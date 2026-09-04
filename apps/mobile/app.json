@@ -1,18 +1,17 @@
 {
   "expo": {
-    "name": "Canine Behavioral Intelligence",
-    "slug": "canine-behavioral-intelligence",
+    "name": "Dogly",
+    "slug": "dogly",
     "version": "0.1.0",
     "orientation": "portrait",
-    "scheme": "cbi",
+    "scheme": "dogly",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.cbi.app.dev"
+      "bundleIdentifier": "com.attilalab.dogly"
     },
     "android": {
-      "package": "com.cbi.app.dev"
+      "package": "com.attilalab.dogly"
     },
     "plugins": [
       "expo-router",
@@ -21,6 +20,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6061c72f-e31c-44fe-ade3-ac1c1a76bfc1"
+      }
+    },
+    "owner": "attila-lab-di-loredana-guida"
   }
 }
