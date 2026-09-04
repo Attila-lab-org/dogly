@@ -1,0 +1,14 @@
+[project]
+name = "dogly-vercel"
+version = "0.1.0"
+description = "Dogly FastAPI runtime dependencies for Vercel."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "PyJWT[crypto]>=2.9",
+    "httpx>=0.27",
+    "sqlalchemy[asyncio]>=2.0",
+    "uvicorn>=0.30",
+]

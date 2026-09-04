@@ -20,3 +20,14 @@ from app.api.app import app  # noqa: E402  (public FastAPI app, spec sez. 9)
 from app.worker.main import worker_app  # noqa: E402  (internal worker app, spec sez. 22)
 
 app.mount("/tasks", worker_app)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> dict[str, str]:
+    """Lightweight production smoke-check endpoint."""
+    return {"service": "dogly", "status": "ok"}
+
+
+@app.get("/health", include_in_schema=False)
+def health() -> dict[str, str]:
+    return {"status": "ok"}
