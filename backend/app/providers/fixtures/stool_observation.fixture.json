@@ -1,0 +1,21 @@
+{
+  "schema_version": "stool_observation.v0",
+  "image_quality": "sufficient",
+  "warnings": [],
+  "fecal_score_estimate": 3,
+  "consistency": "formed",
+  "shape": "segmented_log",
+  "color": "brown",
+  "color_uncertainty": "low",
+  "mucus_candidate": "none_observed",
+  "fresh_blood_candidate": "none_observed",
+  "melena_candidate": "none_observed",
+  "foreign_material_candidate": "unknown",
+  "confidence_band": "MEDIUM",
+  "meta": {
+    "schema_version": "stool_observation.v0",
+    "provider": "mock",
+    "model": "mock-digestive-vision-v0",
+    "request_id": "fixture-stool-0001"
+  }
+}

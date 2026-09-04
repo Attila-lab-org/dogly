@@ -1,0 +1,25 @@
+{
+  "primary_intent": "PLAY_INTERACTION",
+  "confidence_band": "HIGH",
+  "consumer_summary": "Rocky sembra voler giocare: il corpo è sciolto, la coda si muove velocemente e si avvicina verso di te.",
+  "alternatives": [
+    {
+      "intent": "ATTENTION_REQUEST",
+      "rationale": "L'avvicinamento verso la persona è compatibile anche con una richiesta di attenzione."
+    }
+  ],
+  "evidence": [
+    {"source": "observation", "description": "Coda in movimento ampio e veloce", "ref": "tail.movement"},
+    {"source": "observation", "description": "Postura sciolta con spostamento in avanti", "ref": "body.weight_shift"},
+    {"source": "context", "description": "Contesto domestico con gioco visibile", "ref": "scene.visible_objects"}
+  ],
+  "contradictions": [],
+  "personal_memory_used": [],
+  "needs_context": false,
+  "context_question": null,
+  "safety_flags": [],
+  "context_bucket": "HOME",
+  "schema_version": "interpretation.v0",
+  "policy_version": "policy.v0",
+  "taxonomy_version": "intent_taxonomy.v0"
+}

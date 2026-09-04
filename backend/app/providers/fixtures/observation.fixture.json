@@ -1,0 +1,71 @@
+{
+  "schema_version": "observation.v0",
+  "capture_quality": {
+    "dog_visible_fraction": 0.85,
+    "framing": "good",
+    "lighting": "good",
+    "motion_blur": "good",
+    "audio_quality": "degraded",
+    "overall_quality": "good",
+    "warnings": []
+  },
+  "scene": {
+    "environment_class": "home_living_room",
+    "human_count": 1,
+    "dog_count": 1,
+    "visible_objects": ["sofa", "toy_rope"],
+    "spatial_relations": ["dog_facing_human", "toy_near_dog"]
+  },
+  "body": {
+    "body_height": "neutral",
+    "posture": "loose",
+    "rigidity_candidate": "no",
+    "weight_shift": "forward",
+    "orientation_target": "human",
+    "locomotion": "walking",
+    "approach_withdrawal_freeze": "approach"
+  },
+  "head_face": {
+    "head_orientation": "toward_human",
+    "gaze_target": "human_face",
+    "eye_visibility": "good",
+    "mouth_state": "open_relaxed",
+    "lip_lick_candidate": "no",
+    "yawn_candidate": "no",
+    "facial_visibility": "good"
+  },
+  "ears": {
+    "visible": "yes",
+    "position": "neutral_forward",
+    "change": "none",
+    "uncertainty": "low"
+  },
+  "tail": {
+    "visible": "yes",
+    "neutral_relative_height": "neutral",
+    "movement": "wagging",
+    "speed_amp_qualitative": "fast_wide",
+    "uncertainty": "low"
+  },
+  "vocalization": {
+    "present": "no",
+    "type_candidates": [],
+    "count": 0,
+    "relative_pitch": "unknown",
+    "intensity": "unknown",
+    "rhythm": "unknown",
+    "interval_pattern": "unknown",
+    "timing": "unknown"
+  },
+  "timeline": [
+    {"start_ms": 0, "end_ms": 6000, "observed_changes": ["approach", "tail_wag_increase"]},
+    {"start_ms": 6000, "end_ms": 12000, "observed_changes": ["play_bow_candidate"]}
+  ],
+  "unknowns": [],
+  "observer_meta": {
+    "schema_version": "observation.v0",
+    "provider": "mock",
+    "model": "mock-observer-v0",
+    "request_id": "fixture-obs-0001"
+  }
+}

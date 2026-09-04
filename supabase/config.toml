@@ -1,0 +1,41 @@
+# Supabase local development configuration (Spec V1 §4: local = Supabase CLI local stack).
+# Minimal explicit config; all other services use CLI defaults. Secrets are NEVER stored
+# here — this file is safe to commit.
+project_id = "canine-behavioral-intelligence"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]          # internal/ is intentionally NOT exposed via the Data API
+extra_search_path = ["extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]    # non-sensitive local fixtures only (Spec §3)
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false   # local dev only; staging/prod enable confirmations
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"      # behavior videos are 5-20s clips; API validates size/duration
+
+# Buckets are created PRIVATE by migration 0008_storage_policies.sql:
+# dog-avatars, behavior-raw, digestive-raw, food-labels, exports (Spec §12.1).

@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Canine Behavioral Intelligence",
+    "slug": "canine-behavioral-intelligence",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "cbi",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.cbi.app.dev"
+    },
+    "android": {
+      "package": "com.cbi.app.dev"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

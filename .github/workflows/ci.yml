@@ -1,0 +1,77 @@
+# CI (Spec V1 sez. 3.1 / 28.1): gate su push/PR verso main.
+# - mobile: npm ci → typecheck (tsc) → unit test (jest)
+# - backend: uv sync → ruff → pytest (chiamate AI reali mockate via fixture)
+# - supabase: migration reset su stack locale (riproducibilità da vuoto, sez. 11.1)
+# - openapi-drift: export OpenAPI FastAPI e diff vs docs/openapi.json —
+#   la CI fallisce su contract drift non committato (sez. 3.1 / 28.1).
+# Nessun segreto in chiaro: tutti i job girano solo su risorse locali/mock.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install (lockfile)
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npx jest
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install (uv sync)
+        run: uv sync
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Pytest
+        run: uv run pytest -q
+
+  supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+      - name: Start local stack
+        run: supabase start
+      - name: Migration reset (fresh local reset must succeed, sez. 11)
+        run: supabase db reset
+
+  openapi-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install backend deps
+        run: uv sync
+        working-directory: backend
+      - name: Export OpenAPI from FastAPI (source of truth, sez. 3.1)
+        run: uv run python ../scripts/export_openapi.py --out /tmp/openapi.generated.json
+        working-directory: backend
+      - name: Fail on uncommitted contract drift
+        run: diff -u docs/openapi.json /tmp/openapi.generated.json
