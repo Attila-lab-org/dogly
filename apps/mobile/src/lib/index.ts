@@ -20,3 +20,4 @@ export type {
 } from './uploadQueue';
 export { api, apiRequest, getApiBaseUrl, ApiError } from './apiClient';
 export type { RequestOptions, ApiErrorBody } from './apiClient';
+export { getSupabaseClient } from './supabase';
