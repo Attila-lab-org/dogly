@@ -19,8 +19,6 @@ if _BACKEND not in sys.path:
 from app.api.app import app  # noqa: E402  (public FastAPI app, spec sez. 9)
 from app.worker.main import worker_app  # noqa: E402  (internal worker app, spec sez. 22)
 
-app.mount("/tasks", worker_app)
-
 
 @app.get("/", include_in_schema=False)
 def root() -> dict[str, str]:
@@ -31,3 +29,8 @@ def root() -> dict[str, str]:
 @app.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# The worker app already declares /tasks/run. Mounting it at /tasks would
+# accidentally expose /tasks/tasks/run.
+app.mount("/", worker_app)
