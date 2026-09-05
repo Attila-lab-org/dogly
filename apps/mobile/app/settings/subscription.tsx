@@ -5,16 +5,20 @@
  */
 import React from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, Chip, ProgressBar, ScreenContainer } from '@/components';
+import {
+  Button,
+  Card,
+  Chip,
+  ErrorState,
+  LoadingState,
+  ProgressBar,
+  ScreenContainer,
+} from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { isApiConfigured } from '@/features/auth/env';
-import { useSession } from '@/features/auth/SessionProvider';
-import { fetchSubscriptionState } from '@/features/billing/api';
-import { subscriptionMock } from '@/mocks/secondary';
+import { useSubscriptionState } from '@/features/billing/useSubscription';
 
 const PLAN_LABELS = {
   FREE: 'Free',
@@ -24,15 +28,34 @@ const PLAN_LABELS = {
 
 export default function SubscriptionScreen() {
   const router = useRouter();
-  const { usingMockGate } = useSession();
-  const live = isApiConfigured() && !usingMockGate;
-  const query = useQuery({
-    queryKey: ['subscription', 'status'],
-    queryFn: fetchSubscriptionState,
-    enabled: live,
-    staleTime: 30_000,
-  });
-  const { plan, renewsAt, usage } = query.data ?? subscriptionMock;
+  const { live, query, state } = useSubscriptionState();
+
+  // Live: mai fallback silenzioso al mock — loading ed errore sono visibili.
+  if (live && query.isLoading) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Abbonamento" />
+        <LoadingState message="Sto leggendo il tuo piano…" />
+      </ScreenContainer>
+    );
+  }
+
+  if (live && (query.isError || !state)) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Abbonamento" />
+        <ErrorState
+          title="Piano non disponibile"
+          message="Non riesco a leggere lo stato dell'abbonamento. Controlla la connessione e riprova: nel frattempo non cambia nulla sul tuo piano."
+          retryLabel="Riprova"
+          onRetry={() => void query.refetch()}
+        />
+      </ScreenContainer>
+    );
+  }
+
+  if (!state) return null;
+  const { plan, renewsAt, usage } = state;
   const isPremium = plan !== 'FREE';
   const behaviorLimit = Math.max(1, usage.behaviorLimit);
   const digestiveLimit = Math.max(1, usage.digestiveLimit);

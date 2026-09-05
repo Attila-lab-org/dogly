@@ -1,7 +1,7 @@
 /**
  * Behavior processing — polling GET /v1/behavior/events/{id}.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,13 +9,18 @@ import { useQuery } from '@tanstack/react-query';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
-import { PROCESSING_STEP_ORDER, PROCESSING_STEPS } from '@/features/core/copy';
+import { PROCESSING_STEP_ORDER, processingStepsFor } from '@/features/core/copy';
 import { behaviorResultsMock } from '@/mocks/core';
 import {
   getBehaviorEvent,
   IN_PROGRESS_STATUSES,
   isTerminalBehaviorStatus,
 } from '@/features/behavior/api';
+import { mockProcessingAction } from '@/features/behavior/processing';
+import {
+  cancelResultReadyNotification,
+  scheduleResultReadyNotification,
+} from '@/features/behavior/notify';
 import { markUploadCompletedForEvent } from '@/features/behavior/upload';
 import { isApiConfigured } from '@/features/auth/env';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -25,6 +30,7 @@ export default function BehaviorProcessingScreen() {
   const { dog } = useDogProfile();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi = isApiConfigured() && Boolean(eventId) && !eventId?.startsWith('evt-');
+  const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
 
   const query = useQuery({
     queryKey: ['behavior-event', eventId],
@@ -46,38 +52,53 @@ export default function BehaviorProcessingScreen() {
       ? mockEvent.status
       : mockEvent?.status;
 
-  // Mock progression for demo ids
+  // Mock progression for demo ids: rispetta lo stato dell'evento richiesto
   useEffect(() => {
     if (useApi || !mockEvent) return;
-    if (mockEvent.status === 'COMPLETED') {
-      router.replace(`/behavior/result/${mockEvent.eventId}`);
+    const action = mockProcessingAction(mockEvent);
+    if (action.type === 'redirect-result') {
+      void cancelResultReadyNotification(mockEvent.eventId);
+      router.replace(`/behavior/result/${action.eventId}`);
       return;
     }
-    const order: BehaviorEventStatus[] = [
-      'QUEUED',
-      'OBSERVING',
-      'INTERPRETING',
-      'COMPLETED',
-    ];
+    if (action.type === 'stay') return;
     let i = 0;
     const t = setInterval(() => {
       i += 1;
-      if (i >= order.length - 1) {
+      if (i >= steps.length) {
         clearInterval(t);
+        void cancelResultReadyNotification(mockEvent.eventId);
         router.replace('/behavior/result/evt-play');
       }
     }, 1600);
     return () => clearInterval(t);
-  }, [useApi, mockEvent, router]);
+  }, [useApi, mockEvent, router, steps.length]);
 
   useEffect(() => {
     if (!useApi || !query.data) return;
     const s = query.data.status;
     if (s === 'COMPLETED') {
       markUploadCompletedForEvent(query.data.id);
+      void cancelResultReadyNotification(query.data.id);
       router.replace(`/behavior/result/${query.data.id}`);
     }
   }, [useApi, query.data, router]);
+
+  // "Ti avviso quando il risultato è pronto": se l'utente lascia la
+  // schermata prima dello stato terminale, schedula la notifica locale.
+  // Al mount (rientro a guardare) la notifica pendente viene cancellata.
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  useEffect(() => {
+    if (!eventId) return;
+    void cancelResultReadyNotification(eventId);
+    return () => {
+      const s = statusRef.current;
+      if (s && !isTerminalBehaviorStatus(s)) {
+        void scheduleResultReadyNotification(eventId, dog.name);
+      }
+    };
+  }, [eventId, dog.name]);
 
   if (useApi && query.isError) {
     return (
@@ -200,7 +221,7 @@ export default function BehaviorProcessingScreen() {
       )}
 
       <Card style={styles.stepper}>
-        {PROCESSING_STEPS.map((step, index) => {
+        {steps.map((step, index) => {
           const stepOrder = PROCESSING_STEP_ORDER[step.status];
           const done = !isRetrying && stepOrder < currentOrder;
           const active = !isRetrying && stepOrder === currentOrder;
@@ -226,7 +247,7 @@ export default function BehaviorProcessingScreen() {
                   </Text>
                 )}
               </View>
-              {index < PROCESSING_STEPS.length - 1 && (
+              {index < steps.length - 1 && (
                 <View style={[styles.stepLine, done && styles.stepLineDone]} />
               )}
               <View style={styles.stepTextWrap}>

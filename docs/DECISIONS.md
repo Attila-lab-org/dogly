@@ -159,6 +159,23 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
   libreria sonora non ancora validata. Home, Profilo e deep link non lo
   espongono; eventuale riattivazione richiede una nuova decisione prodotto.
 
+### ADR-011 — Admin Control Center web (V0)
+
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Decisione:**
+  - Console web interna in `apps/admin/`: Next.js 15 + TypeScript + npm,
+    app standalone, deploy come progetto Vercel separato.
+  - Dati via read-model dedicati: mock tipizzati in V0, poi endpoint `/v1/admin/*`
+    con RBAC server-side (6 ruoli previsti).
+  - Brand Dogly (design token in `app/globals.css`, logo mark condiviso).
+  - Nessuna modifica al backend consumer in questa fase; security boundary:
+    niente service-key nel browser, azioni privilegiate solo server-side,
+    audit append-only.
+- **Rationale:** governance di business, utenti, AI, costi e privacy su una
+  superficie dedicata, senza toccare l'app consumer né il suo backend; il
+  read-model separato consente di introdurre RBAC e audit senza accoppiamento.
+- **Riferimenti:** `docs/ADMIN_CONTROL_CENTER.md` (route map, fasi, ruoli).
+
 ## Decisioni aperte (Spec V1 sez. 32) — NON inventare risoluzioni
 
 | ID | Decisione | Si può codificare? | Regola vigente |

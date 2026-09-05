@@ -2,13 +2,14 @@
  * Modal all’apertura: una domanda, due risposte, poi sparisce.
  * Nessun logo, nessun claim brand — solo il cane e l’utente.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
 import {
   dismissWelcomeCheckIn,
+  hydrateCheckIn,
   markCheckInNeedsCare,
   markCheckInSoftOk,
   useCheckIn,
@@ -18,10 +19,15 @@ type Step = 'ask' | 'offer';
 
 export function WelcomeCheckInModal({ dogName }: { dogName: string }) {
   const router = useRouter();
-  const { welcomePending } = useCheckIn();
+  const { welcomePending, hydrated } = useCheckIn();
   const [step, setStep] = useState<Step>('ask');
 
-  if (!welcomePending) return null;
+  // Primo render: legge prefs + ultima risposta persistite prima di mostrarsi
+  useEffect(() => {
+    void hydrateCheckIn();
+  }, []);
+
+  if (!hydrated || !welcomePending) return null;
 
   return (
     <Modal

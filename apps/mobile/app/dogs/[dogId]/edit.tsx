@@ -18,6 +18,7 @@ import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
   profileToUpdateBody,
+  updateDogProfile,
   useDogProfile,
   useUpdateDogMutation,
 } from '@/features/core/useDogProfile';
@@ -166,8 +167,32 @@ export default function DogEditScreen() {
       return;
     }
 
+    if (usingMockGate) {
+      // Demo: aggiorna il profilo visibile in-sessione (patch mock dev) e
+      // sveglia gli observer react-query così le schermate si ridisegnano.
+      // Nota onesta: nulla viene inviato al server.
+      updateDogProfile({
+        name: name.trim(),
+        ageLabel,
+        birthDate,
+        sizeLabel,
+        weightKg: parsedWeight,
+        breedLabel,
+        isMix: breedSelection.kind === 'mixed',
+        photoUri,
+        profileVisibility,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['dogs'] });
+      Alert.alert(
+        'Salvato in demo',
+        'Le modifiche sono visibili subito nell’app, ma in questa demo non vengono inviate al server.',
+      );
+      router.back();
+      return;
+    }
+
     try {
-      if (!usingMockGate && dogId) {
+      if (dogId) {
         await updateMutation.mutateAsync(
           profileToUpdateBody({
             name: name.trim(),
@@ -179,11 +204,19 @@ export default function DogEditScreen() {
             isMix: breedSelection.kind === 'mixed',
           }),
         );
-        await apiSetVisibility(
-          dogId,
-          profileVisibility === 'public' ? 'PUBLIC' : 'PRIVATE',
-          profileVisibility === 'public' ? 'public-profile-v1' : undefined,
-        );
+        try {
+          await apiSetVisibility(
+            dogId,
+            profileVisibility === 'public' ? 'PUBLIC' : 'PRIVATE',
+            profileVisibility === 'public' ? 'public-profile-v1' : undefined,
+          );
+        } catch {
+          Alert.alert(
+            'Visibilità non aggiornata',
+            'Il profilo è salvato, ma la visibilità non è stata aggiornata. Controlla la connessione e riprova.',
+          );
+          return;
+        }
       }
       router.back();
     } catch {

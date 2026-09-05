@@ -1,23 +1,44 @@
 /**
- * Welcome (Spec V1 sez. 6, 7.1.1) — brand Dogly + Google / email.
+ * Welcome (Spec V1 sez. 6, 7.1.1) — brand Dogly + Google / Apple (solo iOS,
+ * ADR-001) / email OTP (vale sia per accedere sia per creare l'account).
  */
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { useSession } from '@/features/auth/SessionProvider';
-import { mapAuthError, signInWithGoogle } from '@/features/auth/actions';
+import {
+  mapAuthError,
+  signInWithApple,
+  signInWithGoogle,
+} from '@/features/auth/actions';
+import { shouldOfferAppleSignIn } from '@/features/auth/appleSignIn';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const { sessionState, usingMockGate, loading } = useSession();
-  const [busy, setBusy] = useState<'google' | null>(null);
+  const [busy, setBusy] = useState<'google' | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    let mounted = true;
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => {
+        if (mounted) setAppleAvailable(available);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -32,6 +53,11 @@ export default function WelcomeScreen() {
     router.replace('/(tabs)/home');
   };
 
+  const errorMessage = (err: unknown) =>
+    mapAuthError(err) === 'offline'
+      ? 'Sei offline. Riprova quando hai connessione.'
+      : 'Accesso non riuscito. Riprova.';
+
   const oauth = async () => {
     if (usingMockGate) {
       enterMock();
@@ -42,16 +68,33 @@ export default function WelcomeScreen() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      const kind = mapAuthError(err);
-      setError(
-        kind === 'offline'
-          ? 'Sei offline. Riprova quando hai connessione.'
-          : 'Accesso non riuscito. Riprova.',
-      );
+      setError(errorMessage(err));
     } finally {
       setBusy(null);
     }
   };
+
+  const oauthApple = async () => {
+    // Mock gate dev: stesso comportamento della demo Google.
+    if (usingMockGate) {
+      enterMock();
+      return;
+    }
+    setError(null);
+    setBusy('apple');
+    try {
+      await signInWithApple();
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('annullat')) {
+        return; // annullamento utente: nessun errore da mostrare
+      }
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const showApple = shouldOfferAppleSignIn(Platform.OS, appleAvailable);
 
   return (
     <ScreenContainer contentStyle={styles.screen}>
@@ -88,9 +131,22 @@ export default function WelcomeScreen() {
             }
             testID="welcome-google"
           />
+          {showApple ? (
+            <Button
+              title="Continua con Apple"
+              variant="secondary"
+              loading={busy === 'apple'}
+              disabled={busy !== null}
+              onPress={() => void oauthApple()}
+              icon={
+                <Ionicons name="logo-apple" size={19} color={colors.textOnPrimary} />
+              }
+              testID="welcome-apple"
+            />
+          ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Registrati con email"
+            accessibilityLabel="Continua con email"
             onPress={() => router.push('/(auth)/sign-in')}
             hitSlop={8}
             style={({ pressed }) => [
@@ -99,7 +155,7 @@ export default function WelcomeScreen() {
             ]}
             testID="welcome-register"
           >
-            <Text style={styles.emailLinkText}>Oppure registrati con email</Text>
+            <Text style={styles.emailLinkText}>Oppure continua con email</Text>
           </Pressable>
         </View>
         <Text style={styles.terms}>

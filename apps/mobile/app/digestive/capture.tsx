@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import {
@@ -12,17 +12,34 @@ import {
 } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { useCheckIn } from '@/features/checkin/store';
+import { useSession } from '@/features/auth/SessionProvider';
 import { takeDigestivePhoto } from '@/features/digestive/photo';
+import {
+  discardPendingDigestivePhoto,
+  enqueueAndUploadDigestivePhoto,
+} from '@/features/digestive/upload';
+import { isQuotaExhaustedError } from '@/features/behavior/api';
+import { isApiConfigured } from '@/features/auth/env';
 
 type Phase = 'ready' | 'preview' | 'uploading' | 'upload_failed';
 
 export default function DigestiveCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { userId, usingMockGate } = useSession();
+  const { analysisContext } = useCheckIn();
+  const params = useLocalSearchParams<{ from?: string }>();
+  const fromCheckIn =
+    params.from === 'checkin' || analysisContext?.concern === 'off';
   const [phase, setPhase] = useState<Phase>('ready');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   const takePhoto = async () => {
+    // "Rifai la foto": la foto scartata non resta in coda upload.
+    if (photoUri && userId) {
+      void discardPendingDigestivePhoto(userId, photoUri);
+    }
     const uri = await takeDigestivePhoto();
     if (!uri) return;
     setPhotoUri(uri);
@@ -33,9 +50,24 @@ export default function DigestiveCaptureScreen() {
     if (!photoUri) return;
     setPhase('uploading');
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      router.replace('/digestive/processing/fecal-ok-1');
-    } catch {
+      if (usingMockGate || !isApiConfigured() || !userId || !dog.id) {
+        // Mock gate dev: pipeline finta solo in demo.
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        router.replace('/digestive/processing/fecal-ok-1');
+        return;
+      }
+      const { eventId } = await enqueueAndUploadDigestivePhoto({
+        userId,
+        dogId: dog.id,
+        localUri: photoUri,
+      });
+      router.replace(`/digestive/processing/${eventId}`);
+    } catch (err) {
+      if (isQuotaExhaustedError(err)) {
+        // Quota esaurita (402 QUOTA_EXHAUSTED): paywall, non errore generico.
+        router.replace('/paywall');
+        return;
+      }
       setPhase('upload_failed');
     }
   };
@@ -43,6 +75,10 @@ export default function DigestiveCaptureScreen() {
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Digestione" />
+
+      {fromCheckIn && analysisContext?.note ? (
+        <Text style={styles.careBanner}>{analysisContext.note}</Text>
+      ) : null}
 
       <View style={styles.heading}>
         <Text style={styles.title}>
@@ -155,6 +191,13 @@ function PhotoTip({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label
 const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xxxl,
+  },
+  careBanner: {
+    marginBottom: spacing.md,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   heading: {
     alignItems: 'center',

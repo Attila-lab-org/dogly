@@ -42,14 +42,18 @@ def map_revenuecat_event(payload: dict[str, Any]) -> dict[str, Any] | None:
         status = "active"
     elif event_type in inactive_types:
         status = "inactive"
-    elif event_type in {"CANCELLATION", "BILLING_ISSUE"}:
-        status = "grace_or_cancelled"
+    elif event_type == "CANCELLATION":
+        # RevenueCat cancellation means auto-renewal stopped; entitlement
+        # remains active until EXPIRATION.
+        status = "active"
+    elif event_type == "BILLING_ISSUE":
+        status = "grace_period"
     else:
         return None
 
     product_id = event.get("product_id", "")
     plan = "FREE"
-    if status == "active":
+    if status in {"active", "grace_period"}:
         plan = "PREMIUM_ANNUAL" if "annual" in product_id.lower() else "PREMIUM_MONTHLY"
 
     return {

@@ -8,16 +8,21 @@
  *   (POST /v1/privacy/delete-account).
  */
 import * as Linking from 'expo-linking';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { consentsMock } from '@/mocks/secondary';
 import type { ConsentState } from '@/features/secondary/types';
 import { useSession } from '@/features/auth/SessionProvider';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import {
+  hydrateConsents,
+  setConsent,
+  useConsents,
+} from '@/features/privacy/consents';
 import {
   requestAccountDeletion,
   requestPrivacyExport,
@@ -68,14 +73,28 @@ const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? 'https://dogly.app/terms-
 export default function PrivacyScreen() {
   const router = useRouter();
   const { signOut, usingMockGate } = useSession();
-  const [consents, setConsents] = useState<ConsentState>(consentsMock);
+  const { dog } = useDogProfile();
+  const consents = useConsents();
   const [exportState, setExportState] = useState<ExportState>('idle');
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deleteStarted, setDeleteStarted] = useState(false);
 
-  const toggle = (key: keyof ConsentState) =>
-    setConsents((c) => ({ ...c, [key]: !c[key] }));
+  useEffect(() => {
+    void hydrateConsents();
+  }, []);
+
+  const toggle = (key: keyof ConsentState) => {
+    void (async () => {
+      const saved = await setConsent(key, !consents[key]);
+      if (!saved) {
+        Alert.alert(
+          'Preferenza non salvata',
+          'Non sono riuscito a salvare il consenso sul dispositivo. Riprova.',
+        );
+      }
+    })();
+  };
 
   const startExport = async () => {
     setExportState('pending');
@@ -109,9 +128,17 @@ export default function PrivacyScreen() {
   };
 
   const confirmDelete = () => {
+    if (usingMockGate) {
+      setDeleteArmed(false);
+      Alert.alert(
+        'Solo una demo',
+        "In questa build demo l'account non viene eliminato davvero: nessun dato viene rimosso e l'accesso resta attivo.",
+      );
+      return;
+    }
     Alert.alert(
       'Eliminare definitivamente?',
-      "Questa azione è irreversibile: account, dati di Rocky, media e cronologia verranno eliminati. L'eliminazione può richiedere alcuni giorni e riceverai una conferma.",
+      `Questa azione è irreversibile: account, dati di ${dog.name}, media e cronologia verranno eliminati. L'eliminazione può richiedere alcuni giorni e riceverai una conferma.`,
       [
         { text: 'Annulla', style: 'cancel', onPress: () => setDeleteArmed(false) },
         {
@@ -120,15 +147,11 @@ export default function PrivacyScreen() {
           onPress: () => {
             void (async () => {
               try {
-                if (!usingMockGate) {
-                  await requestAccountDeletion();
-                  await signOut();
-                }
+                await requestAccountDeletion();
+                await signOut();
                 setDeleteArmed(false);
                 setDeleteStarted(true);
-                if (!usingMockGate) {
-                  router.replace('/(auth)/welcome');
-                }
+                router.replace('/(auth)/welcome');
               } catch {
                 setDeleteArmed(false);
                 Alert.alert(
@@ -195,7 +218,7 @@ export default function PrivacyScreen() {
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Esporta i miei dati</Text>
         <Text style={styles.note}>
-          Ricevi un file con profilo, dati di Rocky, risultati, feedback,
+          Ricevi un file con profilo, dati di {dog.name}, risultati, feedback,
           pattern, eventi digestivi, cibi e consensi.
         </Text>
         {exportState === 'idle' && (
@@ -245,7 +268,7 @@ export default function PrivacyScreen() {
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Elimina account</Text>
         <Text style={styles.note}>
-          Elimina account, dati di Rocky, media e cronologia. Azione
+          Elimina account, dati di {dog.name}, media e cronologia. Azione
           irreversibile.
         </Text>
         {deleteStarted ? (

@@ -21,11 +21,13 @@ import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { demoFlags } from '@/mocks/demo';
 import { entitlementMock, paywallOfferingMock } from '@/mocks/entitlements';
 import type { PaywallPlan } from '@/mocks/entitlements';
+import { useDogProfile } from '@/features/core/useDogProfile';
 
 type PlanOption = PaywallPlan['code'];
 
 export default function PaywallScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
   const { plans, benefits, freeChoiceLabel } = paywallOfferingMock;
   const [selected, setSelected] = useState<PlanOption>('PREMIUM_ANNUAL');
   const explainStorePending = () => {
@@ -92,10 +94,10 @@ export default function PaywallScreen() {
         <View style={styles.heroIcon}>
           <Ionicons name="star" size={36} color={colors.primary} />
         </View>
-        <Text style={styles.title}>Conosci Rocky ancora meglio</Text>
+        <Text style={styles.title}>Conosci {dog.name} ancora meglio</Text>
         <Text style={styles.subtitle}>
-          Sblocca più analisi e tutta la storia di Rocky, senza rinunciare al
-          piano gratuito.
+          Sblocca più analisi e tutta la storia di {dog.name}, senza rinunciare
+          al piano gratuito.
         </Text>
       </View>
 

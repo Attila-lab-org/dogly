@@ -21,20 +21,41 @@ function patchLocalMocks(eventId: string, value: FeedbackValue) {
 }
 
 /**
- * POST /v1/behavior/events/{id}/feedback; fallback mock se API assente.
+ * POST /v1/behavior/events/{id}/feedback.
+ * Regola "mai finto successo": un errore di rete/API propaga al caller, che
+ * mostra "Non salvato — riprova" e NON accende il badge "Salvato".
+ * Salvataggio solo-locale ammesso per il mock gate dev: eventi demo (evt-*)
+ * oppure API non configurata (getApiBaseUrl solleva prima ancora di fetch).
  * Nessun riferimento diretto a EXPO_PUBLIC_* (Jest + expo/virtual/env).
  */
+function isApiNotConfiguredError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.startsWith('EXPO_PUBLIC_API_URL non configurata')
+  );
+}
+
 export async function saveBehaviorFeedback(
   eventId: string,
   value: FeedbackValue,
 ): Promise<FeedbackValue> {
+  if (eventId.startsWith('evt-')) {
+    patchLocalMocks(eventId, value);
+    return value;
+  }
   try {
-    const { postBehaviorFeedback } = await import('../behavior/api');
+    // require lazy: l'API client carica moduli nativi (SecureStore) che non
+    // devono essere caricati in contesti senza runtime nativo (es. Jest).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { postBehaviorFeedback } = require('../behavior/api') as typeof import('../behavior/api');
     const res = await postBehaviorFeedback(eventId, value);
     patchLocalMocks(eventId, res.value);
     return res.value;
-  } catch {
-    patchLocalMocks(eventId, value);
-    return value;
+  } catch (err) {
+    if (isApiNotConfiguredError(err)) {
+      patchLocalMocks(eventId, value);
+      return value;
+    }
+    throw err;
   }
 }

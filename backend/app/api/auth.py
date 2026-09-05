@@ -84,6 +84,8 @@ async def validate_supabase_jwt(
         raise ApiError(ErrorCode.AUTH_REQUIRED, "Malformed bearer token.") from exc
 
     alg = header.get("alg", "")
+    if alg not in {"HS256", "RS256", "ES256"}:
+        raise ApiError(ErrorCode.AUTH_REQUIRED, "Token signing algorithm is not accepted.")
     try:
         if alg == "HS256":
             if not settings.supabase_jwt_secret:

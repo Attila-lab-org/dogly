@@ -86,6 +86,7 @@ class InMemoryStore:
         self.webhook_events_seen: set[str] = set()
         self.export_jobs: dict[str, AnalysisJobRec] = {}
         self.deletion_jobs: dict[str, AnalysisJobRec] = {}
+        self.user_consents: list[dict] = []
         self.dog_profile_versions: list[dict] = []
         self.dog_albums: dict[str, DogAlbumRec] = {}
         self.dog_photos: dict[str, DogPhotoRec] = {}

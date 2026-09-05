@@ -11,6 +11,7 @@ import { colors, spacing, typography } from '@/theme/tokens';
 import type { FeedbackValue } from '@/contracts/types';
 import { BehaviorResultView } from '@/features/core/components';
 import { saveBehaviorFeedback } from '@/features/core/feedback';
+import { shareBehaviorResult } from '@/features/behavior/share';
 import { behaviorResultsMock } from '@/mocks/core';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
@@ -46,6 +47,7 @@ export default function BehaviorResultScreen() {
     result?.feedback ?? null,
   );
   const [savingFeedback, setSavingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   useEffect(() => {
     if (result?.feedback) setFeedback(result.feedback);
@@ -94,9 +96,14 @@ export default function BehaviorResultScreen() {
 
   const handleFeedback = async (value: FeedbackValue) => {
     setSavingFeedback(true);
+    setFeedbackError(null);
     try {
       const saved = await saveBehaviorFeedback(result.eventId, value);
       setFeedback(saved);
+    } catch {
+      // Mai finto "Salvato": badge errore onesto, l'utente può riprovare.
+      setFeedback(null);
+      setFeedbackError('Non salvato — riprova');
     } finally {
       setSavingFeedback(false);
     }
@@ -125,6 +132,7 @@ export default function BehaviorResultScreen() {
           result={result}
           dogName={dog.name}
           feedback={feedback}
+          feedbackError={feedbackError}
           onFeedback={(v) => {
             if (!savingFeedback) void handleFeedback(v);
           }}
@@ -142,11 +150,20 @@ export default function BehaviorResultScreen() {
         )}
 
         <Button
+          title="Condividi"
+          variant="outline"
+          icon={<Ionicons name="share-outline" size={18} color={colors.accent} />}
+          onPress={() => void shareBehaviorResult(result, dog.name)}
+          style={styles.saveButton}
+          testID="share-result"
+        />
+
+        <Button
           title="Torna al Diario"
           variant="outline"
           icon={<Ionicons name="book-outline" size={18} color={colors.accent} />}
           onPress={() => router.replace('/(tabs)/diary')}
-          style={styles.saveButton}
+          style={styles.diaryButton}
           testID="back-to-diary"
         />
       </ScrollView>
@@ -183,5 +200,8 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: spacing.xl,
+  },
+  diaryButton: {
+    marginTop: spacing.sm,
   },
 });

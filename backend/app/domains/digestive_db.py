@@ -398,6 +398,17 @@ async def verify_food_product(
         ).mappings().first()
     if not row:
         raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                select internal.arm_media_expiry(
+                  'food_products', cast(:food_id as uuid), 'FOOD_LABEL'
+                )
+                """
+            ),
+            {"food_id": food_id},
+        )
     return _food_from_row(row)
 
 

@@ -5,11 +5,28 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
-from app.contracts.api import MeResponse
-from app.domains import billing_db, profiles_db
+from app.contracts.api import MeResponse, UserConsentsPatch, UserConsentsResponse
+from app.domains import billing_db, consents_db, profiles_db
+from app.domains import consents as consents_domain
 from app.domains.billing import plan_limits
 
 router = APIRouter()
+
+
+@router.get("/me/consents", response_model=UserConsentsResponse)
+async def get_consents(state: StateDep, user_id: UserIdDep) -> UserConsentsResponse:
+    if state.engine is not None:
+        return await consents_db.get_consents(state.engine, user_id)
+    return consents_domain.get_consents(state.store, user_id)
+
+
+@router.patch("/me/consents", response_model=UserConsentsResponse)
+async def patch_consents(
+    payload: UserConsentsPatch, state: StateDep, user_id: UserIdDep
+) -> UserConsentsResponse:
+    if state.engine is not None:
+        return await consents_db.patch_consents(state.engine, user_id, payload)
+    return consents_domain.patch_consents(state.store, user_id, payload)
 
 
 @router.get("/me", response_model=MeResponse)

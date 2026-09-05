@@ -8,7 +8,7 @@ import {
   completeBehaviorCapture,
   initBehaviorCapture,
 } from './api';
-import { getUploadQueue } from '../../lib/uploadQueue';
+import { discardUploadsForUri, getUploadQueue } from '../../lib/uploadQueue';
 
 const draining = new Set<string>();
 let recoverStarted = false;
@@ -251,4 +251,18 @@ export function markUploadCompletedForEvent(eventId: string): void {
       }
     }
   }
+}
+
+/**
+ * "Registra di nuovo" dopo un upload fallito: scarta la riga pending dalla
+ * coda SQLite (altrimenti il drain la riproverebbe a ogni resume) e pulisce
+ * il file locale scartato.
+ */
+export async function discardPendingBehaviorClip(
+  userId: string,
+  localUri: string,
+): Promise<void> {
+  const removed = discardUploadsForUri(getUploadQueue(), userId, localUri);
+  for (const id of removed) uploadMeta.delete(id);
+  if (removed.length > 0) await deleteLocalIfExists(localUri);
 }

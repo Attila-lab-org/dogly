@@ -64,6 +64,40 @@ async def test_me_with_valid_token(client: httpx.AsyncClient, auth_headers, user
     assert "plan" in body and "usage" in body
 
 
+async def test_consents_default_off_and_append_changes(client: httpx.AsyncClient, auth_headers):
+    initial = await client.get("/v1/me/consents", headers=auth_headers)
+    assert initial.status_code == 200
+    assert initial.json() == {
+        "service_terms": False,
+        "research_training": False,
+        "notifications": False,
+        "media_retention": False,
+        "policy_versions": {},
+    }
+
+    updated = await client.patch(
+        "/v1/me/consents",
+        headers=auth_headers,
+        json={
+            "policy_version": "privacy-v1",
+            "service_terms": True,
+            "research_training": True,
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["service_terms"] is True
+    assert updated.json()["research_training"] is True
+    assert updated.json()["notifications"] is False
+
+    revoked = await client.patch(
+        "/v1/me/consents",
+        headers=auth_headers,
+        json={"policy_version": "privacy-v1", "research_training": False},
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["research_training"] is False
+
+
 async def test_cross_user_dog_access_denied(client: httpx.AsyncClient, auth_headers, rsa_keys):
     dog_id = await _create_dog(client, auth_headers)
     other = make_token(rsa_keys[0])  # different sub

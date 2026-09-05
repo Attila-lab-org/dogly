@@ -16,8 +16,8 @@ import {
 } from '../features/core/captureMachine';
 import {
   CONFIDENCE_BAND_LABELS,
-  PROCESSING_STEPS,
   intentHeadline,
+  processingStepsFor,
 } from '../features/core/copy';
 import { saveBehaviorFeedback } from '../features/core/feedback';
 import { BEHAVIOR_EVENT_STATUSES } from '../contracts/types';
@@ -133,7 +133,7 @@ describe('result contract sui mock (sez. 6.1)', () => {
   });
 
   it('gli step di processing usano solo stati canonici (sez. 33.1)', () => {
-    for (const step of PROCESSING_STEPS) {
+    for (const step of processingStepsFor('Rocky')) {
       expect(BEHAVIOR_EVENT_STATUSES).toContain(step.status);
     }
   });

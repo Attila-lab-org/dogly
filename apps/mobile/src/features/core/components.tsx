@@ -171,9 +171,12 @@ export function EvidenceRow({ item }: { item: EvidenceItem }) {
 export function FeedbackButtons({
   value,
   onFeedback,
+  error,
 }: {
   value: FeedbackValue | null;
   onFeedback: (value: FeedbackValue) => void;
+  /** Messaggio onesto quando il salvataggio è fallito: il badge "Salvato" resta spento. */
+  error?: string | null;
 }) {
   const options: Array<{
     value: FeedbackValue;
@@ -189,7 +192,12 @@ export function FeedbackButtons({
     <View style={styles.feedbackCard}>
       <View style={styles.feedbackHeading}>
         <Text style={styles.feedbackTitle}>Ti torna?</Text>
-        {value ? (
+        {error ? (
+          <View style={styles.savedBadge}>
+            <Ionicons name="alert-circle" size={13} color={colors.danger} />
+            <Text style={styles.errorLabel}>{error}</Text>
+          </View>
+        ) : value ? (
           <View style={styles.savedBadge}>
             <Ionicons name="checkmark" size={13} color={colors.accent} />
             <Text style={styles.savedLabel}>Salvato</Text>
@@ -266,12 +274,15 @@ export function BehaviorResultView({
   feedback,
   onFeedback,
   careNote,
+  feedbackError,
 }: {
   result: BehaviorEventResult;
   dogName: string;
   feedback: FeedbackValue | null;
   onFeedback: (value: FeedbackValue) => void;
   careNote?: string | null;
+  /** Stato errore del salvataggio feedback (mai finto "Salvato"). */
+  feedbackError?: string | null;
 }) {
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
@@ -352,7 +363,11 @@ export function BehaviorResultView({
         </Card>
       )}
 
-      <FeedbackButtons value={feedback} onFeedback={onFeedback} />
+      <FeedbackButtons
+        value={feedback}
+        onFeedback={onFeedback}
+        error={feedbackError}
+      />
     </View>
   );
 }
@@ -445,6 +460,11 @@ const styles = StyleSheet.create({
   },
   savedLabel: {
     color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+  },
+  errorLabel: {
+    color: colors.danger,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },

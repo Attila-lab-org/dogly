@@ -9,8 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { subscriptionMock } from '@/mocks/secondary';
 import { getDogProfileSnapshot } from '@/features/core/useDogProfile';
+import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
 
 interface Row {
@@ -23,8 +23,20 @@ interface Row {
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, usingMockGate } = useSession();
-  const isPremium = subscriptionMock.plan !== 'FREE';
+  // Stessa fonte della schermata Abbonamento (query condivisa): il
+  // sottotitolo riflette lo stato reale, non sempre il mock.
+  const { live, query, state: subscription } = useSubscriptionState();
   const dogId = getDogProfileSnapshot().dog.id;
+
+  const subscriptionSubtitle = (() => {
+    if (live && query.isLoading) return 'Verifica del piano in corso…';
+    if (live && query.isError) {
+      return 'Stato non disponibile: apri per riprovare';
+    }
+    return subscription && subscription.plan !== 'FREE'
+      ? 'Premium attivo'
+      : 'Piano Free — 3+3 analisi al mese';
+  })();
 
   const rows: Row[] = [
     {
@@ -48,8 +60,14 @@ export default function SettingsScreen() {
     {
       icon: 'star-outline',
       title: 'Abbonamento',
-      subtitle: isPremium ? 'Premium attivo' : 'Piano Free — 3+3 analisi al mese',
+      subtitle: subscriptionSubtitle,
       href: '/settings/subscription',
+    },
+    {
+      icon: 'bulb-outline',
+      title: 'Come funziona il punteggio di conoscenza',
+      subtitle: 'Cosa misura e come cresce nel tempo',
+      href: `/dogs/${dogId}/knowledge`,
     },
   ];
 

@@ -2,9 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenContainer } from '@/components';
+import { useQuery } from '@tanstack/react-query';
+import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import {
+  getDigestiveEvent,
+  isFailedDigestiveStatus,
+  isTerminalDigestiveStatus,
+} from '@/features/digestive/api';
+import { isApiConfigured } from '@/features/auth/env';
 
 const STEP_DURATION_MS = 1100;
 
@@ -16,6 +23,21 @@ export default function DigestiveProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const [stepIndex, setStepIndex] = useState(0);
+  // Mock gate dev: gli id fecal-* seguono lo stepper finto; gli id reali
+  // fanno polling su GET /v1/digestive/events/{id}.
+  const useApi = isApiConfigured() && !eventId.startsWith('fecal-');
+
+  const query = useQuery({
+    queryKey: ['digestive-event', eventId],
+    queryFn: () => getDigestiveEvent(eventId),
+    enabled: useApi,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status;
+      if (!status || isTerminalDigestiveStatus(status)) return false;
+      return 2000;
+    },
+  });
+
   const steps = useMemo(
     () => [
       'Preparo la foto',
@@ -26,6 +48,7 @@ export default function DigestiveProcessingScreen() {
   );
 
   useEffect(() => {
+    if (useApi) return undefined;
     if (stepIndex >= steps.length) {
       router.replace(`/digestive/result/${eventId}`);
       return undefined;
@@ -35,7 +58,59 @@ export default function DigestiveProcessingScreen() {
       STEP_DURATION_MS,
     );
     return () => clearTimeout(timer);
-  }, [eventId, router, stepIndex, steps.length]);
+  }, [useApi, eventId, router, stepIndex, steps.length]);
+
+  useEffect(() => {
+    if (!useApi || !query.data) return;
+    if (query.data.status === 'COMPLETED' || query.data.status === 'INSUFFICIENT_IMAGE') {
+      router.replace(`/digestive/result/${query.data.id}`);
+    }
+  }, [useApi, query.data, router]);
+
+  if (useApi && query.isError) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          title="Analisi non trovata"
+          message="Non riesco a trovare questa analisi. Torna indietro e riprova."
+        />
+        <Button
+          title="Torna alla Home"
+          onPress={() => router.replace('/(tabs)/rocky')}
+        />
+      </ScreenContainer>
+    );
+  }
+
+  if (useApi && query.data && isFailedDigestiveStatus(query.data.status)) {
+    return (
+      <ScreenContainer>
+        <View style={styles.failedPage}>
+          <View style={styles.failedIcon}>
+            <Ionicons
+              name="cloud-offline-outline"
+              size={36}
+              color={colors.danger}
+            />
+          </View>
+          <Text style={styles.failedTitle}>Qualcosa non ha funzionato</Text>
+          <Text style={styles.failedText}>
+            C'è stato un problema tecnico dall'altra parte. Non è colpa della
+            foto: l'analisi non è stata conteggiata.
+          </Text>
+          <Button
+            title="Riprova"
+            onPress={() => router.replace('/digestive/capture')}
+          />
+          <Button
+            title="Torna alla Home"
+            variant="outline"
+            onPress={() => router.replace('/(tabs)/rocky')}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   const visibleStep = steps[Math.min(stepIndex, steps.length - 1)];
 
@@ -134,5 +209,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     color: colors.textMuted,
     fontSize: typography.size.xs,
+  },
+  failedPage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    padding: spacing.lg,
+  },
+  failedIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.dangerSoft,
+  },
+  failedTitle: {
+    color: colors.text,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+  },
+  failedText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.md,
+    textAlign: 'center',
+    lineHeight: typography.size.md * typography.lineHeight.relaxed,
   },
 });

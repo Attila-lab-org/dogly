@@ -40,3 +40,17 @@ def paginate[T: CursorItem](items: list[T], *, cursor: str | None, limit: int) -
     page = ordered[:limit]
     next_cursor = encode_cursor(page[-1]) if len(ordered) > limit and page else None
     return page, next_cursor
+
+
+def paginate_desc[T: CursorItem](
+    items: list[T], *, cursor: str | None, limit: int
+) -> tuple[list[T], str | None]:
+    """Newest-first cursor page; a cursor continues toward older items."""
+
+    ordered = sorted(items, key=lambda i: (i.created_at, i.id), reverse=True)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        ordered = [i for i in ordered if (i.created_at, i.id) < (ts, last_id)]
+    page = ordered[:limit]
+    next_cursor = encode_cursor(page[-1]) if len(ordered) > limit and page else None
+    return page, next_cursor

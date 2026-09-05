@@ -1,6 +1,9 @@
 /**
- * Tab Diario (Spec V1 sez. 5.1, 6) — timeline unificata cursor-paginata
- * (mock; con il backend: GET /v1/diary?cursor=…, sez. 9).
+ * Tab Diario (Spec V1 sez. 5.1, 6) — timeline unificata cursor-paginata.
+ * Con API attiva: GET /v1/diary?cursor=…&domain=… (sez. 9), paginazione
+ * cursore vera ("Mostra eventi precedenti" carica davvero la pagina
+ * successiva; a fine lista un testo onesto la sostituisce).
+ * In mock gate dev: dati mock, nessuna paginazione simulata.
  * Filtri: Tutti / Comportamento / Digestione. Stati obbligatori: empty,
  * filter, mixed behavior/digestive, deleted media (badge sulle righe).
  * Il design language segue UX_REFERENCE (card bianche, icone teal).
@@ -9,10 +12,22 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Chip, EmptyState, ScreenContainer } from '@/components';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  Chip,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  ScreenContainer,
+} from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { useSession } from '@/features/auth/SessionProvider';
+import { isApiConfigured } from '@/features/auth/env';
+import { queryKeys } from '@/lib/queryClient';
+import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 
 type DiaryFilter = 'ALL' | DiaryDomain;
 
@@ -29,13 +44,12 @@ const DOMAIN_ICONS: Record<DiaryDomain, keyof typeof Ionicons.glyphMap> = {
 
 function dayLabel(iso: string): string {
   const date = new Date(iso);
-  const today = new Date('2026-09-04T23:59:00Z'); // "oggi" del mock
   const dayMs = 24 * 60 * 60 * 1000;
-  const diffDays = Math.floor(
-    (Date.parse(today.toISOString().slice(0, 10)) -
-      Date.parse(iso.slice(0, 10))) /
-      dayMs,
-  );
+  const startOf = (d: Date) =>
+    Date.parse(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    );
+  const diffDays = Math.round((startOf(new Date()) - startOf(date)) / dayMs);
   if (diffDays <= 0) return 'Oggi';
   if (diffDays === 1) return 'Ieri';
   return date.toLocaleDateString('it-IT', {
@@ -91,15 +105,38 @@ function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }
 
 export default function DiaryScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
+  const { userId, usingMockGate } = useSession();
   const [filter, setFilter] = useState<DiaryFilter>('ALL');
 
-  const entries = useMemo(
-    () =>
-      diaryEntriesMock.filter(
+  const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
+
+  // Timeline reale: cursor pagination server-side (GET /v1/diary, sez. 9)
+  const query = useInfiniteQuery({
+    queryKey: [...queryKeys.diary(userId ?? 'anon', dog.id), filter],
+    queryFn: ({ pageParam }) =>
+      fetchDiaryPage({
+        dogId: dog.id,
+        domain: filter === 'ALL' ? undefined : filter,
+        cursor: pageParam,
+        limit: 20,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+    enabled: realEnabled,
+  });
+
+  const entries = useMemo<DiaryEntry[]>(() => {
+    if (!realEnabled) {
+      return diaryEntriesMock.filter(
         (entry) => filter === 'ALL' || entry.domain === filter,
-      ),
-    [filter],
-  );
+      );
+    }
+    return (query.data?.pages ?? [])
+      .flatMap((page) => page.items)
+      .map(mapDiaryItemToEntry)
+      .filter((entry): entry is DiaryEntry => entry !== null);
+  }, [realEnabled, filter, query.data]);
 
   // Raggruppamento per giorno (timeline cursor, sez. 5.1)
   const groups = useMemo(() => {
@@ -117,7 +154,7 @@ export default function DiaryScreen() {
     <ScreenContainer>
       <Text style={styles.title}>Diario</Text>
       <Text style={styles.subtitle}>
-        Tutto quello che ho capito di Rocky, giorno per giorno.
+        Tutto quello che ho capito di {dog.name}, giorno per giorno.
       </Text>
 
       {/* Filtri (sez. 5.1: All / Behavior / Digestive) */}
@@ -143,16 +180,24 @@ export default function DiaryScreen() {
         })}
       </View>
 
-      {groups.length === 0 ? (
+      {realEnabled && query.isLoading ? (
+        <LoadingState message="Carico il diario…" />
+      ) : realEnabled && query.isError ? (
+        <ErrorState
+          title="Non riesco a caricare il diario"
+          message="Controlla la connessione e riprova."
+          onRetry={() => void query.refetch()}
+        />
+      ) : groups.length === 0 ? (
         <EmptyState
           title={
             filter === 'ALL'
               ? 'Il diario è ancora vuoto'
               : 'Nessun evento in questo filtro'
           }
-          message="Registra il primo video di Rocky: le analisi appariranno qui, insieme ai controlli digestivi."
+          message={`Registra il primo video di ${dog.name}: le analisi appariranno qui, insieme ai controlli digestivi.`}
           icon={<Ionicons name="calendar-outline" size={40} color={colors.textMuted} />}
-          actionLabel="Capisci Rocky"
+          actionLabel={`Capisci ${dog.name}`}
           onAction={() => router.push('/behavior/capture')}
         />
       ) : (
@@ -169,7 +214,19 @@ export default function DiaryScreen() {
                   <View key={entry.id}>
                     <DiaryRow
                       entry={entry}
-                      onPress={() => router.push(`/diary/event/${entry.id}`)}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/diary/event/[eventId]',
+                          params: {
+                            eventId: entry.id,
+                            domain: entry.domain,
+                            occurredAt: entry.occurredAt,
+                            deleted: entry.mediaDeleted ? '1' : '0',
+                            title: entry.title,
+                            subtitle: entry.subtitle ?? '',
+                          },
+                        } as never)
+                      }
                     />
                     {index < dayEntries.length - 1 && (
                       <View style={styles.rowDivider} />
@@ -179,8 +236,30 @@ export default function DiaryScreen() {
               </View>
             </View>
           ))}
-          {/* Cursor pagination: placeholder del caricamento pagina successiva */}
-          <Chip label="Mostra eventi precedenti" tone="neutral" style={styles.moreChip} />
+          {/* Paginazione cursore vera: il chip carica la pagina successiva
+              solo se next_cursor esiste; altrimenti testo onesto. */}
+          {realEnabled && query.hasNextPage ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Mostra eventi precedenti"
+              onPress={() => void query.fetchNextPage()}
+              disabled={query.isFetchingNextPage}
+              style={styles.moreChip}
+            >
+              <Chip
+                label={
+                  query.isFetchingNextPage
+                    ? 'Caricamento…'
+                    : 'Mostra eventi precedenti'
+                }
+                tone="neutral"
+              />
+            </Pressable>
+          ) : (
+            <Text style={styles.endNote}>
+              Stai vedendo gli eventi più recenti.
+            </Text>
+          )}
         </ScrollView>
       )}
     </ScreenContainer>
@@ -295,5 +374,11 @@ const styles = StyleSheet.create({
   moreChip: {
     alignSelf: 'center',
     marginTop: spacing.sm,
+  },
+  endNote: {
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
   },
 });

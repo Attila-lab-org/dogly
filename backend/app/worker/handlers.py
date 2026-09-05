@@ -89,6 +89,8 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
     quota = QuotaService(state.store, engine=state.engine)
     if retryable and event.attempt_count < MAX_TASK_ATTEMPTS:
         transition(event, BehaviorEventStatus.FAILED_RETRYABLE)
+        if state.engine is not None:
+            await behavior_db.save_event_state(state.engine, event)
         return {"event_id": event.id, "status": event.status.value, "error": code.value}
     # Terminal: refund the reservation once (sez. 7.3 / 22).
     if event.status == BehaviorEventStatus.FAILED_RETRYABLE or event.status in (BehaviorEventStatus.OBSERVING, BehaviorEventStatus.INTERPRETING):
@@ -132,6 +134,8 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
 
     # QUEUED -> OBSERVING (or FAILED_RETRYABLE -> OBSERVING retry).
     transition(event, BehaviorEventStatus.OBSERVING)
+    if state.engine is not None:
+        await behavior_db.save_event_state(state.engine, event)
     try:
         video_ref = capture.storage_path
         # Real observers need an HTTPS media URI; mint a short-lived signed read URL.

@@ -52,6 +52,7 @@ seedDate.setDate(seedDate.getDate() + 5);
 seedDate.setHours(10, 0, 0, 0);
 
 let events: CareEvent[] = [
+  // Seed demo (dev/mock gate): sostituito dai dati reali dopo hydrateCareEvents.
   {
     id: 'care-demo-vaccine',
     dogId: 'dog-rocky',

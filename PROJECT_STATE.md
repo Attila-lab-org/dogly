@@ -41,6 +41,7 @@ Ultimo aggiornamento: 2026-09-05 • Branch: `main`
 - Profilo privato default / pubblico opt-in; messaggio quotidiano interattivo.
 - Dogly Signals: **POSTICIPATO**; nessun ingresso visibile e deep link disattivati.
   Schema e prototipo restano isolati per una futura rivalutazione.
+- Admin: Control Center web V0 in apps/admin (Next.js), mock read-model; RBAC e endpoint /v1/admin/* nelle fasi successive (ADR-011).
 
 ## Riferimenti
 

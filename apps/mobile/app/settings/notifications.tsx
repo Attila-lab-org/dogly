@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, ScreenContainer } from '@/components';
+import { Card, Chip, ScreenContainer } from '@/components';
 import {
+  hydrateNotificationPreferences,
   setNotificationPreference,
   useNotificationPreferences,
   type NotificationPreferences,
@@ -16,6 +17,8 @@ const OPTIONS: Array<{
   key: keyof NotificationPreferences;
   title: string;
   description: string;
+  /** true = la preferenza viene salvata, ma nessun invio la usa ancora */
+  comingSoon?: boolean;
 }> = [
   {
     key: 'careReminders',
@@ -26,6 +29,7 @@ const OPTIONS: Array<{
     key: 'resultReady',
     title: 'Risultati pronti',
     description: 'Quando termina una nuova analisi.',
+    comingSoon: true,
   },
   {
     key: 'checkIn',
@@ -36,22 +40,29 @@ const OPTIONS: Array<{
     key: 'newPattern',
     title: 'Nuove abitudini',
     description: 'Quando emerge qualcosa di utile.',
+    comingSoon: true,
   },
   {
     key: 'digestiveTrend',
     title: 'Cambiamenti digestivi',
     description: 'Quando notiamo una variazione importante.',
+    comingSoon: true,
   },
   {
     key: 'weeklySummary',
     title: 'Riepilogo settimanale',
     description: 'Un riepilogo della settimana.',
+    comingSoon: true,
   },
 ];
 
 export default function NotificationSettingsScreen() {
   const preferences = useNotificationPreferences();
   const { prefs } = useCheckIn();
+
+  useEffect(() => {
+    void hydrateNotificationPreferences();
+  }, []);
 
   return (
     <ScreenContainer scroll>
@@ -96,8 +107,19 @@ export default function NotificationSettingsScreen() {
             style={[styles.row, index > 0 && styles.divider]}
           >
             <View style={styles.copy}>
-              <Text style={styles.title}>{option.title}</Text>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{option.title}</Text>
+                {option.comingSoon ? (
+                  <Chip label="In arrivo" tone="neutral" />
+                ) : null}
+              </View>
               <Text style={styles.description}>{option.description}</Text>
+              {option.comingSoon ? (
+                <Text style={styles.comingSoonNote}>
+                  La preferenza viene salvata ora; l’invio arriva con una
+                  prossima versione.
+                </Text>
+              ) : null}
             </View>
             <Switch
               value={preferences[option.key]}
@@ -184,6 +206,17 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  comingSoonNote: {
+    marginTop: spacing.xxs,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    fontStyle: 'italic',
   },
   title: {
     color: colors.text,

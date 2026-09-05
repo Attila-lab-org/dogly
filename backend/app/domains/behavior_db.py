@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.config import Settings
 from app.contracts.api import BehaviorCaptureInitRequest, BehaviorFeedbackRequest
 from app.contracts.errors import ApiError, ErrorCode
-from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus
+from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus, FeedbackValue
 from app.domains import dogs_db
 from app.domains.billing import QuotaExceeded
 from app.domains.db import reserve_usage_sql
@@ -322,6 +322,26 @@ async def record_feedback(
     data["event_id"] = str(data["event_id"])
     data["user_id"] = str(data["user_id"])
     return BehaviorFeedbackRec.model_validate(data)
+
+
+async def get_feedback_value(
+    engine: AsyncEngine, *, user_id: str, event_id: str
+) -> FeedbackValue | None:
+    async with engine.connect() as conn:
+        value = (
+            await conn.execute(
+                text(
+                    """
+                    select value
+                    from public.behavior_feedback
+                    where event_id = :event_id
+                      and user_id = cast(:user_id as uuid)
+                    """
+                ),
+                {"event_id": event_id, "user_id": user_id},
+            )
+        ).scalar_one_or_none()
+    return FeedbackValue(str(value)) if value is not None else None
 
 
 async def save_event_state(engine: AsyncEngine, event: BehaviorEventRec) -> None:

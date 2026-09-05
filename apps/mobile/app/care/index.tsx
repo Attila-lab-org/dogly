@@ -7,7 +7,7 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { CareEventCard } from '@/features/care/CareEventCard';
 import { formatCareDate, relativeCareDate } from '@/features/care/date';
-import { useCareEvents } from '@/features/care/store';
+import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { CARE_TYPE_META } from '@/features/care/types';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 
@@ -15,11 +15,16 @@ export default function CareAgendaScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const events = useCareEvents(dog.id);
-  const upcoming = events.filter((event) => event.status === 'SCHEDULED');
+  // "Prossimo" = solo eventi SCHEDULED futuri (nextCareEvent): un evento
+  // passato non completato non deve mai apparire come prossimo; resta però
+  // in "In programma" finché non viene completato o eliminato.
+  const next = nextCareEvent(dog.id);
+  const upcoming = events.filter(
+    (event) => event.status === 'SCHEDULED' && event.id !== next?.id,
+  );
   const history = events
     .filter((event) => event.status !== 'SCHEDULED')
     .sort((a, b) => Date.parse(b.scheduledAt) - Date.parse(a.scheduledAt));
-  const next = upcoming[0];
 
   return (
     <ScreenContainer scroll>
@@ -83,11 +88,11 @@ export default function CareAgendaScreen() {
         style={styles.addButton}
       />
 
-      {upcoming.length > 1 ? (
+      {upcoming.length > 0 ? (
         <>
           <Text style={styles.sectionTitle}>In programma</Text>
           <View style={styles.list}>
-            {upcoming.slice(1).map((event) => (
+            {upcoming.map((event) => (
               <CareEventCard
                 key={event.id}
                 event={event}

@@ -12,8 +12,8 @@ from app.contracts.api import (
     SignalMapEntryOut,
     SignalMapResponse,
 )
+from app.domains import idempotency_db, signals_db
 from app.domains import signals as signals_domain
-from app.domains import signals_db
 from app.domains.models import SignalExperimentRec, SignalMapEntryRec
 
 router = APIRouter()
@@ -87,5 +87,13 @@ async def create_signal_experiment(
             state.store, user_id=user_id, dog_id=dog_id, payload=payload
         )
     response = experiment_out(experiment)
-    guard.record(response.model_dump(mode="json"))
+    body = response.model_dump(mode="json")
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=guard._payload_hash,
+        )
     return response

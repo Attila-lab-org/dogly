@@ -43,23 +43,26 @@ export interface ProcessingStep {
 }
 
 /** Stepper processing (sez. 7.2): coda → osservazione → interpretazione. */
-export const PROCESSING_STEPS: ProcessingStep[] = [
-  {
-    status: 'QUEUED',
-    title: 'In coda',
-    description: 'Il video è al sicuro: inizio appena possibile.',
-  },
-  {
-    status: 'OBSERVING',
-    title: 'Osservo il video',
-    description: 'Rilevo i fatti oggettivi: postura, movimento, vocalizzazioni.',
-  },
-  {
-    status: 'INTERPRETING',
-    title: 'Interpreto i segnali',
-    description: 'Metto insieme osservazioni, contesto e ciò che so di Rocky.',
-  },
-];
+export function processingStepsFor(dogName: string): ProcessingStep[] {
+  return [
+    {
+      status: 'QUEUED',
+      title: 'In coda',
+      description: 'Il video è al sicuro: inizio appena possibile.',
+    },
+    {
+      status: 'OBSERVING',
+      title: 'Osservo il video',
+      description:
+        'Rilevo i fatti oggettivi: postura, movimento, vocalizzazioni.',
+    },
+    {
+      status: 'INTERPRETING',
+      title: 'Interpreto i segnali',
+      description: `Metto insieme osservazioni, contesto e ciò che so di ${dogName}.`,
+    },
+  ];
+}
 
 /** Ordine degli step per evidenziare avanzamento/completamento. */
 export const PROCESSING_STEP_ORDER: Record<string, number> = {

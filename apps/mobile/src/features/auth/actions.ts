@@ -1,5 +1,5 @@
 /**
- * Auth helpers: email OTP + Google OAuth (Supabase).
+ * Auth helpers: email OTP + Google OAuth + Sign in with Apple (Supabase).
  */
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -133,4 +133,44 @@ export async function signInWithGoogle(): Promise<void> {
   }
 
   await completeOAuthCallback(result.url);
+}
+
+/**
+ * Sign in with Apple (ADR-001 LOCKED): credential Apple nativa → Supabase
+ * signInWithIdToken (provider 'apple'). Errori mappati come Google tramite
+ * mapAuthError; l'annullamento utente diventa "Accesso Apple annullato".
+ * NOTA: richiede una development build (EAS/dev-client) con il capability
+ * "Sign In with Apple" — in Expo Go il modulo nativo non è disponibile.
+ */
+export async function signInWithApple(): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase non configurato');
+  }
+  const AppleAuthentication = await import('expo-apple-authentication');
+  let credential;
+  try {
+    credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+  } catch (err) {
+    if (
+      typeof err === 'object' &&
+      err !== null &&
+      (err as { code?: string }).code === 'ERR_REQUEST_CANCELED'
+    ) {
+      throw new Error('Accesso Apple annullato');
+    }
+    throw err;
+  }
+  if (!credential.identityToken) {
+    throw new Error('Token Apple mancante');
+  }
+  const { error } = await getSupabaseClient().auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+  });
+  if (error) throw error;
 }

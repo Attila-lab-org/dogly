@@ -1,6 +1,10 @@
 /**
  * Dettaglio pattern + azioni di review (Spec V1 sez. 9 —
- * POST /v1/patterns/{id}/review): "Corretto" / "Contesta" / "Archivia".
+ * POST /v1/patterns/{id}/review): "Contesta" / "Archivia" sono collegate al
+ * backend quando disponibile. "Corretto": il backend non espone un'azione di
+ * conferma esplicita (enum: contest | archive | correct_context) — mostriamo
+ * uno stato onesto invece di un finto salvataggio. In mock gate dev nessun
+ * feedback viene inviato e la UI lo dichiara.
  * Spiegazione trasparente delle evidenze: support/contradict count,
  * note testuali, reliability band (mai %).
  */
@@ -10,7 +14,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
+import { api } from '@/lib/apiClient';
 import { patternsMock } from '@/mocks/secondary';
+import { isApiConfigured } from '@/features/auth/env';
+import { useSession } from '@/features/auth/SessionProvider';
 import {
   ConfidenceBandPill,
   PatternStateChip,
@@ -18,6 +25,8 @@ import {
 } from '@/features/secondary/components';
 
 type ReviewAction = 'CONFIRM' | 'CONTEST' | 'ARCHIVE';
+type ReviewOutcome = 'recorded' | 'demo' | 'unsupported';
+type IconName = keyof typeof Ionicons.glyphMap;
 
 const reviewCopy: Record<ReviewAction, string> = {
   CONFIRM:
@@ -31,8 +40,13 @@ const reviewCopy: Record<ReviewAction, string> = {
 export default function PatternDetailScreen() {
   const { patternId } = useLocalSearchParams<{ patternId: string }>();
   const router = useRouter();
+  const { usingMockGate } = useSession();
+  const live = isApiConfigured() && !usingMockGate;
   const pattern = patternsMock.find((p) => p.id === patternId);
   const [reviewed, setReviewed] = useState<ReviewAction | null>(null);
+  const [outcome, setOutcome] = useState<ReviewOutcome | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState(false);
 
   if (!pattern) {
     return (
@@ -48,7 +62,50 @@ export default function PatternDetailScreen() {
     );
   }
 
-  const isArchived = reviewed === 'ARCHIVE';
+  const isArchived = reviewed === 'ARCHIVE' && outcome === 'recorded';
+
+  const submitReview = async (action: ReviewAction) => {
+    setReviewError(false);
+    if (!live) {
+      // Mock gate dev: nessun finto salvataggio, lo diciamo esplicitamente.
+      setReviewed(action);
+      setOutcome('demo');
+      return;
+    }
+    if (action === 'CONFIRM') {
+      // Il backend non ha un'azione "confirm" (sez. 9 enum): onestà > fake.
+      setReviewed(action);
+      setOutcome('unsupported');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post(`/v1/patterns/${pattern.id}/review`, {
+        action: action === 'CONTEST' ? 'contest' : 'archive',
+      });
+      setReviewed(action);
+      setOutcome('recorded');
+    } catch {
+      setReviewError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const outcomeCopy: Record<ReviewOutcome, { icon: IconName; text: string }> = {
+    recorded: {
+      icon: 'checkmark-circle',
+      text: reviewed ? reviewCopy[reviewed] : '',
+    },
+    demo: {
+      icon: 'information-circle-outline',
+      text: 'Demo: il tuo parere non è stato inviato al server e nulla viene salvato. Con il backend collegato, Contesta e Archivia vengono registrati davvero.',
+    },
+    unsupported: {
+      icon: 'information-circle-outline',
+      text: 'La conferma esplicita non è registrabile in questa versione: nessuna azione è stata inviata. Il pattern si rafforza solo con nuove osservazioni dal diario.',
+    },
+  };
 
   return (
     <ScreenContainer scroll>
@@ -110,15 +167,15 @@ export default function PatternDetailScreen() {
       </Card>
 
       {/* Azioni di review */}
-      {reviewed ? (
+      {reviewed && outcome ? (
         <Card style={styles.card}>
           <View style={styles.reviewDone}>
             <Ionicons
-              name="checkmark-circle"
+              name={outcomeCopy[outcome].icon}
               size={28}
-              color={colors.accent}
+              color={outcome === 'recorded' ? colors.accent : colors.textSecondary}
             />
-            <Text style={styles.bodyText}>{reviewCopy[reviewed]}</Text>
+            <Text style={styles.bodyText}>{outcomeCopy[outcome].text}</Text>
           </View>
           <Button
             title="Torna ai pattern"
@@ -134,23 +191,42 @@ export default function PatternDetailScreen() {
             Il tuo parere conta come evidenza, ma nessun pattern cambia solo
             per un singolo feedback.
           </Text>
+          {reviewError ? (
+            <View style={styles.errorBanner} accessibilityLiveRegion="polite">
+              <Ionicons
+                name="alert-circle-outline"
+                size={16}
+                color={colors.danger}
+              />
+              <Text style={styles.errorText}>
+                Review non salvata: controlla la connessione e riprova. Nulla è
+                stato registrato.
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.actions}>
             <Button
               title="Corretto"
+              loading={submitting}
+              disabled={submitting}
               icon={<Ionicons name="checkmark" size={18} color={colors.textOnPrimary} />}
-              onPress={() => setReviewed('CONFIRM')}
+              onPress={() => void submitReview('CONFIRM')}
             />
             <Button
               title="Contesta"
               variant="danger"
+              loading={submitting}
+              disabled={submitting}
               icon={<Ionicons name="flag-outline" size={18} color={colors.textOnPrimary} />}
-              onPress={() => setReviewed('CONTEST')}
+              onPress={() => void submitReview('CONTEST')}
             />
             <Button
               title="Archivia"
               variant="outline"
+              loading={submitting}
+              disabled={submitting}
               icon={<Ionicons name="archive-outline" size={18} color={colors.accent} />}
-              onPress={() => setReviewed('ARCHIVE')}
+              onPress={() => void submitReview('ARCHIVE')}
             />
           </View>
         </Card>
@@ -243,6 +319,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     marginBottom: spacing.md,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerSoft,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: typography.size.xs,
+    color: colors.text,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   backButton: {
     marginTop: spacing.xs,

@@ -35,14 +35,15 @@ import { PhotoThumbnail } from '@/features/photos/components';
 import { albumsMock, photosForAlbum } from '@/mocks/photos';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { relativeCareDate } from '@/features/care/date';
-import { useCareEvents } from '@/features/care/store';
+import { nextCareEvent, useCareEvents } from '@/features/care/store';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const careEvents = useCareEvents(dog.id);
+  // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
+  useCareEvents(dog.id);
   const { width } = useWindowDimensions();
   const photoSize = Math.floor(
     (width - spacing.lg * 2 - spacing.sm * 2) / 3,
@@ -53,7 +54,7 @@ export default function DogProfileTabScreen() {
     ? foodProductsMock.find((food) => food.id === activePeriod.foodProductId)
     : undefined;
   const previewPhotos = photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3);
-  const nextCare = careEvents.find((event) => event.status === 'SCHEDULED');
+  const nextCare = nextCareEvent(dog.id);
 
   return (
     <View style={styles.root}>
@@ -166,7 +167,9 @@ export default function DogProfileTabScreen() {
               photo={photo}
               size={photoSize}
               onPress={() =>
-                router.push(`/dogs/${dog.id}/album/photo/${photo.id}` as never)
+                router.push(
+                  `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
+                )
               }
             />
           ))}

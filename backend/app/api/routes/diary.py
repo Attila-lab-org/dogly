@@ -7,9 +7,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.api.deps import StateDep, UserIdDep
-from app.api.pagination import paginate
+from app.api.pagination import paginate_desc
 from app.contracts.api import DiaryItem, DiaryPage
-from app.contracts.taxonomy import AnalysisDomain, RetentionState
+from app.contracts.taxonomy import (
+    AnalysisDomain,
+    ConfidenceBand,
+    FeedbackValue,
+    RetentionState,
+)
 from app.domains import diary_db
 from app.domains.models import BehaviorEventRec, FecalEventRec
 
@@ -25,6 +30,8 @@ class _TimelineEntry:
         summary: str | None,
         status: str,
         retention_state: RetentionState,
+        confidence_band: ConfidenceBand | None = None,
+        feedback: FeedbackValue | None = None,
     ) -> None:
         self.id = rec.id
         self.dog_id = rec.dog_id
@@ -34,6 +41,8 @@ class _TimelineEntry:
         self.summary = summary
         self.status = status
         self.retention_state = retention_state
+        self.confidence_band = confidence_band
+        self.feedback = feedback
 
 
 @router.get("/diary", response_model=DiaryPage)
@@ -74,6 +83,12 @@ async def get_diary(
                     e.summary,
                     e.status.value,
                     retention,
+                    e.confidence_band,
+                    (
+                        store.behavior_feedback[e.id].value
+                        if e.id in store.behavior_feedback
+                        else None
+                    ),
                 )
             )
     if domain in (None, AnalysisDomain.DIGESTIVE):
@@ -93,10 +108,11 @@ async def get_diary(
                     e.summary,
                     e.status,
                     e.retention_state,
+                    e.confidence_band,
                 )
             )
 
-    page, next_cursor = paginate(entries, cursor=cursor, limit=limit)
+    page, next_cursor = paginate_desc(entries, cursor=cursor, limit=limit)
     return DiaryPage(
         items=[
             DiaryItem(
@@ -106,6 +122,8 @@ async def get_diary(
                 status=entry.status,
                 title=entry.title,
                 summary=entry.summary,
+                confidence_band=entry.confidence_band,
+                feedback=entry.feedback,
                 retention_state=entry.retention_state,
                 created_at=entry.created_at,
             )

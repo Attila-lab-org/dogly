@@ -6,6 +6,112 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/v1/me/consents": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Get Consents",
+        "operationId": "get_consents_v1_me_consents_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserConsentsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Patch Consents",
+        "operationId": "patch_consents_v1_me_consents_patch",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserConsentsPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserConsentsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/me": {
       "get": {
         "tags": [
@@ -2832,11 +2938,16 @@
           },
           "bytes": {
             "type": "integer",
+            "maximum": 100000000.0,
             "exclusiveMinimum": 0.0,
             "title": "Bytes"
           },
           "content_type": {
             "type": "string",
+            "enum": [
+              "video/mp4",
+              "video/quicktime"
+            ],
             "title": "Content Type",
             "default": "video/mp4"
           },
@@ -2987,6 +3098,16 @@
               }
             ],
             "title": "Taxonomy Version"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "type": "string",
@@ -3558,6 +3679,26 @@
             ],
             "title": "Summary"
           },
+          "confidence_band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfidenceBand"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "retention_state": {
             "$ref": "#/components/schemas/RetentionState",
             "default": "TEMPORARY"
@@ -3652,6 +3793,43 @@
               }
             ],
             "title": "Color"
+          },
+          "image_quality": {
+            "type": "string",
+            "enum": [
+              "sufficient",
+              "insufficient",
+              "unknown"
+            ],
+            "title": "Image Quality",
+            "default": "unknown"
+          },
+          "quality_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Quality Warnings"
+          },
+          "mucus_candidate": {
+            "type": "string",
+            "title": "Mucus Candidate",
+            "default": "unknown"
+          },
+          "fresh_blood_candidate": {
+            "type": "string",
+            "title": "Fresh Blood Candidate",
+            "default": "unknown"
+          },
+          "melena_candidate": {
+            "type": "string",
+            "title": "Melena Candidate",
+            "default": "unknown"
+          },
+          "foreign_material_candidate": {
+            "type": "string",
+            "title": "Foreign Material Candidate",
+            "default": "unknown"
           },
           "confidence_band": {
             "anyOf": [
@@ -4668,11 +4846,17 @@
           },
           "bytes": {
             "type": "integer",
+            "maximum": 12000000.0,
             "exclusiveMinimum": 0.0,
             "title": "Bytes"
           },
           "content_type": {
             "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ],
             "title": "Content Type",
             "default": "image/jpeg"
           }
@@ -4891,11 +5075,17 @@
           },
           "bytes": {
             "type": "integer",
+            "maximum": 12000000.0,
             "exclusiveMinimum": 0.0,
             "title": "Bytes"
           },
           "content_type": {
             "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ],
             "title": "Content Type",
             "default": "image/jpeg"
           }
@@ -5174,6 +5364,7 @@
           "action": {
             "type": "string",
             "enum": [
+              "confirm",
               "contest",
               "archive",
               "correct_context"
@@ -5854,6 +6045,98 @@
           "ledger"
         ],
         "title": "UsageResponse"
+      },
+      "UserConsentsPatch": {
+        "properties": {
+          "policy_version": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Policy Version"
+          },
+          "service_terms": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Terms"
+          },
+          "research_training": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Training"
+          },
+          "notifications": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notifications"
+          },
+          "media_retention": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Retention"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_version"
+        ],
+        "title": "UserConsentsPatch"
+      },
+      "UserConsentsResponse": {
+        "properties": {
+          "service_terms": {
+            "type": "boolean",
+            "title": "Service Terms",
+            "default": false
+          },
+          "research_training": {
+            "type": "boolean",
+            "title": "Research Training",
+            "default": false
+          },
+          "notifications": {
+            "type": "boolean",
+            "title": "Notifications",
+            "default": false
+          },
+          "media_retention": {
+            "type": "boolean",
+            "title": "Media Retention",
+            "default": false
+          },
+          "policy_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Policy Versions"
+          }
+        },
+        "type": "object",
+        "title": "UserConsentsResponse"
       },
       "ValidationError": {
         "properties": {

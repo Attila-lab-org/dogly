@@ -1,27 +1,39 @@
 /**
- * Sign-in (Spec V1 sez. 6) — Supabase Auth: email OTP/password + Google.
- * Sessione in SecureStore via SessionProvider; dopo login → onboarding o Home.
+ * Sign-in (Spec V1 sez. 6) — Supabase Auth: email OTP (niente password: il
+ * codice copre sia l'accesso sia la creazione dell'account) + Google +
+ * Apple (solo iOS, ADR-001). Sessione in SecureStore via SessionProvider;
+ * dopo login → onboarding o Home.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { useSession } from '@/features/auth/SessionProvider';
 import {
   mapAuthError,
   sendEmailOtp,
+  signInWithApple,
   signInWithGoogle,
-  signInWithPassword,
   verifyEmailOtp,
   type AuthErrorKind,
 } from '@/features/auth/actions';
+import { shouldOfferAppleSignIn } from '@/features/auth/appleSignIn';
 import { demoFlags } from '@/mocks/demo';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
-type AuthProvider = 'google' | 'email';
+type AuthProvider = 'google' | 'apple' | 'email';
 type EmailStep = 'idle' | 'enter_email' | 'enter_code';
 
 const ERROR_COPY: Record<AuthErrorKind, string> = {
@@ -41,9 +53,22 @@ export default function SignInScreen() {
   const [error, setError] = useState<AuthErrorKind | null>(null);
   const [emailStep, setEmailStep] = useState<EmailStep>('idle');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const oauthInFlight = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    let mounted = true;
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => {
+        if (mounted) setAppleAvailable(available);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -87,6 +112,30 @@ export default function SignInScreen() {
     }
   };
 
+  const signInApple = async () => {
+    if (oauthInFlight.current) return;
+    // Mock gate dev: stesso comportamento della demo Google.
+    if (usingMockGate) {
+      runMockSignIn('apple');
+      return;
+    }
+    oauthInFlight.current = true;
+    setError(null);
+    setLoadingProvider('apple');
+    try {
+      await signInWithApple();
+      // SessionProvider onAuthStateChange → redirect via useEffect
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('annullat')) {
+        return; // annullamento utente: nessun errore da mostrare
+      }
+      setError(mapAuthError(err));
+    } finally {
+      oauthInFlight.current = false;
+      setLoadingProvider(null);
+    }
+  };
+
   const startEmail = () => {
     if (usingMockGate) {
       runMockSignIn('email');
@@ -113,22 +162,6 @@ export default function SignInScreen() {
     }
   };
 
-  const confirmPassword = async () => {
-    if (!email.trim() || !password) {
-      setError('auth_error');
-      return;
-    }
-    setLoadingProvider('email');
-    setError(null);
-    try {
-      await signInWithPassword(email, password);
-    } catch (err) {
-      setError(mapAuthError(err));
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
-
   const confirmOtp = async () => {
     setLoadingProvider('email');
     setError(null);
@@ -140,6 +173,8 @@ export default function SignInScreen() {
       setLoadingProvider(null);
     }
   };
+
+  const showApple = shouldOfferAppleSignIn(Platform.OS, appleAvailable);
 
   return (
     <ScreenContainer>
@@ -178,6 +213,10 @@ export default function SignInScreen() {
 
       {emailStep === 'enter_email' && (
         <View style={styles.emailBlock}>
+          <Text style={styles.emailExplain}>
+            Ti inviamo un codice via email: niente password. Vale sia per
+            accedere sia per creare il tuo account.
+          </Text>
           <Text style={styles.label}>Email</Text>
           <TextInput
             autoCapitalize="none"
@@ -190,32 +229,17 @@ export default function SignInScreen() {
             style={styles.input}
             testID="signin-email-input"
           />
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="current-password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            placeholder="La tua password"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            testID="signin-password-input"
-          />
           <Button
-            title="Accedi con password"
-            loading={loadingProvider === 'email'}
-            onPress={() => void confirmPassword()}
-            testID="signin-password-submit"
-          />
-          <Button
-            title="Oppure invia un codice"
-            variant="outline"
+            title="Invia il codice"
             loading={loadingProvider === 'email'}
             onPress={() => void sendOtp()}
             testID="signin-send-otp"
           />
-          <Pressable onPress={() => setEmailStep('idle')}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Torna ai metodi di accesso"
+            onPress={() => setEmailStep('idle')}
+          >
             <Text style={styles.link}>Torna ai metodi di accesso</Text>
           </Pressable>
         </View>
@@ -239,7 +263,11 @@ export default function SignInScreen() {
             onPress={() => void confirmOtp()}
             testID="signin-verify-otp"
           />
-          <Pressable onPress={() => void sendOtp()}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reinvia codice"
+            onPress={() => void sendOtp()}
+          >
             <Text style={styles.link}>Reinvia codice</Text>
           </Pressable>
         </View>
@@ -253,9 +281,24 @@ export default function SignInScreen() {
             loading={loadingProvider === 'google'}
             disabled={loadingProvider !== null}
             onPress={() => void signInOAuth()}
-            icon={<Ionicons name="logo-google" size={18} color={colors.accent} />}
+            icon={
+              <Ionicons name="logo-google" size={18} color={colors.textOnPrimary} />
+            }
             testID="signin-google"
           />
+          {showApple ? (
+            <Button
+              title="Continua con Apple"
+              variant="secondary"
+              loading={loadingProvider === 'apple'}
+              disabled={loadingProvider !== null}
+              onPress={() => void signInApple()}
+              icon={
+                <Ionicons name="logo-apple" size={18} color={colors.textOnPrimary} />
+              }
+              testID="signin-apple"
+            />
+          ) : null}
           <Button
             title="Continua con email"
             variant="outline"
@@ -329,6 +372,11 @@ const styles = StyleSheet.create({
   },
   emailBlock: {
     gap: spacing.md,
+  },
+  emailExplain: {
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   label: {
     fontSize: typography.size.sm,

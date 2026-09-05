@@ -18,6 +18,16 @@ from app.domains import digestive_db, idempotency_db
 router = APIRouter()
 
 
+def _public_digestive_status(status: str) -> str:
+    """Keep worker internals separate from the stable mobile status contract."""
+
+    if status in {"OBSERVING", "INTERPRETING", "FAILED_RETRYABLE"}:
+        return "PROCESSING"
+    if status == "REJECTED_QUALITY":
+        return "INSUFFICIENT_IMAGE"
+    return status
+
+
 async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
     guard.record(body)
     if state.engine is not None and guard._scope:
@@ -100,13 +110,22 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         e = await digestive_db.get_fecal_event(state.engine, user_id=user_id, event_id=event_id)
     else:
         e = digestive_domain.get_fecal_event(state.store, user_id=user_id, event_id=event_id)
+    observation = e.observation_json or {}
     return DigestiveEventOut(
         id=e.id,
         dog_id=e.dog_id,
-        status=e.status,
+        status=_public_digestive_status(e.status),
         fecal_score_estimate=e.fecal_score_estimate,
         consistency=e.consistency,
         color=e.color,
+        image_quality=observation.get("image_quality", "unknown"),
+        quality_warnings=observation.get("warnings", []),
+        mucus_candidate=observation.get("mucus_candidate", "unknown"),
+        fresh_blood_candidate=observation.get("fresh_blood_candidate", "unknown"),
+        melena_candidate=observation.get("melena_candidate", "unknown"),
+        foreign_material_candidate=observation.get(
+            "foreign_material_candidate", "unknown"
+        ),
         confidence_band=e.confidence_band,
         safety_flags=e.safety_flags,
         summary=e.summary,

@@ -166,7 +166,9 @@ def collect_export_payload(store: InMemoryStore, user_id: str) -> dict[str, Any]
             for rec in store.feeding_periods.values()
             if rec.dog_id in dog_ids
         ],
-        "consents": [],
+        "consents": [
+            row for row in store.user_consents if row["user_id"] == user_id
+        ],
         "subscriptions": [
             rec.model_dump(mode="json")
             for rec in store.subscriptions.values()

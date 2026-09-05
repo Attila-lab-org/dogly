@@ -70,6 +70,8 @@ async def review_pattern(
         pattern.state = PatternState.CONTESTED
     elif payload.action == "archive":
         pattern.state = PatternState.ARCHIVED
+    elif payload.action == "confirm":
+        pattern.confirm_count += 1
     elif payload.action == "correct_context":
         # Context correction is stored as metadata; no state change.
         pattern.version += 1

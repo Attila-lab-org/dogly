@@ -83,12 +83,19 @@ async def review_pattern(
         if payload.action == "contest":
             next_state = PatternState.CONTESTED.value
             version_increment = 0
+            confirm_increment = 0
         elif payload.action == "archive":
             next_state = PatternState.ARCHIVED.value
             version_increment = 0
+            confirm_increment = 0
+        elif payload.action == "confirm":
+            next_state = str(row["state"])
+            version_increment = 0
+            confirm_increment = 1
         else:
             next_state = str(row["state"])
             version_increment = 1
+            confirm_increment = 0
 
         updated = (
             await conn.execute(
@@ -97,6 +104,7 @@ async def review_pattern(
                     update public.personal_patterns
                     set state = :state,
                         version = version + :version_increment,
+                        confirm_count = confirm_count + :confirm_increment,
                         last_seen = now(),
                         updated_at = now()
                     where id = :pattern_id
@@ -109,6 +117,7 @@ async def review_pattern(
                     "pattern_id": pattern_id,
                     "state": next_state,
                     "version_increment": version_increment,
+                    "confirm_increment": confirm_increment,
                 },
             )
         ).mappings().one()

@@ -30,7 +30,11 @@ import {
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
 import { useSession } from '@/features/auth/SessionProvider';
-import { enqueueAndUploadBehaviorClip } from '@/features/behavior/upload';
+import {
+  discardPendingBehaviorClip,
+  enqueueAndUploadBehaviorClip,
+} from '@/features/behavior/upload';
+import { isQuotaExhaustedError } from '@/features/behavior/api';
 import { isApiConfigured } from '@/features/auth/env';
 
 export default function BehaviorCaptureScreen() {
@@ -186,12 +190,18 @@ export default function BehaviorCaptureScreen() {
   }, []);
 
   const retake = useCallback(() => {
+    const discardedUri = pendingUriRef.current;
     pendingUriRef.current = null;
     uploadStartedRef.current = false;
     setUploadError(null);
     setUploading(false);
     dispatch({ type: 'RESET' });
-  }, []);
+    // Il video scartato non deve restare in coda SQLite: il drain lo
+    // riproverebbe a ogni resume anche se l'utente lo ha buttato.
+    if (discardedUri && userId) {
+      void discardPendingBehaviorClip(userId, discardedUri);
+    }
+  }, [userId]);
 
   // Upload dopo clip valida
   useEffect(() => {
@@ -222,7 +232,12 @@ export default function BehaviorCaptureScreen() {
           hasAudio: micGranted && !state.audioDegraded,
         });
         router.replace(`/behavior/processing/${eventId}`);
-      } catch {
+      } catch (err) {
+        if (isQuotaExhaustedError(err)) {
+          // Quota esaurita (402 QUOTA_EXHAUSTED): paywall, non errore generico.
+          router.replace('/paywall');
+          return;
+        }
         uploadStartedRef.current = false;
         setUploading(false);
         setUploadError(
@@ -261,7 +276,11 @@ export default function BehaviorCaptureScreen() {
         hasAudio: micGranted && !state.audioDegraded,
       });
       router.replace(`/behavior/processing/${eventId}`);
-    } catch {
+    } catch (err) {
+      if (isQuotaExhaustedError(err)) {
+        router.replace('/paywall');
+        return;
+      }
       setUploading(false);
       setUploadError('Upload non riuscito. Riprova.');
     }

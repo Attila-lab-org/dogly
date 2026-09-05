@@ -231,6 +231,26 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
 
 const DB_NAME = 'cbi-pending-uploads.db';
 
+/**
+ * Rimuove dalla coda tutte le righe pending per un file locale (es. "Registra
+ * di nuovo" dopo un upload fallito): senza rimozione la coda riproverebbe un
+ * upload che l'utente ha esplicitamente scartato. Ritorna gli id rimossi.
+ */
+export function discardUploadsForUri(
+  queue: UploadQueue,
+  userId: string,
+  localUri: string,
+): string[] {
+  const removed: string[] = [];
+  for (const item of queue.listByUser(userId)) {
+    if (item.localUri === localUri) {
+      queue.remove(item.id);
+      removed.push(item.id);
+    }
+  }
+  return removed;
+}
+
 let defaultQueue: UploadQueue | null = null;
 
 /** Coda di produzione (SQLite on-device). Lazy: aperta al primo uso. */

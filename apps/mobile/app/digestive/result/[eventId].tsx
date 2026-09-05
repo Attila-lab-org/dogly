@@ -2,10 +2,11 @@
  * Risultato digestivo: lettura immediata, dettagli utili e safety deterministica.
  * Le anomalie non osservate non vengono elencate per evitare falsa rassicurazione.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { fecalEventsMock } from '@/mocks/secondary';
@@ -20,6 +21,11 @@ import {
   SAFETY_COPY,
 } from '@/features/secondary/safetyCopy';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import {
+  getDigestiveEvent,
+  mapApiDigestiveEventToResult,
+} from '@/features/digestive/api';
+import { isApiConfigured } from '@/features/auth/env';
 import type {
   CandidateLevel,
   SafetyFlagCode,
@@ -38,7 +44,49 @@ export default function DigestiveResultScreen() {
     : params.eventId ?? '';
   const router = useRouter();
   const { dog } = useDogProfile();
-  const event = eventId ? fecalEventsMock[eventId] : undefined;
+  // Mock gate dev: gli id fecal-* leggono i mock; gli id reali fanno GET.
+  const useApi =
+    isApiConfigured() && Boolean(eventId) && !eventId.startsWith('fecal-');
+
+  const query = useQuery({
+    queryKey: ['digestive-event', eventId],
+    queryFn: () => getDigestiveEvent(eventId),
+    enabled: useApi,
+  });
+
+  const event = useApi
+    ? query.data
+      ? mapApiDigestiveEventToResult(query.data)
+      : undefined
+    : eventId
+      ? fecalEventsMock[eventId]
+      : undefined;
+
+  const stillProcessing = event !== undefined && event.status === 'PROCESSING';
+  useEffect(() => {
+    if (stillProcessing && event) {
+      router.replace(`/digestive/processing/${event.eventId}`);
+    }
+  }, [stillProcessing, event, router]);
+
+  if (useApi && query.isLoading) {
+    return (
+      <ScreenContainer>
+        <ErrorState title="Caricamento" message="Sto aprendo il risultato…" />
+      </ScreenContainer>
+    );
+  }
+
+  if (stillProcessing) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          title="Analisi in corso"
+          message="Ti porto allo stato dell'analisi…"
+        />
+      </ScreenContainer>
+    );
+  }
 
   if (!event) {
     return (

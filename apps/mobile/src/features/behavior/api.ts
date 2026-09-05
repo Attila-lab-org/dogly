@@ -11,7 +11,19 @@ import type {
   FeedbackValue,
 } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
-import { api } from '../../lib/apiClient';
+import { api, ApiError } from '../../lib/apiClient';
+
+/**
+ * Quota esaurita lato server (ErrorCode.QUOTA_EXHAUSTED, HTTP 402 — vedi
+ * backend/app/contracts/errors.py): il caller instrada al paywall invece di
+ * mostrare un generico errore di upload.
+ */
+export function isQuotaExhaustedError(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    (err.code === 'QUOTA_EXHAUSTED' || err.status === 402)
+  );
+}
 
 export type ApiEvidenceItem = {
   source: string;

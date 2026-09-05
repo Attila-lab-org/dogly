@@ -78,6 +78,36 @@ class MeResponse(BaseModel):
     feature_availability: dict[str, bool] = Field(default_factory=dict)
 
 
+class UserConsentsResponse(BaseModel):
+    service_terms: bool = False
+    research_training: bool = False
+    notifications: bool = False
+    media_retention: bool = False
+    policy_versions: dict[str, str] = Field(default_factory=dict)
+
+
+class UserConsentsPatch(BaseModel):
+    policy_version: str = Field(min_length=1, max_length=80)
+    service_terms: bool | None = None
+    research_training: bool | None = None
+    notifications: bool | None = None
+    media_retention: bool | None = None
+
+    @model_validator(mode="after")
+    def require_a_change(self) -> UserConsentsPatch:
+        if all(
+            value is None
+            for value in (
+                self.service_terms,
+                self.research_training,
+                self.notifications,
+                self.media_retention,
+            )
+        ):
+            raise ValueError("At least one consent value is required")
+        return self
+
+
 class SubscriptionStatusResponse(BaseModel):
     plan: PlanOut
     entitlement_source: str = "revenuecat_mirror"
@@ -254,8 +284,8 @@ class BehaviorCaptureInitRequest(BaseModel):
     client_request_id: str = Field(min_length=8, max_length=128)
     duration_ms: int = Field(gt=0)
     has_audio: bool = True
-    bytes: int = Field(gt=0)
-    content_type: str = "video/mp4"
+    bytes: int = Field(gt=0, le=100_000_000)
+    content_type: Literal["video/mp4", "video/quicktime"] = "video/mp4"
     context_bucket: ContextBucket = ContextBucket.UNKNOWN
 
 
@@ -308,6 +338,7 @@ class BehaviorEventOut(BaseModel):
     context_question: str | None = None
     policy_version: str | None = None
     taxonomy_version: str | None = None
+    feedback: FeedbackValue | None = None
     created_at: datetime
     completed_at: datetime | None = None
 
@@ -337,6 +368,8 @@ class DiaryItem(BaseModel):
     status: str
     title: str
     summary: str | None = None
+    confidence_band: ConfidenceBand | None = None
+    feedback: FeedbackValue | None = None
     retention_state: RetentionState = RetentionState.TEMPORARY
     created_at: datetime
 
@@ -366,7 +399,7 @@ class PatternListResponse(BaseModel):
 
 
 class PatternReviewRequest(BaseModel):
-    action: Literal["contest", "archive", "correct_context"]
+    action: Literal["confirm", "contest", "archive", "correct_context"]
     corrected_context: ContextBucket | None = None
     note: str | None = None
 
@@ -385,8 +418,8 @@ class PatternReviewResponse(BaseModel):
 class FecalInitRequest(BaseModel):
     dog_id: str
     client_request_id: str = Field(min_length=8, max_length=128)
-    bytes: int = Field(gt=0)
-    content_type: str = "image/jpeg"
+    bytes: int = Field(gt=0, le=12_000_000)
+    content_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
 
 
 class FecalInitResponse(BaseModel):
@@ -408,6 +441,12 @@ class DigestiveEventOut(BaseModel):
     fecal_score_estimate: int | None = None
     consistency: str | None = None
     color: str | None = None
+    image_quality: Literal["sufficient", "insufficient", "unknown"] = "unknown"
+    quality_warnings: list[str] = Field(default_factory=list)
+    mucus_candidate: str = "unknown"
+    fresh_blood_candidate: str = "unknown"
+    melena_candidate: str = "unknown"
+    foreign_material_candidate: str = "unknown"
     confidence_band: ConfidenceBand | None = None
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
     summary: str | None = None
@@ -417,8 +456,8 @@ class DigestiveEventOut(BaseModel):
 class FoodScanInitRequest(BaseModel):
     dog_id: str
     client_request_id: str = Field(min_length=8, max_length=128)
-    bytes: int = Field(gt=0)
-    content_type: str = "image/jpeg"
+    bytes: int = Field(gt=0, le=12_000_000)
+    content_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
 
 
 class FoodScanInitResponse(BaseModel):

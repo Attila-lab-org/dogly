@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { patternsMock } from '@/mocks/secondary';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   ConfidenceBandPill,
   PatternStateChip,
@@ -19,21 +20,24 @@ import {
 
 export default function PatternsScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
   const patterns = patternsMock.filter((p) => p.state !== 'ARCHIVED');
 
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Pattern appresi" />
       <Text style={styles.intro}>
-        Questi sono i comportamenti che sto imparando su Rocky. Ogni pattern
-        nasce da eventi reali e dai tuoi feedback: puoi sempre verificarli.
+        Questi sono i comportamenti che sto imparando su {dog.name}. Ogni
+        pattern nasce da eventi reali e dai tuoi feedback: puoi sempre
+        verificarli.
       </Text>
 
       {patterns.length === 0 ? (
         <Card>
           <Text style={styles.emptyText}>
-            Nessun pattern ancora. Continua ad analizzare i video di Rocky:
-            quando vedrò comportamenti ripetuti, te li mostrerò qui.
+            Nessun pattern ancora. Continua ad analizzare i video di{' '}
+            {dog.name}: quando vedrò comportamenti ripetuti, te li mostrerò
+            qui.
           </Text>
         </Card>
       ) : (

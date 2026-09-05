@@ -13,6 +13,7 @@ from app.contracts.api import (
     BehaviorFeedbackResponse,
     CaptureCompleteResponse,
 )
+from app.contracts.taxonomy import FeedbackValue
 from app.domains import behavior as behavior_domain
 from app.domains import behavior_db, idempotency_db
 from app.domains.models import BehaviorEventRec
@@ -20,7 +21,9 @@ from app.domains.models import BehaviorEventRec
 router = APIRouter()
 
 
-def event_out(event: BehaviorEventRec) -> BehaviorEventOut:
+def event_out(
+    event: BehaviorEventRec, feedback: FeedbackValue | None = None
+) -> BehaviorEventOut:
     interp = event.interpretation_json or {}
     return BehaviorEventOut(
         id=event.id,
@@ -36,6 +39,7 @@ def event_out(event: BehaviorEventRec) -> BehaviorEventOut:
         context_question=interp.get("context_question"),
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
+        feedback=feedback,
         created_at=event.created_at,
         completed_at=event.completed_at,
     )
@@ -124,9 +128,14 @@ async def complete_capture(
 async def get_behavior_event(event_id: str, state: StateDep, user_id: UserIdDep) -> BehaviorEventOut:
     if state.engine is not None:
         event = await behavior_db.get_event(state.engine, user_id=user_id, event_id=event_id)
+        feedback = await behavior_db.get_feedback_value(
+            state.engine, user_id=user_id, event_id=event_id
+        )
     else:
         event = behavior_domain.get_event(state.store, user_id=user_id, event_id=event_id)
-    return event_out(event)
+        rec = state.store.behavior_feedback.get(event_id)
+        feedback = rec.value if rec is not None and rec.user_id == user_id else None
+    return event_out(event, feedback)
 
 
 @router.post("/behavior/events/{event_id}/feedback", response_model=BehaviorFeedbackResponse)

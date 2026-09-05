@@ -4,10 +4,12 @@
  * CTA dominante gradiente "CAPISCI ROCKY" (mic + videocamera),
  * "Controlla digestione" secondario, ultima analisi, quota residua sottile.
  * Stati obbligatori (sez. 6): new user (cold-start), quota exhausted,
- * offline (banner con retry, mock flag demoFlags.homeOffline),
- * processing existing event.
+ * offline (banner con retry su network monitor reale; demoFlags.homeOffline
+ * forza la demo in dev), processing existing event.
+ * Dati reali via useHomeData (GET /v1/usage + GET /v1/diary); mock solo in
+ * mock gate dev.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,11 +17,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, DogMetaRow } from '@/components';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
-import { diaryEntriesMock, homeDataMock } from '@/mocks/core';
+import { diaryEntriesMock } from '@/mocks/core';
 import { demoFlags } from '@/mocks/demo';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { WelcomeCheckInModal } from '@/features/checkin/WelcomeCheckInModal';
+import { useCheckIn } from '@/features/checkin/store';
 import { StoriesRail } from '@/features/stories/StoriesRail';
 import { useStories } from '@/features/stories/data';
 import {
@@ -27,34 +30,37 @@ import {
   isBirthdayToday,
 } from '@/features/dogs/profileDates';
 import {
-  dayDistance,
   formatCareDate,
   relativeCareDate,
 } from '@/features/care/date';
-import { useCareEvents } from '@/features/care/store';
+import { nextCareEvent, useCareEvents } from '@/features/care/store';
+import { useHomeData } from '@/features/home/useHomeData';
+import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const careEvents = useCareEvents(dog.id);
   const stories = useStories();
   const birthdayToday = isBirthdayToday(dog.birthDate);
-  const { usage, lastInsight, processingEventId, isNewUser } = homeDataMock;
+  const { usage, lastInsight, processingEventId, isNewUser, source } =
+    useHomeData(dog.id);
+  const { analysisContext } = useCheckIn();
 
-  // Stato offline (sez. 6 Home): simulato dal flag demo finché non c'è un
-  // network monitor; il retry ricontrolla la connettività (mock: torna online).
-  const [offline, setOffline] = useState(demoFlags.homeOffline);
+  // Stato offline (sez. 6 Home): network monitor reale (expo-network);
+  // demoFlags.homeOffline resta solo per forzare la demo in dev.
+  const network = useNetworkStatus();
+  const offline = demoFlags.homeOffline || network.offline;
 
-  const behaviorRemaining = usage.behaviorLimit - usage.behaviorUsed;
-  const quotaExhausted = behaviorRemaining <= 0;
-  const nextCare = careEvents.find(
-    (event) =>
-      event.status === 'SCHEDULED' &&
-      dayDistance(event.scheduledAt) >= 0 &&
-      dayDistance(event.scheduledAt) <= 7,
-  );
+  const behaviorRemaining = usage
+    ? usage.behaviorLimit - usage.behaviorUsed
+    : null;
+  const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
+  // Prossimo evento agenda: solo futuri non completati (store.nextCareEvent);
+  // useCareEvents idrata lo store e rende reattiva la card.
+  useCareEvents(dog.id);
+  const nextCare = nextCareEvent(dog.id);
 
   const startCapture = () => {
     if (processingEventId) {
@@ -66,7 +72,13 @@ export default function HomeScreen() {
       router.push('/paywall');
       return;
     }
-    router.push('/behavior/capture');
+    // Contesto check-in ("Sembra sereno" / "Non come al solito"): il capture
+    // mostra la nota coerente quando arriva con from=checkin.
+    router.push(
+      (analysisContext
+        ? '/behavior/capture?from=checkin'
+        : '/behavior/capture') as never,
+    );
   };
 
   return (
@@ -168,7 +180,10 @@ export default function HomeScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Riprova connessione"
-                onPress={() => setOffline(false)}
+                onPress={() => {
+                  if (demoFlags.homeOffline) return; // demo forzata in dev
+                  void network.refresh();
+                }}
                 hitSlop={8}
               >
                 <Text style={styles.offlineRetry}>Riprova</Text>
@@ -224,8 +239,9 @@ export default function HomeScreen() {
             </LinearGradient>
           </Pressable>
 
-          {/* Quota residua sottile (sez. 21) o CTA paywall se esaurita */}
-          {quotaExhausted ? (
+          {/* Quota residua sottile (sez. 21) o CTA paywall se esaurita.
+              Con API attiva ma quota non caricata: niente numeri inventati. */}
+          {behaviorRemaining === null ? null : quotaExhausted ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push('/paywall')}
@@ -295,7 +311,12 @@ export default function HomeScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => {
-                // Route dal mock: lastInsight.eventId → episodio del Diario
+                if (source === 'api') {
+                  // Dati reali: dettaglio evento dal backend
+                  router.push(`/behavior/result/${lastInsight.eventId}`);
+                  return;
+                }
+                // Mock gate: lastInsight.eventId → episodio del Diario
                 // che referenzia quell'evento (niente id hardcoded).
                 const entry = diaryEntriesMock.find(
                   (e) => e.refId === lastInsight.eventId,

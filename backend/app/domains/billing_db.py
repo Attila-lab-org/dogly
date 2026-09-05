@@ -37,8 +37,8 @@ def _webhook_status_to_db(status: str | None) -> str:
     normalized = (status or "").lower()
     if normalized == "active":
         return "ACTIVE"
-    if normalized == "grace_or_cancelled":
-        return "CANCELLED"
+    if normalized == "grace_period":
+        return "GRACE_PERIOD"
     return "EXPIRED"
 
 
