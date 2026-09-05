@@ -15,13 +15,18 @@ export { contentTypeFromUri, isLocalPhotoUri } from './photoUri';
 async function fileBytes(localUri: string): Promise<number> {
   try {
     const info = await getInfoAsync(localUri);
-    if (info.exists && 'size' in info && typeof info.size === 'number') {
-      return Math.max(1, info.size);
+    if (
+      info.exists &&
+      'size' in info &&
+      typeof info.size === 'number' &&
+      info.size > 0
+    ) {
+      return info.size;
     }
   } catch {
-    // fallback
+    // L'errore esplicito sotto evita di dichiarare una dimensione falsa.
   }
-  return 1;
+  throw new Error('Non riesco a leggere il file scelto. Prova con un’altra foto.');
 }
 
 async function putSignedUpload(

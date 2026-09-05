@@ -8,6 +8,7 @@
  */
 import React, { useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -135,8 +136,15 @@ export default function DogOnboardingScreen() {
           if (userId) {
             await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
           }
-        } catch {
-          // Il profilo è già salvato: la foto si può ritentare da Modifica.
+        } catch (photoError) {
+          const detail =
+            photoError instanceof Error
+              ? photoError.message
+              : 'Errore sconosciuto';
+          Alert.alert(
+            'Profilo salvato senza foto',
+            `${detail}\nPuoi riprovare da Modifica profilo.`,
+          );
         } finally {
           setSavingPhoto(false);
         }

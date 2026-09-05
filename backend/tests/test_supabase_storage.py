@@ -11,6 +11,7 @@ from app.providers.supabase_storage import SupabaseStorageProvider
 async def test_signed_upload_accepts_supabase_url_field() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "POST"
+        assert request.content == b"{}"
         assert "/storage/v1/object/upload/sign/dog-avatars/users/u/dogs/d/avatar/a.jpg" in str(
             request.url
         )
@@ -44,4 +45,38 @@ async def test_signed_upload_accepts_supabase_url_field() -> None:
         "https://project.supabase.co/storage/v1/object/upload/sign/"
         "dog-avatars/users/u/dogs/d/avatar/a.jpg?token=signed-token"
     )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("info", "expected"),
+    [
+        ({"size": 1234}, True),
+        ({"size": 999}, False),
+        ({"metadata": {}}, False),
+    ],
+)
+async def test_object_exists_validates_expected_size(
+    info: dict[str, object], expected: bool
+) -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=info)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+
+    exists = await provider.object_exists(
+        bucket="dog-avatars",
+        path="users/u/dogs/d/avatar/a.jpg",
+        expected_bytes=1234,
+    )
+
+    assert exists is expected
     await client.aclose()

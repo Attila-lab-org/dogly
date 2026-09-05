@@ -1,7 +1,7 @@
 /**
  * Modifica profilo cane — PATCH /v1/dogs/{id} via react-query.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
@@ -38,16 +39,20 @@ import {
   ageLabelFromYears,
   ageYearsFromLabel,
 } from '@/features/dogs/profileDates';
+import { dogsQueryKey } from '@/features/dogs/api';
 import { setProfileVisibility as apiSetVisibility } from '@/features/photos/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
 
 export default function DogEditScreen() {
   const router = useRouter();
-  const { dogId } = useLocalSearchParams<{ dogId: string }>();
+  const params = useLocalSearchParams<{ dogId?: string | string[] }>();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
-  const updateMutation = useUpdateDogMutation(dogId ?? dog.id);
+  const { usingMockGate, userId } = useSession();
+  const queryClient = useQueryClient();
+  const routeDogId = Array.isArray(params.dogId) ? params.dogId[0] : params.dogId;
+  const dogId = routeDogId ?? dog.id;
+  const updateMutation = useUpdateDogMutation(dogId);
   const [name, setName] = useState(dog.name);
   const [ageYears, setAgeYears] = useState<number | null>(
     dog.birthDate
@@ -64,20 +69,39 @@ export default function DogEditScreen() {
   );
   const [photoUri, setPhotoUri] = useState(dog.photoUri);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
   const [profileVisibility, setProfileVisibility] = useState(
     dog.profileVisibility,
   );
+
+  useEffect(() => {
+    if (!pendingPhotoUri && !uploadingPhoto) {
+      setPhotoUri(dog.photoUri);
+    }
+  }, [dog.photoUri, pendingPhotoUri, uploadingPhoto]);
 
   const selectAndUploadPhoto = async () => {
     const uri = await pickAvatarPhoto();
     if (!uri) return;
     setPhotoUri(uri);
-    if (usingMockGate || !dogId) return;
+    setPendingPhotoUri(uri);
+    if (usingMockGate) {
+      setPendingPhotoUri(null);
+      return;
+    }
+    if (!dogId) {
+      Alert.alert('Foto non salvata', 'Profilo del cane non disponibile.');
+      return;
+    }
 
     setUploadingPhoto(true);
     try {
       const savedUrl = await persistDogAvatar(dogId, uri);
       if (savedUrl) setPhotoUri(savedUrl);
+      if (userId) {
+        await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
+      }
+      setPendingPhotoUri(null);
       Alert.alert('Foto salvata', 'La foto profilo è stata caricata.');
     } catch (error) {
       const detail =
@@ -89,6 +113,13 @@ export default function DogEditScreen() {
   };
 
   const save = async () => {
+    if (pendingPhotoUri) {
+      Alert.alert(
+        'Foto non ancora salvata',
+        'Tocca nuovamente la foto e completa il caricamento prima di uscire.',
+      );
+      return;
+    }
     if (!name.trim()) {
       Alert.alert('Nome richiesto', 'Il nome del cane è obbligatorio.');
       return;

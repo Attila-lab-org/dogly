@@ -42,7 +42,7 @@ class SupabaseStorageProvider:
         response = await self._client.post(
             url,
             headers={**self._headers(), "Content-Type": "application/json"},
-            json={"expiresIn": ttl_seconds},
+            json={},
         )
         response.raise_for_status()
         data = response.json()
@@ -75,9 +75,9 @@ class SupabaseStorageProvider:
         if expected_bytes is None:
             return True
         info = response.json()
-        size = info.get("metadata", {}).get("size") or info.get("contentLength") or info.get("size")
+        size = info.get("size") or info.get("contentLength") or info.get("metadata", {}).get("size")
         if size is None:
-            return True
+            return False
         return int(size) == int(expected_bytes)
 
     async def delete_object(self, *, bucket: str, path: str) -> None:
