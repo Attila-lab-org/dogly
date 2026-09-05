@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import text
@@ -17,7 +18,13 @@ def _row_to_dog(row: Any) -> DogRec:
     data = dict(row)
     data["id"] = str(data["id"])
     data["owner_id"] = str(data["owner_id"])
+    if isinstance(data.get("birth_date"), date):
+        data["birth_date"] = data["birth_date"].isoformat()
     return DogRec.model_validate(data)
+
+
+def _parse_birth_date(value: str | None) -> date | None:
+    return date.fromisoformat(value) if value else None
 
 
 async def list_dogs(engine: AsyncEngine, *, user_id: str) -> list[DogRec]:
@@ -105,7 +112,7 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
                 {
                     "owner_id": user_id,
                     "name": payload.name,
-                    "birth_date": payload.birth_date,
+                    "birth_date": _parse_birth_date(payload.birth_date),
                     "age_stage": payload.age_stage or "UNKNOWN",
                     "size": payload.size,
                     "breed_label": payload.breed_label,
@@ -138,6 +145,8 @@ async def update_dog(
     changed = payload.model_dump(exclude_none=True)
     if not changed:
         return await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    if "birth_date" in changed:
+        changed["birth_date"] = _parse_birth_date(changed["birth_date"])
 
     sets = ", ".join(f"{k} = :{k}" for k in changed)
     params = {"dog_id": dog_id, "user_id": user_id, **changed}
