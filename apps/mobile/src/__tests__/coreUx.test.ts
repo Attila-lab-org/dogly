@@ -19,6 +19,7 @@ import {
   PROCESSING_STEPS,
   intentHeadline,
 } from '../features/core/copy';
+import { saveBehaviorFeedback } from '../features/core/feedback';
 import { BEHAVIOR_EVENT_STATUSES } from '../contracts/types';
 import { behaviorResultsMock, diaryEntriesMock, homeDataMock } from '../mocks/core';
 
@@ -139,7 +140,7 @@ describe('result contract sui mock (sez. 6.1)', () => {
 });
 
 describe('mock Home e Diario', () => {
-  it('Home replica il mockup: KS 38% e ultima analisi "sembra rilassato"', () => {
+  it('mantiene il Knowledge Score nel dominio profilo e l’ultima analisi Home', () => {
     expect(homeDataMock.knowledgeScore.score).toBe(38);
     expect(homeDataMock.lastInsight?.label).toBe('sembra rilassato');
     expect(homeDataMock.usage.behaviorUsed).toBeLessThanOrEqual(
@@ -162,5 +163,19 @@ describe('mock Home e Diario', () => {
     expect(new Set(diaryEntriesMock.map((e) => e.domain))).toEqual(
       new Set(['BEHAVIOR', 'DIGESTIVE']),
     );
+  });
+
+  it('salva il feedback con un solo tap e lo mantiene nel Diario', () => {
+    const result = behaviorResultsMock['evt-play'];
+    const entry = diaryEntriesMock.find((item) => item.refId === result.eventId);
+    const previousFeedback = result.feedback;
+    const previousSubtitle = entry?.subtitle ?? null;
+
+    expect(saveBehaviorFeedback(result.eventId, 'NO')).toBe('NO');
+    expect(result.feedback).toBe('NO');
+    expect(entry?.subtitle).toContain('Feedback: non credo');
+
+    result.feedback = previousFeedback;
+    if (entry) entry.subtitle = previousSubtitle;
   });
 });

@@ -1,6 +1,6 @@
 /**
- * Tab Home (Spec V1 sez. 5.1) — replica fedele di docs/ux/mockup-home.png.
- * Contenuti: header "Ciao! 👋", dog card, Knowledge Score (38%),
+ * Tab Home — accesso rapido a storie, analisi e diario.
+ * Contenuti: header, storie, dog card,
  * CTA dominante gradiente "CAPISCI ROCKY" (mic + videocamera),
  * "Controlla digestione" secondario, ultima analisi, quota residua sottile.
  * Stati obbligatori (sez. 6): new user (cold-start), quota exhausted,
@@ -8,21 +8,40 @@
  * processing existing event.
  */
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '@/components';
+import { Card, DogMetaRow } from '@/components';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { diaryEntriesMock, homeDataMock } from '@/mocks/core';
 import { demoFlags } from '@/mocks/demo';
-import { DogAvatar, KnowledgeScoreBlock } from '@/features/core/components';
+import { DogAvatar } from '@/features/core/components';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { WelcomeCheckInModal } from '@/features/checkin/WelcomeCheckInModal';
+import { StoriesRail } from '@/features/stories/StoriesRail';
+import { useStories } from '@/features/stories/data';
+import {
+  currentAgeLabel,
+  isBirthdayToday,
+} from '@/features/dogs/profileDates';
+import {
+  dayDistance,
+  formatCareDate,
+  relativeCareDate,
+} from '@/features/care/date';
+import { useCareEvents } from '@/features/care/store';
+
+const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { dog, knowledgeScore, usage, lastInsight, processingEventId, isNewUser } =
-    homeDataMock;
+  const { dog } = useDogProfile();
+  const careEvents = useCareEvents(dog.id);
+  const stories = useStories();
+  const birthdayToday = isBirthdayToday(dog.birthDate);
+  const { usage, lastInsight, processingEventId, isNewUser } = homeDataMock;
 
   // Stato offline (sez. 6 Home): simulato dal flag demo finché non c'è un
   // network monitor; il retry ricontrolla la connettività (mock: torna online).
@@ -30,6 +49,12 @@ export default function HomeScreen() {
 
   const behaviorRemaining = usage.behaviorLimit - usage.behaviorUsed;
   const quotaExhausted = behaviorRemaining <= 0;
+  const nextCare = careEvents.find(
+    (event) =>
+      event.status === 'SCHEDULED' &&
+      dayDistance(event.scheduledAt) >= 0 &&
+      dayDistance(event.scheduledAt) <= 7,
+  );
 
   const startCapture = () => {
     if (processingEventId) {
@@ -51,58 +76,77 @@ export default function HomeScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header: saluto + campana con badge (mockup) */}
+          {/* Header: logo + saluto + campana con badge (mockup + brand) */}
           <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text style={styles.greeting}>Ciao! 👋</Text>
-              <Text style={styles.subtitle}>
-                Pronto a capire meglio {dog.name}?
-              </Text>
+            <View style={styles.logoBadge}>
+              <Image
+                source={logoMarkSource}
+                style={styles.logoMark}
+                resizeMode="contain"
+                accessibilityLabel="Dogly"
+              />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Notifiche"
-              onPress={() => router.push('/notifications')}
-              hitSlop={12}
-              style={styles.bell}
-            >
-              <Ionicons name="notifications-outline" size={24} color={colors.text} />
-              <View style={styles.badge} />
-            </Pressable>
+            <View style={styles.headerText}>
+              <Text
+                style={styles.greeting}
+                accessibilityLabel={
+                  birthdayToday
+                    ? `Buon compleanno, ${dog.name}!`
+                    : 'Ciao!'
+                }
+              >
+                {birthdayToday
+                  ? `Buon compleanno, ${dog.name}! 🎉`
+                  : 'Ciao!'}
+              </Text>
+              <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Apri diario"
+                onPress={() => router.push('/(tabs)/diary')}
+                hitSlop={12}
+                style={styles.headerIcon}
+              >
+                <Ionicons name="calendar-outline" size={23} color={colors.text} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Notifiche, non lette"
+                onPress={() => router.push('/notifications')}
+                hitSlop={12}
+                style={styles.headerIcon}
+              >
+                <Ionicons name="notifications-outline" size={24} color={colors.text} />
+                {nextCare ? <View style={styles.badge} /> : null}
+              </Pressable>
+            </View>
           </View>
+
+          <StoriesRail
+            stories={stories}
+            onAdd={() => router.push('/(tabs)/camera')}
+            onOpen={(story) => router.push(`/stories/${story.id}` as never)}
+          />
 
           {/* Dog card: foto circolare, nome, cuore, meta con icone teal */}
           <Card style={styles.dogCard}>
             <View style={styles.dogRow}>
-              <DogAvatar size={104} photoUri={dog.photoUri} />
+              <DogAvatar size={104} photoUri={dog.photoUri} dogName={dog.name} />
               <View style={styles.dogInfo}>
                 <View style={styles.dogNameRow}>
                   <Text style={styles.dogName}>{dog.name}</Text>
                   <Ionicons name="heart-outline" size={22} color={colors.danger} />
                 </View>
-                <View style={styles.metaItem}>
-                  <Ionicons name="calendar" size={15} color={colors.accent} />
-                  <Text style={styles.metaText}>{dog.ageLabel}</Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Ionicons name="resize" size={15} color={colors.accent} />
-                  <Text style={styles.metaText}>{dog.sizeLabel}</Text>
-                </View>
-                {dog.breedLabel ? (
-                  <View style={styles.metaItem}>
-                    <Ionicons name="paw" size={15} color={colors.accent} />
-                    <Text style={styles.metaText}>{dog.breedLabel}</Text>
-                  </View>
-                ) : null}
+                <DogMetaRow
+                  ageLabel={currentAgeLabel(dog.birthDate, dog.ageLabel)}
+                  sizeLabel={dog.sizeLabel}
+                  breedLabel={dog.breedLabel}
+                />
               </View>
             </View>
 
-            {/* Knowledge Score dentro la dog card (mockup) */}
-            <KnowledgeScoreBlock
-              knowledgeScore={knowledgeScore}
-              dogName={dog.name}
-              style={styles.score}
-            />
           </Card>
 
           {/* Stato offline (sez. 6 Home): banner con retry, pattern come
@@ -172,16 +216,10 @@ export default function HomeScreen() {
             >
               <Text style={styles.ctaTitle}>CAPISCI {dog.name.toUpperCase()}</Text>
               <Text style={styles.ctaSubtitle}>
-                Premi e analizza audio + video
+                Registra un breve video
               </Text>
-              <View style={styles.ctaButtons}>
-                <View style={styles.ctaCircle}>
-                  <Ionicons name="mic" size={30} color={colors.accent} />
-                </View>
-                <View style={styles.ctaDivider} />
-                <View style={styles.ctaCircle}>
-                  <Ionicons name="videocam" size={30} color={colors.accent} />
-                </View>
+              <View style={styles.ctaCircle}>
+                <Ionicons name="videocam" size={30} color={colors.accent} />
               </View>
             </LinearGradient>
           </Pressable>
@@ -218,6 +256,40 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={16} color={colors.accent} />
           </Pressable>
 
+          {nextCare ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Prossimo appuntamento: ${nextCare.title}`}
+              onPress={() => router.push(`/care/${nextCare.id}` as never)}
+              style={({ pressed }) => [
+                styles.careCard,
+                pressed && styles.careCardPressed,
+              ]}
+            >
+              <View style={styles.careIcon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={22}
+                  color={colors.warning}
+                />
+              </View>
+              <View style={styles.careText}>
+                <Text style={styles.careLabel}>
+                  {relativeCareDate(nextCare.scheduledAt)}
+                </Text>
+                <Text style={styles.careTitle}>{nextCare.title}</Text>
+                <Text style={styles.careDate}>
+                  {formatCareDate(nextCare.scheduledAt, nextCare.allDay)}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={19}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          ) : null}
+
           {/* Ultima analisi (mockup: smiley teal + chevron) */}
           {lastInsight && (
             <Pressable
@@ -250,6 +322,7 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+      <WelcomeCheckInModal dogName={dog.name} />
     </View>
   );
 }
@@ -268,9 +341,23 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
+  },
+  logoBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+    ...shadows.card,
+  },
+  logoMark: {
+    width: 34,
+    height: 25, // ratio 132:97 dell'asset brand
   },
   headerText: {
     flex: 1,
@@ -280,14 +367,22 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     color: colors.text,
   },
-  subtitle: {
+  tagline: {
     marginTop: spacing.xs,
-    fontSize: typography.size.md,
-    color: colors.textSecondary,
-    lineHeight: typography.size.md * typography.lineHeight.normal,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: colors.accent,
+    letterSpacing: 0.4,
   },
-  bell: {
-    padding: spacing.xs,
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  headerIcon: {
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
@@ -320,21 +415,6 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     color: colors.text,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  metaText: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-  },
-  score: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   offlineBanner: {
     flexDirection: 'row',
@@ -398,12 +478,6 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
     opacity: 0.9,
   },
-  ctaButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.xl,
-    gap: spacing.xl,
-  },
   ctaCircle: {
     width: 76,
     height: 76,
@@ -411,11 +485,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  ctaDivider: {
-    width: 1,
-    height: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    marginTop: spacing.xl,
   },
   quota: {
     marginTop: spacing.md,
@@ -442,6 +512,47 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
     color: colors.accent,
+  },
+  careCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warningSoft,
+    backgroundColor: colors.surface,
+  },
+  careCardPressed: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  careIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.warningSoft,
+  },
+  careText: {
+    flex: 1,
+  },
+  careLabel: {
+    color: colors.warning,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
+  careTitle: {
+    marginTop: spacing.xxs,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  careDate: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
   },
   lastInsight: {
     flexDirection: 'row',

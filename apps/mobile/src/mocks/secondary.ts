@@ -17,16 +17,19 @@ import type {
 
 export const DOG_ID = 'dog-rocky';
 
-/** Knowledge Score (sez. 18): product-score, ammesso come numero. */
-export const knowledgeScoreMock = {
-  score: 67,
-  caption: 'Stiamo costruendo un legame forte! 💙',
+/** Knowledge Score allineato a Home (single source: mocks/core). */
+export { homeKnowledgeScoreMock as knowledgeScoreMock } from './core';
+
+/** Caption legacy per UI profilo (low knowledge). */
+export const knowledgeScoreCaptions = {
+  caption: 'Sto iniziando a conoscerlo...',
   captionLow: 'Sto iniziando a conoscerlo...',
-};
+} as const;
 
 /**
  * Pattern appresi (sez. 17.2). I due ESTABLISHED vengono dal mockup;
  * il terzo è CONTESTED per coprire lo stato "Da verificare" (sez. 6).
+ * In UI V1 restano nascosti finché PATTERNS_ENABLED = false.
  */
 export const patternsMock: PersonalPattern[] = [
   {

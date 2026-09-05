@@ -32,27 +32,27 @@ export const SAFETY_COPY: Record<SafetyFlagCode, SafetyCopy> = {
   REPEATED_WATERY: {
     title: 'Episodi liquidi ripetuti',
     message:
-      'Negli ultimi giorni sembrano esserci episodi liquidi ripetuti. Monitora Rocky e tieni traccia dei pasti.',
+      'Negli ultimi giorni sembrano esserci episodi liquidi ripetuti. Monitora il tuo cane e tieni traccia dei pasti.',
     action: 'Se continua, contatta il veterinario',
   },
   RAPID_WORSENING: {
     title: 'Peggioramento rapido rispetto al solito',
     message:
-      "Le ultime osservazioni sembrano peggiorare in fretta rispetto alla baseline di Rocky.",
+      "Le ultime osservazioni sembrano peggiorare in fretta rispetto alla baseline del tuo cane.",
     action: 'Contatta il veterinario',
   },
 };
 
 /** Disclaimer gentile, fisso, mostrato in capture e result (sez. 19 / O-02). */
 export const DIGESTIVE_DISCLAIMER =
-  "Questa è un'osservazione automatica della foto, non una diagnosi veterinaria. In caso di dubbio, parla sempre con il tuo veterinario.";
+  'Osservazione automatica, non diagnosi veterinaria. Se hai dubbi, parla con il veterinario.';
 
 /**
  * Regola "nessuna assenza provata" (sez. 19.3): se il modello non vede
  * un'anomalia, questo NON prova che non ci sia.
  */
 export const ABSENCE_NOT_PROOF_NOTE =
-  "Se l'analisi non segnala un'anomalia, questo non dimostra che non ci sia: osserva sempre Rocky e, se qualcosa ti preoccupa, consulta il veterinario.";
+  "Una foto senza segnali evidenti non può escludere un problema.";
 
 /** Nota sulla stima del fecal score (sez. 19.1). */
 export const FECAL_SCORE_ESTIMATE_NOTE =

@@ -2,12 +2,14 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { tabBar } from '../../src/theme/tokens';
+import { useDogProfile } from '../../src/features/core/useDogProfile';
 
 /**
- * UX LOCK (Spec V1 sez. 5.1): MASSIMO 3 tab primarie — Home / Diario / Rocky.
- * Non aggiungere altre tab: le altre route vivono fuori dal tab group.
+ * Tab V1: Home / Fotocamera (storie) / {Nome cane}.
+ * Diario resta in stack, link dalla Home (max 3 tab).
  */
 export default function TabsLayout() {
+  const { dog } = useDogProfile();
   return (
     <Tabs
       screenOptions={{
@@ -27,21 +29,28 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="diary"
+        name="camera"
         options={{
-          title: 'Diario',
+          title: 'Fotocamera',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar" size={size} color={color as string} />
+            <Ionicons name="camera" size={size} color={color as string} />
           ),
         }}
       />
       <Tabs.Screen
         name="rocky"
         options={{
-          title: 'Rocky',
+          title: dog.name,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="paw" size={size} color={color as string} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="diary"
+        options={{
+          href: null,
+          title: 'Diario',
         }}
       />
     </Tabs>

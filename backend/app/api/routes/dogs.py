@@ -16,6 +16,7 @@ def to_out(dog: DogRec) -> DogOut:
     return DogOut(
         id=dog.id,
         name=dog.name,
+        birth_date=dog.birth_date,
         age_stage=dog.age_stage,
         size=dog.size,
         breed_label=dog.breed_label,

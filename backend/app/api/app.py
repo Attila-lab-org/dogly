@@ -11,10 +11,12 @@ from fastapi.responses import JSONResponse
 from app.api.deps import AppState, build_default_state
 from app.api.routes import (
     behavior,
+    care,
     devices,
     diary,
     digestive,
     dogs,
+    gallery,
     me,
     nutrition,
     patterns,
@@ -27,7 +29,7 @@ from app.contracts.errors import ApiError, ErrorBody, ErrorCode
 
 def create_app(state: AppState | None = None) -> FastAPI:
     app = FastAPI(
-        title="Canine Behavioral Intelligence API",
+        title="Dogly API",
         version="1.0.0",
         description="Public API V1 (Spec V1 sez. 9). OpenAPI is the mobile client contract.",
     )
@@ -60,6 +62,8 @@ def create_app(state: AppState | None = None) -> FastAPI:
 
     app.include_router(me.router, prefix="/v1", tags=["me"])
     app.include_router(dogs.router, prefix="/v1", tags=["dogs"])
+    app.include_router(gallery.router, prefix="/v1", tags=["gallery"])
+    app.include_router(care.router, prefix="/v1", tags=["care-agenda"])
     app.include_router(behavior.router, prefix="/v1", tags=["behavior"])
     app.include_router(diary.router, prefix="/v1", tags=["diary"])
     app.include_router(patterns.router, prefix="/v1", tags=["patterns"])

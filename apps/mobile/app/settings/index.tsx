@@ -10,30 +10,32 @@ import { Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { subscriptionMock } from '@/mocks/secondary';
+import { getDogProfileSnapshot } from '@/features/core/useDogProfile';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
-  href: '/settings/privacy' | '/settings/subscription' | '/notifications' | null;
+  href: string | null;
 }
 
 export default function SettingsScreen() {
   const router = useRouter();
   const isPremium = subscriptionMock.plan !== 'FREE';
+  const dogId = getDogProfileSnapshot().dog.id;
 
   const rows: Row[] = [
     {
       icon: 'person-outline',
       title: 'Profilo',
-      subtitle: 'Account e dati di Rocky',
-      href: null, // profilo editing: route gestita dal workstream core
+      subtitle: 'Dati del cane e avatar',
+      href: `/dogs/${dogId}/edit`,
     },
     {
       icon: 'notifications-outline',
       title: 'Notifiche',
       subtitle: 'Cosa vuoi ricevere e quando',
-      href: '/notifications',
+      href: '/settings/notifications',
     },
     {
       icon: 'shield-checkmark-outline',
@@ -58,7 +60,7 @@ export default function SettingsScreen() {
             key={row.title}
             accessibilityRole="button"
             disabled={row.href === null}
-            onPress={() => row.href && router.push(row.href)}
+            onPress={() => row.href && router.push(row.href as never)}
             style={[
               styles.row,
               index < rows.length - 1 && styles.rowDivider,
@@ -80,7 +82,7 @@ export default function SettingsScreen() {
           </Pressable>
         ))}
       </Card>
-      <Text style={styles.version}>Canine Behavioral Intelligence · V1 beta</Text>
+      <Text style={styles.version}>Dogly · V1 beta</Text>
     </ScreenContainer>
   );
 }

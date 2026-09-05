@@ -18,10 +18,15 @@ import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import type { FeedbackValue } from '@/contracts/types';
 import { BehaviorResultView } from '@/features/core/components';
-import { behaviorResultsMock, dogMock } from '@/mocks/core';
+import { saveBehaviorFeedback } from '@/features/core/feedback';
+import { behaviorResultsMock } from '@/mocks/core';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { useCheckIn } from '@/features/checkin/store';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
+  const { analysisContext } = useCheckIn();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const result = eventId ? behaviorResultsMock[eventId] : undefined;
 
@@ -58,8 +63,9 @@ export default function BehaviorResultScreen() {
     );
   }
 
-  const isInsufficient =
-    result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
+  const handleFeedback = (value: FeedbackValue) => {
+    setFeedback(saveBehaviorFeedback(result.eventId, value));
+  };
 
   return (
     <ScreenContainer padded={false}>
@@ -83,9 +89,12 @@ export default function BehaviorResultScreen() {
       >
         <BehaviorResultView
           result={result}
-          dogName={dogMock.name}
+          dogName={dog.name}
           feedback={feedback}
-          onFeedback={setFeedback}
+          onFeedback={handleFeedback}
+          careNote={
+            analysisContext?.concern === 'off' ? analysisContext.note : null
+          }
         />
 
         {/* Safety message (sez. 6): copy prudente, mai diagnostico */}
@@ -97,14 +106,13 @@ export default function BehaviorResultScreen() {
           </Text>
         )}
 
-        {/* Azione finale: Salva nel diario (outline teal, mockup) */}
         <Button
-          title={isInsufficient ? 'Vai al Diario' : 'Salva nel diario'}
+          title="Torna al Diario"
           variant="outline"
-          icon={<Ionicons name="bookmark-outline" size={18} color={colors.accent} />}
+          icon={<Ionicons name="book-outline" size={18} color={colors.accent} />}
           onPress={() => router.replace('/(tabs)/diary')}
           style={styles.saveButton}
-          testID="save-to-diary"
+          testID="back-to-diary"
         />
       </ScrollView>
     </ScreenContainer>

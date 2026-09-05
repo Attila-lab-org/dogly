@@ -21,8 +21,8 @@ describe('auth gate (sez. 7.1)', () => {
     expect(resolveEntryRoute('authenticated-with-dog')).toBe('/(tabs)/home');
   });
 
-  it('default mock coerente con i mockup (utente con cane)', () => {
-    expect(sessionMock).toBe('authenticated-with-dog');
+  it('default mock: welcome/auth iniziale (logo Dogly)', () => {
+    expect(sessionMock).toBe('unauthenticated');
   });
 });
 

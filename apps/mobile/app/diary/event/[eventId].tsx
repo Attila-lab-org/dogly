@@ -13,10 +13,13 @@ import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import type { FeedbackValue } from '@/contracts/types';
 import { BehaviorResultView, SectionHeader } from '@/features/core/components';
-import { behaviorResultsMock, diaryEntriesMock, dogMock } from '@/mocks/core';
+import { saveBehaviorFeedback } from '@/features/core/feedback';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { behaviorResultsMock, diaryEntriesMock } from '@/mocks/core';
 
 export default function DiaryEventScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const entry = diaryEntriesMock.find((e) => e.id === eventId);
   const behaviorResult = entry ? behaviorResultsMock[entry.refId] : undefined;
@@ -44,6 +47,11 @@ export default function DiaryEventScreen() {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const handleFeedback = (value: FeedbackValue) => {
+    if (!behaviorResult) return;
+    setFeedback(saveBehaviorFeedback(behaviorResult.eventId, value));
+  };
 
   return (
     <ScreenContainer padded={false}>
@@ -79,9 +87,9 @@ export default function DiaryEventScreen() {
         {entry.domain === 'BEHAVIOR' && behaviorResult ? (
           <BehaviorResultView
             result={behaviorResult}
-            dogName={dogMock.name}
+            dogName={dog.name}
             feedback={feedback}
-            onFeedback={setFeedback}
+            onFeedback={handleFeedback}
           />
         ) : (
           /* Evento digestivo: il dettaglio completo vive nel flusso F2 */

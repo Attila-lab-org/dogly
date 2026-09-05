@@ -20,9 +20,12 @@ export function ProgressBar({
 }: ProgressBarProps) {
   const clamped = Math.min(1, Math.max(0, progress));
   const fill = tone === 'accent' ? colors.accent : colors.primary;
+  const percent = Math.round(clamped * 100);
   return (
     <View
       accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: percent }}
+      accessibilityLabel={`Progresso ${percent} percento`}
       style={[styles.track, { height, borderRadius: height / 2 }, style]}
     >
       <View

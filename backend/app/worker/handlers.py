@@ -27,6 +27,11 @@ from app.domains.billing import QuotaService
 from app.domains.digestive import deterministic_safety_flags
 from app.domains.models import BehaviorEventRec
 from app.domains.repository import now_utc
+from app.domains.retention import (
+    cleanup_expired_raw_media,
+    schedule_behavior_raw_expiry,
+    schedule_digestive_raw_expiry,
+)
 from app.providers.base import EligiblePatternSummary
 
 MAX_TASK_ATTEMPTS = 5
@@ -59,6 +64,12 @@ def _eligible_memory(state: AppState, dog_id: str) -> list[EligiblePatternSummar
     ]
 
 
+def _arm_behavior_raw_ttl(state: AppState, event: BehaviorEventRec) -> None:
+    capture = state.store.captures.get(event.capture_id)
+    if capture is not None:
+        schedule_behavior_raw_expiry(capture, state.settings)
+
+
 async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retryable: bool) -> dict:
     event.last_error_code = code.value
     quota = QuotaService(state.store)
@@ -73,6 +84,8 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
     if not event.quota_refunded and not event.quota_committed:
         await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR)
         event.quota_refunded = True
+    event.completed_at = now_utc()
+    _arm_behavior_raw_ttl(state, event)
     return {"event_id": event.id, "status": event.status.value, "error": code.value}
 
 
@@ -121,6 +134,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR)
             event.quota_refunded = True
         event.completed_at = now_utc()
+        _arm_behavior_raw_ttl(state, event)
         return {"event_id": event.id, "status": event.status.value}
 
     # OBSERVING -> INTERPRETING
@@ -157,6 +171,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     if not event.quota_committed and not event.quota_refunded:
         await quota.commit(event.user_id, AnalysisDomain.BEHAVIOR)
         event.quota_committed = True
+    _arm_behavior_raw_ttl(state, event)
     return {"event_id": event.id, "status": event.status.value}
 
 
@@ -182,6 +197,8 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         if not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE)
             event.quota_refunded = True
+        event.completed_at = now_utc()
+        schedule_digestive_raw_expiry(event, state.settings)
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_SCHEMA_INVALID.value}
     await state.cost_meter.record(
         usage=usage,
@@ -199,6 +216,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE)
             event.quota_refunded = True
         event.completed_at = now_utc()
+        schedule_digestive_raw_expiry(event, state.settings)
         return {"event_id": event.id, "status": event.status}
 
     event.fecal_score_estimate = observation.fecal_score_estimate
@@ -217,4 +235,11 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     if not event.quota_committed and not event.quota_refunded:
         await quota.commit(event.user_id, AnalysisDomain.DIGESTIVE)
         event.quota_committed = True
+    schedule_digestive_raw_expiry(event, state.settings)
     return {"event_id": event.id, "status": event.status}
+
+
+async def process_media_retention_cleanup(state: AppState, *, event_id: str | None = None) -> dict:
+    """Periodic cleanup of expired temporary raw media (IDs-only task)."""
+    del event_id  # unused; cleanup scans the store
+    return await cleanup_expired_raw_media(state.store, storage=state.storage)

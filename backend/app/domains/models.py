@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 
 from app.contracts.taxonomy import (
     BehaviorEventStatus,
+    CareEventStatus,
+    CareEventType,
     ConfidenceBand,
     ContextBucket,
     FeedbackValue,
@@ -44,6 +46,26 @@ class DogRec(BaseModel):
     weight_kg: float | None = None
     photo_path: str | None = None
     created_at: datetime
+
+
+class CareEventRec(BaseModel):
+    id: str
+    dog_id: str
+    user_id: str
+    event_type: CareEventType
+    title: str
+    scheduled_at: datetime
+    all_day: bool = False
+    timezone: str
+    location: str | None = None
+    notes: str | None = None
+    reminder_enabled: bool = True
+    reminder_minutes_before: int = 1440
+    status: CareEventStatus = CareEventStatus.SCHEDULED
+    completed_at: datetime | None = None
+    reminder_sent_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class BehaviorCaptureRec(BaseModel):
@@ -125,10 +147,48 @@ class FecalEventRec(BaseModel):
     confidence_band: ConfidenceBand | None = None
     safety_flags: list[dict] = Field(default_factory=list)
     summary: str | None = None
+    retention_state: RetentionState = RetentionState.TEMPORARY
+    expires_at: datetime | None = None
     quota_committed: bool = False
     quota_refunded: bool = False
     created_at: datetime
     completed_at: datetime | None = None
+
+
+class DogAlbumRec(BaseModel):
+    id: str
+    dog_id: str
+    owner_id: str
+    title: str
+    cover_photo_id: str | None = None
+    default_visibility: str = "PRIVATE"  # PRIVATE | PUBLISHED
+    created_at: datetime
+
+
+class DogPhotoRec(BaseModel):
+    id: str
+    album_id: str
+    dog_id: str
+    owner_id: str
+    storage_path: str
+    caption: str | None = None
+    visibility: str = "PRIVATE"  # PRIVATE | PUBLISHED
+    taken_at: datetime | None = None
+    created_at: datetime
+    deleted_at: datetime | None = None
+
+
+class DogProfileVisibilityRec(BaseModel):
+    dog_id: str
+    visibility: str = "PRIVATE"  # PRIVATE | PUBLIC
+    consent_version: str | None = None
+    consented_at: datetime | None = None
+    revoked_at: datetime | None = None
+    public_slug: str | None = None
+    whitelist_fields: list[str] = Field(
+        default_factory=lambda: ["name", "breed_label", "age_stage", "size"]
+    )
+    updated_at: datetime
 
 
 class FoodProductRec(BaseModel):

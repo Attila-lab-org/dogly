@@ -47,9 +47,9 @@ const CONSENT_ROWS: ConsentRow[] = [
   },
   {
     key: 'keepClip',
-    title: 'Conserva i clip originali',
+    title: 'Conserva i clip originali (eccezione)',
     description:
-      'Di default video e foto vengono eliminati dopo l’analisi. Attiva solo se vuoi mantenerli.',
+      'I video originali delle analisi vengono eliminati automaticamente 24 ore dopo il completamento. Risultati, evidenze e feedback restano nel Diario. Attiva solo se vuoi mantenere un clip oltre il TTL (richiede consenso esplicito).',
   },
 ];
 

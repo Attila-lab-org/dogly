@@ -70,6 +70,9 @@ select pg_temp.assert(
 select pg_temp.assert(
   not has_table_privilege('anon', 'public.dogs', 'SELECT'),
   'anon has no SELECT on public.dogs');
+select pg_temp.assert(
+  not has_table_privilege('anon', 'public.care_events', 'SELECT'),
+  'anon has no SELECT on care_events');
 
 -- Quota RPCs must not be callable by client roles
 select pg_temp.assert(
@@ -135,6 +138,10 @@ select pg_temp.assert(
   (select count(*) = 0 from public.subscriptions
     where user_id = '11111111-1111-1111-1111-111111111111'),
   'cross-user SELECT subscriptions returns nothing');
+select pg_temp.assert(
+  (select count(*) = 0 from public.care_events
+    where user_id = '11111111-1111-1111-1111-111111111111'),
+  'cross-user SELECT care_events returns nothing');
 
 -- B2. Writes: Bob cannot create/update rows owned by Alice
 --     (WITH CHECK violations raise; we assert via savepoint-free try blocks)
@@ -146,6 +153,26 @@ begin
     raise exception 'RLS TEST FAILED: cross-user INSERT dogs succeeded';
   exception when insufficient_privilege or check_violation then
     raise notice 'PASS: cross-user INSERT dogs denied';
+  end;
+end $$;
+
+do $$
+begin
+  begin
+    insert into public.care_events (
+      dog_id, user_id, event_type, title, scheduled_at, timezone
+    )
+    values (
+      'aaaa1111-1111-1111-1111-111111111111',
+      '22222222-2222-2222-2222-222222222222',
+      'VET_VISIT',
+      'Cross-user visit',
+      now() + interval '1 day',
+      'Europe/Rome'
+    );
+    raise exception 'RLS TEST FAILED: care event on another user''s dog succeeded';
+  exception when insufficient_privilege or check_violation then
+    raise notice 'PASS: cross-user INSERT care_events denied';
   end;
 end $$;
 
@@ -265,6 +292,43 @@ begin
     raise exception 'RLS TEST FAILED: non-canonical storage path insert succeeded';
   exception when insufficient_privilege or check_violation then
     raise notice 'PASS: non-canonical storage path insert denied';
+  end;
+end $$;
+
+reset role;
+reset request.jwt.claims;
+
+-- =========================================================================
+-- E. Gallery + visibility: owner-only (Dogly UX V1 / migration 0013)
+-- =========================================================================
+set role authenticated;
+set request.jwt.claims to
+  '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+
+select pg_temp.assert(
+  (select count(*) = 0 from public.dog_albums
+    where owner_id = '11111111-1111-1111-1111-111111111111'),
+  'cross-user SELECT dog_albums returns nothing');
+select pg_temp.assert(
+  (select count(*) = 0 from public.dog_photos
+    where owner_id = '11111111-1111-1111-1111-111111111111'),
+  'cross-user SELECT dog_photos returns nothing');
+select pg_temp.assert(
+  (select count(*) = 0 from public.dog_profile_visibility v
+    join public.dogs d on d.id = v.dog_id
+    where d.owner_id = '11111111-1111-1111-1111-111111111111'),
+  'cross-user SELECT dog_profile_visibility returns nothing');
+
+do $$
+begin
+  begin
+    insert into storage.objects (bucket_id, name, owner_id)
+    values ('dog-gallery',
+            'users/11111111-1111-1111-1111-111111111111/dogs/aaaa1111-1111-1111-1111-111111111111/gallery/bbbb2222-2222-2222-2222-222222222222/cccc3333-cccc-3333-cccc-333333333333.jpg',
+            '22222222-2222-2222-2222-222222222222');
+    raise exception 'RLS TEST FAILED: cross-user dog-gallery insert succeeded';
+  exception when insufficient_privilege or check_violation then
+    raise notice 'PASS: cross-user dog-gallery insert denied (fail closed)';
   end;
 end $$;
 

@@ -1,151 +1,175 @@
-/**
- * Preferenze notifiche (Spec V1 sez. 23.1 / 13.1): preferenza app SEPARATA
- * dal permesso OS. Il permesso di sistema viene chiesto solo quando c'è un
- * beneficio visibile, mai al primo avvio.
- */
-import React, { useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ScreenContainer } from '@/components';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { ScreenContainer } from '@/components';
+import { useCareEvents } from '@/features/care/store';
+import { formatCareDate, relativeCareDate } from '@/features/care/date';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import { StackScreenHeader } from '@/features/secondary/components';
-
-interface Pref {
-  key: string;
-  title: string;
-  description: string;
-}
-
-const PREFS: Pref[] = [
-  {
-    key: 'resultReady',
-    title: 'Risultato pronto',
-    description: 'Quando un’analisi comportamentale o digestiva è completata.',
-  },
-  {
-    key: 'newPattern',
-    title: 'Nuovo pattern scoperto',
-    description: 'Quando imparo qualcosa di nuovo su Rocky.',
-  },
-  {
-    key: 'digestiveTrend',
-    title: 'Cambiamenti digestivi',
-    description: 'Quando noto un cambiamento rispetto alla baseline di Rocky.',
-  },
-  {
-    key: 'weeklySummary',
-    title: 'Riepilogo settimanale',
-    description: 'Un riepilogo gentile della settimana di Rocky, una volta a settimana.',
-  },
-];
+import { colors, radius, spacing, typography } from '@/theme/tokens';
 
 export default function NotificationsScreen() {
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({
-    resultReady: true,
-    newPattern: true,
-    digestiveTrend: true,
-    weeklySummary: false,
-  });
+  const router = useRouter();
+  const { dog } = useDogProfile();
+  const careEvents = useCareEvents(dog.id).filter(
+    (event) => event.status === 'SCHEDULED' && event.reminderEnabled,
+  );
 
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Notifiche" />
-      <Text style={styles.intro}>
-        Queste preferenze riguardano l’app. Se il telefono blocca le
-        notifiche a livello di sistema, attiva il permesso dalle impostazioni
-        del dispositivo: sono due controlli separati.
-      </Text>
 
-      <Card style={styles.card}>
-        {PREFS.map((pref, index) => (
-          <View
-            key={pref.key}
-            style={[styles.prefRow, index > 0 && styles.prefDivider]}
-          >
-            <View style={styles.prefText}>
-              <Text style={styles.prefTitle}>{pref.title}</Text>
-              <Text style={styles.prefDescription}>{pref.description}</Text>
-            </View>
-            <Switch
-              value={enabled[pref.key]}
-              onValueChange={(v) =>
-                setEnabled((e) => ({ ...e, [pref.key]: v }))
-              }
-              trackColor={{ false: colors.border, true: colors.accentSoft }}
-              thumbColor={enabled[pref.key] ? colors.accent : colors.textMuted}
-              accessibilityLabel={pref.title}
-            />
-          </View>
-        ))}
-      </Card>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/settings/notifications')}
+        style={styles.settingsLink}
+      >
+        <Ionicons name="options-outline" size={18} color={colors.primary} />
+        <Text style={styles.settingsText}>Gestisci le notifiche</Text>
+      </Pressable>
 
-      <View style={styles.osBox}>
-        <Ionicons name="phone-portrait-outline" size={18} color={colors.primary} />
-        <Text style={styles.osText}>
-          Permesso di sistema: non ancora richiesto. Lo chiederemo solo quando
-          attivi una notifica che ti interessa.
-        </Text>
-      </View>
-
-      <Button
-        title="Salva preferenze"
-        onPress={() => {}}
-        style={styles.save}
-      />
+      <Text style={styles.section}>Promemoria in programma</Text>
+      {careEvents.length > 0 ? (
+        <View style={styles.list}>
+          {careEvents.map((event) => (
+            <Pressable
+              key={event.id}
+              accessibilityRole="button"
+              onPress={() => router.push(`/care/${event.id}` as never)}
+              style={({ pressed }) => [
+                styles.item,
+                pressed && styles.itemPressed,
+              ]}
+            >
+              <View style={styles.icon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={colors.warning}
+                />
+              </View>
+              <View style={styles.copy}>
+                <View style={styles.titleRow}>
+                  <Text style={styles.title}>{event.title}</Text>
+                  <Text style={styles.relative}>
+                    {relativeCareDate(event.scheduledAt)}
+                  </Text>
+                </View>
+                <Text style={styles.description}>
+                  Avviso il giorno prima ·{' '}
+                  {formatCareDate(event.scheduledAt, event.allDay)}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.empty}>
+          <Ionicons
+            name="notifications-outline"
+            size={30}
+            color={colors.textMuted}
+          />
+          <Text style={styles.emptyTitle}>Tutto tranquillo</Text>
+          <Text style={styles.emptyText}>
+            Qui vedrai avvisi e promemoria importanti.
+          </Text>
+        </View>
+      )}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  intro: {
+  settingsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-end',
+    marginTop: -spacing.sm,
+    marginBottom: spacing.xl,
+    paddingVertical: spacing.xs,
+  },
+  settingsText: {
+    color: colors.primary,
     fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-    marginBottom: spacing.lg,
+    fontWeight: typography.weight.semibold,
   },
-  card: {
-    marginBottom: spacing.lg,
+  section: {
+    marginBottom: spacing.md,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
   },
-  prefRow: {
+  list: {
+    gap: spacing.sm,
+  },
+  item: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  prefDivider: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  itemPressed: {
+    backgroundColor: colors.surfaceMuted,
   },
-  prefText: {
+  icon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.warningSoft,
+  },
+  copy: {
     flex: 1,
   },
-  prefTitle: {
+  titleRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  title: {
+    flex: 1,
+    color: colors.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
   },
-  prefDescription: {
+  relative: {
+    color: colors.warning,
     fontSize: typography.size.xs,
-    color: colors.textSecondary,
-    lineHeight: typography.size.xs * typography.lineHeight.normal,
+    fontWeight: typography.weight.bold,
+  },
+  description: {
     marginTop: spacing.xxs,
-  },
-  osBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.primarySoft,
-    borderRadius: 12,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  osText: {
-    flex: 1,
+    color: colors.textSecondary,
     fontSize: typography.size.xs,
-    color: colors.text,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
-  save: {
-    marginBottom: spacing.xl,
+  empty: {
+    alignItems: 'center',
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  emptyTitle: {
+    marginTop: spacing.md,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  emptyText: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    textAlign: 'center',
   },
 });

@@ -39,4 +39,10 @@ describe('design tokens (UX_REFERENCE vincolante)', () => {
   it('tab bar: voce attiva blu primario', () => {
     expect(tabBar.activeTint).toBe(colors.primary);
   });
+
+  it('token overlay e highlight per camera/icone', () => {
+    expect(colors.overlayDark).toContain('rgba');
+    expect(colors.overlayLight).toContain('rgba');
+    expect(colors.iconHighlight).toBe('#F5C518');
+  });
 });

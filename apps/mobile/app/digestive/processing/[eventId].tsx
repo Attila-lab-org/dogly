@@ -1,138 +1,138 @@
-/**
- * Digestive processing (Spec V1 sez. 6): stepper breve mentre l'evento
- * fecale viene osservato. Mock: avanza deterministicamente e porta al
- * risultato. Niente loop di polling stretto lato client (sez. 22).
- */
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, ScreenContainer } from '@/components';
+import { ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { useDogProfile } from '@/features/core/useDogProfile';
 
-const STEPS = [
-  { key: 'QUEUED', label: 'Foto caricata', icon: 'cloud-done-outline' },
-  { key: 'OBSERVING', label: 'Osservo la foto…', icon: 'eye-outline' },
-  { key: 'COMPARING', label: 'Confronto con la baseline di Rocky', icon: 'analytics-outline' },
-  { key: 'DONE', label: 'Quasi fatto', icon: 'checkmark-circle-outline' },
-] as const;
-
-const STEP_DURATION_MS = 1200;
+const STEP_DURATION_MS = 1100;
 
 export default function DigestiveProcessingScreen() {
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[] }>();
+  const eventId = Array.isArray(params.eventId)
+    ? params.eventId[0] ?? 'fecal-ok-1'
+    : params.eventId ?? 'fecal-ok-1';
   const router = useRouter();
+  const { dog } = useDogProfile();
   const [stepIndex, setStepIndex] = useState(0);
+  const steps = useMemo(
+    () => [
+      'Preparo la foto',
+      'Osservo forma e colore',
+      `Confronto con il solito di ${dog.name}`,
+    ],
+    [dog.name],
+  );
 
   useEffect(() => {
-    if (stepIndex >= STEPS.length) {
-      router.replace(`/digestive/result/${eventId ?? 'fecal-ok-1'}`);
+    if (stepIndex >= steps.length) {
+      router.replace(`/digestive/result/${eventId}`);
       return undefined;
     }
-    const timer = setTimeout(() => setStepIndex((i) => i + 1), STEP_DURATION_MS);
+    const timer = setTimeout(
+      () => setStepIndex((current) => current + 1),
+      STEP_DURATION_MS,
+    );
     return () => clearTimeout(timer);
-  }, [stepIndex, eventId, router]);
+  }, [eventId, router, stepIndex, steps.length]);
+
+  const visibleStep = steps[Math.min(stepIndex, steps.length - 1)];
 
   return (
-    <ScreenContainer>
-      <View style={styles.center}>
-        <Text style={styles.title}>Analisi in corso</Text>
-        <Text style={styles.subtitle}>
-          Puoi restare qui o tornare dopo: ti avvisiamo quando è pronto.
-        </Text>
-        <Card style={styles.card}>
-          {STEPS.map((step, index) => {
-            const done = index < stepIndex;
-            const active = index === stepIndex;
-            return (
-              <View key={step.key} style={styles.stepRow}>
-                <View
-                  style={[
-                    styles.stepIcon,
-                    done && styles.stepIconDone,
-                    active && styles.stepIconActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={done ? 'checkmark' : (step.icon as keyof typeof Ionicons.glyphMap)}
-                    size={16}
-                    color={
-                      done
-                        ? colors.textOnPrimary
-                        : active
-                          ? colors.accent
-                          : colors.textMuted
-                    }
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.stepLabel,
-                    active && styles.stepLabelActive,
-                    done && styles.stepLabelDone,
-                  ]}
-                >
-                  {step.label}
-                </Text>
-              </View>
-            );
-          })}
-        </Card>
+    <ScreenContainer contentStyle={styles.screen}>
+      <View style={styles.visual}>
+        <View style={styles.orbit}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="leaf" size={38} color={colors.accent} />
+          </View>
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={styles.loader}
+          />
+        </View>
       </View>
+
+      <Text style={styles.title}>Controllo in corso</Text>
+      <Text style={styles.currentStep}>{visibleStep}</Text>
+
+      <View style={styles.progress}>
+        {steps.map((step, index) => (
+          <View
+            key={step}
+            style={[
+              styles.progressSegment,
+              index <= stepIndex && styles.progressSegmentActive,
+            ]}
+          />
+        ))}
+      </View>
+
+      <Text style={styles.wait}>Ci vorranno solo pochi secondi.</Text>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  center: {
+  screen: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: typography.size.xl,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  card: {
-    paddingVertical: spacing.xl,
-  },
-  stepRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  stepIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceMuted,
+  visual: {
+    marginBottom: spacing.xxl,
+  },
+  orbit: {
+    width: 128,
+    height: 128,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepIconDone: {
-    backgroundColor: colors.accent,
-  },
-  stepIconActive: {
+  iconCircle: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.accentSoft,
   },
-  stepLabel: {
-    fontSize: typography.size.sm,
-    color: colors.textMuted,
+  loader: {
+    position: 'absolute',
+    transform: [{ scale: 1.5 }],
   },
-  stepLabelActive: {
+  title: {
     color: colors.text,
-    fontWeight: typography.weight.semibold,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
   },
-  stepLabelDone: {
+  currentStep: {
+    minHeight: 24,
+    marginTop: spacing.sm,
     color: colors.textSecondary,
+    fontSize: typography.size.md,
+    textAlign: 'center',
+  },
+  progress: {
+    width: '72%',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+  },
+  progressSegment: {
+    flex: 1,
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.border,
+  },
+  progressSegmentActive: {
+    backgroundColor: colors.accent,
+  },
+  wait: {
+    marginTop: spacing.xl,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
   },
 });

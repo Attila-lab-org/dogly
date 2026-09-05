@@ -17,7 +17,11 @@ from app.domains.models import (
     BehaviorCaptureRec,
     BehaviorEventRec,
     BehaviorFeedbackRec,
+    CareEventRec,
     DeviceInstallationRec,
+    DogAlbumRec,
+    DogPhotoRec,
+    DogProfileVisibilityRec,
     DogRec,
     FecalEventRec,
     FeedingPeriodRec,
@@ -65,6 +69,7 @@ class InMemoryStore:
         self.captures: dict[str, BehaviorCaptureRec] = {}
         self.behavior_events: dict[str, BehaviorEventRec] = {}
         self.behavior_feedback: dict[str, BehaviorFeedbackRec] = {}
+        self.care_events: dict[str, CareEventRec] = {}
         self.patterns: dict[str, PersonalPatternRec] = {}
         self.fecal_events: dict[str, FecalEventRec] = {}
         self.food_products: dict[str, FoodProductRec] = {}
@@ -78,6 +83,9 @@ class InMemoryStore:
         self.export_jobs: dict[str, AnalysisJobRec] = {}
         self.deletion_jobs: dict[str, AnalysisJobRec] = {}
         self.dog_profile_versions: list[dict] = []
+        self.dog_albums: dict[str, DogAlbumRec] = {}
+        self.dog_photos: dict[str, DogPhotoRec] = {}
+        self.dog_profile_visibility: dict[str, DogProfileVisibilityRec] = {}
         # Index: (user_id, client_request_id) -> capture/fecal id
         self.capture_by_client_request: dict[tuple[str, str], str] = {}
         self.fecal_by_client_request: dict[tuple[str, str], str] = {}

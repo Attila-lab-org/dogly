@@ -1,12 +1,6 @@
 /**
- * Digestive result (Spec V1 sez. 6.1-adattata / 19): osservazione strutturata.
- * REGOLE VINCOLANTI:
- * - fecal score 1–7 mostrato come STIMA, mai misura di laboratorio (19.1);
- * - candidati muco/sangue/melena/materiale estraneo con wording
- *   "possibile/candidato", MAI assenze provate (19.3);
- * - safety flag → copy DETERMINISTICO fisso da safetyCopy.ts, non generato;
- * - confronto Rocky-vs-Rocky con baseline e cibo attivo (19.2);
- * - nessun feedback richiesto qui; nessuna diagnosi medica.
+ * Risultato digestivo: lettura immediata, dettagli utili e safety deterministica.
+ * Le anomalie non osservate non vengono elencate per evitare falsa rassicurazione.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -23,41 +17,36 @@ import {
 import {
   ABSENCE_NOT_PROOF_NOTE,
   DIGESTIVE_DISCLAIMER,
-  FECAL_SCORE_ESTIMATE_NOTE,
   SAFETY_COPY,
 } from '@/features/secondary/safetyCopy';
-import type { CandidateLevel } from '@/features/secondary/types';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import type {
+  CandidateLevel,
+  SafetyFlagCode,
+} from '@/features/secondary/types';
 
-function ObservationRow({
-  label,
-  value,
-  warn,
-}: {
+type Candidate = {
   label: string;
-  value: string;
-  warn?: boolean;
-}) {
-  return (
-    <View style={styles.obsRow}>
-      <Text style={styles.obsLabel}>{label}</Text>
-      <Text style={[styles.obsValue, warn && styles.obsValueWarn]}>{value}</Text>
-    </View>
-  );
-}
+  level: CandidateLevel;
+  coveredBy?: SafetyFlagCode;
+};
 
 export default function DigestiveResultScreen() {
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[] }>();
+  const eventId = Array.isArray(params.eventId)
+    ? params.eventId[0] ?? ''
+    : params.eventId ?? '';
   const router = useRouter();
-  // Niente fallback silenzioso: evento sconosciuto → ErrorState (come
-  // behavior/result/[eventId].tsx), mai mostrare dati di un altro evento.
+  const { dog } = useDogProfile();
   const event = eventId ? fecalEventsMock[eventId] : undefined;
 
   if (!event) {
     return (
       <ScreenContainer>
+        <StackScreenHeader title="Digestione" />
         <ErrorState
-          title="Osservazione non trovata"
-          message="Non riesco ad aprire questa osservazione. Controlla il Diario."
+          title="Risultato non disponibile"
+          message="Puoi ritrovare le osservazioni precedenti nel Diario."
         />
         <Button
           title="Apri il Diario"
@@ -67,35 +56,33 @@ export default function DigestiveResultScreen() {
     );
   }
 
-  // Stato mandatory "insufficient image" (sez. 6 / 19.1): nessuna stima,
-  // UI dedicata con CTA per scattare di nuovo.
-  if (event.status === 'INSUFFICIENT_IMAGE' || event.imageQuality === 'insufficient') {
+  if (
+    event.status === 'INSUFFICIENT_IMAGE' ||
+    event.imageQuality === 'insufficient'
+  ) {
     return (
-      <ScreenContainer scroll>
-        <StackScreenHeader title="Osservazione digestiva" />
-        <View style={styles.insufficientIconWrap}>
-          <Ionicons name="camera-outline" size={36} color={colors.warning} />
+      <ScreenContainer scroll contentStyle={styles.content}>
+        <StackScreenHeader title="Digestione" />
+        <View style={styles.emptyVisual}>
+          <View style={styles.warningIcon}>
+            <Ionicons name="camera-outline" size={34} color={colors.warning} />
+          </View>
+          <Text style={styles.emptyTitle}>Serve un’altra foto</Text>
+          <Text style={styles.emptySubtitle}>
+            Questa non è abbastanza nitida per un risultato affidabile.
+          </Text>
         </View>
-        <Text style={styles.headline}>Foto non sufficiente</Text>
-        <Text style={styles.insufficientText}>
-          Non riesco a leggere bene questa foto: preferisco non darti numeri
-          poco affidabili. Nessuna analisi è stata conteggiata.
-        </Text>
-        {event.qualityWarnings.length > 0 && (
-          <Card style={styles.card}>
-            <Text style={styles.sectionTitle}>Cosa migliorare</Text>
-            {event.qualityWarnings.map((warning) => (
-              <View key={warning} style={styles.warningRow}>
-                <Ionicons
-                  name="warning-outline"
-                  size={16}
-                  color={colors.warning}
-                />
-                <Text style={styles.warningItem}>{warning}</Text>
-              </View>
-            ))}
-          </Card>
-        )}
+
+        <Card style={styles.improveCard}>
+          <Text style={styles.cardTitle}>Per migliorarla</Text>
+          {event.qualityWarnings.map((warning) => (
+            <View key={warning} style={styles.tipRow}>
+              <Ionicons name="checkmark" size={17} color={colors.accent} />
+              <Text style={styles.tipText}>{warning}</Text>
+            </View>
+          ))}
+        </Card>
+
         <Button
           title="Scatta di nuovo"
           icon={
@@ -105,293 +92,465 @@ export default function DigestiveResultScreen() {
           testID="digestive-retake"
         />
         <Button
-          title="Torna al Diario"
+          title="Chiudi"
           variant="outline"
-          onPress={() => router.replace('/(tabs)/diary')}
-          style={styles.insufficientSecondary}
+          onPress={() => router.replace('/(tabs)/rocky')}
+          style={styles.secondaryAction}
         />
       </ScreenContainer>
     );
   }
 
   const hasSafetyFlags = event.safetyFlags.length > 0;
-
-  const candidates: { label: string; level: CandidateLevel }[] = [
-    { label: 'Muco', level: event.mucusCandidate },
-    { label: 'Sangue fresco', level: event.bloodCandidate },
-    { label: 'Feci nere/catramose (melena)', level: event.melenaCandidate },
-    { label: 'Materiale estraneo', level: event.foreignMaterialCandidate },
+  const candidates: Candidate[] = [
+    { label: 'Possibile muco', level: event.mucusCandidate },
+    {
+      label: 'Possibile sangue',
+      level: event.bloodCandidate,
+      coveredBy: 'BLOOD_CANDIDATE',
+    },
+    {
+      label: 'Colore molto scuro',
+      level: event.melenaCandidate,
+      coveredBy: 'MELENA_CANDIDATE',
+    },
+    { label: 'Possibile materiale estraneo', level: event.foreignMaterialCandidate },
   ];
+  const notableCandidates = candidates.filter(
+    ({ level, coveredBy }) =>
+      (level === 'possible' || level === 'clear_candidate') &&
+      (!coveredBy || !event.safetyFlags.includes(coveredBy)),
+  );
 
   return (
-    <ScreenContainer scroll>
-      <StackScreenHeader title="Osservazione digestiva" />
+    <ScreenContainer scroll contentStyle={styles.content}>
+      <StackScreenHeader title="Digestione" />
 
-      {/* Headline probabilistica */}
-      <Text style={styles.headline}>
-        {hasSafetyFlags
-          ? 'Qualcosa da verificare con il veterinario'
-          : 'Tutto sembra nella norma'}
-      </Text>
-      <View style={styles.pillWrap}>
-        <ConfidenceBandPill band={event.confidenceBand} />
+      <View
+        style={[
+          styles.resultHero,
+          hasSafetyFlags ? styles.resultHeroAttention : styles.resultHeroRegular,
+        ]}
+      >
+        <View
+          style={[
+            styles.resultIcon,
+            hasSafetyFlags
+              ? styles.resultIconAttention
+              : styles.resultIconRegular,
+          ]}
+        >
+          <Ionicons
+            name={hasSafetyFlags ? 'alert-outline' : 'checkmark'}
+            size={30}
+            color={hasSafetyFlags ? colors.danger : colors.accent}
+          />
+        </View>
+        <Text style={styles.resultTitle}>
+          {hasSafetyFlags
+            ? 'C’è qualcosa da controllare'
+            : 'Sembra tutto regolare'}
+        </Text>
+        <Text style={styles.resultSummary}>
+          {event.baselineComparison.replace(/Rocky/g, dog.name)}
+        </Text>
+        <ConfidenceBandPill band={event.confidenceBand} style={styles.pill} />
       </View>
 
-      {/* Safety flag: copy deterministico fisso, mai generato */}
       {event.safetyFlags.map((flag) => {
         const copy = SAFETY_COPY[flag];
         return (
           <View key={flag} style={styles.safetyCard}>
-            <View style={styles.safetyHeader}>
-              <Ionicons name="medkit" size={18} color={colors.danger} />
+            <View style={styles.safetyHeading}>
+              <Ionicons name="medkit" size={20} color={colors.danger} />
               <Text style={styles.safetyTitle}>{copy.title}</Text>
             </View>
             <Text style={styles.safetyMessage}>{copy.message}</Text>
-            <Text style={styles.safetyAction}>👉 {copy.action}</Text>
+            <Text style={styles.safetyAction}>{copy.action}</Text>
           </View>
         );
       })}
 
-      {/* Osservazione strutturata */}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Cosa ho osservato</Text>
+      <Text style={styles.sectionTitle}>In breve</Text>
+      <View style={styles.metrics}>
+        <MetricCard
+          icon="shapes-outline"
+          label="Consistenza"
+          value={capitalize(event.consistency)}
+        />
+        <MetricCard
+          icon="color-palette-outline"
+          label="Colore"
+          value={capitalize(event.color)}
+        />
+      </View>
 
-        <View style={styles.scoreRow}>
-          <View style={styles.scoreCircle}>
-            <Text style={styles.scoreNumber}>
-              {event.fecalScoreEstimate ?? '—'}
-            </Text>
-            <Text style={styles.scoreScale}>/7</Text>
-          </View>
-          <View style={styles.scoreTextWrap}>
-            <Text style={styles.scoreTitle}>Stima del punteggio fecale</Text>
-            <Text style={styles.scoreNote}>{FECAL_SCORE_ESTIMATE_NOTE}</Text>
-          </View>
+      <Card style={styles.scoreCard}>
+        <View style={styles.scoreBadge}>
+          <Text style={styles.scoreNumber}>{event.fecalScoreEstimate ?? '—'}</Text>
+          <Text style={styles.scoreTotal}>/7</Text>
         </View>
-
-        <ObservationRow label="Consistenza" value={event.consistency} />
-        <ObservationRow label="Colore" value={event.color} />
-        {candidates.map((c) => (
-          <ObservationRow
-            key={c.label}
-            label={c.label}
-            value={candidateText(c.level)}
-            warn={c.level === 'possible' || c.level === 'clear_candidate'}
-          />
-        ))}
+        <View style={styles.scoreCopy}>
+          <Text style={styles.scoreTitle}>Stima visiva</Text>
+          <Text style={styles.scoreSubtitle}>
+            Basata sulla forma osservata nella foto.
+          </Text>
+        </View>
       </Card>
 
-      {/* Confronto Rocky-vs-Rocky + cibo attivo */}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Rispetto al solito Rocky</Text>
-        <View style={styles.compareRow}>
-          <Ionicons name="analytics-outline" size={16} color={colors.accent} />
-          <Text style={styles.bodyText}>{event.baselineComparison}</Text>
-        </View>
-        {event.activeFoodName && (
-          <View style={styles.compareRow}>
-            <Ionicons name="nutrition-outline" size={16} color={colors.accent} />
-            <Text style={styles.bodyText}>
-              Cibo in questo periodo: {event.activeFoodName}
+      {notableCandidates.length > 0 ? (
+        <Card style={styles.notableCard}>
+          <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
+          {notableCandidates.map((candidate) => (
+            <View key={candidate.label} style={styles.notableRow}>
+              <View style={styles.notableDot} />
+              <Text style={styles.notableLabel}>{candidate.label}</Text>
+              <Text style={styles.notableValue}>
+                {candidateText(candidate.level)}
+              </Text>
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
+      {event.activeFoodName ? (
+        <View style={styles.foodRow}>
+          <View style={styles.foodIcon}>
+            <Ionicons name="nutrition-outline" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.foodCopy}>
+            <Text style={styles.foodLabel}>Cibo attuale</Text>
+            <Text style={styles.foodValue} numberOfLines={2}>
+              {event.activeFoodName}
             </Text>
           </View>
-        )}
-        <Text style={styles.note}>
-          Un cambiamento vicino a un cambio di cibo è solo un'associazione
-          temporale, non una prova di causa.
-        </Text>
-      </Card>
+        </View>
+      ) : null}
 
-      {/* Note fisse: nessuna diagnosi, nessuna assenza provata */}
       <View style={styles.disclaimer}>
-        <Text style={styles.disclaimerText}>{DIGESTIVE_DISCLAIMER}</Text>
-        <Text style={[styles.disclaimerText, styles.disclaimerGap]}>
-          {ABSENCE_NOT_PROOF_NOTE}
-        </Text>
+        <Ionicons
+          name="information-circle-outline"
+          size={18}
+          color={colors.textSecondary}
+        />
+        <View style={styles.disclaimerCopy}>
+          <Text style={styles.disclaimerText}>{DIGESTIVE_DISCLAIMER}</Text>
+          <Text style={styles.disclaimerText}>{ABSENCE_NOT_PROOF_NOTE}</Text>
+        </View>
       </View>
 
       <Button
-        title="Torna al profilo di Rocky"
-        variant="outline"
+        title="Fatto"
         onPress={() => router.replace('/(tabs)/rocky')}
+      />
+      <Button
+        title="Apri il Diario"
+        variant="outline"
+        onPress={() => router.replace('/(tabs)/diary')}
+        style={styles.secondaryAction}
       />
     </ScreenContainer>
   );
 }
 
+function MetricCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.metricCard}>
+      <View style={styles.metricIcon}>
+        <Ionicons name={icon} size={20} color={colors.accent} />
+      </View>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function capitalize(value: string): string {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
 const styles = StyleSheet.create({
-  insufficientIconWrap: {
+  content: {
+    paddingBottom: spacing.xxxl,
+  },
+  resultHero: {
+    alignItems: 'center',
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+  },
+  resultHeroRegular: {
+    backgroundColor: colors.accentSoft,
+  },
+  resultHeroAttention: {
+    backgroundColor: colors.dangerSoft,
+  },
+  resultIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  resultIconRegular: {
+    backgroundColor: colors.surface,
+  },
+  resultIconAttention: {
+    backgroundColor: colors.surface,
+  },
+  resultTitle: {
+    color: colors.text,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+  },
+  resultSummary: {
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    textAlign: 'center',
+  },
+  pill: {
+    marginTop: spacing.md,
+  },
+  safetyCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.dangerSoft,
+    marginBottom: spacing.lg,
+  },
+  safetyHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  safetyTitle: {
+    flex: 1,
+    color: colors.danger,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  safetyMessage: {
+    marginTop: spacing.sm,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  safetyAction: {
+    marginTop: spacing.md,
+    color: colors.danger,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  sectionTitle: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+  },
+  metrics: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  metricCard: {
+    flex: 1,
+    minHeight: 132,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  metricIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentSoft,
+  },
+  metricLabel: {
+    marginTop: spacing.md,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+  },
+  metricValue: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  scoreCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  scoreBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    paddingTop: spacing.md,
+    backgroundColor: colors.primarySoft,
+  },
+  scoreNumber: {
+    color: colors.primary,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.bold,
+  },
+  scoreTotal: {
+    color: colors.primary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+  },
+  scoreCopy: {
+    flex: 1,
+  },
+  scoreTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  scoreSubtitle: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+  },
+  notableCard: {
+    marginBottom: spacing.lg,
+  },
+  cardTitle: {
+    marginBottom: spacing.md,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  notableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 40,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  notableDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warning,
+  },
+  notableLabel: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.size.sm,
+  },
+  notableValue: {
+    color: colors.warning,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  foodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.lg,
+  },
+  foodIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  foodCopy: {
+    flex: 1,
+  },
+  foodLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+  },
+  foodValue: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  disclaimer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    marginBottom: spacing.lg,
+  },
+  disclaimerCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  disclaimerText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
+  },
+  secondaryAction: {
+    marginTop: spacing.sm,
+  },
+  emptyVisual: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  warningIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.warningSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
+    backgroundColor: colors.warningSoft,
     marginBottom: spacing.md,
   },
-  insufficientText: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  emptyTitle: {
+    color: colors.text,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+  },
+  emptySubtitle: {
     marginTop: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    textAlign: 'center',
+  },
+  improveCard: {
     marginBottom: spacing.lg,
   },
-  warningRow: {
+  tipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  warningItem: {
+  tipText: {
     flex: 1,
-    fontSize: typography.size.sm,
     color: colors.text,
-  },
-  insufficientSecondary: {
-    marginTop: spacing.sm,
-  },
-  headline: {
-    fontSize: typography.size.xl,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  pillWrap: {
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  safetyCard: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  safetyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  safetyTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-    color: colors.danger,
-  },
-  safetyMessage: {
     fontSize: typography.size.sm,
-    color: colors.text,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-  },
-  safetyAction: {
-    marginTop: spacing.sm,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.danger,
-  },
-  card: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  scoreCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.accentSoft,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    paddingTop: spacing.md,
-  },
-  scoreNumber: {
-    fontSize: typography.size.xxl,
-    fontWeight: typography.weight.bold,
-    color: colors.accent,
-  },
-  scoreScale: {
-    fontSize: typography.size.sm,
-    color: colors.accent,
-  },
-  scoreTextWrap: {
-    flex: 1,
-  },
-  scoreTitle: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-  },
-  scoreNote: {
-    fontSize: typography.size.xs,
-    color: colors.textSecondary,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
-    marginTop: spacing.xxs,
-  },
-  obsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.md,
-  },
-  obsLabel: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  obsValue: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-    textTransform: 'capitalize',
-  },
-  obsValueWarn: {
-    color: colors.warning,
-  },
-  compareRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  bodyText: {
-    flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-  },
-  note: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
-    marginTop: spacing.xs,
-  },
-  disclaimer: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  disclaimerText: {
-    fontSize: typography.size.xs,
-    color: colors.textSecondary,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
-  },
-  disclaimerGap: {
-    marginTop: spacing.xs,
   },
 });

@@ -26,7 +26,6 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(auth)" />
           <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
         </Stack>
       </SafeAreaProvider>

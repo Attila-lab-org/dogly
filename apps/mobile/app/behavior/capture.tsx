@@ -11,7 +11,7 @@
  */
 import React, { useEffect, useReducer, useRef } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
@@ -22,9 +22,15 @@ import {
   formatCaptureTimer,
   initialCaptureState,
 } from '@/features/core/captureMachine';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { useCheckIn } from '@/features/checkin/store';
 
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
+  const { analysisContext } = useCheckIn();
+  const params = useLocalSearchParams<{ from?: string; care?: string }>();
+  const fromCheckIn = params.from === 'checkin' || analysisContext?.concern === 'off';
   const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -71,9 +77,15 @@ export default function BehaviorCaptureScreen() {
           >
             <Ionicons name="close" size={26} color={colors.text} />
           </Pressable>
-          <Text style={styles.topTitle}>Capisci Rocky</Text>
+          <Text style={styles.topTitle}>
+            {fromCheckIn ? `Guardiamo ${dog.name}` : `Capisci ${dog.name}`}
+          </Text>
           <View style={styles.topSpacer} />
         </View>
+
+        {fromCheckIn && analysisContext?.note ? (
+          <Text style={styles.careBanner}>{analysisContext.note}</Text>
+        ) : null}
 
         {/* Preview camera (simulata: placeholder fino a expo-camera) */}
         <View style={styles.preview}>
@@ -220,6 +232,13 @@ const styles = StyleSheet.create({
   topSpacer: {
     width: 26,
   },
+  careBanner: {
+    marginBottom: spacing.md,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
   preview: {
     flex: 1,
     borderRadius: radius.lg,
@@ -260,7 +279,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: 'rgba(14, 42, 71, 0.7)',
+    backgroundColor: colors.overlayDark,
     borderRadius: radius.full,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,

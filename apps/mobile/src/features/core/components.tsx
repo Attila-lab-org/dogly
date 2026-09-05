@@ -5,40 +5,23 @@
  * a tre vie. Stile vincolante: docs/ux/UX_REFERENCE.md + mockup ufficiali.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, Chip, ProgressBar } from '../../components';
+import { Card, Chip, ProgressBar, SectionHeader } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type {
   BehaviorEventResult,
+  BehaviorIntent,
   ConfidenceBand,
   EvidenceItem,
   FeedbackValue,
 } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
+import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 import { CONFIDENCE_BAND_LABELS, intentHeadline } from './copy';
 import type { KnowledgeScore } from './types';
 
-/* ------------------------------------------------------------------ */
-/* SectionHeader                                                       */
-/* ------------------------------------------------------------------ */
-
-export function SectionHeader({
-  title,
-  icon,
-  style,
-}: {
-  title: string;
-  icon?: React.ReactNode;
-  style?: ViewStyle;
-}) {
-  return (
-    <View style={[styles.sectionHeader, style]}>
-      {icon}
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-  );
-}
+export { SectionHeader };
 
 /* ------------------------------------------------------------------ */
 /* DogAvatar — foto circolare o placeholder zampa (foto opzionale, 7.1) */
@@ -47,26 +30,39 @@ export function SectionHeader({
 export function DogAvatar({
   size = 96,
   photoUri,
+  dogName = 'il cane',
 }: {
   size?: number;
   photoUri?: string | null;
+  dogName?: string;
 }) {
-  // V1 mock: nessuna foto salvata → placeholder zampa (sez. 6 "no photo")
-  void photoUri;
+  const hasPhoto = Boolean(photoUri);
   return (
     <View
+      accessibilityRole="image"
+      accessibilityLabel={
+        hasPhoto ? `Foto di ${dogName}` : `Nessuna foto di ${dogName}, placeholder zampa`
+      }
       style={[
         styles.avatar,
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      <Ionicons name="paw" size={size * 0.45} color={colors.textMuted} />
+      {hasPhoto ? (
+        <Image
+          source={{ uri: photoUri as string }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          accessibilityIgnoresInvertColors
+        />
+      ) : (
+        <Ionicons name="paw" size={size * 0.45} color={colors.textMuted} />
+      )}
     </View>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* KnowledgeScoreBlock — "Quanto conosco Rocky" (sez. 18, numero ammesso) */
+/* KnowledgeScoreBlock — "Quanto conosco {nome}" nel profilo cane. */
 /* ------------------------------------------------------------------ */
 
 export function KnowledgeScoreBlock({
@@ -126,24 +122,42 @@ export function ConfidencePill({ band }: { band: ConfidenceBand }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* EvidenceRow — icona teal + testo in card grigio-chiarissimo (mockup) */
+/* EvidenceRow — icona carina semantica + testo in card grigio-chiaro  */
 /* ------------------------------------------------------------------ */
 
-const EVIDENCE_ICONS: Record<EvidenceItem['source'], keyof typeof Ionicons.glyphMap> = {
-  OBSERVATION: 'eye-outline',
-  CONTEXT: 'location-outline',
-  PERSONAL_PATTERN: 'bulb-outline',
-};
+/**
+ * Icona semantica dedotta dal contenuto della label (mockup: ogni evidence
+ * ha la sua icona — coda, orecchie, voce…). Fallback sulle icone per fonte.
+ * Display-only: nessun cambio di contratto; quando il backend emetterà un
+ * campo `kind` (sez. 16.3) basterà sostituire questa inferenza.
+ */
+const EVIDENCE_ICON_KEYWORDS: Array<[RegExp, CuteIconName]> = [
+  [/coda|scodinzol/i, 'tail'],
+  [/orecch/i, 'ear'],
+  [/vocal|abbaia|guait|ulula|audio|suono/i, 'voice'],
+  [/postura|corpo|distes|gioco/i, 'paw'],
+  [/movimento|verso|salta|zampa|avvicina|insegu/i, 'movement'],
+  [/sguardo|occhi|fissa|visibile|guarda/i, 'gaze'],
+  [/respiro|ansim/i, 'breath'],
+  [/casa|ambiente|stanza|divano|giardino/i, 'home'],
+  [/orario|sera|mattina|giorno|clip|breve|notte/i, 'clock'],
+  [/pattern|abitudin/i, 'pattern'],
+];
+
+function evidenceIconName(item: EvidenceItem): CuteIconName {
+  for (const [pattern, name] of EVIDENCE_ICON_KEYWORDS) {
+    if (pattern.test(item.label)) return name;
+  }
+  if (item.source === 'PERSONAL_PATTERN') return 'pattern';
+  if (item.source === 'CONTEXT') return 'home';
+  return 'gaze';
+}
 
 export function EvidenceRow({ item }: { item: EvidenceItem }) {
   return (
     <View style={styles.evidenceRow}>
       <View style={styles.evidenceIconWrap}>
-        <Ionicons
-          name={EVIDENCE_ICONS[item.source]}
-          size={18}
-          color={colors.accent}
-        />
+        <CuteIcon name={evidenceIconName(item)} size={18} />
       </View>
       <Text style={styles.evidenceText}>{item.label}</Text>
     </View>
@@ -161,65 +175,103 @@ export function FeedbackButtons({
   value: FeedbackValue | null;
   onFeedback: (value: FeedbackValue) => void;
 }) {
+  const options: Array<{
+    value: FeedbackValue;
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+  }> = [
+    { value: 'YES', label: 'Sì, è così', icon: 'checkmark' },
+    { value: 'NO', label: 'Non credo', icon: 'close' },
+    { value: 'UNKNOWN', label: 'Non lo so', icon: 'help' },
+  ];
+
   return (
-    <View style={styles.feedbackGroup}>
-      <Button
-        title="Sì, è così"
-        variant={value === 'YES' || value === null ? 'primary' : 'outline'}
-        onPress={() => onFeedback('YES')}
-        icon={
-          <Ionicons
-            name="thumbs-up-outline"
-            size={18}
-            color={value === 'NO' || value === 'UNKNOWN' ? colors.accent : colors.textOnPrimary}
-          />
-        }
-        testID="feedback-yes"
-      />
-      <Button
-        title="Non credo"
-        variant={value === 'NO' || value === null ? 'danger' : 'outline'}
-        onPress={() => onFeedback('NO')}
-        icon={
-          <Ionicons
-            name="thumbs-down-outline"
-            size={18}
-            color={value === 'NO' || value === null ? colors.textOnPrimary : colors.accent}
-          />
-        }
-        testID="feedback-no"
-      />
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => onFeedback('UNKNOWN')}
-        style={({ pressed }) => [
-          styles.feedbackUnknown,
-          value === 'UNKNOWN' && styles.feedbackUnknownSelected,
-          pressed && styles.feedbackUnknownPressed,
-        ]}
-        testID="feedback-unknown"
-      >
-        <Ionicons name="help-circle-outline" size={18} color={colors.textSecondary} />
-        <Text style={styles.feedbackUnknownLabel}>Non lo so</Text>
-      </Pressable>
+    <View style={styles.feedbackCard}>
+      <View style={styles.feedbackHeading}>
+        <Text style={styles.feedbackTitle}>Ti torna?</Text>
+        {value ? (
+          <View style={styles.savedBadge}>
+            <Ionicons name="checkmark" size={13} color={colors.accent} />
+            <Text style={styles.savedLabel}>Salvato</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.feedbackOptions}>
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <Pressable
+              key={option.value}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => onFeedback(option.value)}
+              style={({ pressed }) => [
+                styles.feedbackOption,
+                selected && styles.feedbackOptionSelected,
+                pressed && styles.feedbackOptionPressed,
+              ]}
+              testID={`feedback-${option.value.toLowerCase()}`}
+            >
+              <View
+                style={[
+                  styles.feedbackIcon,
+                  selected && styles.feedbackIconSelected,
+                ]}
+              >
+                <Ionicons
+                  name={option.icon}
+                  size={16}
+                  color={selected ? colors.textOnPrimary : colors.textSecondary}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.feedbackOptionLabel,
+                  selected && styles.feedbackOptionLabelSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* BehaviorResultView — contratto 6.1 completo (result + dettaglio diario) */
+/* BehaviorResultView — contratto UX_REFERENCE (risultato per il cliente) */
 /* ------------------------------------------------------------------ */
+
+/** Disegno carino dell'hero per ogni intent della tassonomia (sez. 16.2). */
+const INTENT_HERO_ICONS: Record<BehaviorIntent, CuteIconName> = {
+  PLAY_INTERACTION: 'play',
+  ATTENTION_REQUEST: 'attention',
+  OUTSIDE_REQUEST: 'door',
+  ALERT_VIGILANCE: 'alert',
+  DISCOMFORT_AVOIDANCE: 'cloud',
+  FEAR_INSECURITY: 'cloud',
+  HIGH_AROUSAL: 'bolt',
+  FRUSTRATION: 'frustration',
+  RELAX_REST: 'moon',
+  RESOURCE_TENSION: 'bowl',
+  AMBIGUOUS: 'question',
+  INSUFFICIENT: 'search',
+};
 
 export function BehaviorResultView({
   result,
   dogName,
   feedback,
   onFeedback,
+  careNote,
 }: {
   result: BehaviorEventResult;
   dogName: string;
   feedback: FeedbackValue | null;
   onFeedback: (value: FeedbackValue) => void;
+  careNote?: string | null;
 }) {
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
@@ -227,39 +279,58 @@ export function BehaviorResultView({
 
   return (
     <View>
-      {/* Illustrazione amichevole (mockup-result: cerchio azzurro chiaro) */}
-      <View style={styles.illustrationWrap}>
-        <View style={styles.illustrationCircle}>
-          <Ionicons
-            name={isInsufficient ? 'search' : 'tennisball-outline'}
-            size={64}
-            color={colors.primary}
+      <View
+        style={[
+          styles.resultHero,
+          (isInsufficient || isAmbiguous) && styles.resultHeroUncertain,
+        ]}
+      >
+        <View style={styles.resultIcon}>
+          <CuteIcon
+            name={
+              isInsufficient || !result.primary_intent
+                ? 'search'
+                : INTENT_HERO_ICONS[result.primary_intent]
+            }
+            size={32}
+            color={
+              isInsufficient || isAmbiguous ? colors.warning : colors.accent
+            }
           />
         </View>
+        <Text style={styles.headline}>
+          {intentHeadline(dogName, result.primary_intent)}
+        </Text>
+        <View style={styles.pillWrap}>
+          <ConfidencePill band={result.confidence_band} />
+        </View>
+        <Text style={styles.summary}>
+          {personalizeCopy(result.consumer_summary, dogName)}
+        </Text>
       </View>
 
-      {/* Headline probabilistica + pill band (mai %) */}
-      <Text style={styles.headline}>
-        {intentHeadline(dogName, result.primary_intent)}
-      </Text>
-      <View style={styles.pillWrap}>
-        <ConfidencePill band={result.confidence_band} />
-      </View>
+      {careNote ? (
+        <View style={styles.careCard}>
+          <Ionicons name="heart-outline" size={18} color={colors.accent} />
+          <Text style={styles.careNote}>{careNote}</Text>
+        </View>
+      ) : null}
 
-      {/* Summary prudente (sez. 6.1: "sembra / probabilmente / possibile") */}
-      <Text style={styles.summary}>{result.consumer_summary}</Text>
-
-      {/* Perché? 3–5 evidence con fonte tipizzata (sez. 6.1) */}
       {result.evidence.length > 0 && (
         <View style={styles.evidenceSection}>
-          <Text style={styles.evidenceTitle}>Perché?</Text>
+          <Text style={styles.evidenceTitle}>Segnali osservati</Text>
           {result.evidence.map((item, index) => (
-            <EvidenceRow key={`${item.label}-${index}`} item={item} />
+            <EvidenceRow
+              key={`${item.label}-${index}`}
+              item={{
+                ...item,
+                label: personalizeCopy(item.label, dogName),
+              }}
+            />
           ))}
         </View>
       )}
 
-      {/* Ipotesi alternativa quando incerto (sez. 6.1: 0–2 alternative) */}
       {result.alternatives.length > 0 && (
         <Card style={styles.alternativeCard}>
           <SectionHeader
@@ -273,19 +344,24 @@ export function BehaviorResultView({
               <Text style={styles.alternativeLabel}>
                 {BEHAVIOR_INTENT_LABELS[alt.intent]}
               </Text>
-              <Text style={styles.alternativeRationale}>{alt.rationale}</Text>
+              <Text style={styles.alternativeRationale}>
+                {personalizeCopy(alt.rationale, dogName)}
+              </Text>
             </View>
           ))}
         </Card>
       )}
 
-      {/* Feedback a tre vie one-tap: nessuna penalità per "Non lo so" */}
       <FeedbackButtons value={feedback} onFeedback={onFeedback} />
     </View>
   );
 }
 
 /* ------------------------------------------------------------------ */
+
+function personalizeCopy(copy: string, dogName: string): string {
+  return copy.replace(/Rocky/g, dogName);
+}
 
 const styles = StyleSheet.create({
   sectionHeader: {
@@ -345,43 +421,92 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.text,
   },
-  feedbackGroup: {
-    gap: spacing.md,
+  feedbackCard: {
     marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
   },
-  feedbackUnknown: {
+  feedbackHeading: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  feedbackTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  savedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  savedLabel: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+  },
+  feedbackOptions: {
+    flexDirection: 'row',
     gap: spacing.sm,
-    backgroundColor: colors.surfaceMuted,
+  },
+  feedbackOption: {
+    flex: 1,
+    minHeight: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
     borderRadius: radius.md,
-    paddingVertical: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
   },
-  feedbackUnknownSelected: {
-    borderWidth: 1.5,
-    borderColor: colors.accent,
+  feedbackOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
-  feedbackUnknownPressed: {
+  feedbackOptionPressed: {
     backgroundColor: colors.border,
   },
-  feedbackUnknownLabel: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.textSecondary,
-  },
-  illustrationWrap: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  illustrationCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: colors.primarySoft,
+  feedbackIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  feedbackIconSelected: {
+    backgroundColor: colors.primary,
+  },
+  feedbackOptionLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    textAlign: 'center',
+  },
+  feedbackOptionLabelSelected: {
+    color: colors.primary,
+  },
+  resultHero: {
+    alignItems: 'center',
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentSoft,
+  },
+  resultHeroUncertain: {
+    backgroundColor: colors.warningSoft,
+  },
+  resultIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   headline: {
     fontSize: typography.size.xxl,
@@ -396,10 +521,25 @@ const styles = StyleSheet.create({
   },
   summary: {
     marginTop: spacing.md,
-    fontSize: typography.size.md,
+    fontSize: typography.size.sm,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: typography.size.md * typography.lineHeight.normal,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  careCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  careNote: {
+    flex: 1,
+    fontSize: typography.size.sm,
+    color: colors.text,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   evidenceSection: {
     marginTop: spacing.xl,

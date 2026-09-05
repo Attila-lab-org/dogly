@@ -15,6 +15,8 @@ from app.contracts.interpretation import AlternativeIntent, EvidenceItem, Safety
 from app.contracts.taxonomy import (
     AnalysisDomain,
     BehaviorEventStatus,
+    CareEventStatus,
+    CareEventType,
     ConfidenceBand,
     ContextBucket,
     FeedbackValue,
@@ -113,6 +115,7 @@ class DogUpdate(BaseModel):
 class DogOut(BaseModel):
     id: str
     name: str
+    birth_date: str | None = None
     age_stage: str | None = None
     size: str | None = None
     breed_label: str | None = None
@@ -125,6 +128,58 @@ class DogOut(BaseModel):
 
 class DogListResponse(CursorPage):
     items: list[DogOut]
+
+
+# ---------------------------------------------------------------------------
+# Care agenda
+# ---------------------------------------------------------------------------
+
+
+class CareEventCreate(BaseModel):
+    event_type: CareEventType
+    title: str = Field(min_length=1, max_length=120)
+    scheduled_at: datetime
+    all_day: bool = False
+    timezone: str = Field(default="Europe/Rome", min_length=1, max_length=64)
+    location: str | None = Field(default=None, max_length=160)
+    notes: str | None = Field(default=None, max_length=1000)
+    reminder_enabled: bool = True
+    reminder_minutes_before: int = Field(default=1440, ge=0, le=525600)
+
+
+class CareEventUpdate(BaseModel):
+    event_type: CareEventType | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    scheduled_at: datetime | None = None
+    all_day: bool | None = None
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
+    location: str | None = Field(default=None, max_length=160)
+    notes: str | None = Field(default=None, max_length=1000)
+    reminder_enabled: bool | None = None
+    reminder_minutes_before: int | None = Field(default=None, ge=0, le=525600)
+    status: CareEventStatus | None = None
+
+
+class CareEventOut(BaseModel):
+    id: str
+    dog_id: str
+    event_type: CareEventType
+    title: str
+    scheduled_at: datetime
+    all_day: bool
+    timezone: str
+    location: str | None = None
+    notes: str | None = None
+    reminder_enabled: bool
+    reminder_minutes_before: int
+    status: CareEventStatus
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CareEventListResponse(CursorPage):
+    items: list[CareEventOut]
 
 
 # ---------------------------------------------------------------------------
@@ -381,3 +436,79 @@ class DeleteAccountRequest(BaseModel):
 class DeleteAccountResponse(BaseModel):
     deletion_job_id: str
     status: str = "pending"
+
+
+# ---------------------------------------------------------------------------
+# Gallery / profile visibility (Dogly UX V1)
+# ---------------------------------------------------------------------------
+
+
+class DogAlbumCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    default_visibility: Literal["PRIVATE", "PUBLISHED"] = "PRIVATE"
+
+
+class DogAlbumOut(BaseModel):
+    id: str
+    dog_id: str
+    title: str
+    cover_photo_id: str | None = None
+    photo_count: int = 0
+    default_visibility: Literal["PRIVATE", "PUBLISHED"] = "PRIVATE"
+    created_at: datetime
+
+
+class DogAlbumListResponse(BaseModel):
+    items: list[DogAlbumOut]
+
+
+class DogPhotoInitRequest(BaseModel):
+    content_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
+    bytes: int = Field(gt=0, le=15_000_000)
+    caption: str | None = Field(default=None, max_length=280)
+    visibility: Literal["PRIVATE", "PUBLISHED"] | None = None
+    taken_at: datetime | None = None
+
+
+class DogPhotoUpdate(BaseModel):
+    caption: str | None = Field(default=None, max_length=280)
+    visibility: Literal["PRIVATE", "PUBLISHED"] | None = None
+
+
+class DogPhotoOut(BaseModel):
+    id: str
+    album_id: str
+    dog_id: str
+    storage_path: str
+    caption: str | None = None
+    visibility: Literal["PRIVATE", "PUBLISHED"] = "PRIVATE"
+    taken_at: datetime | None = None
+    created_at: datetime
+
+
+class DogPhotoListResponse(BaseModel):
+    items: list[DogPhotoOut]
+
+
+class DogPhotoUploadResponse(BaseModel):
+    photo: DogPhotoOut
+    upload: dict
+
+
+class DogProfileVisibilityUpdate(BaseModel):
+    visibility: Literal["PRIVATE", "PUBLIC"]
+    consent_version: str | None = None
+    public_slug: str | None = Field(default=None, max_length=64)
+    whitelist_fields: list[str] | None = None
+
+
+class DogProfileVisibilityOut(BaseModel):
+    dog_id: str
+    visibility: Literal["PRIVATE", "PUBLIC"] = "PRIVATE"
+    consent_version: str | None = None
+    consented_at: datetime | None = None
+    revoked_at: datetime | None = None
+    public_slug: str | None = None
+    whitelist_fields: list[str] = Field(
+        default_factory=lambda: ["name", "breed_label", "age_stage", "size"]
+    )

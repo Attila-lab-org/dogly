@@ -16,7 +16,15 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Dogly usa le foto che scegli per creare storie e album.",
+          "cameraPermission": "Dogly usa la fotocamera solo quando scegli di scattare una foto."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

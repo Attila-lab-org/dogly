@@ -7,8 +7,6 @@ The worker owns OBSERVING/INTERPRETING/terminal transitions.
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 from app.config import Settings
 from app.contracts.api import BehaviorCaptureInitRequest, BehaviorFeedbackRequest
 from app.contracts.errors import ApiError, ErrorCode
@@ -88,7 +86,9 @@ async def init_capture(
         bytes=payload.bytes,
         content_type=payload.content_type,
         context_bucket=payload.context_bucket,
-        expires_at=now_utc() + timedelta(hours=settings.raw_media_ttl_hours),
+        # expires_at is set only at terminal analysis completion (Spec §23.2 /
+        # Dogly UX V1): TTL starts when processing finishes, not at upload init.
+        expires_at=None,
         created_at=now_utc(),
     )
     event = BehaviorEventRec(

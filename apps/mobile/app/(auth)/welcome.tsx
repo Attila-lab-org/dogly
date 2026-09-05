@@ -1,135 +1,149 @@
 /**
- * Welcome (Spec V1 sez. 6, 7.1.1) — welcome/privacy summary prima del sign-in.
- * Privacy summary (sez. 23.1): consenso servizio qui; ricerca/training
- * separato e opt-in (mai preselezionato); "keep clip" separato.
- * Nessun permesso OS alla prima apertura (sez. 13.1).
+ * Welcome (Spec V1 sez. 6, 7.1.1) — schermata iniziale con logo Dogly.
+ * Auth reale (Google / registrazione / login) arriverà con Supabase;
+ * V1 demo: bottoni visualmente spenti ma tap → entrata in app.
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, ScreenContainer } from '@/components';
-import { colors, gradients, radius, spacing, typography } from '@/theme/tokens';
-
-const PRIVACY_POINTS: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
-  {
-    icon: 'lock-closed-outline',
-    text: 'I video di Rocky restano privati e puoi eliminarli quando vuoi.',
-  },
-  {
-    icon: 'flask-outline',
-    text: 'Uso per ricerca e miglioramento solo se lo scegli tu, a parte.',
-  },
-  {
-    icon: 'videocam-outline',
-    text: "L'AI lavora solo quando registri tu: niente analisi in background.",
-  },
-];
+import { ScreenContainer } from '@/components';
+import { DoglyLogo } from '@/features/brand/DoglyLogo';
+import { colors, radius, spacing, typography } from '@/theme/tokens';
 
 export default function WelcomeScreen() {
   const router = useRouter();
 
+  /** Demo: entra comunque (cane Rocky già in mock). */
+  const enterApp = () => {
+    router.replace('/(tabs)/home');
+  };
+
   return (
-    <ScreenContainer>
+    <ScreenContainer contentStyle={styles.screen}>
       <View style={styles.hero}>
-        <LinearGradient
-          colors={[...gradients.cta]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroBadge}
-        >
-          <Ionicons name="paw" size={44} color={colors.textOnPrimary} />
-        </LinearGradient>
-        <Text style={styles.title}>Capisci cosa ti sta{'\n'}dicendo il tuo cane</Text>
-        <Text style={styles.subtitle}>
-          Registra pochi secondi di video: osservo i segnali di Rocky e te li
-          spiego in parole semplici.
+        <DoglyLogo width={240} />
+        <Text style={styles.tagline}>
+          Capisci cosa ti sta dicendo il tuo cane
         </Text>
       </View>
 
-      {/* Privacy summary (sez. 7.1.1 + 23.1) */}
-      <View style={styles.privacyCard}>
-        {PRIVACY_POINTS.map((point) => (
-          <View key={point.icon} style={styles.privacyRow}>
-            <View style={styles.privacyIcon}>
-              <Ionicons name={point.icon} size={18} color={colors.accent} />
-            </View>
-            <Text style={styles.privacyText}>{point.text}</Text>
-          </View>
-        ))}
+      <View style={styles.footer}>
+        <View style={styles.actions}>
+          <AuthEntry
+            title="Continua con Google"
+            icon="logo-google"
+            onPress={enterApp}
+            testID="welcome-google"
+          />
+          <AuthEntry
+            title="Registrazione"
+            icon="person-add-outline"
+            onPress={enterApp}
+            testID="welcome-register"
+          />
+          <AuthEntry
+            title="Login"
+            icon="log-in-outline"
+            onPress={enterApp}
+            testID="welcome-login"
+          />
+        </View>
+        <Text style={styles.hint}>Auth in arrivo — tap per entrare in demo</Text>
+        <Text style={styles.terms}>
+          Continuando accetti i termini e l'informativa privacy del servizio.
+        </Text>
       </View>
-
-      <Button
-        title="Inizia"
-        onPress={() => router.push('/(auth)/sign-in')}
-        testID="welcome-continue"
-      />
-      <Text style={styles.terms}>
-        Continuando accetti i termini e l'informativa privacy del servizio.
-      </Text>
     </ScreenContainer>
   );
 }
 
+function AuthEntry({
+  title,
+  icon,
+  onPress,
+  testID,
+}: {
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint="Modalità demo: entra direttamente nell'app"
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.entry,
+        pressed && styles.entryPressed,
+      ]}
+    >
+      <Ionicons name={icon} size={20} color={colors.textMuted} />
+      <Text style={styles.entryLabel}>{title}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
   hero: {
     alignItems: 'center',
     marginTop: spacing.xxxl,
-    marginBottom: spacing.xl,
+    gap: spacing.xl,
   },
-  heroBadge: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.lg * 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontSize: typography.size.xxl,
-    fontWeight: typography.weight.bold,
+  tagline: {
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.semibold,
     color: colors.text,
     textAlign: 'center',
-    lineHeight: typography.size.xxl * typography.lineHeight.tight,
+    lineHeight: typography.size.lg * typography.lineHeight.tight,
+    paddingHorizontal: spacing.lg,
   },
-  subtitle: {
-    marginTop: spacing.md,
-    fontSize: typography.size.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: typography.size.md * typography.lineHeight.relaxed,
+  footer: {
+    paddingBottom: spacing.md,
   },
-  privacyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
+  actions: {
     gap: spacing.md,
-    marginBottom: spacing.xl,
   },
-  privacyRow: {
+  entry: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-  },
-  privacyIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
+    opacity: 0.48,
   },
-  privacyText: {
-    flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.text,
-    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  entryPressed: {
+    opacity: 0.62,
   },
-  terms: {
-    marginTop: spacing.md,
+  entryLabel: {
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+    color: colors.textMuted,
+  },
+  hint: {
+    marginTop: spacing.lg,
     fontSize: typography.size.xs,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  terms: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
 });

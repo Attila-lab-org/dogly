@@ -78,6 +78,21 @@ class FeedbackValue(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class CareEventType(StrEnum):
+    VACCINE = "VACCINE"
+    VET_VISIT = "VET_VISIT"
+    PARASITE_TREATMENT = "PARASITE_TREATMENT"
+    EXAM = "EXAM"
+    THERAPY = "THERAPY"
+    OTHER = "OTHER"
+
+
+class CareEventStatus(StrEnum):
+    SCHEDULED = "SCHEDULED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
 class PatternState(StrEnum):
     CANDIDATE = "CANDIDATE"
     PRELIMINARY = "PRELIMINARY"

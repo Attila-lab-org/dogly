@@ -17,8 +17,11 @@ export type SessionState =
   | 'authenticated-no-dog'
   | 'authenticated-with-dog';
 
-/** Stato di sessione simulato (default: utente con cane, come i mockup). */
-export const sessionMock: SessionState = 'authenticated-with-dog';
+/**
+ * Default demo: schermata iniziale con logo.
+ * Dopo tap su Google / Registrazione / Login (spenti ma cliccabili) → Home.
+ */
+export const sessionMock: SessionState = 'unauthenticated';
 
 export type EntryRoute = '/(auth)/welcome' | '/onboarding/dog' | '/(tabs)/home';
 

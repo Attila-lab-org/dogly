@@ -1,93 +1,117 @@
 /**
- * Tab Rocky (Spec V1 sez. 5.1) — replica fedele di docs/ux/mockup-rocky.png.
- * Contenuti: identità, Knowledge Score, pattern appresi, stati frequenti,
- * baseline digestiva + cibo attivo, drill-down settings.
- * Stati obbligatori (sez. 6): low knowledge, no pattern, contested pattern
- * (badge "Da verificare").
+ * Profilo cane: spazio personale, visivo e orientato alle azioni.
+ * Le spiegazioni tecniche e le policy restano fuori da questa schermata.
  */
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Chip, ProgressBar } from '@/components';
-import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { Card } from '@/components';
+import {
+  colors,
+  gradients,
+  radius,
+  shadows,
+  spacing,
+  typography,
+} from '@/theme/tokens';
 import {
   digestiveBaselineMock,
-  DOG_ID,
   feedingPeriodsMock,
   foodProductsMock,
-  knowledgeScoreMock,
-  patternsMock,
 } from '@/mocks/secondary';
-import { PatternStateChip, SectionHeader } from '@/features/secondary/components';
+import { DogAvatar } from '@/features/core/components';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { PhotoThumbnail } from '@/features/photos/components';
+import { albumsMock, photosForAlbum } from '@/mocks/photos';
+import { currentAgeLabel } from '@/features/dogs/profileDates';
+import { relativeCareDate } from '@/features/care/date';
+import { useCareEvents } from '@/features/care/store';
 
-const DOG = {
-  name: 'Rocky',
-  age: '4 anni',
-  size: 'Taglia media',
-  breed: 'Labrador',
-};
+type IconName = keyof typeof Ionicons.glyphMap;
 
-const FREQUENT_STATES: { label: string; tone: 'success' | 'primary' | 'warning' }[] = [
-  { label: 'Relax', tone: 'success' },
-  { label: 'Gioco', tone: 'primary' },
-  { label: 'Attenzione', tone: 'warning' },
-];
-
-const PATTERN_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  'pattern-porta': 'log-in',
-  'pattern-sera': 'moon',
-  'pattern-fattorino': 'megaphone',
-};
-
-export default function RockyScreen() {
+export default function DogProfileTabScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
+  const careEvents = useCareEvents(dog.id);
+  const { width } = useWindowDimensions();
+  const photoSize = Math.floor(
+    (width - spacing.lg * 2 - spacing.sm * 2) / 3,
+  );
 
-  const score = knowledgeScoreMock.score;
-  const isLowKnowledge = score < 30;
-
-  // Pattern visibili: mai ARCHIVED; CONTESTED con badge "Da verificare"
-  const visiblePatterns = patternsMock.filter((p) => p.state !== 'ARCHIVED');
-  const hasPatterns = visiblePatterns.length > 0;
-
-  const activePeriod = feedingPeriodsMock.find((f) => f.endedAt === null);
+  const activePeriod = feedingPeriodsMock.find((period) => period.endedAt === null);
   const activeFood = activePeriod
-    ? foodProductsMock.find((f) => f.id === activePeriod.foodProductId)
+    ? foodProductsMock.find((food) => food.id === activePeriod.foodProductId)
     : undefined;
-  const baseline = digestiveBaselineMock;
+  const previewPhotos = photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3);
+  const nextCare = careEvents.find((event) => event.status === 'SCHEDULED');
 
   return (
     <View style={styles.root}>
-      {/* Header gradiente blu con foto circolare + matita + ingranaggio */}
       <LinearGradient
         colors={[...gradients.header]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
+        style={styles.hero}
       >
-        <SafeAreaView edges={['top']} style={styles.headerSafe}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Impostazioni"
-            onPress={() => router.push('/settings')}
-            hitSlop={12}
-            style={styles.gear}
-          >
-            <Ionicons name="settings-outline" size={24} color={colors.textOnPrimary} />
-          </Pressable>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Ionicons name="paw" size={52} color={colors.textMuted} />
-            </View>
+        <View style={styles.decorLarge} />
+        <View style={styles.decorSmall} />
+        <SafeAreaView edges={['top']} style={styles.heroSafe}>
+          <View style={styles.topBar}>
+            <Text style={styles.eyebrow}>IL SUO SPAZIO</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Modifica foto di Rocky"
-              style={styles.editBadge}
+              accessibilityLabel="Impostazioni"
+              onPress={() => router.push('/settings')}
+              hitSlop={12}
+              style={styles.topButton}
             >
-              <Ionicons name="pencil" size={14} color={colors.primary} />
+              <Ionicons
+                name="settings-outline"
+                size={22}
+                color={colors.textOnPrimary}
+              />
             </Pressable>
+          </View>
+
+          <View style={styles.identity}>
+            <View style={styles.avatarWrap}>
+              <View style={styles.avatarHalo}>
+                <DogAvatar
+                  size={AVATAR_SIZE}
+                  photoUri={dog.photoUri}
+                  dogName={dog.name}
+                />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Modifica profilo di ${dog.name}`}
+                onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
+                style={styles.editBadge}
+              >
+                <Ionicons name="pencil" size={15} color={colors.primary} />
+              </Pressable>
+            </View>
+            <Text style={styles.name}>{dog.name}</Text>
+            <View style={styles.metaRow}>
+              <MetaPill
+                icon="calendar-outline"
+                label={currentAgeLabel(dog.birthDate, dog.ageLabel)}
+              />
+              <MetaPill icon="resize-outline" label={dog.sizeLabel} />
+              {dog.breedLabel ? (
+                <MetaPill icon="paw-outline" label={dog.breedLabel} />
+              ) : null}
+            </View>
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -97,149 +121,175 @@ export default function RockyScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Identità */}
-        <Text style={styles.name}>{DOG.name}</Text>
-        <View style={styles.metaRow}>
-          <View style={styles.metaItem}>
-            <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.metaText}>{DOG.age}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="resize-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.metaText}>{DOG.size}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="paw-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.metaText}>{DOG.breed}</Text>
-          </View>
-        </View>
-
-        {/* Knowledge Score (sez. 18 — product score, numero ammesso) */}
-        <Card style={styles.section}>
-          <View style={styles.scoreRow}>
-            <Text style={styles.sectionTitle}>Quanto conosco {DOG.name}</Text>
-            <Text style={styles.scoreValue}>{score}%</Text>
-          </View>
-          <ProgressBar progress={score / 100} tone="primary" />
-          <Text style={styles.caption}>
-            {isLowKnowledge
-              ? knowledgeScoreMock.captionLow
-              : knowledgeScoreMock.caption}
-          </Text>
-        </Card>
-
-        {/* Pattern appresi (sez. 17.2) */}
-        <Card style={styles.section}>
-          <SectionHeader
-            title="Pattern appresi"
-            icon={<Ionicons name="bulb" size={20} color="#F5C518" />}
+        <Card style={styles.quickActions}>
+          <QuickAction
+            icon="camera-outline"
+            label="Storia"
+            onPress={() => router.push('/(tabs)/camera')}
           />
-          {hasPatterns ? (
-            visiblePatterns.map((pattern, index) => (
-              <Pressable
-                key={pattern.id}
-                accessibilityRole="button"
-                onPress={() =>
-                  router.push(`/patterns/${pattern.id}`)
-                }
-                style={[
-                  styles.patternRow,
-                  index < visiblePatterns.length - 1 && styles.patternRowDivider,
-                ]}
-              >
-                <View style={styles.patternIconWrap}>
-                  <Ionicons
-                    name={PATTERN_ICONS[pattern.id] ?? 'sparkles'}
-                    size={20}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.patternTextWrap}>
-                  <Text style={styles.patternTitle}>{pattern.title}</Text>
-                  {pattern.state === 'CONTESTED' && (
-                    <PatternStateChip state={pattern.state} />
-                  )}
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
-            ))
-          ) : (
-            <View style={styles.emptyPatterns}>
-              <Text style={styles.emptyPatternsText}>
-                Non ho ancora imparato pattern di {DOG.name}. Continua ad
-                analizzare: li scopriremo insieme.
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push('/patterns')}
-              >
-                <Text style={styles.link}>Scopri come funziona</Text>
-              </Pressable>
-            </View>
-          )}
-          {hasPatterns && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push('/patterns')}
-              style={styles.seeAll}
-            >
-              <Text style={styles.link}>Vedi tutti i pattern</Text>
-            </Pressable>
-          )}
-        </Card>
-
-        {/* Stati frequenti — chip colorate come da mockup */}
-        <Card style={styles.section}>
-          <SectionHeader title="Stati frequenti" />
-          <View style={styles.chipsRow}>
-            {FREQUENT_STATES.map((s) => (
-              <Chip key={s.label} label={s.label} tone={s.tone} />
-            ))}
-          </View>
-        </Card>
-
-        {/* Digestione: baseline + cibo attivo + link alla capacità secondaria */}
-        <Card style={styles.section}>
-          <SectionHeader
-            title="Digestione"
-            icon={<Ionicons name="leaf-outline" size={18} color={colors.accent} />}
+          <View style={styles.actionDivider} />
+          <QuickAction
+            icon="images-outline"
+            label="Album"
+            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
           />
-          <View style={styles.digestiveRow}>
-            <Ionicons name="analytics-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.digestiveText}>
-              Baseline: {baseline.trendSummary.toLowerCase()} ·{' '}
-              {baseline.observedEvents} osservazioni
-            </Text>
-          </View>
-          {activeFood ? (
-            <View style={styles.digestiveRow}>
-              <Ionicons name="nutrition-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.digestiveText}>
-                Cibo attivo: {activeFood.brand} {activeFood.name}
-              </Text>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push('/nutrition/foods')}
-              style={styles.digestiveRow}
-            >
-              <Ionicons name="nutrition-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.link}>Aggiungi il cibo di Rocky</Text>
-            </Pressable>
-          )}
+          <View style={styles.actionDivider} />
+          <QuickAction
+            icon="calendar-outline"
+            label="Diario"
+            onPress={() => router.push('/(tabs)/diary')}
+          />
+        </Card>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>I suoi momenti</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/digestive/capture')}
-            style={styles.digestiveCta}
+            accessibilityLabel="Vedi tutti gli album"
+            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+            hitSlop={8}
           >
-            <Ionicons name="camera-outline" size={18} color={colors.primary} />
-            <Text style={styles.link}>Controlla digestione</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            <Text style={styles.seeAll}>Vedi tutti</Text>
           </Pressable>
-        </Card>
+        </View>
+
+        <View style={styles.photoRow}>
+          {previewPhotos.map((photo) => (
+            <PhotoThumbnail
+              key={photo.id}
+              photo={photo}
+              size={photoSize}
+              onPress={() =>
+                router.push(`/dogs/${dog.id}/album/photo/${photo.id}` as never)
+              }
+            />
+          ))}
+        </View>
+
+        <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
+          Benessere
+        </Text>
+        <View style={styles.wellnessGrid}>
+          <WellnessCard
+            icon="leaf-outline"
+            iconColor={colors.accent}
+            iconBackground={colors.accentSoft}
+            label="Digestione"
+            value={
+              digestiveBaselineMock.variability === 'bassa'
+                ? 'Stabile'
+                : 'Da osservare'
+            }
+            onPress={() => router.push('/digestive/capture')}
+          />
+          <WellnessCard
+            icon="nutrition-outline"
+            iconColor={colors.primary}
+            iconBackground={colors.primarySoft}
+            label="Alimentazione"
+            value={activeFood?.brand ?? 'Aggiungi cibo'}
+            onPress={() => router.push('/nutrition/foods')}
+          />
+          <WellnessCard
+            icon="calendar-outline"
+            iconColor={colors.warning}
+            iconBackground={colors.warningSoft}
+            label="Agenda"
+            value={
+              nextCare
+                ? relativeCareDate(nextCare.scheduledAt)
+                : 'Aggiungi promemoria'
+            }
+            onPress={() => router.push('/care' as never)}
+          />
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Modifica i dettagli di ${dog.name}`}
+          onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
+          style={styles.detailsRow}
+        >
+          <View style={styles.detailsIcon}>
+            <Ionicons name="paw-outline" size={20} color={colors.primary} />
+          </View>
+          <Text style={styles.detailsTitle}>Modifica profilo</Text>
+          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+        </Pressable>
       </ScrollView>
     </View>
+  );
+}
+
+function MetaPill({ icon, label }: { icon: IconName; label: string }) {
+  return (
+    <View style={styles.metaPill}>
+      <Ionicons name={icon} size={13} color={colors.textOnPrimary} />
+      <Text style={styles.metaLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+    >
+      <View style={styles.quickIcon}>
+        <Ionicons name={icon} size={22} color={colors.primary} />
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function WellnessCard({
+  icon,
+  iconColor,
+  iconBackground,
+  label,
+  value,
+  onPress,
+}: {
+  icon: IconName;
+  iconColor: string;
+  iconBackground: string;
+  label: string;
+  value: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.wellnessCard,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.wellnessIcon, { backgroundColor: iconBackground }]}>
+        <Ionicons name={icon} size={22} color={iconColor} />
+      </View>
+      <Text style={styles.wellnessLabel}>{label}</Text>
+      <View style={styles.wellnessValueRow}>
+        <Text style={styles.wellnessValue} numberOfLines={1}>
+          {value}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -250,165 +300,232 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    borderBottomLeftRadius: radius.lg * 2,
-    borderBottomRightRadius: radius.lg * 2,
+  hero: {
+    paddingBottom: spacing.xxxl + spacing.xl,
+    overflow: 'hidden',
   },
-  headerSafe: {
-    alignItems: 'center',
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
+  heroSafe: {
+    paddingHorizontal: spacing.lg,
   },
-  gear: {
+  decorLarge: {
     position: 'absolute',
-    right: spacing.lg,
-    top: spacing.lg,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    right: -80,
+    top: -70,
   },
-  avatarWrap: {
-    marginTop: spacing.xl,
+  decorSmall: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    left: -38,
+    bottom: 18,
   },
-  avatar: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: colors.surface,
+  topBar: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eyebrow: {
+    color: colors.textOnPrimary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 1.5,
+    opacity: 0.8,
+  },
+  topButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: colors.textOnPrimary,
+  },
+  identity: {
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatarHalo: {
+    padding: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
     ...shadows.raised,
   },
   editBadge: {
     position: 'absolute',
-    right: 0,
-    bottom: spacing.sm,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    right: 2,
+    bottom: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.card,
   },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
-  },
   name: {
-    fontSize: typography.size.xxl,
+    marginTop: spacing.md,
+    color: colors.textOnPrimary,
+    fontSize: typography.size.display,
     fontWeight: typography.weight.bold,
-    color: colors.text,
-    textAlign: 'center',
   },
   metaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: spacing.lg,
+    gap: spacing.sm,
     marginTop: spacing.sm,
-    marginBottom: spacing.lg,
   },
-  metaItem: {
+  metaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
   },
-  metaText: {
+  metaLabel: {
+    color: colors.textOnPrimary,
     fontSize: typography.size.xs,
-    color: colors.textSecondary,
+    fontWeight: typography.weight.medium,
   },
-  section: {
-    marginBottom: spacing.lg,
+  scroll: {
+    flex: 1,
+    marginTop: -spacing.xxl,
   },
-  sectionTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxxl,
   },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  scoreValue: {
-    fontSize: typography.size.xl,
-    fontWeight: typography.weight.bold,
-    color: colors.accent,
-  },
-  caption: {
-    marginTop: spacing.xs,
-    fontSize: typography.size.xs,
-    color: colors.textSecondary,
-  },
-  patternRow: {
+  quickActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
+    marginBottom: spacing.xxl,
   },
-  patternRowDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  quickAction: {
+    flex: 1,
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 72,
+    justifyContent: 'center',
   },
-  patternIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
+  quickIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  patternTextWrap: {
-    flex: 1,
-    gap: spacing.xs,
-    alignItems: 'flex-start',
-  },
-  patternTitle: {
+  quickLabel: {
+    color: colors.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
+  },
+  actionDivider: {
+    width: 1,
+    height: 50,
+    backgroundColor: colors.border,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
     color: colors.text,
-  },
-  emptyPatterns: {
-    gap: spacing.sm,
-  },
-  emptyPatternsText: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
   },
   seeAll: {
-    marginTop: spacing.md,
-  },
-  link: {
+    color: colors.primary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.primary,
   },
-  chipsRow: {
+  standaloneTitle: {
+    marginBottom: spacing.md,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.xxl,
+  },
+  wellnessGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
   },
-  digestiveRow: {
-    flexDirection: 'row',
+  wellnessCard: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    minHeight: 150,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  wellnessIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  digestiveText: {
-    flex: 1,
-    fontSize: typography.size.sm,
+  wellnessLabel: {
     color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    marginBottom: spacing.xs,
   },
-  digestiveCta: {
+  wellnessValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs,
+  },
+  wellnessValue: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 72,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  detailsIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  detailsTitle: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });
-
-// Esportato per test futuri: il dogId mock usato dalla schermata
-export { DOG_ID };

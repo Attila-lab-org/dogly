@@ -12,11 +12,18 @@ export interface DogProfile {
   name: string;
   /** Meta già formattati per la UI (es. "4 anni") */
   ageLabel: string;
+  /** Data di nascita ISO YYYY-MM-DD, facoltativa ma utile per il compleanno. */
+  birthDate: string | null;
   sizeLabel: string;
   /** Razza, "Mix" o null se sconosciuta (unknown breed ammesso, sez. 6) */
   breedLabel: string | null;
+  isMix: boolean;
   /** Foto opzionale: null → placeholder zampa */
   photoUri: string | null;
+  /** Profilo pubblico: privato di default, opt-in esplicito */
+  profileVisibility: 'private' | 'public';
+  /** Versione consenso profilo pubblico (null se privato) */
+  publicConsentVersion: string | null;
 }
 
 /** Usage mensile del piano (sez. 21: FREE 3+3/mese, niente unlimited). */
@@ -28,7 +35,7 @@ export interface UsageSummary {
   resetsAt: string;
 }
 
-/** "Quanto conosco Rocky" (sez. 18): product-score, numero ammesso in UI. */
+/** "Quanto conosco {nome}" nel profilo: product-score, numero ammesso in UI. */
 export interface KnowledgeScore {
   /** 0–100 */
   score: number;

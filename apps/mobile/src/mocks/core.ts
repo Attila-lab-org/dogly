@@ -1,5 +1,5 @@
 /**
- * Mock tipizzati dei domini core (F1): profilo di Rocky, Knowledge Score Home,
+ * Mock tipizzati dei domini core (F1): profilo di Rocky, Knowledge Score,
  * quota residua, ultima analisi, risultati comportamentali e timeline Diario.
  * Derivati dal mockup ufficiale (mockup-home/result.png) e dalla Spec V1
  * (sez. 5–7, 6.1, 16.2, 21). Regola 29.2: i mock nascono dagli stessi
@@ -22,9 +22,13 @@ export const dogMock: DogProfile = {
   id: DOG_ID,
   name: 'Rocky',
   ageLabel: '4 anni',
+  birthDate: '2022-05-18',
   sizeLabel: 'Taglia media',
-  breedLabel: 'Labrador',
+  breedLabel: 'Golden Retriever',
+  isMix: false,
   photoUri: null,
+  profileVisibility: 'private',
+  publicConsentVersion: null,
 };
 
 /**

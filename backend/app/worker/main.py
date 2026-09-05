@@ -26,6 +26,7 @@ from app.worker import handlers
 TASK_HANDLERS = {
     "behavior_analysis": handlers.process_behavior_event,
     "digestive_analysis": handlers.process_digestive_event,
+    "media_retention_cleanup": handlers.process_media_retention_cleanup,
 }
 
 
@@ -33,11 +34,11 @@ class TaskEnvelope(BaseModel):
     """Workflow push payload: IDs only, no media bytes, no secrets (sez. 22)."""
 
     task_type: str
-    event_id: str
+    event_id: str | None = None
 
 
 def create_worker_app(state: AppState | None = None) -> FastAPI:
-    app = FastAPI(title="CBI Private Worker", version="1.0.0", docs_url=None, openapi_url=None)
+    app = FastAPI(title="Dogly Private Worker", version="1.0.0", docs_url=None, openapi_url=None)
     app.state.cbi = state or build_default_state()
 
     async def internal_auth(
@@ -63,7 +64,12 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
         handler = TASK_HANDLERS.get(envelope.task_type)
         if handler is None:
             raise ApiError(ErrorCode.VALIDATION_FAILED, f"Unknown task type {envelope.task_type}")
-        result = await handler(st, event_id=envelope.event_id)
+        if envelope.task_type == "media_retention_cleanup":
+            result = await handlers.process_media_retention_cleanup(st, event_id=envelope.event_id)
+        else:
+            if not envelope.event_id:
+                raise ApiError(ErrorCode.VALIDATION_FAILED, "event_id is required for this task.")
+            result = await handler(st, event_id=envelope.event_id)
         # Non-2xx fails the workflow run and the platform retries with
         # backoff; FAILED_RETRYABLE is signaled explicitly in the result so
         # the caller can re-enqueue. Handlers are idempotent on redelivery.

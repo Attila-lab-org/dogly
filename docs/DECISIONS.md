@@ -80,15 +80,67 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
   riserva quota atomica lato DB prima del job, refund solo per rejection qualità o
   fallimento tecnico terminale; nessun rollover.
 
+### ADR-006 — Dogly Daily Check-in (owner signals + baseline personale)
+
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** LOCKED (UX V1.1, rivisto 2)
+- **Decisione:**
+  - Modal all’apertura app (poi sparisce): “Come ti sembra {nome}?” con
+    “Sembra sereno” / “Non come al solito” (niente bene/male secco in Home).
+  - Se non come al solito → CTA “Fai un video” o “Guarda la digestione”.
+  - Contesto salvato → capture/result personalizzati.
+  - Risultato analisi: headline probabilistica, confidenza a banda,
+    sezione “Perché?” con evidenze e feedback a tre vie.
+- **Rationale:** immediatezza emotiva + utilità clinica soft senza questionario.
+
+### ADR-007 — Accesso alle storie dalla Home
+
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** LOCKED (demo V1)
+- **Decisione:**
+  - Non mostrare il Knowledge Score nelle superfici principali Home/Profilo.
+  - Tab primarie: Home / Fotocamera / {nome cane}; Diario raggiungibile dalla Home.
+  - Le storie si vedono nei cerchi in alto nella Home e si scorrono nel viewer.
+  - La tab Fotocamera permette scatto o scelta dalla galleria; la storia dura 24h
+    ed è separata dagli album.
+- **Rationale:** rendere immediati sia la creazione sia il punto di accesso alle
+  storie, senza superare il limite di tre tab.
+
+### ADR-008 — Flusso digestivo orientato all’utente
+
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** LOCKED (UX V1.1)
+- **Decisione:**
+  - Capture con foto reale, anteprima e tre indicazioni visive brevi.
+  - Processing ridotto allo stato corrente, senza step tecnici esposti.
+  - Risultato con sintesi, confronto personale e metriche essenziali.
+  - Mostrare soltanto candidati rilevanti; safety flag deterministici sempre
+    prioritari.
+  - Disclaimer breve nel flusso; testo esteso nelle policy.
+- **Rationale:** rendere l’osservazione digestiva comprensibile e utilizzabile
+  senza trasformarla in un referto o in una schermata tecnica.
+
+### ADR-009 — Agenda salute e promemoria contestuali
+
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** LOCKED (UX V1.1)
+- **Decisione:**
+  - L'Agenda vive nel profilo del cane, dentro Benessere; non è una quarta tab.
+  - Home mostra solo appuntamenti entro sette giorni.
+  - Creazione guidata con categorie e valori già selezionati: visita,
+    giorno successivo alle 10:00 e promemoria un giorno prima.
+  - Il permesso OS viene richiesto al primo promemoria, non durante onboarding.
+  - Gli eventi sono owner-scoped, persistiti in `care_events` e disponibili
+    via API versionata; completamento o eliminazione annullano il reminder.
+  - Campanella e preferenze notifiche sono superfici distinte.
+- **Rationale:** dare utilità quotidiana senza appesantire navigazione e
+  onboarding, mantenendo il controllo del promemoria sempre esplicito.
+
 ## Decisioni aperte (Spec V1 sez. 32) — NON inventare risoluzioni
 
 | ID | Decisione | Si può codificare? | Regola vigente |
 | --- | --- | --- | --- |
-| O-01 | Brand/app display name e bundle/package ID di produzione finali | Sì | Placeholder per ambiente in dev/staging; release store di produzione bloccata. |
+| O-01 | Brand/app display name e bundle/package ID di produzione finali | Sì | **Chiuso per V1 product brand: Dogly** (`com.attilalab.dogly` su Expo). Store listing copy legale resta in O-02. |
 | O-02 | Wording finale legale/privacy/disclaimer medico | Sì | Slot di copy versionati, architettura consensi e template safety; copy legale bloccato prima del public release. |
 | O-03 | Model ID esatti OpenAI/Gemini | Sì | Selezione via config dopo lo spike (G3); nessun hardcoding. |
 | O-04 | Vendor analytics/feature-flag finale | Sì | Raccomandati PostHog + Sentry; interfacce wrapper mantengono sostituibilità. |
-| O-05 | Durate finali di retention dei raw media | Sì | TTL configurabile + keep/research consent esplicito; finalizzare prima del public V1. |
+| O-05 | Durate finali di retention dei raw media | Sì | **Beta V1: 24h dal completamento terminale** (config `raw_media_ttl_hours`); keep/research consent esplicito resta. |
 | O-06 | Upload da galleria per behavior post-launch | Sì | Non implementare nella V1 iniziale. |
 | O-07 | Percentuale numerica di confidence | Sì | Non shippare percentuali fino al calibration gate; usare bande Low/Medium/High. |
 | O-08 | Algoritmo di similarity/embedding dei pattern | Sì | Solo infrastruttura in P0; abilitare discovery dopo eval. |

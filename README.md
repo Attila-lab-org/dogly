@@ -1,12 +1,15 @@
-# Canine Behavioral Intelligence
+# Dogly
 
 App mobile consumer (iOS/Android) che interpreta il comportamento del cane da brevi
 video (5–20 s) e monitora la salute digestiva da foto delle feci, con sistema
 longitudinale di Personal Intelligence anti-feedback-loop.
 
-**Source of truth:** `SPEC_V1.docx` (Engineering Implementation Spec V1) +
-`SPEC_AMENDMENT_V1.1.md` (hosting Vercel + Vercel Workflows — vincolante, sostituisce
-le voci hosting/async/secret-management della Spec V1).
+**Brand:** Dogly (`com.attilalab.dogly`). Internal repo/package history may still
+reference “Canine Behavioral Intelligence / CBI”.
+
+**Source of truth:** Engineering Spec V1 (DOCX esterno) +
+`SPEC_AMENDMENT_V1.1.md` (hosting Vercel + Vercel Workflows — vincolante) +
+`docs/ux/UX_REFERENCE.md` (UX V1) + `docs/DECISIONS.md`.
 
 Stato corrente dei gate e blocker: vedi `PROJECT_STATE.md`.
 
@@ -14,14 +17,16 @@ Stato corrente dei gate e blocker: vedi `PROJECT_STATE.md`.
 
 | Path | Contenuto | Owner (workstream) |
 | --- | --- | --- |
-| `apps/mobile/` | App Expo React Native + TypeScript (Router, 3 tab) — *in corso, gate G0* | A / F |
+| `apps/mobile/` | App Expo React Native + TypeScript (Router, 3 tab) — brand Dogly | A / F |
+| `api/index.py` | Shim serverless Vercel (public API + worker mount) | D / C |
+| `vercel.json` | Config deploy root (includeFiles backend) | D |
 | `backend/app/api/` | Public FastAPI API (route `/v1/*`, JWT Supabase) | C |
 | `backend/app/worker/` | Handler privati dei job asincroni (route `/tasks/run`, auth interna) | C / D |
 | `backend/app/domains/` | dogs, behavior, digestive, billing, privacy | C |
 | `backend/app/providers/` | Adapter Gemini/OpenAI/Storage/JobQueue (mock fixture-backed in V1 locale) | E |
 | `backend/app/contracts/` | Schemi Pydantic request/response/provider (Observation/Interpretation) | E |
 | `backend/tests/` | Test pytest: auth, quota, idempotenza, contratti, job queue, worker | C / J |
-| `supabase/migrations/` | Unica sorgente dello schema DB (0001–0012, forward-only) | B |
+| `supabase/migrations/` | Unica sorgente dello schema DB (0001–0014, forward-only) | B |
 | `supabase/tests/` | Test SQL: RLS negative, quota, privacy/retention | B / J |
 | `infra/vercel/` | Config deploy Vercel (`vercel.json`, env mapping) — Amendment V1.1 | D |
 | `scripts/` | Export OpenAPI, utility fixture/eval | C / J |
@@ -37,7 +42,7 @@ GitHub Actions + EAS (CI/CD).
 
 - Python 3.12+ con [uv](https://docs.astral.sh/uv/)
 - [Supabase CLI](https://supabase.com/docs/guides/cli) (stack locale PostgreSQL/Auth/Storage)
-- Node.js LTS + npm, Expo CLI / EAS CLI (per `apps/mobile/`)
+- Node.js LTS + **pnpm** (packageManager in `apps/mobile/package.json`), Expo CLI / EAS CLI
 - Docker (richiesto da Supabase CLI per lo stack locale)
 
 ## Setup locale — backend
@@ -66,7 +71,7 @@ uv run python ../scripts/export_openapi.py   # aggiorna docs/openapi.json
 
 ```bash
 supabase start              # stack locale (DB, Auth, Storage)
-supabase db reset           # applica migrations 0001–0012 + seed.sql da zero
+supabase db reset           # applica migrations 0001–0014 + seed.sql da zero
 bash supabase/tests/run_tests.sh   # RLS negative tests, quota, privacy/retention
 ```
 
@@ -81,10 +86,10 @@ per tassonomie AI in evoluzione; RLS/grants nella stessa gate della tabella.
 ## Setup locale — mobile
 
 ```bash
-cd apps/mobile              # (branch feat/mobile-shell — gate G0 in corso)
-npm install
-cp .env.example .env        # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
-npx expo start              # Metro / Expo Go per UI; development build per moduli nativi e IAP
+cd apps/mobile
+pnpm install
+cp .env.example .env.local   # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+pnpm start                   # Metro / Expo Go per UI; development build per moduli nativi e IAP
 ```
 
 Le variabili `EXPO_PUBLIC_*` possono contenere **solo valori pubblici** (URL Supabase,
@@ -129,4 +134,4 @@ Dettaglio completo deploy/env: `infra/vercel/README.md`.
 | `docs/RELEASE_CHECKLIST.md` | Checklist firmabile staging→production |
 | `docs/EVALS.md` | Strategia di valutazione AI (spike video/foto, metriche) |
 | `docs/ux/` | Riferimento UX ufficiale e mockup |
-| `docs/openapi.json` | Snapshot OpenAPI V1 (23 path) per contract-drift check |
+| `docs/openapi.json` | Snapshot OpenAPI V1 (31 path) per contract-drift check |

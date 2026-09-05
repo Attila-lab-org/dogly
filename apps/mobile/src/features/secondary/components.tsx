@@ -10,8 +10,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { Chip } from '../../components/Chip';
 import type { ChipTone } from '../../components/Chip';
+import { SectionHeader } from '../../components/SectionHeader';
 import type { ConfidenceBand, PatternState } from '../../contracts/types';
 import type { CandidateLevel } from './types';
+
+export { SectionHeader };
 
 /** Top bar stile mockup-result: back chevron a sinistra, titolo centrato. */
 export function StackScreenHeader({
@@ -85,36 +88,6 @@ export function ConfidenceBandPill({
 }) {
   return <Chip label={bandLabel[band]} tone={bandTone[band]} style={style} />;
 }
-
-/** Titolo di sezione con icona teal opzionale a destra (stile mockup Rocky). */
-export function SectionHeader({
-  title,
-  icon,
-}: {
-  title: string;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <View style={sectionStyles.row}>
-      <Text style={sectionStyles.title}>{title}</Text>
-      {icon}
-    </View>
-  );
-}
-
-const sectionStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontSize: typography.size.lg,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-  },
-});
 
 const stateLabel: Record<PatternState, string> = {
   CANDIDATE: 'In osservazione',

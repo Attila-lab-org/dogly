@@ -35,7 +35,7 @@ export const paywallOfferingMock: PaywallOffering = {
   benefits: [
     '30 analisi comportamentali + 30 digestive al mese',
     'Diario completo senza limiti di cronologia',
-    'Pattern e trend personali di Rocky',
+    'Pattern e trend personali del tuo cane',
     'Insights su alimentazione e digestione',
   ],
   premiumAllowanceLabel: '30 + 30 analisi al mese',
@@ -54,6 +54,9 @@ export const paywallOfferingMock: PaywallOffering = {
 };
 
 /**
+ * Billing V1: StoreKit / Google Play via RevenueCat; Stripe solo per web/non-digital.
+ * I prezzi sopra sono quelli approvati (mensile €9,99 / annuale €89,99).
+ *
  * Stato entitlement lato server mirror (sez. 21.1: grace period, refund,
  * cancellation aggiornano l'entitlement senza cancellare i dati del cane).
  * 'grace_period' → banner gentile nel paywall (stato mandatory "grace", sez. 6).

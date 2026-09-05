@@ -8,7 +8,6 @@
  */
 import React, { useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,19 +21,27 @@ import { z } from 'zod';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
+import { updateDogProfile } from '@/features/core/useDogProfile';
+import { pickAvatarPhoto } from '@/features/photos/share';
+import { BreedPicker } from '@/features/dogs/BreedPicker';
+import {
+  breedLabelFromSelection,
+  type BreedSelection,
+} from '@/features/dogs/breeds';
+import {
+  AgePicker,
+  BirthdayPicker,
+} from '@/features/dogs/AgeBirthdayPicker';
+import {
+  ageFromBirthDate,
+  ageLabelFromYears,
+} from '@/features/dogs/profileDates';
 
-const LIFE_STAGES = ['Cucciolo', 'Adulto', 'Anziano'] as const;
 const SIZES = ['Piccola', 'Media', 'Grande'] as const;
 
 const dogSchema = z.object({
   name: z.string().trim().min(1, 'Il nome è necessario: lo userò in tutta l’app.'),
-  lifeStage: z.enum(LIFE_STAGES),
   size: z.enum(SIZES),
-  /** Età approssimativa ammessa (sez. 6: "approximate age") */
-  approximateAge: z.string().trim().max(20).optional(),
-  /** Razza libera, "Mix" o unknown (sez. 6: "unknown breed") */
-  breed: z.string().trim().max(60).optional(),
-  breedUnknown: z.boolean(),
   /** Foto opzionale (sez. 6: "no photo") */
   photoUri: z.string().nullable(),
 });
@@ -45,12 +52,13 @@ export default function DogOnboardingScreen() {
   const router = useRouter();
   const [draft, setDraft] = useState<DogDraft>({
     name: '',
-    lifeStage: 'Adulto',
     size: 'Media',
-    approximateAge: '',
-    breed: '',
-    breedUnknown: false,
     photoUri: null,
+  });
+  const [ageYears, setAgeYears] = useState<number | null>(null);
+  const [birthDate, setBirthDate] = useState<string | null>(null);
+  const [breedSelection, setBreedSelection] = useState<BreedSelection>({
+    kind: 'unselected',
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -59,6 +67,10 @@ export default function DogOnboardingScreen() {
     setDraft((d) => ({ ...d, ...partial }));
 
   const submit = () => {
+    if (ageYears === null) {
+      setError('Seleziona l’età.');
+      return;
+    }
     const parsed = dogSchema.safeParse(draft);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Controlla i campi e riprova.');
@@ -66,8 +78,21 @@ export default function DogOnboardingScreen() {
     }
     setError(null);
     setSaving(true);
-    // Mock V1: POST /v1/dogs (sez. 9) creerà il profilo versionato; qui
-    // instradiamo al passo 7.1.3 (Home con cold-start copy).
+    const breedLabel = breedLabelFromSelection(breedSelection);
+    updateDogProfile({
+      name: parsed.data.name,
+      ageLabel: ageLabelFromYears(ageYears),
+      birthDate,
+      sizeLabel:
+        parsed.data.size === 'Piccola'
+          ? 'Taglia piccola'
+          : parsed.data.size === 'Grande'
+            ? 'Taglia grande'
+            : 'Taglia media',
+      breedLabel,
+      isMix: breedSelection.kind === 'mixed',
+      photoUri: parsed.data.photoUri,
+    });
     setTimeout(() => router.replace('/(tabs)/home'), 600);
   };
 
@@ -85,15 +110,10 @@ export default function DogOnboardingScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Aggiungi foto del cane"
-          onPress={() =>
-            // Mock V1: il picker foto arriverà con l'upload firmato
-            // (bucket dog-avatars, sez. 12.1); fino ad allora lo stato
-            // "no photo" (sez. 6) resta valido e il profilo si crea senza.
-            Alert.alert(
-              'Foto di Rocky',
-              'Funzione foto in arrivo: per ora puoi continuare senza, la potrai aggiungere dal profilo.',
-            )
-          }
+          onPress={async () => {
+            const uri = await pickAvatarPhoto();
+            if (uri) patch({ photoUri: uri });
+          }}
           style={styles.photoBadge}
         >
           <Ionicons name="camera" size={16} color={colors.primary} />
@@ -113,26 +133,30 @@ export default function DogOnboardingScreen() {
         testID="onboarding-name"
       />
 
-      {/* Life stage + età approssimativa */}
       <Text style={styles.label}>Età</Text>
-      <View style={styles.chips}>
-        {LIFE_STAGES.map((stage) => (
-          <OptionChip
-            key={stage}
-            label={stage}
-            selected={draft.lifeStage === stage}
-            onPress={() => patch({ lifeStage: stage })}
-          />
-        ))}
+      <View style={styles.profileField}>
+        <AgePicker
+          value={ageYears}
+          onChange={(years) => {
+            setAgeYears(years);
+            setBirthDate(null);
+          }}
+          testID="onboarding-age"
+        />
       </View>
-      <TextInput
-        value={draft.approximateAge}
-        onChangeText={(approximateAge) => patch({ approximateAge })}
-        placeholder="Età approssimativa (es. circa 4 anni)"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
-        testID="onboarding-age"
-      />
+
+      <Text style={styles.label}>Compleanno (facoltativo)</Text>
+      <View style={styles.profileField}>
+        <BirthdayPicker
+          value={birthDate}
+          ageYears={ageYears}
+          onChange={(date) => {
+            setBirthDate(date);
+            if (date) setAgeYears(ageFromBirthDate(date));
+          }}
+          testID="onboarding-birthday"
+        />
+      </View>
 
       {/* Taglia */}
       <Text style={styles.label}>Taglia</Text>
@@ -147,32 +171,12 @@ export default function DogOnboardingScreen() {
         ))}
       </View>
 
-      {/* Razza opzionale / sconosciuta */}
-      <Text style={styles.label}>Razza (facoltativa)</Text>
-      <TextInput
-        value={draft.breedUnknown ? '' : draft.breed}
-        onChangeText={(breed) => patch({ breed, breedUnknown: false })}
-        placeholder="Es. Labrador, Mix…"
-        placeholderTextColor={colors.textMuted}
-        editable={!draft.breedUnknown}
-        style={[styles.input, draft.breedUnknown && styles.inputDisabled]}
+      <Text style={styles.label}>Razza</Text>
+      <BreedPicker
+        value={breedSelection}
+        onChange={setBreedSelection}
         testID="onboarding-breed"
       />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ checked: draft.breedUnknown }}
-        onPress={() =>
-          patch({ breedUnknown: !draft.breedUnknown, breed: '' })
-        }
-        style={styles.unknownRow}
-      >
-        <Ionicons
-          name={draft.breedUnknown ? 'checkbox' : 'square-outline'}
-          size={20}
-          color={draft.breedUnknown ? colors.primary : colors.textMuted}
-        />
-        <Text style={styles.unknownText}>Non la conosco</Text>
-      </Pressable>
 
       {error && (
         <View style={styles.errorBanner} accessibilityLiveRegion="polite">
@@ -270,9 +274,8 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     color: colors.text,
   },
-  inputDisabled: {
-    backgroundColor: colors.surfaceMuted,
-    color: colors.textMuted,
+  profileField: {
+    marginBottom: spacing.sm,
   },
   chips: {
     flexDirection: 'row',
@@ -298,16 +301,6 @@ const styles = StyleSheet.create({
   },
   optionLabelSelected: {
     color: colors.primary,
-  },
-  unknownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  unknownText: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
   },
   errorBanner: {
     flexDirection: 'row',
