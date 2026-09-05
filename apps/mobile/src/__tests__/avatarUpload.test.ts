@@ -1,6 +1,5 @@
 jest.mock('expo-file-system/legacy', () => ({
   FileSystemUploadType: { BINARY_CONTENT: 0 },
-  getInfoAsync: jest.fn(),
   uploadAsync: jest.fn(),
 }));
 
@@ -9,14 +8,13 @@ jest.mock('../features/dogs/api', () => ({
   completeDogAvatar: jest.fn(),
 }));
 
-import { getInfoAsync, uploadAsync } from 'expo-file-system/legacy';
+import { uploadAsync } from 'expo-file-system/legacy';
 import {
   completeDogAvatar,
   initDogAvatar,
 } from '../features/dogs/api';
 import { persistDogAvatar } from '../features/dogs/avatar';
 
-const mockGetInfoAsync = getInfoAsync as jest.Mock;
 const mockUploadAsync = uploadAsync as jest.Mock;
 const mockInitDogAvatar = initDogAvatar as jest.Mock;
 const mockCompleteDogAvatar = completeDogAvatar as jest.Mock;
@@ -27,7 +25,6 @@ describe('upload foto profilo cane', () => {
   });
 
   it('esegue init, upload binario e complete in ordine', async () => {
-    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 1234 });
     mockInitDogAvatar.mockResolvedValue({
       storage_path: 'users/u/dogs/d/avatar/a.jpg',
       upload: { url: 'https://storage.test/signed' },
@@ -43,7 +40,6 @@ describe('upload foto profilo cane', () => {
 
     expect(mockInitDogAvatar).toHaveBeenCalledWith('dog-1', {
       content_type: 'image/jpeg',
-      bytes: 1234,
     });
     expect(mockUploadAsync).toHaveBeenCalledWith(
       'https://storage.test/signed',
@@ -55,7 +51,6 @@ describe('upload foto profilo cane', () => {
     );
     expect(mockCompleteDogAvatar).toHaveBeenCalledWith('dog-1', {
       storage_path: 'users/u/dogs/d/avatar/a.jpg',
-      bytes: 1234,
     });
     expect(mockInitDogAvatar.mock.invocationCallOrder[0]).toBeLessThan(
       mockUploadAsync.mock.invocationCallOrder[0],

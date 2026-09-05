@@ -70,7 +70,10 @@ export async function updateDog(
 
 export async function initDogAvatar(
   dogId: string,
-  body: { content_type: 'image/jpeg' | 'image/png' | 'image/webp'; bytes: number },
+  body: {
+    content_type: 'image/jpeg' | 'image/png' | 'image/webp';
+    bytes?: number;
+  },
 ): Promise<DogAvatarInitResponse> {
   return api.post<DogAvatarInitResponse>(`/v1/dogs/${dogId}/avatar/init`, body);
 }

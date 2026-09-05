@@ -267,7 +267,7 @@ class SignedUpload(BaseModel):
 
 class DogAvatarInitRequest(BaseModel):
     content_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
-    bytes: int = Field(gt=0, le=8_000_000)
+    bytes: int | None = Field(default=None, gt=0, le=8_000_000)
 
 
 class DogAvatarInitResponse(BaseModel):

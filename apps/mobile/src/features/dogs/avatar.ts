@@ -3,7 +3,6 @@
  */
 import {
   FileSystemUploadType,
-  getInfoAsync,
   uploadAsync,
 } from 'expo-file-system/legacy';
 
@@ -11,23 +10,6 @@ import { completeDogAvatar, initDogAvatar } from './api';
 import { contentTypeFromUri } from './photoUri';
 
 export { contentTypeFromUri, isLocalPhotoUri } from './photoUri';
-
-async function fileBytes(localUri: string): Promise<number> {
-  try {
-    const info = await getInfoAsync(localUri);
-    if (
-      info.exists &&
-      'size' in info &&
-      typeof info.size === 'number' &&
-      info.size > 0
-    ) {
-      return info.size;
-    }
-  } catch {
-    // L'errore esplicito sotto evita di dichiarare una dimensione falsa.
-  }
-  throw new Error('Non riesco a leggere il file scelto. Prova con un’altra foto.');
-}
 
 async function putSignedUpload(
   uploadUrl: string,
@@ -50,15 +32,12 @@ export async function persistDogAvatar(
   localUri: string,
 ): Promise<string | null> {
   const contentType = contentTypeFromUri(localUri);
-  const bytes = await fileBytes(localUri);
   const init = await initDogAvatar(dogId, {
     content_type: contentType,
-    bytes,
   });
   await putSignedUpload(init.upload.url, localUri, contentType);
   const completed = await completeDogAvatar(dogId, {
     storage_path: init.storage_path,
-    bytes,
   });
   return completed.photo_url;
 }
