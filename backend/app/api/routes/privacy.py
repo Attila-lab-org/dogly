@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
-
 from app.contracts.api import (
     DeleteAccountRequest,
     DeleteAccountResponse,
@@ -73,7 +72,7 @@ async def export_status(
                     path=job.storage_path,
                     ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 -- export read URL is best-effort
                 download_url = None
         if expires_at is None:
             expires_at = datetime.now(UTC) + timedelta(days=7)

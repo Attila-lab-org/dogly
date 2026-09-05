@@ -63,7 +63,17 @@ jobs:
         run: |
           eval "$(supabase status -o env)"
           export SUPABASE_DB_URL="$DB_URL"
-          bash supabase/tests/run_tests.sh
+          set +e
+          bash supabase/tests/run_tests.sh 2>&1 | tee /tmp/supabase-tests.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            details="$(tail -n 30 /tmp/supabase-tests.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\n'/'%0A'}"
+            details="${details//$'\r'/'%0D'}"
+            echo "::error title=Supabase SQL tests failed::$details"
+            exit "$status"
+          fi
 
   openapi-drift:
     runs-on: ubuntu-latest
@@ -88,9 +98,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:v8.24.2 \
+            detect --source=/repo --redact --verbose
 
   dependency-scan:
     runs-on: ubuntu-latest

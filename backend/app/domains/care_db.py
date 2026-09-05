@@ -14,7 +14,6 @@ from app.domains import dogs_db
 from app.domains.models import CareEventRec
 from app.domains.repository import now_utc
 
-
 _CARE_COLUMNS = """
   id, dog_id, user_id, event_type, title, scheduled_at, all_day, timezone,
   location, notes, reminder_enabled, reminder_minutes_before, status,

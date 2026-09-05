@@ -50,7 +50,7 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     )
     assert init.status_code == 200, init.text
     path = init.json()["storage_path"]
-    assert path.startswith(f"users/")
+    assert path.startswith("users/")
     assert f"/dogs/{dog_id}/avatar/" in path
     assert init.json()["upload"]["url"].startswith("https://storage.mock.local/")
 

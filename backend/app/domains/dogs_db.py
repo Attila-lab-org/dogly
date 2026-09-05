@@ -237,7 +237,7 @@ async def init_avatar_upload(
     payload,
 ):
     from app.contracts.api import SignedUpload
-    from app.domains.dogs import AVATAR_BUCKET, _AVATAR_EXT, avatar_storage_prefix
+    from app.domains.dogs import _AVATAR_EXT, AVATAR_BUCKET, avatar_storage_prefix
     from app.domains.repository import new_id
 
     await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)

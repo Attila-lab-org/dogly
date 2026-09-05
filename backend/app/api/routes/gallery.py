@@ -124,7 +124,7 @@ async def update_photo(
 async def delete_photo(photo_id: str, state: StateDep, user_id: UserIdDep) -> None:
     if state.engine is not None:
         await gallery_db.soft_delete_photo(state.engine, user_id=user_id, photo_id=photo_id)
-        return None
+        return
     gallery_domain.soft_delete_photo(state.store, user_id=user_id, photo_id=photo_id)
 
 

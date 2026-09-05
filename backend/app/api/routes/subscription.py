@@ -6,8 +6,8 @@ from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
 from app.contracts.api import SubscriptionStatusResponse, UsageResponse
-from app.domains.billing import subscription_status_payload
 from app.domains import billing_db
+from app.domains.billing import subscription_status_payload
 
 router = APIRouter()
 

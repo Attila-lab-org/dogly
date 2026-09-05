@@ -33,7 +33,7 @@ async def to_out(dog: DogRec, state: AppState) -> DogOut:
                     path=dog.photo_path,
                     ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 -- avatar read URL is best-effort
                 photo_url = None
     return DogOut(
         id=dog.id,

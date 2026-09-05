@@ -26,9 +26,8 @@ from app.contracts.taxonomy import (
     AnalysisDomain,
     BehaviorEventStatus,
 )
-from app.domains import behavior_db, digestive_db, patterns_db
+from app.domains import behavior_db, digestive_db, patterns_db, privacy_db
 from app.domains import privacy as privacy_domain
-from app.domains import privacy_db
 from app.domains.billing import QuotaService
 from app.domains.digestive import deterministic_safety_flags
 from app.domains.models import BehaviorEventRec
