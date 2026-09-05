@@ -99,10 +99,20 @@ jobs:
           fetch-depth: 0
       - name: Gitleaks
         run: |
+          set +e
           docker run --rm \
             -v "$PWD:/repo" \
             ghcr.io/gitleaks/gitleaks:v8.24.2 \
-            detect --source=/repo --redact --verbose
+            detect --source=/repo --redact --verbose 2>&1 | tee /tmp/gitleaks.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            details="$(tail -n 40 /tmp/gitleaks.log)"
+            details="${details//'%'/'%25'}"
+            details="${details//$'\n'/'%0A'}"
+            details="${details//$'\r'/'%0D'}"
+            echo "::error title=Gitleaks scan failed::$details"
+            exit "$status"
+          fi
 
   dependency-scan:
     runs-on: ubuntu-latest
