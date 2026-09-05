@@ -63,7 +63,7 @@ export default function DogEditScreen() {
     breedSelectionFromLabel(dog.breedLabel),
   );
   const [photoUri, setPhotoUri] = useState(dog.photoUri);
-  const [photoChanged, setPhotoChanged] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [profileVisibility, setProfileVisibility] = useState(
     dog.profileVisibility,
   );
@@ -92,9 +92,6 @@ export default function DogEditScreen() {
 
     try {
       if (!usingMockGate && dogId) {
-        if (photoChanged && photoUri) {
-          await persistDogAvatar(dogId, photoUri);
-        }
         await updateMutation.mutateAsync(
           profileToUpdateBody({
             name: name.trim(),
@@ -134,9 +131,20 @@ export default function DogEditScreen() {
           hitSlop={8}
           onPress={async () => {
             const uri = await pickAvatarPhoto();
-            if (uri) {
-              setPhotoUri(uri);
-              setPhotoChanged(true);
+            if (!uri) return;
+            setPhotoUri(uri);
+            if (usingMockGate || !dogId) return;
+            setUploadingPhoto(true);
+            try {
+              const savedUrl = await persistDogAvatar(dogId, uri);
+              if (savedUrl) setPhotoUri(savedUrl);
+              Alert.alert('Foto salvata', 'La foto profilo è stata caricata.');
+            } catch (error) {
+              const detail =
+                error instanceof Error ? error.message : 'Errore sconosciuto';
+              Alert.alert('Foto non salvata', detail);
+            } finally {
+              setUploadingPhoto(false);
             }
           }}
           style={styles.photoBadge}
@@ -269,7 +277,8 @@ export default function DogEditScreen() {
 
       <Button
         title="Salva"
-        loading={updateMutation.isPending}
+        loading={updateMutation.isPending || uploadingPhoto}
+        disabled={uploadingPhoto}
         onPress={() => void save()}
       />
     </ScreenContainer>
