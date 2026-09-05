@@ -1,11 +1,8 @@
 export function isLocalPhotoUri(uri: string | null | undefined): boolean {
   if (!uri) return false;
-  return (
-    uri.startsWith('file:') ||
-    uri.startsWith('content:') ||
-    uri.startsWith('ph://') ||
-    uri.startsWith('assets-library:')
-  );
+  // ImagePicker can return platform-specific schemes (for example asset:/ on
+  // Android). Only already-uploaded remote URLs must be excluded.
+  return !/^https?:\/\//i.test(uri);
 }
 
 export function contentTypeFromUri(

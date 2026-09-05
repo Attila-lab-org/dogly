@@ -1,7 +1,11 @@
 /**
  * Upload avatar cane: init firmato → PUT → complete (stesso pattern dei clip).
  */
-import { getInfoAsync } from 'expo-file-system/legacy';
+import {
+  FileSystemUploadType,
+  getInfoAsync,
+  uploadAsync,
+} from 'expo-file-system/legacy';
 
 import { completeDogAvatar, initDogAvatar } from './api';
 import { contentTypeFromUri } from './photoUri';
@@ -25,14 +29,12 @@ async function putSignedUpload(
   localUri: string,
   contentType: string,
 ): Promise<void> {
-  const fileResponse = await fetch(localUri);
-  const body = await fileResponse.blob();
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
+  const response = await uploadAsync(uploadUrl, localUri, {
+    httpMethod: 'PUT',
     headers: { 'Content-Type': contentType },
-    body,
+    uploadType: FileSystemUploadType.BINARY_CONTENT,
   });
-  if (!response.ok) {
+  if (response.status < 200 || response.status >= 300) {
     throw new Error(`Upload avatar fallito (${response.status})`);
   }
 }

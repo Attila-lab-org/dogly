@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.deps import StateDep, UserIdDep
+from app.api.deps import AppState, StateDep, UserIdDep
 from app.contracts.api import (
     DogAlbumCreate,
     DogAlbumListResponse,
@@ -19,8 +19,21 @@ from app.contracts.api import (
 )
 from app.domains import gallery as gallery_domain
 from app.domains import gallery_db
+from app.domains.gallery_db import GALLERY_BUCKET
 
 router = APIRouter()
+
+
+async def photo_with_url(photo: DogPhotoOut, state: AppState) -> DogPhotoOut:
+    try:
+        url = await state.storage.create_signed_read_url(
+            bucket=GALLERY_BUCKET,
+            path=photo.storage_path,
+            ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
+        )
+    except Exception:  # noqa: BLE001 -- gallery read URL is best-effort
+        url = None
+    return photo.model_copy(update={"photo_url": url})
 
 
 @router.get("/dogs/{dog_id}/albums", response_model=DogAlbumListResponse)
@@ -57,10 +70,9 @@ async def get_album(album_id: str, state: StateDep, user_id: UserIdDep) -> DogAl
 async def list_photos(album_id: str, state: StateDep, user_id: UserIdDep) -> DogPhotoListResponse:
     if state.engine is not None:
         items = await gallery_db.list_photos(state.engine, user_id=user_id, album_id=album_id)
-        return DogPhotoListResponse(items=items)
-    return DogPhotoListResponse(
-        items=gallery_domain.list_photos(state.store, user_id=user_id, album_id=album_id)
-    )
+    else:
+        items = gallery_domain.list_photos(state.store, user_id=user_id, album_id=album_id)
+    return DogPhotoListResponse(items=[await photo_with_url(photo, state) for photo in items])
 
 
 @router.post(
@@ -112,12 +124,14 @@ async def update_photo(
     photo_id: str, payload: DogPhotoUpdate, state: StateDep, user_id: UserIdDep
 ) -> DogPhotoOut:
     if state.engine is not None:
-        return await gallery_db.update_photo(
+        photo = await gallery_db.update_photo(
             state.engine, user_id=user_id, photo_id=photo_id, payload=payload
         )
-    return gallery_domain.update_photo(
-        state.store, user_id=user_id, photo_id=photo_id, payload=payload
-    )
+    else:
+        photo = gallery_domain.update_photo(
+            state.store, user_id=user_id, photo_id=photo_id, payload=payload
+        )
+    return await photo_with_url(photo, state)
 
 
 @router.delete("/photos/{photo_id}", status_code=204)

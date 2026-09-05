@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { albumsMock } from '@/mocks/photos';
-import { DOG_ID } from '@/mocks/core';
+import { createAlbum } from '@/features/photos/api';
 
 export default function CreateAlbumScreen() {
   const { dogId } = useLocalSearchParams<{ dogId: string }>();
   const router = useRouter();
   const [title, setTitle] = useState('');
+  const [saving, setSaving] = useState(false);
 
   return (
     <ScreenContainer>
@@ -25,19 +25,19 @@ export default function CreateAlbumScreen() {
       />
       <Button
         title="Crea"
-        disabled={!title.trim()}
-        onPress={() => {
-          const id = `album-${Date.now()}`;
-          albumsMock.unshift({
-            id,
-            dogId: dogId ?? DOG_ID,
-            title: title.trim(),
-            coverPhotoId: null,
-            photoCount: 0,
-            defaultVisibility: 'private',
-            createdAt: new Date().toISOString(),
-          });
-          router.replace(`/dogs/${dogId}/album/${id}` as never);
+        disabled={!title.trim() || !dogId}
+        loading={saving}
+        onPress={async () => {
+          if (!dogId) return;
+          setSaving(true);
+          try {
+            const album = await createAlbum(dogId, title);
+            router.replace(`/dogs/${dogId}/album/${album.id}` as never);
+          } catch {
+            Alert.alert('Album non creato', 'Riprova tra poco.');
+          } finally {
+            setSaving(false);
+          }
         }}
       />
     </ScreenContainer>

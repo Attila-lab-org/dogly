@@ -564,6 +564,7 @@ class DogPhotoOut(BaseModel):
     album_id: str
     dog_id: str
     storage_path: str
+    photo_url: str | None = None
     caption: str | None = None
     visibility: Literal["PRIVATE", "PUBLISHED"] = "PRIVATE"
     taken_at: datetime | None = None

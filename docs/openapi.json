@@ -4258,6 +4258,17 @@
             "type": "string",
             "title": "Storage Path"
           },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
           "caption": {
             "anyOf": [
               {

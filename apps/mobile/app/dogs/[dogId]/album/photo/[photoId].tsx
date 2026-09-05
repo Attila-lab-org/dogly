@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -8,23 +9,46 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { Button, EmptyState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { VisibilityBadge } from '@/features/photos/components';
 import { PHOTO_COPY } from '@/features/photos/copy';
 import { sharePhoto } from '@/features/photos/share';
-import { photoById } from '@/mocks/photos';
+import {
+  fetchAlbumPhotos,
+  updateAlbumPhotoVisibility,
+} from '@/features/photos/api';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import type { PhotoVisibility } from '@/features/photos/types';
 
 export default function PhotoViewerScreen() {
-  const { photoId } = useLocalSearchParams<{ photoId: string }>();
+  const { photoId, albumId } = useLocalSearchParams<{
+    photoId: string;
+    albumId: string;
+  }>();
   const { dog } = useDogProfile();
-  const base = photoById(photoId);
-  const [visibility, setVisibility] = useState<PhotoVisibility>(
-    base?.visibility ?? 'private',
-  );
+  const photosQuery = useQuery({
+    queryKey: ['gallery-photos', albumId],
+    queryFn: () => fetchAlbumPhotos(albumId!),
+    enabled: Boolean(albumId),
+  });
+  const base = photosQuery.data?.find((photo) => photo.id === photoId);
+  const [visibility, setVisibility] = useState<PhotoVisibility>('private');
+
+  useEffect(() => {
+    if (base) setVisibility(base.visibility);
+  }, [base]);
+
+  if (photosQuery.isLoading) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Foto" />
+        <ActivityIndicator color={colors.primary} />
+      </ScreenContainer>
+    );
+  }
 
   if (!base) {
     return (
@@ -49,14 +73,18 @@ export default function PhotoViewerScreen() {
       <Pressable
         accessibilityRole="switch"
         accessibilityState={{ checked: visibility === 'published' }}
-        onPress={() => {
+        onPress={async () => {
           const next = visibility === 'private' ? 'published' : 'private';
-          setVisibility(next);
-          base.visibility = next;
-          Alert.alert(
-            next === 'published' ? 'Foto visibile' : 'Foto privata',
-            PHOTO_COPY.publishedHint,
-          );
+          try {
+            await updateAlbumPhotoVisibility(base.id, next);
+            setVisibility(next);
+            Alert.alert(
+              next === 'published' ? 'Foto visibile' : 'Foto privata',
+              PHOTO_COPY.publishedHint,
+            );
+          } catch {
+            Alert.alert('Modifica non salvata', 'Riprova tra poco.');
+          }
         }}
         style={styles.toggle}
       >
