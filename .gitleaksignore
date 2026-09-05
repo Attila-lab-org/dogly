@@ -2,3 +2,6 @@
 # Ignore only these two historical findings; service-role keys remain blocked.
 fa78e3a1cf39b7569bc7b89b866de0a02a8affa2:apps/mobile/eas.json:generic-api-key:26
 fa78e3a1cf39b7569bc7b89b866de0a02a8affa2:apps/mobile/eas.json:generic-api-key:44
+
+# AsyncStorage namespace, not a credential.
+7d3deb05078f74a95ba3d31637499bccb31ab70c:apps/mobile/src/features/privacy/consents.ts:generic-api-key:14
