@@ -46,6 +46,14 @@ const SIZES = ['Piccola', 'Media', 'Grande'] as const;
 const dogSchema = z.object({
   name: z.string().trim().min(1, 'Il nome è necessario: lo userò in tutta l’app.'),
   size: z.enum(SIZES),
+  weightKg: z.string().trim().refine(
+    (value) => {
+      if (!value) return true;
+      const weight = Number(value.replace(',', '.'));
+      return Number.isFinite(weight) && weight > 0 && weight <= 999.99;
+    },
+    'Inserisci un peso valido in kg.',
+  ),
   /** Foto opzionale (sez. 6: "no photo") */
   photoUri: z.string().nullable(),
 });
@@ -59,6 +67,7 @@ export default function DogOnboardingScreen() {
   const [draft, setDraft] = useState<DogDraft>({
     name: '',
     size: 'Media',
+    weightKg: '',
     photoUri: null,
   });
   const [ageYears, setAgeYears] = useState<number | null>(null);
@@ -103,6 +112,9 @@ export default function DogOnboardingScreen() {
             name: parsed.data.name,
             birthDate,
             sizeLabel,
+            weightKg: parsed.data.weightKg
+              ? Number(parsed.data.weightKg.replace(',', '.'))
+              : null,
             breedLabel,
             isMix: breedSelection.kind === 'mixed',
             ageLabel,
@@ -191,6 +203,17 @@ export default function DogOnboardingScreen() {
           />
         ))}
       </View>
+
+      <Text style={styles.label}>Peso (kg, facoltativo)</Text>
+      <TextInput
+        value={draft.weightKg}
+        onChangeText={(weightKg) => patch({ weightKg })}
+        placeholder="Es. 12,5"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="decimal-pad"
+        style={styles.input}
+        testID="onboarding-weight"
+      />
 
       <Text style={styles.label}>Razza</Text>
       <BreedPicker

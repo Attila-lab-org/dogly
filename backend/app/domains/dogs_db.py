@@ -27,6 +27,10 @@ def _parse_birth_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
 
 
+def _normalize_size(value: str | None) -> str | None:
+    return value.upper() if value else None
+
+
 async def list_dogs(engine: AsyncEngine, *, user_id: str) -> list[DogRec]:
     async with engine.connect() as conn:
         rows = (
@@ -114,7 +118,7 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
                     "name": payload.name,
                     "birth_date": _parse_birth_date(payload.birth_date),
                     "age_stage": payload.age_stage or "UNKNOWN",
-                    "size": payload.size,
+                    "size": _normalize_size(payload.size),
                     "breed_label": payload.breed_label,
                     "is_mix": payload.is_mix,
                     "sex": payload.sex,
@@ -147,6 +151,8 @@ async def update_dog(
         return await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
     if "birth_date" in changed:
         changed["birth_date"] = _parse_birth_date(changed["birth_date"])
+    if "size" in changed:
+        changed["size"] = _normalize_size(changed["size"])
 
     sets = ", ".join(f"{k} = :{k}" for k in changed)
     params = {"dog_id": dog_id, "user_id": user_id, **changed}

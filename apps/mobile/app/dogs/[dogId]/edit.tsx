@@ -55,6 +55,9 @@ export default function DogEditScreen() {
   );
   const [birthDate, setBirthDate] = useState(dog.birthDate);
   const [sizeLabel, setSizeLabel] = useState(dog.sizeLabel);
+  const [weightKg, setWeightKg] = useState(
+    dog.weightKg === null ? '' : String(dog.weightKg).replace('.', ','),
+  );
   const [breedSelection, setBreedSelection] = useState(
     breedSelectionFromLabel(dog.breedLabel),
   );
@@ -74,6 +77,16 @@ export default function DogEditScreen() {
     }
     const breedLabel = breedLabelFromSelection(breedSelection);
     const ageLabel = ageLabelFromYears(ageYears);
+    const parsedWeight = weightKg.trim()
+      ? Number(weightKg.trim().replace(',', '.'))
+      : null;
+    if (
+      parsedWeight !== null &&
+      (!Number.isFinite(parsedWeight) || parsedWeight <= 0 || parsedWeight > 999.99)
+    ) {
+      Alert.alert('Peso non valido', 'Inserisci un peso valido in kg.');
+      return;
+    }
 
     try {
       if (!usingMockGate && dogId) {
@@ -83,6 +96,7 @@ export default function DogEditScreen() {
             ageLabel,
             birthDate,
             sizeLabel,
+            weightKg: parsedWeight,
             breedLabel,
             isMix: breedSelection.kind === 'mixed',
           }),
@@ -175,6 +189,16 @@ export default function DogEditScreen() {
           </Pressable>
         ))}
       </View>
+
+      <Text style={styles.label}>Peso (kg, facoltativo)</Text>
+      <TextInput
+        value={weightKg}
+        onChangeText={setWeightKg}
+        keyboardType="decimal-pad"
+        placeholder="Es. 12,5"
+        placeholderTextColor={colors.textMuted}
+        style={styles.input}
+      />
 
       <Text style={styles.label}>Razza</Text>
       <View style={styles.breedField}>

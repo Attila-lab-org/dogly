@@ -15,6 +15,8 @@ export interface DogProfile {
   /** Data di nascita ISO YYYY-MM-DD, facoltativa ma utile per il compleanno. */
   birthDate: string | null;
   sizeLabel: string;
+  /** Peso corrente in chilogrammi, facoltativo. */
+  weightKg: number | null;
   /** Razza, "Mix" o null se sconosciuta (unknown breed ammesso, sez. 6) */
   breedLabel: string | null;
   isMix: boolean;

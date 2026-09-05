@@ -49,20 +49,23 @@ export type DogUpdateBody = {
 export function sizeToApi(
   size: 'Piccola' | 'Media' | 'Grande' | string,
 ): string {
-  if (size === 'Piccola' || size === 'Taglia piccola') return 'small';
-  if (size === 'Grande' || size === 'Taglia grande') return 'large';
-  if (size === 'Media' || size === 'Taglia media') return 'medium';
-  return size;
+  if (size === 'Piccola' || size === 'Taglia piccola') return 'SMALL';
+  if (size === 'Grande' || size === 'Taglia grande') return 'LARGE';
+  if (size === 'Media' || size === 'Taglia media') return 'MEDIUM';
+  return size.toUpperCase();
 }
 
 export function sizeFromApi(size: string | null): string {
   switch (size) {
+    case 'SMALL':
     case 'small':
     case 'Piccola':
       return 'Taglia piccola';
+    case 'LARGE':
     case 'large':
     case 'Grande':
       return 'Taglia grande';
+    case 'MEDIUM':
     case 'medium':
     case 'Media':
       return 'Taglia media';
@@ -83,6 +86,7 @@ export function mapApiDogToProfile(dog: ApiDog): DogProfile {
     ageLabel,
     birthDate,
     sizeLabel: sizeFromApi(dog.size),
+    weightKg: dog.weight_kg,
     breedLabel: dog.breed_label,
     isMix: dog.is_mix,
     photoUri: dog.photo_path,

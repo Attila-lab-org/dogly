@@ -3,11 +3,16 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
-from app.domains.dogs_db import _parse_birth_date, _row_to_dog
+from app.domains.dogs_db import _normalize_size, _parse_birth_date, _row_to_dog
 
 
 def test_parse_birth_date_returns_postgres_compatible_date() -> None:
     assert _parse_birth_date("2022-09-01") == date(2022, 9, 1)
+
+
+def test_normalize_size_matches_database_constraint() -> None:
+    assert _normalize_size("medium") == "MEDIUM"
+    assert _normalize_size(None) is None
 
 
 def test_row_to_dog_serializes_database_date() -> None:
