@@ -13,8 +13,20 @@ from app.contracts.api import (
     FecalInitResponse,
 )
 from app.domains import digestive as digestive_domain
+from app.domains import digestive_db, idempotency_db
 
 router = APIRouter()
+
+
+async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=guard._payload_hash,
+        )
 
 
 @router.post("/digestive/fecal/init", response_model=FecalInitResponse)
@@ -26,20 +38,29 @@ async def init_fecal(
 ) -> FecalInitResponse:
     if cached := guard.lookup():
         return FecalInitResponse.model_validate(cached)
-    event, url, expires, reserved = await digestive_domain.init_fecal_event(
-        state.store,
-        settings=state.settings,
-        storage=state.storage,
-        user_id=user_id,
-        payload=payload,
-    )
+    if state.engine is not None:
+        event, url, expires, reserved = await digestive_db.init_fecal_event(
+            state.engine,
+            settings=state.settings,
+            storage=state.storage,
+            user_id=user_id,
+            payload=payload,
+        )
+    else:
+        event, url, expires, reserved = await digestive_domain.init_fecal_event(
+            state.store,
+            settings=state.settings,
+            storage=state.storage,
+            user_id=user_id,
+            payload=payload,
+        )
     resp = FecalInitResponse(
         event_id=event.id,
         status=event.status,
         upload={"url": url, "storage_path": event.image_path, "expires_at": expires},
         quota_reserved=reserved,
     )
-    guard.record(resp.model_dump(mode="json"))
+    await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp
 
 
@@ -52,21 +73,33 @@ async def complete_fecal(
 ) -> FecalCompleteResponse:
     if cached := guard.lookup():
         return FecalCompleteResponse.model_validate(cached)
-    event = await digestive_domain.complete_fecal_event(
-        state.store,
-        storage=state.storage,
-        queue=state.queue,
-        user_id=user_id,
-        event_id=event_id,
-    )
+    if state.engine is not None:
+        event = await digestive_db.complete_fecal_event(
+            state.engine,
+            storage=state.storage,
+            queue=state.queue,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    else:
+        event = await digestive_domain.complete_fecal_event(
+            state.store,
+            storage=state.storage,
+            queue=state.queue,
+            user_id=user_id,
+            event_id=event_id,
+        )
     resp = FecalCompleteResponse(event_id=event.id, status=event.status)
-    guard.record(resp.model_dump(mode="json"))
+    await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp
 
 
 @router.get("/digestive/events/{event_id}", response_model=DigestiveEventOut)
 async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep) -> DigestiveEventOut:
-    e = digestive_domain.get_fecal_event(state.store, user_id=user_id, event_id=event_id)
+    if state.engine is not None:
+        e = await digestive_db.get_fecal_event(state.engine, user_id=user_id, event_id=event_id)
+    else:
+        e = digestive_domain.get_fecal_event(state.store, user_id=user_id, event_id=event_id)
     return DigestiveEventOut(
         id=e.id,
         dog_id=e.dog_id,
@@ -83,4 +116,8 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
 
 @router.get("/dogs/{dog_id}/digestive-summary", response_model=DigestiveSummaryOut)
 async def get_digestive_summary(dog_id: str, state: StateDep, user_id: UserIdDep) -> DigestiveSummaryOut:
-    return DigestiveSummaryOut(**digestive_domain.digestive_summary(state.store, user_id=user_id, dog_id=dog_id))
+    if state.engine is not None:
+        summary = await digestive_db.digestive_summary(state.engine, user_id=user_id, dog_id=dog_id)
+    else:
+        summary = digestive_domain.digestive_summary(state.store, user_id=user_id, dog_id=dog_id)
+    return DigestiveSummaryOut(**summary)

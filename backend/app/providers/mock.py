@@ -165,6 +165,7 @@ class MockStorageProvider:
 
     def __init__(self) -> None:
         self.objects: set[tuple[str, str]] = set()
+        self.blobs: dict[tuple[str, str], bytes] = {}
 
     async def create_signed_upload_url(
         self, *, bucket: str, path: str, content_type: str, ttl_seconds: int
@@ -183,6 +184,12 @@ class MockStorageProvider:
 
     async def delete_object(self, *, bucket: str, path: str) -> None:
         self.objects.discard((bucket, path))
+        self.blobs.pop((bucket, path), None)
+
+    async def upload_bytes(self, *, bucket: str, path: str, data: bytes, content_type: str) -> None:
+        del content_type
+        self.objects.add((bucket, path))
+        self.blobs[(bucket, path)] = data
 
 
 class InMemoryJobQueue:

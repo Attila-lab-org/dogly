@@ -91,9 +91,15 @@ async def current_user_id(
     if not authorization or not authorization.lower().startswith("bearer "):
         raise ApiError(ErrorCode.AUTH_REQUIRED, "Authentication is required.")
     token = authorization.split(" ", 1)[1].strip()
-    return await validate_supabase_jwt(
+    user_id = await validate_supabase_jwt(
         token, settings=state.settings, jwks_provider=state.jwks_provider
     )
+    if state.engine is not None:
+        from app.domains import profiles_db
+
+        if await profiles_db.is_account_deleted(state.engine, user_id):
+            raise ApiError(ErrorCode.INVALID_STATE, "Account deletion in progress.")
+    return user_id
 
 
 UserIdDep = Annotated[str, Depends(current_user_id)]

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Header, Request
 from app.api.deps import StateDep
 from app.contracts.api import RevenueCatWebhookResponse
 from app.contracts.errors import ApiError, ErrorCode
+from app.domains import billing_db
 from app.domains.repository import now_utc
 from app.providers.billing import (
     WebhookSignatureError,
@@ -41,6 +42,10 @@ async def revenuecat_webhook(
     update = map_revenuecat_event(payload)
     if update is None:
         return RevenueCatWebhookResponse(processed=False)
+
+    if state.engine is not None:
+        processed = await billing_db.upsert_subscription_from_webhook(state.engine, update)
+        return RevenueCatWebhookResponse(processed=True, duplicate=not processed)
 
     store = state.store
     event_id = update.get("event_id")

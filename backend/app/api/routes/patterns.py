@@ -17,6 +17,7 @@ from app.contracts.api import (
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import ELIGIBLE_PATTERN_STATES, PatternState
+from app.domains import dogs_db, patterns_db
 from app.domains.dogs import get_owned_dog
 from app.domains.repository import now_utc
 
@@ -38,12 +39,15 @@ def _out(p) -> PatternOut:
 
 @router.get("/dogs/{dog_id}/patterns", response_model=PatternListResponse)
 async def list_patterns(dog_id: str, state: StateDep, user_id: UserIdDep) -> PatternListResponse:
-    get_owned_dog(state.store, user_id=user_id, dog_id=dog_id)
-    visible = [
-        p
-        for p in state.store.patterns.values()
-        if p.dog_id == dog_id and p.state in ELIGIBLE_PATTERN_STATES | {PatternState.CONTESTED}
-    ]
+    if state.engine is not None:
+        visible = await patterns_db.list_visible_patterns(state.engine, user_id=user_id, dog_id=dog_id)
+    else:
+        get_owned_dog(state.store, user_id=user_id, dog_id=dog_id)
+        visible = [
+            p
+            for p in state.store.patterns.values()
+            if p.dog_id == dog_id and p.state in ELIGIBLE_PATTERN_STATES | {PatternState.CONTESTED}
+        ]
     return PatternListResponse(items=[_out(p) for p in visible])
 
 
@@ -51,6 +55,13 @@ async def list_patterns(dog_id: str, state: StateDep, user_id: UserIdDep) -> Pat
 async def review_pattern(
     pattern_id: str, payload: PatternReviewRequest, state: StateDep, user_id: UserIdDep
 ) -> PatternReviewResponse:
+    if state.engine is not None:
+        pattern = await patterns_db.review_pattern(
+            state.engine, user_id=user_id, pattern_id=pattern_id, payload=payload
+        )
+        await dogs_db.get_owned_dog(state.engine, user_id=user_id, dog_id=pattern.dog_id)
+        return PatternReviewResponse(pattern_id=pattern.id, state=pattern.state)
+
     pattern = state.store.patterns.get(pattern_id)
     if pattern is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Pattern not found")

@@ -27,6 +27,8 @@ TASK_HANDLERS = {
     "behavior_analysis": handlers.process_behavior_event,
     "digestive_analysis": handlers.process_digestive_event,
     "media_retention_cleanup": handlers.process_media_retention_cleanup,
+    "privacy_export": handlers.process_privacy_export,
+    "account_deletion": handlers.process_account_deletion,
 }
 
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
 from app.contracts.api import MeResponse
+from app.domains import billing_db, profiles_db
 from app.domains.billing import plan_limits
 
 router = APIRouter()
@@ -13,10 +14,15 @@ router = APIRouter()
 
 @router.get("/me", response_model=MeResponse)
 async def get_me(state: StateDep, user_id: UserIdDep) -> MeResponse:
-    store = state.store
-    profile = store.ensure_profile(user_id)
-    sub = store.ensure_subscription(user_id)
-    ledger = store.ensure_ledger(user_id)
+    if state.engine is not None:
+        profile = await profiles_db.get_or_create_profile(state.engine, user_id)
+        sub = await billing_db.get_subscription(state.engine, user_id)
+        ledger = await billing_db.get_usage_ledger(state.engine, user_id)
+    else:
+        store = state.store
+        profile = store.ensure_profile(user_id)
+        sub = store.ensure_subscription(user_id)
+        ledger = store.ensure_ledger(user_id)
     limits = plan_limits(sub.plan)
     premium = sub.plan != "FREE" and sub.status == "active"
     return MeResponse(

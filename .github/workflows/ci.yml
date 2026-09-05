@@ -59,8 +59,11 @@ jobs:
       - uses: supabase/setup-cli@v1
       - name: Start local stack
         run: supabase start
-      - name: Migration reset (fresh local reset must succeed, sez. 11)
-        run: supabase db reset
+      - name: RLS / quota / privacy SQL tests (sez. 26.1 / 28.1)
+        run: |
+          eval "$(supabase status -o env)"
+          export SUPABASE_DB_URL="$DB_URL"
+          bash supabase/tests/run_tests.sh
 
   openapi-drift:
     runs-on: ubuntu-latest

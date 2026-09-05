@@ -12,6 +12,8 @@ class VercelWorkflowsJobQueue(JobQueue):
 
     async def enqueue(self, *, task_type: str, payload: dict[str, str]) -> str:
         event_id = payload.get("event_id")
+        if not event_id and task_type == "media_retention_cleanup":
+            event_id = "retention"
         if not event_id:
             raise ValueError("event_id is required for durable analysis workflows")
 

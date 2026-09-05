@@ -7,18 +7,26 @@ from fastapi import APIRouter
 from app.api.deps import StateDep, UserIdDep
 from app.contracts.api import SubscriptionStatusResponse, UsageResponse
 from app.domains.billing import subscription_status_payload
+from app.domains import billing_db
 
 router = APIRouter()
 
 
 @router.get("/subscription/status", response_model=SubscriptionStatusResponse)
 async def subscription_status(state: StateDep, user_id: UserIdDep) -> SubscriptionStatusResponse:
+    if state.engine is not None:
+        return SubscriptionStatusResponse(
+            **await billing_db.subscription_status_payload(state.engine, user_id)
+        )
     return SubscriptionStatusResponse(**subscription_status_payload(state.store, user_id))
 
 
 @router.get("/usage", response_model=UsageResponse)
 async def get_usage(state: StateDep, user_id: UserIdDep) -> UsageResponse:
-    ledger = state.store.ensure_ledger(user_id)
+    if state.engine is not None:
+        ledger = await billing_db.get_usage_ledger(state.engine, user_id)
+    else:
+        ledger = state.store.ensure_ledger(user_id)
     return UsageResponse(
         ledger={
             "behavior": {

@@ -18,12 +18,16 @@ from app.contracts.api import (
     DogProfileVisibilityUpdate,
 )
 from app.domains import gallery as gallery_domain
+from app.domains import gallery_db
 
 router = APIRouter()
 
 
 @router.get("/dogs/{dog_id}/albums", response_model=DogAlbumListResponse)
 async def list_albums(dog_id: str, state: StateDep, user_id: UserIdDep) -> DogAlbumListResponse:
+    if state.engine is not None:
+        items = await gallery_db.list_albums(state.engine, user_id=user_id, dog_id=dog_id)
+        return DogAlbumListResponse(items=items)
     return DogAlbumListResponse(
         items=gallery_domain.list_albums(state.store, user_id=user_id, dog_id=dog_id)
     )
@@ -33,6 +37,10 @@ async def list_albums(dog_id: str, state: StateDep, user_id: UserIdDep) -> DogAl
 async def create_album(
     dog_id: str, payload: DogAlbumCreate, state: StateDep, user_id: UserIdDep
 ) -> DogAlbumOut:
+    if state.engine is not None:
+        return await gallery_db.create_album(
+            state.engine, user_id=user_id, dog_id=dog_id, payload=payload
+        )
     return gallery_domain.create_album(
         state.store, user_id=user_id, dog_id=dog_id, payload=payload
     )
@@ -40,11 +48,16 @@ async def create_album(
 
 @router.get("/albums/{album_id}", response_model=DogAlbumOut)
 async def get_album(album_id: str, state: StateDep, user_id: UserIdDep) -> DogAlbumOut:
+    if state.engine is not None:
+        return await gallery_db.get_album(state.engine, user_id=user_id, album_id=album_id)
     return gallery_domain.get_album(state.store, user_id=user_id, album_id=album_id)
 
 
 @router.get("/albums/{album_id}/photos", response_model=DogPhotoListResponse)
 async def list_photos(album_id: str, state: StateDep, user_id: UserIdDep) -> DogPhotoListResponse:
+    if state.engine is not None:
+        items = await gallery_db.list_photos(state.engine, user_id=user_id, album_id=album_id)
+        return DogPhotoListResponse(items=items)
     return DogPhotoListResponse(
         items=gallery_domain.list_photos(state.store, user_id=user_id, album_id=album_id)
     )
@@ -61,14 +74,24 @@ async def init_photo(
     state: StateDep,
     user_id: UserIdDep,
 ) -> DogPhotoUploadResponse:
-    photo, url, expires = await gallery_domain.init_photo_upload(
-        state.store,
-        settings=state.settings,
-        storage=state.storage,
-        user_id=user_id,
-        album_id=album_id,
-        payload=payload,
-    )
+    if state.engine is not None:
+        photo, url, expires = await gallery_db.init_photo_upload(
+            state.engine,
+            settings=state.settings,
+            storage=state.storage,
+            user_id=user_id,
+            album_id=album_id,
+            payload=payload,
+        )
+    else:
+        photo, url, expires = await gallery_domain.init_photo_upload(
+            state.store,
+            settings=state.settings,
+            storage=state.storage,
+            user_id=user_id,
+            album_id=album_id,
+            payload=payload,
+        )
     return DogPhotoUploadResponse(
         photo=DogPhotoOut(
             id=photo.id,
@@ -88,6 +111,10 @@ async def init_photo(
 async def update_photo(
     photo_id: str, payload: DogPhotoUpdate, state: StateDep, user_id: UserIdDep
 ) -> DogPhotoOut:
+    if state.engine is not None:
+        return await gallery_db.update_photo(
+            state.engine, user_id=user_id, photo_id=photo_id, payload=payload
+        )
     return gallery_domain.update_photo(
         state.store, user_id=user_id, photo_id=photo_id, payload=payload
     )
@@ -95,6 +122,9 @@ async def update_photo(
 
 @router.delete("/photos/{photo_id}", status_code=204)
 async def delete_photo(photo_id: str, state: StateDep, user_id: UserIdDep) -> None:
+    if state.engine is not None:
+        await gallery_db.soft_delete_photo(state.engine, user_id=user_id, photo_id=photo_id)
+        return None
     gallery_domain.soft_delete_photo(state.store, user_id=user_id, photo_id=photo_id)
 
 
@@ -102,6 +132,8 @@ async def delete_photo(photo_id: str, state: StateDep, user_id: UserIdDep) -> No
 async def get_visibility(
     dog_id: str, state: StateDep, user_id: UserIdDep
 ) -> DogProfileVisibilityOut:
+    if state.engine is not None:
+        return await gallery_db.get_visibility(state.engine, user_id=user_id, dog_id=dog_id)
     return gallery_domain.get_visibility(state.store, user_id=user_id, dog_id=dog_id)
 
 
@@ -112,6 +144,10 @@ async def put_visibility(
     state: StateDep,
     user_id: UserIdDep,
 ) -> DogProfileVisibilityOut:
+    if state.engine is not None:
+        return await gallery_db.update_visibility(
+            state.engine, user_id=user_id, dog_id=dog_id, payload=payload
+        )
     return gallery_domain.update_visibility(
         state.store, user_id=user_id, dog_id=dog_id, payload=payload
     )

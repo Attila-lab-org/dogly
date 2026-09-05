@@ -79,6 +79,15 @@ class SupabaseStorageProvider:
         if response.status_code not in (200, 404):
             response.raise_for_status()
 
+    async def upload_bytes(self, *, bucket: str, path: str, data: bytes, content_type: str) -> None:
+        url = f"{self._base}/storage/v1/object/{bucket}/{quote(path, safe='/')}"
+        response = await self._client.post(
+            url,
+            headers={**self._headers(), "Content-Type": content_type, "x-upsert": "true"},
+            content=data,
+        )
+        response.raise_for_status()
+
     async def create_signed_read_url(self, *, bucket: str, path: str, ttl_seconds: int) -> str:
         url = f"{self._base}/storage/v1/object/sign/{bucket}/{quote(path, safe='/')}"
         response = await self._client.post(

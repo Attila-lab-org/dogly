@@ -10,6 +10,7 @@ from app.api.deps import StateDep, UserIdDep
 from app.api.pagination import paginate
 from app.contracts.api import DiaryItem, DiaryPage
 from app.contracts.taxonomy import AnalysisDomain
+from app.domains import diary_db
 from app.domains.models import BehaviorEventRec, FecalEventRec
 
 router = APIRouter()
@@ -35,6 +36,16 @@ async def get_diary(
     domain: Annotated[AnalysisDomain | None, Query()] = None,
     dog_id: Annotated[str | None, Query()] = None,
 ) -> DiaryPage:
+    if state.engine is not None:
+        return await diary_db.list_diary_page(
+            state.engine,
+            user_id=user_id,
+            cursor=cursor,
+            limit=limit,
+            domain=domain,
+            dog_id=dog_id,
+        )
+
     store = state.store
     entries: list[_TimelineEntry] = []
     if domain in (None, AnalysisDomain.BEHAVIOR):

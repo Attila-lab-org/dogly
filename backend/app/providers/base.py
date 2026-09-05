@@ -96,6 +96,8 @@ class StorageProvider(Protocol):
 
     async def delete_object(self, *, bucket: str, path: str) -> None: ...
 
+    async def upload_bytes(self, *, bucket: str, path: str, data: bytes, content_type: str) -> None: ...
+
 
 @runtime_checkable
 class JobQueue(Protocol):
