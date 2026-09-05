@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 96" role="img" aria-labelledby="title">
+  <title id="title">Dogly</title>
+  <rect width="160" height="96" rx="22" fill="#ffffff"/>
+  <path fill="#052b52" d="M10 84V12h37c27 0 44 14 44 36S74 84 47 84H10Zm25-20h11c12 0 20-6 20-16s-8-16-20-16H35v32Z"/>
+  <path fill="#ffffff" d="M28 56 45 41l2-17 9 12 13 7-10 17-18 5-13-9Z"/>
+  <circle cx="55" cy="45" r="2.5" fill="#052b52"/>
+  <rect x="102" y="32" width="14" height="42" rx="7" fill="#08aeb5"/>
+  <rect x="126" y="18" width="14" height="56" rx="7" fill="#08aeb5"/>
+  <circle cx="109" cy="84" r="6" fill="#08aeb5"/>
+</svg>
