@@ -46,16 +46,23 @@ class SupabaseStorageProvider:
         )
         response.raise_for_status()
         data = response.json()
-        token = data.get("token") or data.get("signedURL") or data.get("signedUrl")
-        if not token:
-            raise RuntimeError("Supabase signed upload response missing token")
-        if str(token).startswith("http"):
-            signed = str(token)
-        else:
+        signed_value = data.get("signedURL") or data.get("signedUrl") or data.get("url")
+        token = data.get("token")
+        if signed_value:
+            value = str(signed_value)
+            if value.startswith("http"):
+                signed = value
+            elif value.startswith("/storage/v1/"):
+                signed = f"{self._base}{value}"
+            else:
+                signed = f"{self._base}/storage/v1/{value.lstrip('/')}"
+        elif token:
             signed = (
                 f"{self._base}/storage/v1/object/upload/sign/{bucket}/"
                 f"{quote(path, safe='/')}?token={token}"
             )
+        else:
+            raise RuntimeError("Supabase signed upload response missing URL/token")
         expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
         return signed, expires_at
 

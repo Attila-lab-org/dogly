@@ -5,24 +5,37 @@ import { PHOTO_COPY } from './copy';
 import type { AlbumPhoto, SharePhotoPayload } from './types';
 
 export async function pickAlbumPhoto(): Promise<string | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
+  // Android usa il Photo Picker di sistema e non richiede accesso generale
+  // alla libreria. Chiedere prima il permesso può bloccare definitivamente la
+  // selezione dopo un rifiuto, senza neppure aprire il picker.
+  if (Platform.OS !== 'android') {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        'Permesso richiesto',
+        'Per aggiungere foto serve l’accesso alla galleria.',
+      );
+      return null;
+    }
+  }
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets[0]) {
+      return null;
+    }
+    return result.assets[0].uri;
+  } catch {
     Alert.alert(
-      'Permesso richiesto',
-      'Per aggiungere foto all’album serve l’accesso alla galleria.',
+      'Galleria non disponibile',
+      'Non sono riuscito ad aprire le foto del telefono.',
     );
     return null;
   }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 0.85,
-    allowsEditing: true,
-    aspect: [1, 1],
-  });
-  if (result.canceled || !result.assets[0]) {
-    return null;
-  }
-  return result.assets[0].uri;
 }
 
 /** Scatto fotocamera per storie. */

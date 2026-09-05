@@ -68,6 +68,26 @@ export default function DogEditScreen() {
     dog.profileVisibility,
   );
 
+  const selectAndUploadPhoto = async () => {
+    const uri = await pickAvatarPhoto();
+    if (!uri) return;
+    setPhotoUri(uri);
+    if (usingMockGate || !dogId) return;
+
+    setUploadingPhoto(true);
+    try {
+      const savedUrl = await persistDogAvatar(dogId, uri);
+      if (savedUrl) setPhotoUri(savedUrl);
+      Alert.alert('Foto salvata', 'La foto profilo è stata caricata.');
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : 'Errore sconosciuto';
+      Alert.alert('Foto non salvata', detail);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const save = async () => {
     if (!name.trim()) {
       Alert.alert('Nome richiesto', 'Il nome del cane è obbligatorio.');
@@ -123,35 +143,21 @@ export default function DogEditScreen() {
       <StackScreenHeader title="Modifica profilo" />
       <Text style={styles.hint}>Profilo di {dog.name} · id {dogId}</Text>
 
-      <View style={styles.avatarSection}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Cambia foto profilo"
+        disabled={uploadingPhoto}
+        onPress={() => void selectAndUploadPhoto()}
+        style={styles.avatarSection}
+      >
         <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Cambia foto"
-          hitSlop={8}
-          onPress={async () => {
-            const uri = await pickAvatarPhoto();
-            if (!uri) return;
-            setPhotoUri(uri);
-            if (usingMockGate || !dogId) return;
-            setUploadingPhoto(true);
-            try {
-              const savedUrl = await persistDogAvatar(dogId, uri);
-              if (savedUrl) setPhotoUri(savedUrl);
-              Alert.alert('Foto salvata', 'La foto profilo è stata caricata.');
-            } catch (error) {
-              const detail =
-                error instanceof Error ? error.message : 'Errore sconosciuto';
-              Alert.alert('Foto non salvata', detail);
-            } finally {
-              setUploadingPhoto(false);
-            }
-          }}
-          style={styles.photoBadge}
-        >
+        <View style={styles.photoBadge}>
           <Ionicons name="camera" size={16} color={colors.primary} />
-        </Pressable>
-      </View>
+        </View>
+      </Pressable>
+      {uploadingPhoto ? (
+        <Text style={styles.photoStatus}>Caricamento foto in corso…</Text>
+      ) : null}
 
       <Text style={styles.label}>Nome</Text>
       <TextInput
@@ -307,6 +313,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  photoStatus: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    marginTop: -spacing.md,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
   },
   label: {
     fontSize: typography.size.sm,
