@@ -211,9 +211,11 @@ export default function DogEditScreen() {
           <Ionicons name="camera" size={16} color={colors.primary} />
         </View>
       </Pressable>
-      {uploadingPhoto ? (
-        <Text style={styles.photoStatus}>Caricamento foto in corso…</Text>
-      ) : null}
+      <Text style={styles.photoStatus}>
+        {uploadingPhoto
+          ? 'Caricamento foto in corso…'
+          : 'Foto profilo · caricamento automatico attivo'}
+      </Text>
 
       <Text style={styles.label}>Nome</Text>
       <TextInput

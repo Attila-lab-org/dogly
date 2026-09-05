@@ -2,7 +2,7 @@
  * Sign-in (Spec V1 sez. 6) — Supabase Auth: email OTP/password + Google.
  * Sessione in SecureStore via SessionProvider; dopo login → onboarding o Home.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +43,7 @@ export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
+  const oauthInFlight = useRef(false);
 
   useEffect(() => {
     if (loading) return;
@@ -67,10 +68,12 @@ export default function SignInScreen() {
   };
 
   const signInOAuth = async () => {
+    if (oauthInFlight.current) return;
     if (usingMockGate) {
       runMockSignIn('google');
       return;
     }
+    oauthInFlight.current = true;
     setError(null);
     setLoadingProvider('google');
     try {
@@ -79,6 +82,7 @@ export default function SignInScreen() {
     } catch (err) {
       setError(mapAuthError(err));
     } finally {
+      oauthInFlight.current = false;
       setLoadingProvider(null);
     }
   };

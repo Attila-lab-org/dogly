@@ -72,7 +72,9 @@ export async function signInWithPassword(
   if (error) throw error;
 }
 
-export async function completeOAuthCallback(callbackUrl: string): Promise<void> {
+const oauthCompletions = new Map<string, Promise<void>>();
+
+async function runOAuthCallback(callbackUrl: string): Promise<void> {
   const supabase = getSupabaseClient();
   const callback = parseOAuthCallbackUrl(callbackUrl);
 
@@ -93,6 +95,20 @@ export async function completeOAuthCallback(callbackUrl: string): Promise<void> 
     return;
   }
   throw new Error('Sessione OAuth non ricevuta');
+}
+
+export async function completeOAuthCallback(callbackUrl: string): Promise<void> {
+  const existing = oauthCompletions.get(callbackUrl);
+  if (existing) return existing;
+
+  const completion = runOAuthCallback(callbackUrl);
+  oauthCompletions.set(callbackUrl, completion);
+  try {
+    await completion;
+  } catch (error) {
+    oauthCompletions.delete(callbackUrl);
+    throw error;
+  }
 }
 
 export async function signInWithGoogle(): Promise<void> {
