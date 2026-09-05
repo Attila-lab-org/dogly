@@ -4,12 +4,16 @@
  * GET /v1/subscription/status + GET /v1/usage.
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Chip, ProgressBar, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { isApiConfigured } from '@/features/auth/env';
+import { useSession } from '@/features/auth/SessionProvider';
+import { fetchSubscriptionState } from '@/features/billing/api';
 import { subscriptionMock } from '@/mocks/secondary';
 
 const PLAN_LABELS = {
@@ -20,8 +24,18 @@ const PLAN_LABELS = {
 
 export default function SubscriptionScreen() {
   const router = useRouter();
-  const { plan, renewsAt, usage } = subscriptionMock;
+  const { usingMockGate } = useSession();
+  const live = isApiConfigured() && !usingMockGate;
+  const query = useQuery({
+    queryKey: ['subscription', 'status'],
+    queryFn: fetchSubscriptionState,
+    enabled: live,
+    staleTime: 30_000,
+  });
+  const { plan, renewsAt, usage } = query.data ?? subscriptionMock;
   const isPremium = plan !== 'FREE';
+  const behaviorLimit = Math.max(1, usage.behaviorLimit);
+  const digestiveLimit = Math.max(1, usage.digestiveLimit);
 
   return (
     <ScreenContainer scroll>
@@ -56,11 +70,11 @@ export default function SubscriptionScreen() {
             <Text style={styles.quotaTitle}>Analisi comportamentali</Text>
           </View>
           <Text style={styles.quotaValue}>
-            {usage.behaviorUsed}/{usage.behaviorLimit}
+            {usage.behaviorUsed}/{behaviorLimit}
           </Text>
         </View>
         <ProgressBar
-          progress={usage.behaviorUsed / usage.behaviorLimit}
+          progress={usage.behaviorUsed / behaviorLimit}
           tone="primary"
         />
 
@@ -70,11 +84,11 @@ export default function SubscriptionScreen() {
             <Text style={styles.quotaTitle}>Analisi digestive</Text>
           </View>
           <Text style={styles.quotaValue}>
-            {usage.digestiveUsed}/{usage.digestiveLimit}
+            {usage.digestiveUsed}/{digestiveLimit}
           </Text>
         </View>
         <ProgressBar
-          progress={usage.digestiveUsed / usage.digestiveLimit}
+          progress={usage.digestiveUsed / digestiveLimit}
           tone="accent"
         />
 
@@ -98,7 +112,12 @@ export default function SubscriptionScreen() {
         title="Ripristina acquisto"
         variant="outline"
         icon={<Ionicons name="refresh-outline" size={18} color={colors.accent} />}
-        onPress={() => {}}
+        onPress={() => {
+          Alert.alert(
+            'Ripristino acquisto',
+            'Il ripristino dallo store non è ancora disponibile in questa build. Se hai già un abbonamento, lo sincronizziamo dal tuo account al prossimo accesso.',
+          );
+        }}
         style={styles.action}
       />
       <Text style={styles.restoreNote}>

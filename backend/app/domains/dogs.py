@@ -3,11 +3,24 @@
 
 from __future__ import annotations
 
-from app.contracts.api import DogCreate, DogUpdate
+from app.config import Settings
+from app.contracts.api import DogAvatarInitRequest, DogCreate, DogUpdate, SignedUpload
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains.billing import max_active_dogs
 from app.domains.models import DogRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
+from app.providers.base import StorageProvider
+
+AVATAR_BUCKET = "dog-avatars"
+_AVATAR_EXT = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
+
+
+def avatar_storage_prefix(user_id: str, dog_id: str) -> str:
+    return f"users/{user_id}/dogs/{dog_id}/avatar/"
 
 
 def create_dog(store: InMemoryStore, *, user_id: str, payload: DogCreate) -> DogRec:
@@ -54,3 +67,55 @@ def update_dog(store: InMemoryStore, *, user_id: str, dog_id: str, payload: DogU
         store.save_profile_version(dog_id, updated.model_dump(mode="json"), sorted(changed.keys()))
         return updated
     return dog
+
+
+def set_photo_path(
+    store: InMemoryStore, *, user_id: str, dog_id: str, photo_path: str
+) -> DogRec:
+    dog = get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    updated = dog.model_copy(update={"photo_path": photo_path})
+    store.dogs[dog.id] = updated
+    store.save_profile_version(dog_id, updated.model_dump(mode="json"), ["photo_path"])
+    return updated
+
+
+async def init_avatar_upload(
+    store: InMemoryStore,
+    *,
+    settings: Settings,
+    storage: StorageProvider,
+    user_id: str,
+    dog_id: str,
+    payload: DogAvatarInitRequest,
+) -> tuple[str, SignedUpload]:
+    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    ext = _AVATAR_EXT[payload.content_type]
+    path = f"{avatar_storage_prefix(user_id, dog_id)}{new_id()}.{ext}"
+    url, expires = await storage.create_signed_upload_url(
+        bucket=AVATAR_BUCKET,
+        path=path,
+        content_type=payload.content_type,
+        ttl_seconds=settings.storage_signed_url_ttl_seconds,
+    )
+    return path, SignedUpload(url=url, storage_path=path, expires_at=expires)
+
+
+async def complete_avatar_upload(
+    store: InMemoryStore,
+    *,
+    storage: StorageProvider,
+    user_id: str,
+    dog_id: str,
+    storage_path: str,
+    expected_bytes: int | None = None,
+) -> DogRec:
+    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    prefix = avatar_storage_prefix(user_id, dog_id)
+    if not storage_path.startswith(prefix):
+        raise ApiError(ErrorCode.VALIDATION_FAILED, "Avatar path is not valid for this dog.")
+    exists = await storage.object_exists(
+        bucket=AVATAR_BUCKET, path=storage_path, expected_bytes=expected_bytes
+    )
+    if not exists:
+        raise ApiError(ErrorCode.NOT_FOUND, "Avatar upload was not found.")
+    return set_photo_path(store, user_id=user_id, dog_id=dog_id, photo_path=storage_path)

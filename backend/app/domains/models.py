@@ -289,6 +289,8 @@ class AnalysisJobRec(BaseModel):
     attempt_count: int = 0
     last_error_code: str | None = None
     task_id: str | None = None
+    storage_path: str | None = None
+    expires_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

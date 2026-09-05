@@ -64,10 +64,27 @@ def claim_export_job(store: InMemoryStore, job_id: str) -> AnalysisJobRec | None
     return job
 
 
-def complete_export_job(store: InMemoryStore, job_id: str) -> None:
+def complete_export_job(
+    store: InMemoryStore,
+    job_id: str,
+    *,
+    storage_path: str | None = None,
+    expires_at=None,
+) -> None:
     if job := store.export_jobs.get(job_id):
         job.status = "completed"
         job.updated_at = now_utc()
+        if storage_path is not None:
+            job.storage_path = storage_path
+        if expires_at is not None:
+            job.expires_at = expires_at
+
+
+def get_export_job(store: InMemoryStore, *, user_id: str, job_id: str) -> AnalysisJobRec:
+    job = store.export_jobs.get(job_id)
+    if job is None or job.user_id != user_id:
+        raise ApiError(ErrorCode.NOT_FOUND, "Export not found.")
+    return job
 
 
 def fail_export_job(store: InMemoryStore, job_id: str, error: str) -> None:

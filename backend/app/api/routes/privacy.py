@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
+
 from app.contracts.api import (
     DeleteAccountRequest,
     DeleteAccountResponse,
     PrivacyExportResponse,
+    PrivacyExportStatusResponse,
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import privacy as privacy_domain
@@ -47,3 +51,35 @@ async def delete_account(
     )
     job.task_id = task_id
     return DeleteAccountResponse(deletion_job_id=job.id, status=job.status)
+
+
+@router.get("/privacy/export/{job_id}", response_model=PrivacyExportStatusResponse)
+async def export_status(
+    job_id: str, state: StateDep, user_id: UserIdDep
+) -> PrivacyExportStatusResponse:
+    if state.engine is not None:
+        job = await privacy_db.get_export_job(state.engine, user_id=user_id, job_id=job_id)
+    else:
+        job = privacy_domain.get_export_job(state.store, user_id=user_id, job_id=job_id)
+
+    download_url = None
+    expires_at = job.expires_at
+    if job.status == "completed" and job.storage_path:
+        create_read = getattr(state.storage, "create_signed_read_url", None)
+        if callable(create_read):
+            try:
+                download_url = await create_read(
+                    bucket="exports",
+                    path=job.storage_path,
+                    ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
+                )
+            except Exception:
+                download_url = None
+        if expires_at is None:
+            expires_at = datetime.now(UTC) + timedelta(days=7)
+    return PrivacyExportStatusResponse(
+        export_job_id=job.id,
+        status=job.status,
+        download_url=download_url,
+        expires_at=expires_at,
+    )

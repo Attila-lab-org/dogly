@@ -3,21 +3,24 @@
  */
 import { api } from '../../lib/apiClient';
 import { queryKeys } from '../../lib/queryClient';
-import type { DogProfile } from '../core/types';
-import { ageLabelFromYears, ageFromBirthDate } from './profileDates';
+import type { ApiDog } from './map';
 
-export type ApiDog = {
-  id: string;
-  name: string;
-  birth_date: string | null;
-  age_stage: string | null;
-  size: string | null;
-  breed_label: string | null;
-  is_mix: boolean;
-  sex: string | null;
-  weight_kg: number | null;
-  photo_path: string | null;
-  created_at: string;
+export type {
+  ApiDog,
+} from './map';
+export {
+  mapApiDogToProfile,
+  sizeFromApi,
+  sizeToApi,
+} from './map';
+
+export type DogAvatarInitResponse = {
+  storage_path: string;
+  upload: {
+    url: string;
+    storage_path: string;
+    expires_at: string;
+  };
 };
 
 export type DogListResponse = { items: ApiDog[] };
@@ -45,56 +48,6 @@ export type DogUpdateBody = {
   weight_kg?: number | null;
 };
 
-/** UI size chip → API size string. */
-export function sizeToApi(
-  size: 'Piccola' | 'Media' | 'Grande' | string,
-): string {
-  if (size === 'Piccola' || size === 'Taglia piccola') return 'SMALL';
-  if (size === 'Grande' || size === 'Taglia grande') return 'LARGE';
-  if (size === 'Media' || size === 'Taglia media') return 'MEDIUM';
-  return size.toUpperCase();
-}
-
-export function sizeFromApi(size: string | null): string {
-  switch (size) {
-    case 'SMALL':
-    case 'small':
-    case 'Piccola':
-      return 'Taglia piccola';
-    case 'LARGE':
-    case 'large':
-    case 'Grande':
-      return 'Taglia grande';
-    case 'MEDIUM':
-    case 'medium':
-    case 'Media':
-      return 'Taglia media';
-    default:
-      return size ?? 'Taglia media';
-  }
-}
-
-export function mapApiDogToProfile(dog: ApiDog): DogProfile {
-  const birthDate = dog.birth_date;
-  const ageLabel = birthDate
-    ? ageLabelFromYears(ageFromBirthDate(birthDate))
-    : dog.age_stage ?? 'Età da completare';
-
-  return {
-    id: dog.id,
-    name: dog.name,
-    ageLabel,
-    birthDate,
-    sizeLabel: sizeFromApi(dog.size),
-    weightKg: dog.weight_kg,
-    breedLabel: dog.breed_label,
-    isMix: dog.is_mix,
-    photoUri: dog.photo_path,
-    profileVisibility: 'private',
-    publicConsentVersion: null,
-  };
-}
-
 export async function listDogs(): Promise<ApiDog[]> {
   const res = await api.get<DogListResponse>('/v1/dogs');
   return res.items;
@@ -113,6 +66,20 @@ export async function updateDog(
   body: DogUpdateBody,
 ): Promise<ApiDog> {
   return api.patch<ApiDog>(`/v1/dogs/${dogId}`, body);
+}
+
+export async function initDogAvatar(
+  dogId: string,
+  body: { content_type: 'image/jpeg' | 'image/png' | 'image/webp'; bytes: number },
+): Promise<DogAvatarInitResponse> {
+  return api.post<DogAvatarInitResponse>(`/v1/dogs/${dogId}/avatar/init`, body);
+}
+
+export async function completeDogAvatar(
+  dogId: string,
+  body: { storage_path: string; bytes?: number },
+): Promise<ApiDog> {
+  return api.post<ApiDog>(`/v1/dogs/${dogId}/avatar/complete`, body);
 }
 
 export function dogsQueryKey(userId: string) {

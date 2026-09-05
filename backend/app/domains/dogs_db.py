@@ -188,3 +188,88 @@ async def update_dog(
             },
         )
     return dog
+
+
+async def set_photo_path(
+    engine: AsyncEngine, *, user_id: str, dog_id: str, photo_path: str
+) -> DogRec:
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    update public.dogs
+                    set photo_path = :photo_path
+                    where id = :dog_id and owner_id = :user_id
+                    returning id, owner_id, name, birth_date, age_stage, size, breed_label,
+                              is_mix, sex, weight_kg, photo_path, created_at
+                    """
+                ),
+                {"dog_id": dog_id, "user_id": user_id, "photo_path": photo_path},
+            )
+        ).mappings().first()
+        if not row:
+            raise ApiError(ErrorCode.NOT_FOUND, "Dog not found")
+        dog = _row_to_dog(row)
+        await conn.execute(
+            text(
+                """
+                insert into internal.dog_profile_versions (dog_id, snapshot, changed_fields)
+                values (:dog_id, CAST(:snapshot AS jsonb), CAST(:fields AS text[]))
+                """
+            ),
+            {
+                "dog_id": dog.id,
+                "snapshot": dog.model_dump_json(),
+                "fields": ["photo_path"],
+            },
+        )
+    return dog
+
+
+async def init_avatar_upload(
+    engine: AsyncEngine,
+    *,
+    settings,
+    storage,
+    user_id: str,
+    dog_id: str,
+    payload,
+):
+    from app.contracts.api import SignedUpload
+    from app.domains.dogs import AVATAR_BUCKET, _AVATAR_EXT, avatar_storage_prefix
+    from app.domains.repository import new_id
+
+    await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    ext = _AVATAR_EXT[payload.content_type]
+    path = f"{avatar_storage_prefix(user_id, dog_id)}{new_id()}.{ext}"
+    url, expires = await storage.create_signed_upload_url(
+        bucket=AVATAR_BUCKET,
+        path=path,
+        content_type=payload.content_type,
+        ttl_seconds=settings.storage_signed_url_ttl_seconds,
+    )
+    return path, SignedUpload(url=url, storage_path=path, expires_at=expires)
+
+
+async def complete_avatar_upload(
+    engine: AsyncEngine,
+    *,
+    storage,
+    user_id: str,
+    dog_id: str,
+    storage_path: str,
+    expected_bytes: int | None = None,
+) -> DogRec:
+    from app.domains.dogs import AVATAR_BUCKET, avatar_storage_prefix
+
+    await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    prefix = avatar_storage_prefix(user_id, dog_id)
+    if not storage_path.startswith(prefix):
+        raise ApiError(ErrorCode.VALIDATION_FAILED, "Avatar path is not valid for this dog.")
+    exists = await storage.object_exists(
+        bucket=AVATAR_BUCKET, path=storage_path, expected_bytes=expected_bytes
+    )
+    if not exists:
+        raise ApiError(ErrorCode.NOT_FOUND, "Avatar upload was not found.")
+    return await set_photo_path(engine, user_id=user_id, dog_id=dog_id, photo_path=storage_path)

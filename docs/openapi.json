@@ -229,6 +229,142 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/avatar/init": {
+      "post": {
+        "tags": [
+          "dogs"
+        ],
+        "summary": "Init Avatar",
+        "operationId": "init_avatar_v1_dogs__dog_id__avatar_init_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DogAvatarInitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DogAvatarInitResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/avatar/complete": {
+      "post": {
+        "tags": [
+          "dogs"
+        ],
+        "summary": "Complete Avatar",
+        "operationId": "complete_avatar_v1_dogs__dog_id__avatar_complete_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DogAvatarCompleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DogOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/dogs/{dog_id}/albums": {
       "get": {
         "tags": [
@@ -2535,6 +2671,64 @@
         }
       }
     },
+    "/v1/privacy/export/{job_id}": {
+      "get": {
+        "tags": [
+          "privacy"
+        ],
+        "summary": "Export Status",
+        "operationId": "export_status_v1_privacy_export__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyExportStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/webhooks/revenuecat": {
       "post": {
         "tags": [
@@ -3654,6 +3848,76 @@
         ],
         "title": "DogAlbumOut"
       },
+      "DogAvatarCompleteRequest": {
+        "properties": {
+          "storage_path": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 8,
+            "title": "Storage Path"
+          },
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 8000000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage_path"
+        ],
+        "title": "DogAvatarCompleteRequest"
+      },
+      "DogAvatarInitRequest": {
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ],
+            "title": "Content Type",
+            "default": "image/jpeg"
+          },
+          "bytes": {
+            "type": "integer",
+            "maximum": 8000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bytes"
+        ],
+        "title": "DogAvatarInitRequest"
+      },
+      "DogAvatarInitResponse": {
+        "properties": {
+          "storage_path": {
+            "type": "string",
+            "title": "Storage Path"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/SignedUpload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage_path",
+          "upload"
+        ],
+        "title": "DogAvatarInitResponse"
+      },
       "DogCreate": {
         "properties": {
           "name": {
@@ -3870,6 +4134,17 @@
               }
             ],
             "title": "Photo Path"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
           },
           "created_at": {
             "type": "string",
@@ -5010,6 +5285,47 @@
           "export_job_id"
         ],
         "title": "PrivacyExportResponse"
+      },
+      "PrivacyExportStatusResponse": {
+        "properties": {
+          "export_job_id": {
+            "type": "string",
+            "title": "Export Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "export_job_id",
+          "status"
+        ],
+        "title": "PrivacyExportStatusResponse"
       },
       "ProfileOut": {
         "properties": {

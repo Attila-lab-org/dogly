@@ -127,6 +127,7 @@ class DogOut(BaseModel):
     sex: str | None = None
     weight_kg: float | None = None
     photo_path: str | None = None
+    photo_url: str | None = None
     created_at: datetime
 
 
@@ -262,6 +263,21 @@ class SignedUpload(BaseModel):
     url: str
     storage_path: str
     expires_at: datetime
+
+
+class DogAvatarInitRequest(BaseModel):
+    content_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
+    bytes: int = Field(gt=0, le=8_000_000)
+
+
+class DogAvatarInitResponse(BaseModel):
+    storage_path: str
+    upload: SignedUpload
+
+
+class DogAvatarCompleteRequest(BaseModel):
+    storage_path: str = Field(min_length=8, max_length=512)
+    bytes: int | None = Field(default=None, gt=0, le=8_000_000)
 
 
 class BehaviorCaptureInitResponse(BaseModel):
@@ -488,6 +504,13 @@ class RevenueCatWebhookResponse(BaseModel):
 class PrivacyExportResponse(BaseModel):
     export_job_id: str
     status: str = "queued"
+
+
+class PrivacyExportStatusResponse(BaseModel):
+    export_job_id: str
+    status: str
+    download_url: str | None = None
+    expires_at: datetime | None = None
 
 
 class DeleteAccountRequest(BaseModel):

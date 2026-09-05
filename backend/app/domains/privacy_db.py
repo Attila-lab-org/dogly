@@ -202,6 +202,37 @@ async def fail_deletion_job(engine: AsyncEngine, job_id: str, error: str) -> Non
         )
 
 
+async def get_export_job(engine: AsyncEngine, *, user_id: str, job_id: str) -> AnalysisJobRec:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    select *
+                    from internal.export_jobs
+                    where id = :id and user_id = :uid
+                    """
+                ),
+                {"id": job_id, "uid": user_id},
+            )
+        ).mappings().first()
+    if not row:
+        from app.contracts.errors import ApiError, ErrorCode
+
+        raise ApiError(ErrorCode.NOT_FOUND, "Export not found.")
+    status = str(row.get("status", "PENDING")).upper()
+    mapped = {
+        "PENDING": "queued",
+        "RUNNING": "running",
+        "COMPLETED": "completed",
+        "FAILED": "failed",
+    }.get(status, status.lower())
+    job = _job_from_row(row, job_type="privacy_export", status=mapped)
+    job.storage_path = row.get("storage_path")
+    job.expires_at = row.get("expires_at")
+    return job
+
+
 async def export_expires_at(engine: AsyncEngine) -> datetime:
     async with engine.connect() as conn:
         return (

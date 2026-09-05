@@ -21,11 +21,14 @@ import { z } from 'zod';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   profileToCreateBody,
   useCreateDogMutation,
 } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
+import { dogsQueryKey } from '@/features/dogs/api';
+import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
 import { pickAvatarPhoto } from '@/features/photos/share';
 import { BreedPicker } from '@/features/dogs/BreedPicker';
 import {
@@ -62,8 +65,10 @@ type DogDraft = z.infer<typeof dogSchema>;
 
 export default function DogOnboardingScreen() {
   const router = useRouter();
-  const { usingMockGate, markDogCreated } = useSession();
+  const queryClient = useQueryClient();
+  const { usingMockGate, markDogCreated, userId } = useSession();
   const createDog = useCreateDogMutation();
+  const [savingPhoto, setSavingPhoto] = useState(false);
   const [draft, setDraft] = useState<DogDraft>({
     name: '',
     size: 'Media',
@@ -123,6 +128,19 @@ export default function DogOnboardingScreen() {
         ),
       );
       markDogCreated(dog.id);
+      if (parsed.data.photoUri && isLocalPhotoUri(parsed.data.photoUri)) {
+        setSavingPhoto(true);
+        try {
+          await persistDogAvatar(dog.id, parsed.data.photoUri);
+          if (userId) {
+            await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
+          }
+        } catch {
+          // Il profilo è già salvato: la foto si può ritentare da Modifica.
+        } finally {
+          setSavingPhoto(false);
+        }
+      }
       router.replace('/(tabs)/home');
     } catch {
       setError('Non sono riuscito a salvare il profilo. Controlla la connessione.');
@@ -231,7 +249,7 @@ export default function DogOnboardingScreen() {
 
       <Button
         title="Inizia a capirlo"
-        loading={createDog.isPending}
+        loading={createDog.isPending || savingPhoto}
         onPress={() => void submit()}
         style={styles.submit}
         testID="onboarding-submit"

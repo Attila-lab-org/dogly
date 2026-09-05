@@ -13,7 +13,7 @@
  * backend entitlements (Spec 4.1/21).
  */
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
@@ -28,6 +28,12 @@ export default function PaywallScreen() {
   const router = useRouter();
   const { plans, benefits, freeChoiceLabel } = paywallOfferingMock;
   const [selected, setSelected] = useState<PlanOption>('PREMIUM_ANNUAL');
+  const explainStorePending = () => {
+    Alert.alert(
+      'Acquisti in arrivo',
+      'Lo store non è ancora collegato in questa build. Nessun addebito è stato fatto: puoi continuare con il piano Free.',
+    );
+  };
 
   // Stati simulabili via flag demo (src/mocks/demo.ts) finché RevenueCat non
   // è collegato: "unavailable store" e "grace" (sez. 6 Paywall).
@@ -62,7 +68,7 @@ export default function PaywallScreen() {
         <Button
           title="Ripristina acquisto"
           variant="outline"
-          onPress={() => {}}
+          onPress={explainStorePending}
           style={styles.restore}
         />
       </ScreenContainer>
@@ -144,13 +150,13 @@ export default function PaywallScreen() {
 
       <Button
         title="Acquista"
-        onPress={() => {}}
+        onPress={explainStorePending}
         style={styles.buy}
       />
       <Button
         title="Ripristina acquisto"
         variant="outline"
-        onPress={() => {}}
+        onPress={explainStorePending}
         style={styles.restore}
       />
 

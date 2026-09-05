@@ -20,6 +20,7 @@ import {
   useDogProfile,
   useUpdateDogMutation,
 } from '@/features/core/useDogProfile';
+import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
 import { useSession } from '@/features/auth/SessionProvider';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { pickAvatarPhoto } from '@/features/photos/share';
@@ -90,6 +91,9 @@ export default function DogEditScreen() {
 
     try {
       if (!usingMockGate && dogId) {
+        if (photoUri && isLocalPhotoUri(photoUri)) {
+          await persistDogAvatar(dogId, photoUri);
+        }
         await updateMutation.mutateAsync(
           profileToUpdateBody({
             name: name.trim(),

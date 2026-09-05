@@ -350,7 +350,14 @@ async def process_privacy_export(state: AppState, *, event_id: str) -> dict:
                 expires_at=expires_at,
             )
         else:
-            privacy_domain.complete_export_job(state.store, job.id)
+            from datetime import UTC, datetime, timedelta
+
+            privacy_domain.complete_export_job(
+                state.store,
+                job.id,
+                storage_path=path,
+                expires_at=datetime.now(UTC) + timedelta(days=7),
+            )
         return {"event_id": job.id, "status": "COMPLETED", "storage_path": path}
     except Exception as exc:
         if state.engine is not None:

@@ -39,6 +39,13 @@ async def test_privacy_export_memory_path_uploads_gzip(
     assert [dog["id"] for dog in payload["dogs"]] == [dog_id]
     assert "bytes" not in json.dumps(payload)
 
+    status = await client.get(f"/v1/privacy/export/{job_id}", headers=auth_headers)
+    assert status.status_code == 200, status.text
+    status_body = status.json()
+    assert status_body["status"] == "completed"
+    assert status_body["download_url"].startswith("https://storage.mock.local/exports/read/")
+    assert status_body["expires_at"] is not None
+
 
 async def test_account_deletion_memory_path_requires_confirmation_and_purges(
     client: httpx.AsyncClient,

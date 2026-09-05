@@ -108,6 +108,12 @@ export default function DogProfileTabScreen() {
                 label={currentAgeLabel(dog.birthDate, dog.ageLabel)}
               />
               <MetaPill icon="resize-outline" label={dog.sizeLabel} />
+              {dog.weightKg ? (
+                <MetaPill
+                  icon="scale-outline"
+                  label={`${String(dog.weightKg).replace('.', ',')} kg`}
+                />
+              ) : null}
               {dog.breedLabel ? (
                 <MetaPill icon="paw-outline" label={dog.breedLabel} />
               ) : null}

@@ -179,6 +179,9 @@ class MockStorageProvider:
         # called; tests can pre-seed `objects` to simulate real uploads.
         return url, expires_at
 
+    async def create_signed_read_url(self, *, bucket: str, path: str, ttl_seconds: int) -> str:
+        return f"https://storage.mock.local/{bucket}/read/{path}?ttl={ttl_seconds}"
+
     async def object_exists(self, *, bucket: str, path: str, expected_bytes: int | None = None) -> bool:
         return True  # mock: object validation always succeeds
 

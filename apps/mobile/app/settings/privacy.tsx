@@ -10,12 +10,19 @@
 import * as Linking from 'expo-linking';
 import React, { useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { consentsMock } from '@/mocks/secondary';
 import type { ConsentState } from '@/features/secondary/types';
+import { useSession } from '@/features/auth/SessionProvider';
+import {
+  requestAccountDeletion,
+  requestPrivacyExport,
+  waitForExportReady,
+} from '@/features/privacy/api';
 
 type ExportState = 'idle' | 'pending' | 'ready';
 
@@ -59,18 +66,46 @@ const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL ?? 'https://dogly.app/pr
 const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? 'https://dogly.app/terms-beta';
 
 export default function PrivacyScreen() {
+  const router = useRouter();
+  const { signOut, usingMockGate } = useSession();
   const [consents, setConsents] = useState<ConsentState>(consentsMock);
   const [exportState, setExportState] = useState<ExportState>('idle');
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deleteStarted, setDeleteStarted] = useState(false);
 
   const toggle = (key: keyof ConsentState) =>
     setConsents((c) => ({ ...c, [key]: !c[key] }));
 
-  const startExport = () => {
+  const startExport = async () => {
     setExportState('pending');
-    // Mock job: POST /v1/privacy/export → export pronto
-    setTimeout(() => setExportState('ready'), 2000);
+    setExportUrl(null);
+    if (usingMockGate) {
+      setTimeout(() => setExportState('ready'), 2000);
+      return;
+    }
+    try {
+      const started = await requestPrivacyExport();
+      const ready = await waitForExportReady(started.export_job_id);
+      if (ready.status === 'completed') {
+        setExportUrl(ready.download_url);
+        setExportState('ready');
+        return;
+      }
+      setExportState('idle');
+      Alert.alert(
+        'Export non pronto',
+        ready.status === 'failed'
+          ? 'La preparazione del file è fallita. Riprova tra poco.'
+          : 'Sto ancora preparando il file. Riprova tra qualche minuto.',
+      );
+    } catch {
+      setExportState('idle');
+      Alert.alert(
+        'Export non riuscito',
+        'Controlla la connessione e riprova.',
+      );
+    }
   };
 
   const confirmDelete = () => {
@@ -83,8 +118,25 @@ export default function PrivacyScreen() {
           text: 'Sì, elimina tutto',
           style: 'destructive',
           onPress: () => {
-            setDeleteArmed(false);
-            setDeleteStarted(true);
+            void (async () => {
+              try {
+                if (!usingMockGate) {
+                  await requestAccountDeletion();
+                  await signOut();
+                }
+                setDeleteArmed(false);
+                setDeleteStarted(true);
+                if (!usingMockGate) {
+                  router.replace('/(auth)/welcome');
+                }
+              } catch {
+                setDeleteArmed(false);
+                Alert.alert(
+                  'Eliminazione non riuscita',
+                  'Controlla la connessione e riprova.',
+                );
+              }
+            })();
           },
         },
       ],
@@ -173,7 +225,16 @@ export default function PrivacyScreen() {
             <Button
               title="Scarica l'export"
               icon={<Ionicons name="download" size={18} color={colors.textOnPrimary} />}
-              onPress={() => {}}
+              onPress={() => {
+                if (exportUrl) {
+                  void Linking.openURL(exportUrl);
+                  return;
+                }
+                Alert.alert(
+                  'Link non disponibile',
+                  'L’export è pronto lato server, ma il link di download non è ancora arrivato. Riprova tra poco.',
+                );
+              }}
               style={styles.exportButton}
             />
           </>
