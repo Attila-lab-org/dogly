@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api.pagination import paginate
 from app.contracts.api import DiaryItem, DiaryPage
-from app.contracts.taxonomy import AnalysisDomain
+from app.contracts.taxonomy import AnalysisDomain, RetentionState
 
 
 class _TimelineEntry:
@@ -21,7 +21,8 @@ class _TimelineEntry:
         self.title = str(row["title"])
         self.summary = row["summary"]
         self.status = str(row["status"])
-        self.retention_state = str(row["retention_state"])
+        raw_retention = row.get("retention_state") or RetentionState.TEMPORARY.value
+        self.retention_state = RetentionState(str(raw_retention))
 
 
 async def list_diary_page(
@@ -33,26 +34,34 @@ async def list_diary_page(
     domain: AnalysisDomain | None,
     dog_id: str | None,
 ) -> DiaryPage:
-    domain_value = domain.value if domain else None
+    params: dict[str, Any] = {"user_id": user_id}
+    dog_filter = ""
+    domain_filter = ""
+    if dog_id:
+        dog_filter = "and dog_id = cast(:dog_id as uuid)"
+        params["dog_id"] = dog_id
+    if domain is not None:
+        domain_filter = "and domain = :domain"
+        params["domain"] = domain.value
+
     async with engine.connect() as conn:
         rows = (
             await conn.execute(
                 text(
-                    """
+                    f"""
                     select *
                     from (
                       select e.id,
                              e.dog_id,
                              e.created_at,
                              'BEHAVIOR'::text as domain,
-                             coalesce(e.primary_intent, 'Analisi comportamento') as title,
+                             coalesce(e.primary_intent::text, 'Analisi comportamento') as title,
                              e.summary,
-                             e.status,
-                             c.retention_state
+                             e.status::text as status,
+                             coalesce(c.retention_state::text, 'TEMPORARY') as retention_state
                       from public.behavior_events e
-                      join public.behavior_captures c on c.id = e.capture_id
-                      where e.user_id = :user_id
-                        and (:dog_id is null or e.dog_id = cast(:dog_id as uuid))
+                      left join public.behavior_captures c on c.id = e.capture_id
+                      where e.user_id = cast(:user_id as uuid)
                       union all
                       select f.id,
                              f.dog_id,
@@ -64,17 +73,18 @@ async def list_diary_page(
                                else 'Controllo digestione'
                              end as title,
                              f.summary,
-                             f.status,
-                             f.retention_state
+                             f.status::text as status,
+                             coalesce(f.retention_state::text, 'TEMPORARY') as retention_state
                       from public.fecal_events f
-                      where f.user_id = :user_id
-                        and (:dog_id is null or f.dog_id = cast(:dog_id as uuid))
+                      where f.user_id = cast(:user_id as uuid)
                     ) timeline
-                    where (:domain is null or domain = :domain)
+                    where true
+                      {dog_filter}
+                      {domain_filter}
                     order by created_at asc, id asc
                     """
                 ),
-                {"user_id": user_id, "dog_id": dog_id, "domain": domain_value},
+                params,
             )
         ).mappings().all()
 

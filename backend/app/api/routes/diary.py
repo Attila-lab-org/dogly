@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from app.api.deps import StateDep, UserIdDep
 from app.api.pagination import paginate
 from app.contracts.api import DiaryItem, DiaryPage
-from app.contracts.taxonomy import AnalysisDomain
+from app.contracts.taxonomy import AnalysisDomain, RetentionState
 from app.domains import diary_db
 from app.domains.models import BehaviorEventRec, FecalEventRec
 
@@ -17,7 +17,15 @@ router = APIRouter()
 
 
 class _TimelineEntry:
-    def __init__(self, rec: BehaviorEventRec | FecalEventRec, domain: AnalysisDomain, title: str, summary: str | None, status: str) -> None:
+    def __init__(
+        self,
+        rec: BehaviorEventRec | FecalEventRec,
+        domain: AnalysisDomain,
+        title: str,
+        summary: str | None,
+        status: str,
+        retention_state: RetentionState,
+    ) -> None:
         self.id = rec.id
         self.dog_id = rec.dog_id
         self.created_at = rec.created_at
@@ -25,6 +33,7 @@ class _TimelineEntry:
         self.title = title
         self.summary = summary
         self.status = status
+        self.retention_state = retention_state
 
 
 @router.get("/diary", response_model=DiaryPage)
@@ -53,7 +62,20 @@ async def get_diary(
             if e.user_id != user_id or (dog_id and e.dog_id != dog_id):
                 continue
             title = e.primary_intent.value if e.primary_intent else "Analisi comportamento"
-            entries.append(_TimelineEntry(e, AnalysisDomain.BEHAVIOR, title, e.summary, e.status.value))
+            capture = store.captures.get(e.capture_id)
+            retention = (
+                capture.retention_state if capture is not None else RetentionState.TEMPORARY
+            )
+            entries.append(
+                _TimelineEntry(
+                    e,
+                    AnalysisDomain.BEHAVIOR,
+                    title,
+                    e.summary,
+                    e.status.value,
+                    retention,
+                )
+            )
     if domain in (None, AnalysisDomain.DIGESTIVE):
         for e in store.fecal_events.values():
             if e.user_id != user_id or (dog_id and e.dog_id != dog_id):
@@ -63,7 +85,16 @@ async def get_diary(
                 if e.fecal_score_estimate
                 else "Controllo digestione"
             )
-            entries.append(_TimelineEntry(e, AnalysisDomain.DIGESTIVE, title, e.summary, e.status))
+            entries.append(
+                _TimelineEntry(
+                    e,
+                    AnalysisDomain.DIGESTIVE,
+                    title,
+                    e.summary,
+                    e.status,
+                    e.retention_state,
+                )
+            )
 
     page, next_cursor = paginate(entries, cursor=cursor, limit=limit)
     return DiaryPage(
@@ -75,6 +106,7 @@ async def get_diary(
                 status=entry.status,
                 title=entry.title,
                 summary=entry.summary,
+                retention_state=entry.retention_state,
                 created_at=entry.created_at,
             )
             for entry in page
