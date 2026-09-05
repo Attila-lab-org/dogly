@@ -28,7 +28,7 @@ import {
 } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { dogsQueryKey } from '@/features/dogs/api';
-import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
+import { persistDogAvatar } from '@/features/dogs/avatar';
 import { pickAvatarPhoto } from '@/features/photos/share';
 import { BreedPicker } from '@/features/dogs/BreedPicker';
 import {
@@ -128,7 +128,7 @@ export default function DogOnboardingScreen() {
         ),
       );
       markDogCreated(dog.id);
-      if (parsed.data.photoUri && isLocalPhotoUri(parsed.data.photoUri)) {
+      if (parsed.data.photoUri) {
         setSavingPhoto(true);
         try {
           await persistDogAvatar(dog.id, parsed.data.photoUri);
