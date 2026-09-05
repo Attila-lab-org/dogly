@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { getSupabaseClient } from '../../lib/supabase';
 import { isSupabaseConfigured } from './env';
+import { parseOAuthCallbackUrl } from './oauthCallback';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -71,6 +72,29 @@ export async function signInWithPassword(
   if (error) throw error;
 }
 
+export async function completeOAuthCallback(callbackUrl: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const callback = parseOAuthCallbackUrl(callbackUrl);
+
+  if (callback.error) {
+    throw new Error(callback.error);
+  }
+  if (callback.accessToken && callback.refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: callback.accessToken,
+      refresh_token: callback.refreshToken,
+    });
+    if (error) throw error;
+    return;
+  }
+  if (callback.code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(callback.code);
+    if (error) throw error;
+    return;
+  }
+  throw new Error('Sessione OAuth non ricevuta');
+}
+
 export async function signInWithGoogle(): Promise<void> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase non configurato');
@@ -92,29 +116,5 @@ export async function signInWithGoogle(): Promise<void> {
     throw new Error('Accesso Google annullato');
   }
 
-  const url = new URL(result.url);
-  const params = new URLSearchParams(
-    url.hash.startsWith('#') ? url.hash.slice(1) : url.search.slice(1),
-  );
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
-  const code = params.get('code');
-
-  if (accessToken && refreshToken) {
-    const { error: sessionError } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    if (sessionError) throw sessionError;
-    return;
-  }
-
-  if (code) {
-    const { error: exchangeError } =
-      await supabase.auth.exchangeCodeForSession(code);
-    if (exchangeError) throw exchangeError;
-    return;
-  }
-
-  throw new Error('Sessione Google non ricevuta');
+  await completeOAuthCallback(result.url);
 }
