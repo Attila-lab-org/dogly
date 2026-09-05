@@ -1,0 +1,4 @@
+# Supabase publishable keys are intentionally public client identifiers.
+# Ignore only these two historical findings; service-role keys remain blocked.
+fa78e3a1cf39b7569bc7b89b866de0a02a8affa2:apps/mobile/eas.json:generic-api-key:26
+fa78e3a1cf39b7569bc7b89b866de0a02a8affa2:apps/mobile/eas.json:generic-api-key:44

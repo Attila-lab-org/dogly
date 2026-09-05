@@ -6,9 +6,6 @@
 --   supabase start && supabase db reset
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/quota_tests.sql
 --
--- Runs as service_role (the only role allowed to execute the quota RPCs).
-set role service_role;
-
 create or replace function pg_temp.assert(p_cond boolean, p_msg text)
 returns void language plpgsql as $$
 begin
@@ -31,6 +28,10 @@ insert into auth.users (
   crypt('local-only-password', gen_salt('bf')), now(),
   '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '')
 on conflict (id) do nothing;
+
+-- Fixture creation needs postgres access to auth.users. The quota operations
+-- themselves run as service_role, matching production.
+set role service_role;
 
 -- Fresh FREE ledger: limit 3 behavior / 3 digestive for the current period
 delete from public.usage_ledgers where user_id = '99999999-9999-9999-9999-999999999999';
