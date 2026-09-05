@@ -6,12 +6,26 @@
     "orientation": "portrait",
     "scheme": "dogly",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.attilalab.dogly"
+      "bundleIdentifier": "com.attilalab.dogly",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Dogly usa la fotocamera per registrare brevi video del tuo cane e aiutarti a capirlo.",
+        "NSMicrophoneUsageDescription": "Dogly può usare il microfono durante i video comportamentali. È facoltativo."
+      }
     },
     "android": {
-      "package": "com.attilalab.dogly"
+      "package": "com.attilalab.dogly",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#DCEBFE"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -19,10 +33,37 @@
       "expo-sqlite",
       "expo-notifications",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#DCEBFE"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Dogly usa la fotocamera per registrare brevi video del tuo cane e aiutarti a capirlo.",
+          "microphonePermission": "Dogly può usare il microfono durante i video comportamentali. È facoltativo.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Dogly usa le foto che scegli per creare storie e album.",
-          "cameraPermission": "Dogly usa la fotocamera solo quando scegli di scattare una foto."
+          "cameraPermission": "Dogly usa la fotocamera solo quando scegli di scattare una foto.",
+          "microphonePermission": false
         }
       ]
     ],

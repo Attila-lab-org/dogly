@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 import sys
 
+from sqlalchemy import text
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _BACKEND = os.path.join(_ROOT, "backend")
 if _BACKEND not in sys.path:
@@ -29,6 +31,17 @@ def root() -> dict[str, str]:
 @app.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready", include_in_schema=False)
+async def ready() -> dict[str, str]:
+    """Verify that the production process can reach its database."""
+    state = app.state.cbi
+    if state.engine is None:
+        raise RuntimeError("Database is not configured")
+    async with state.engine.connect() as connection:
+        await connection.execute(text("select 1"))
+    return {"status": "ok", "database": "connected"}
 
 
 # The worker app already declares /tasks/run. Mounting it at /tasks would

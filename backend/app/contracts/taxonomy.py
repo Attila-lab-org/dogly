@@ -93,6 +93,36 @@ class CareEventStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class SignalCategory(StrEnum):
+    """Consumer-safe acoustic signal categories for Dogly Signals."""
+
+    PLAY = "PLAY"
+    ATTENTION = "ATTENTION"
+    CURIOSITY = "CURIOSITY"
+    CONTACT = "CONTACT"
+
+
+class SignalExperimentStatus(StrEnum):
+    PLANNED = "PLANNED"
+    COMPLETED = "COMPLETED"
+    DISCARDED = "DISCARDED"
+
+
+class SignalBehavior(StrEnum):
+    HEAD_TURN = "HEAD_TURN"
+    EAR_RAISE = "EAR_RAISE"
+    APPROACH = "APPROACH"
+    PLAY_READY = "PLAY_READY"
+    STILL_ATTENTIVE = "STILL_ATTENTIVE"
+    NO_VISIBLE_RESPONSE = "NO_VISIBLE_RESPONSE"
+
+
+class SignalMapState(StrEnum):
+    DISCOVERING = "DISCOVERING"
+    LEARNING = "LEARNING"
+    RECURRING = "RECURRING"
+
+
 class PatternState(StrEnum):
     CANDIDATE = "CANDIDATE"
     PRELIMINARY = "PRELIMINARY"

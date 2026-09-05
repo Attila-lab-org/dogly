@@ -21,7 +21,11 @@ import { z } from 'zod';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
-import { updateDogProfile } from '@/features/core/useDogProfile';
+import {
+  profileToCreateBody,
+  useCreateDogMutation,
+} from '@/features/core/useDogProfile';
+import { useSession } from '@/features/auth/SessionProvider';
 import { pickAvatarPhoto } from '@/features/photos/share';
 import { BreedPicker } from '@/features/dogs/BreedPicker';
 import {
@@ -50,6 +54,8 @@ type DogDraft = z.infer<typeof dogSchema>;
 
 export default function DogOnboardingScreen() {
   const router = useRouter();
+  const { usingMockGate, markDogCreated } = useSession();
+  const createDog = useCreateDogMutation();
   const [draft, setDraft] = useState<DogDraft>({
     name: '',
     size: 'Media',
@@ -61,12 +67,11 @@ export default function DogOnboardingScreen() {
     kind: 'unselected',
   });
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const patch = (partial: Partial<DogDraft>) =>
     setDraft((d) => ({ ...d, ...partial }));
 
-  const submit = () => {
+  const submit = async () => {
     if (ageYears === null) {
       setError('Seleziona l’età.');
       return;
@@ -77,23 +82,39 @@ export default function DogOnboardingScreen() {
       return;
     }
     setError(null);
-    setSaving(true);
     const breedLabel = breedLabelFromSelection(breedSelection);
-    updateDogProfile({
-      name: parsed.data.name,
-      ageLabel: ageLabelFromYears(ageYears),
-      birthDate,
-      sizeLabel:
-        parsed.data.size === 'Piccola'
-          ? 'Taglia piccola'
-          : parsed.data.size === 'Grande'
-            ? 'Taglia grande'
-            : 'Taglia media',
-      breedLabel,
-      isMix: breedSelection.kind === 'mixed',
-      photoUri: parsed.data.photoUri,
-    });
-    setTimeout(() => router.replace('/(tabs)/home'), 600);
+    const sizeLabel =
+      parsed.data.size === 'Piccola'
+        ? 'Taglia piccola'
+        : parsed.data.size === 'Grande'
+          ? 'Taglia grande'
+          : 'Taglia media';
+    const ageLabel = ageLabelFromYears(ageYears);
+
+    try {
+      if (usingMockGate) {
+        markDogCreated('dog-rocky');
+        router.replace('/(tabs)/home');
+        return;
+      }
+      const dog = await createDog.mutateAsync(
+        profileToCreateBody(
+          {
+            name: parsed.data.name,
+            birthDate,
+            sizeLabel,
+            breedLabel,
+            isMix: breedSelection.kind === 'mixed',
+            ageLabel,
+          },
+          `dog-create-${Date.now()}`,
+        ),
+      );
+      markDogCreated(dog.id);
+      router.replace('/(tabs)/home');
+    } catch {
+      setError('Non sono riuscito a salvare il profilo. Controlla la connessione.');
+    }
   };
 
   return (
@@ -187,8 +208,8 @@ export default function DogOnboardingScreen() {
 
       <Button
         title="Inizia a capirlo"
-        loading={saving}
-        onPress={submit}
+        loading={createDog.isPending}
+        onPress={() => void submit()}
         style={styles.submit}
         testID="onboarding-submit"
       />

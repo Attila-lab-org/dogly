@@ -1,26 +1,80 @@
-import 'expo-sqlite/localStorage/install';
-
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import * as SecureStore from 'expo-secure-store';
+
+import {
+  getSupabasePublishableKey,
+  getSupabaseUrl,
+  isSupabaseConfigured,
+} from '../features/auth/env';
+
+/**
+ * Supabase Auth storage → SecureStore (Spec V1 sez. 5.3).
+ * Valori lunghi spezzati in chunk (limite SecureStore ~2KB su Android).
+ */
+
+const CHUNK = 1800;
+
+const secureAuthStorage = {
+  async getItem(key: string): Promise<string | null> {
+    const meta = await SecureStore.getItemAsync(key);
+    if (meta === null) return null;
+    const chunks = Number(meta);
+    if (!Number.isFinite(chunks) || chunks <= 0) return meta;
+    const parts: string[] = [];
+    for (let i = 0; i < chunks; i += 1) {
+      const part = await SecureStore.getItemAsync(`${key}.${i}`);
+      if (part === null) return null;
+      parts.push(part);
+    }
+    return parts.join('');
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (value.length <= CHUNK) {
+      await SecureStore.setItemAsync(key, value);
+      return;
+    }
+    const count = Math.ceil(value.length / CHUNK);
+    await SecureStore.setItemAsync(key, String(count));
+    for (let i = 0; i < count; i += 1) {
+      await SecureStore.setItemAsync(
+        `${key}.${i}`,
+        value.slice(i * CHUNK, (i + 1) * CHUNK),
+      );
+    }
+  },
+  async removeItem(key: string): Promise<void> {
+    const meta = await SecureStore.getItemAsync(key);
+    if (meta !== null) {
+      const chunks = Number(meta);
+      if (Number.isFinite(chunks) && chunks > 0) {
+        for (let i = 0; i < chunks; i += 1) {
+          await SecureStore.deleteItemAsync(`${key}.${i}`);
+        }
+      }
+    }
+    await SecureStore.deleteItemAsync(key);
+  },
+};
 
 let client: SupabaseClient | undefined;
 
-export function getSupabaseClient(): SupabaseClient {
-  if (client) {
-    return client;
-  }
+export { isSupabaseConfigured };
 
-  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export function getSupabaseClient(): SupabaseClient {
+  if (client) return client;
+
+  const url = getSupabaseUrl();
+  const publishableKey = getSupabasePublishableKey();
 
   if (!url || !publishableKey) {
     throw new Error(
-      'Supabase non configurato: mancano EXPO_PUBLIC_SUPABASE_URL o EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.',
+      'Supabase non configurato: mancano EXPO_PUBLIC_SUPABASE_URL o EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (o ANON).',
     );
   }
 
   client = createClient(url, publishableKey, {
     auth: {
-      storage: localStorage,
+      storage: secureAuthStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

@@ -22,6 +22,7 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 | Messaggio quotidiano | Non in Home. Eventuale tono “voce cane” solo come output di un’analisi, non card giornaliera |
 | Daily Check-in | Modal all’apertura (poi sparisce): “Come ti sembra {nome}?” → Sereno / Non come al solito → CTA video o digestione. Contesto passato all’analisi |
 | Digestione / nutrizione | In V1, wording osservativo |
+| Dogly Signals | Posticipato; nessun ingresso visibile nella UX corrente |
 | Storie | Cerchi in Home; foto da fotocamera/galleria; viewer sequenziale; durata 24h |
 | Admin | Post-V1 |
 
@@ -31,7 +32,13 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 - Card bianche con radius grande (16–24px) e ombre morbide.
 - Palette prodotto: blu primario `#2563EB`, accento teal `#14B8A6`, testo navy `#0E2A47`.
 - Icone outline tondeggianti (teal). Tab attivo blu.
-- Logo Dogly: splash / app icon / welcome auth — non ripetuto in Home, modal check-in o risultato.
+- Icone: set custom disegnato `CuteIcon` (`src/components/CuteIcon.tsx`, SVG due toni
+  teal/navy) per evidence semantiche e hero risultato per-intent; Ionicons resta
+  per le icone funzionali (tab, azioni, sistema).
+- Logo Dogly: splash / app icon / welcome / sign-in; in Home ammesso come badge
+  bianco nell'header accanto al saluto (decisione PO 2026-09-05); non ripetuto in
+  modal check-in o risultato.
+- Slogan di brand: "Il tuo cane, finalmente capito." — header Home e welcome.
 - Token unici in `apps/mobile/src/theme/tokens.ts`.
 - Brand board di riferimento: `docs/ux/brand-dogly-board.jpg` (identità, non layout quotidiano).
 
@@ -49,6 +56,7 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 | Edit profilo | `dogs/[dogId]/edit` | Modifica meta e avatar |
 | Knowledge | `dogs/[dogId]/knowledge` | Dettaglio copertura |
 | Album | `dogs/[dogId]/album/*` | Lista, griglia, viewer, create |
+| Dogly Signals | `signals/*` | Sospeso; route reindirizzate alla Home |
 | Capture / result | `behavior/*` | State machine + band + feedback |
 | Digestive / nutrition | `digestive/*`, `nutrition/*` | Secondario |
 | Agenda salute | `care/*` | Vaccini, visite e promemoria del cane |
@@ -65,12 +73,13 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 
 ## Home
 
-- Header: saluto + campana.
+- Header: badge logo Dogly + saluto + slogan; campana e accesso Diario a destra.
 - Riga Storie orizzontale + aggiunta rapida.
 - Dog card senza Knowledge Score.
 - Nessun check-in fisso in pagina.
 - All’apertura: modal tenero (scodinzolio) che sparisce dopo la risposta.
 - CTA "CAPISCI {NOME}", digestione, ultima analisi, quota.
+- Dogly Signals non compare nella Home finché il servizio è sospeso.
 - Il prossimo appuntamento compare solo nei sette giorni precedenti, senza
   trasformare l'Agenda in una quarta tab.
 
@@ -110,8 +119,30 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 - Pagina personale e visiva: header gradiente, avatar editabile e meta dinamiche.
 - Azioni rapide: Storia, Album, Diario.
 - “I suoi momenti”: preview fotografica + Vedi tutti, senza testo esplicativo.
-- Benessere: stato sintetico di digestione e alimentazione.
+- Benessere: stato sintetico di digestione, alimentazione, agenda e Signals.
 - Niente Knowledge Score, stati frequenti, pattern o policy nella pagina principale.
+
+## Dogly Signals
+
+> **POSTICIPATO:** nessun ingresso in Home o Profilo; deep link disattivati.
+> Questa sezione conserva soltanto il riferimento per una futura rivalutazione.
+
+- Promessa: conoscere il modo in cui il cane risponde a segnali sonori
+  selezionati. Non tradurre abbai in parole e non promettere obbedienza.
+- Sequenza device: camera preview → baseline 3 s → riproduzione automatica
+  una volta (massimo 2,5 s) → osservazione 5 s.
+- Il proprietario tocca “Ha reagito” per misurare la latenza e seleziona solo
+  comportamenti chiaramente visibili. Il risultato non è precompilato.
+- Il breve video di supporto resta nella cache durante la sequenza e viene
+  eliminato alla fine; il backend salva solo osservazione e latenza.
+- Categorie V1: attenzione, gioco, contatto, curiosità. Tenere fuori disagio,
+  minaccia e segnali agonistici.
+- Flusso: invito → inquadratura → osservazione prima → segnale → osservazione
+  dopo → risultato osservabile → feedback Sì / No / Non saprei.
+- Risultati: “Rocky ha girato la testa e alzato le orecchie”, non “questo
+  significa vieni”.
+- Mappa personale nel profilo: stati “Da scoprire”, “Sto imparando”,
+  “Ricorrente”; conteggi e ultimo riassunto per categoria.
 
 ## Digestione
 

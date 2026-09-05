@@ -14,6 +14,7 @@ Implementazione di riferimento: `supabase/migrations/0008–0009,0012`,
 | Service-key leak | Segreti solo server-side / secret store; repository secret scan | ✅ Classi segreti mappate su Vercel Env Vars (sez. 2); secret scan in CI (sez. 28.1) — pipeline CI in allestimento |
 | Quota bypass / parallel abuse | Riserva usage atomica + guardrail device/account/IP autenticati | ✅ Funzioni DB atomiche `reserve/commit/refund` (migrazione 0006); test race `supabase/tests/quota_concurrency.sh` + `backend/tests/test_quota.py` |
 | Signed URL misuse | Path esatto generato dal server, expiry breve, bucket privati, validazione metadata | ✅ Storage policies migrazione 0008; path `users/{uid}/dogs/{dog_id}/{domain}/{event_id}/{uuid}.{ext}` generato dall'API |
+| Dogly Signals overclaim | Copy/contratti vietano traduzione, obbedienza e significati universali | ✅ `signal_experiments` salva solo categoria safe, sound key allowlisted, reazioni osservabili e feedback owner |
 | Prompt/media injection | Media trattati come dato non fidato; output strutturati; nessuna esecuzione di tool AI nel path di inferenza | ✅ Regola sez. 15 (vedi sez. 5); validazione Pydantic con allowlist enum |
 | Webhook spoof | Validazione firma RevenueCat + event ID idempotenti | ✅ `POST /v1/webhooks/revenuecat` richiede `REVENUECAT_WEBHOOK_SECRET`; nessun JWT utente; handling idempotente |
 | Task spoof | Identità interna coda→worker; worker senza ingress pubblico | ✅ Su Vercel: route `/tasks/run` protette da header `x-internal-token` = `WORKER_INTERNAL_TOKEN`; dispatcher `VercelWorkflowsJobQueue` unico chiamante attestato (sostituisce OIDC Cloud Tasks, Amendment V1.1); test `test_worker.py` |
@@ -55,6 +56,11 @@ nessun segreto di produzione nei log CI.
   (eventi, observation, interpretation, pattern, usage ledger, subscriptions): letture
   solo dei propri record; scritte solo via API con controllo ownership; il worker/API
   opera con service role.
+- **Dogly Signals:** le tabelle `signal_experiments` e `signal_map_entries` sono
+  owner-scoped via `dogs.owner_id`. I dati sono sound key allowlisted e reazioni
+  osservabili; niente raw audio, niente voce del proprietario, niente significati
+  inventati o comandi. Le scritture sono negate ad `authenticated`/`anon` sia
+  dalle policy RLS sia dai privilegi SQL (`0016`); mutazioni solo via API.
 - **Storage privato (sez. 12.1, migrazione 0008):** bucket privati
   (`dog-avatars`, `behavior-raw`, `digestive-raw`, `food-labels`, `exports`); object key
   generato dall'API; signed upload URL per esattamente un path con expiry breve

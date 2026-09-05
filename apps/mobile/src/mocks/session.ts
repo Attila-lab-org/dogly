@@ -1,15 +1,7 @@
 /**
- * Sessione/auth gate mock (Spec V1 sez. 7.1 / 5.3).
- * Finché Supabase Auth non è collegato, la sessione è un mock tipizzato che
- * pilota il routing dell'entry point (app/index.tsx).
- *
- * TOGGLE DI SVILUPPO: cambia `sessionMock` per simulare i tre stati del
- * journey first-time (sez. 7.1):
- * - 'unauthenticated'      → /(auth)/welcome (welcome/privacy → sign-in)
- * - 'authenticated-no-dog' → /onboarding/dog (crea il profilo del cane)
- * - 'authenticated-with-dog' → /(tabs)/home
- * In produzione lo stato arriverà dalla sessione Supabase in SecureStore
- * (sez. 5.3) + esistenza del profilo cane (GET /v1/dogs, sez. 9).
+ * Auth gate helpers (Spec V1 sez. 7.1).
+ * Produzione: SessionProvider (Supabase + GET /v1/dogs).
+ * `sessionMock` resta solo per __DEV__ quando mancano le env Supabase.
  */
 
 export type SessionState =
@@ -17,10 +9,7 @@ export type SessionState =
   | 'authenticated-no-dog'
   | 'authenticated-with-dog';
 
-/**
- * Default demo: schermata iniziale con logo.
- * Dopo tap su Google / Registrazione / Login (spenti ma cliccabili) → Home.
- */
+/** Fallback __DEV__ senza EXPO_PUBLIC_SUPABASE_* — non usato in produzione. */
 export const sessionMock: SessionState = 'unauthenticated';
 
 export type EntryRoute = '/(auth)/welcome' | '/onboarding/dog' | '/(tabs)/home';

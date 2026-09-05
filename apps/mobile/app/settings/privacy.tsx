@@ -7,6 +7,7 @@
  * - "Elimina account" con doppia conferma esplicita
  *   (POST /v1/privacy/delete-account).
  */
+import * as Linking from 'expo-linking';
 import React, { useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +54,10 @@ const CONSENT_ROWS: ConsentRow[] = [
   },
 ];
 
+
+const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL ?? 'https://dogly.app/privacy-beta';
+const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? 'https://dogly.app/terms-beta';
+
 export default function PrivacyScreen() {
   const [consents, setConsents] = useState<ConsentState>(consentsMock);
   const [exportState, setExportState] = useState<ExportState>('idle');
@@ -89,6 +94,25 @@ export default function PrivacyScreen() {
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Privacy e dati" />
+
+      <Card style={styles.card}>
+        <Text style={styles.sectionTitle}>Documenti beta</Text>
+        <Text style={styles.note}>
+          Privacy Policy e Termini della closed beta sono sempre raggiungibili da qui.
+        </Text>
+        <Button
+          title="Apri Privacy Policy"
+          variant="outline"
+          onPress={() => void Linking.openURL(PRIVACY_URL)}
+          style={styles.exportButton}
+        />
+        <Button
+          title="Apri Termini beta"
+          variant="outline"
+          onPress={() => void Linking.openURL(TERMS_URL)}
+          style={styles.exportButton}
+        />
+      </Card>
 
       {/* Consensi separati */}
       <Card style={styles.card}>

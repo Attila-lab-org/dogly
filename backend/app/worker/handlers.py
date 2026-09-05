@@ -23,6 +23,7 @@ from app.contracts.taxonomy import (
     AnalysisDomain,
     BehaviorEventStatus,
 )
+from app.domains import behavior_db
 from app.domains.billing import QuotaService
 from app.domains.digestive import deterministic_safety_flags
 from app.domains.models import BehaviorEventRec
@@ -72,7 +73,7 @@ def _arm_behavior_raw_ttl(state: AppState, event: BehaviorEventRec) -> None:
 
 async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retryable: bool) -> dict:
     event.last_error_code = code.value
-    quota = QuotaService(state.store)
+    quota = QuotaService(state.store, engine=state.engine)
     if retryable and event.attempt_count < MAX_TASK_ATTEMPTS:
         transition(event, BehaviorEventStatus.FAILED_RETRYABLE)
         return {"event_id": event.id, "status": event.status.value, "error": code.value}
@@ -82,32 +83,56 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
     else:
         raise InvalidTransition(f"cannot fail terminally from {event.status}")
     if not event.quota_refunded and not event.quota_committed:
-        await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR)
+        await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
         event.quota_refunded = True
     event.completed_at = now_utc()
     _arm_behavior_raw_ttl(state, event)
+    if state.engine is not None:
+        await behavior_db.save_event_state(state.engine, event)
     return {"event_id": event.id, "status": event.status.value, "error": code.value}
 
 
 async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     """Behavior analysis handler: QUEUED -> OBSERVING -> INTERPRETING ->
     COMPLETED / REJECTED_QUALITY / FAILED_* (sez. 7.2). Idempotent."""
-    event = state.store.behavior_events.get(event_id)
-    if event is None:
-        # Unknown event: acknowledge to stop retries (task payload is IDs only).
-        return {"event_id": event_id, "status": "ignored_unknown_event"}
+    if state.engine is not None:
+        event = await behavior_db.load_event(state.engine, event_id=event_id)
+        if event is None:
+            return {"event_id": event_id, "status": "ignored_unknown_event"}
+        # Mirror into memory for helpers that still read store (TTL arming).
+        state.store.behavior_events[event.id] = event
+        capture = await behavior_db.load_capture(state.engine, capture_id=event.capture_id)
+        if capture is None:
+            return {"event_id": event_id, "status": "ignored_unknown_capture"}
+        state.store.captures[capture.id] = capture
+    else:
+        event = state.store.behavior_events.get(event_id)
+        if event is None:
+            return {"event_id": event_id, "status": "ignored_unknown_event"}
+        capture = state.store.captures[event.capture_id]
+
     if event.status in TERMINAL_EVENT_STATUSES:
         return {"event_id": event.id, "status": event.status.value, "noop": True}
 
     event.attempt_count += 1
-    capture = state.store.captures[event.capture_id]
-    quota = QuotaService(state.store)
+    quota = QuotaService(state.store, engine=state.engine)
 
     # QUEUED -> OBSERVING (or FAILED_RETRYABLE -> OBSERVING retry).
     transition(event, BehaviorEventStatus.OBSERVING)
     try:
+        video_ref = capture.storage_path
+        # Real observers need an HTTPS media URI; mint a short-lived signed read URL.
+        create_read = getattr(state.storage, "create_signed_read_url", None)
+        if callable(create_read) and state.settings.observer_provider != "mock":
+            from app.domains.behavior import BEHAVIOR_BUCKET
+
+            video_ref = await create_read(
+                bucket=BEHAVIOR_BUCKET,
+                path=capture.storage_path,
+                ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 600),
+            )
         observation, obs_usage = await state.observer.observe(
-            video_ref=capture.storage_path,
+            video_ref=video_ref,
             policy_version=INTERPRETATION_POLICY_VERSION,
             duration_ms=capture.duration_ms,
         )
@@ -131,10 +156,12 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     if quality.overall_quality == "insufficient" or (quality.dog_visible_fraction or 0.0) <= 0.0:
         transition(event, BehaviorEventStatus.REJECTED_QUALITY)
         if not event.quota_refunded and not event.quota_committed:
-            await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR)
+            await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
             event.quota_refunded = True
         event.completed_at = now_utc()
         _arm_behavior_raw_ttl(state, event)
+        if state.engine is not None:
+            await behavior_db.save_event_state(state.engine, event)
         return {"event_id": event.id, "status": event.status.value}
 
     # OBSERVING -> INTERPRETING
@@ -169,9 +196,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     event.taxonomy_version = interpretation.taxonomy_version
     event.completed_at = now_utc()
     if not event.quota_committed and not event.quota_refunded:
-        await quota.commit(event.user_id, AnalysisDomain.BEHAVIOR)
+        await quota.commit(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
         event.quota_committed = True
     _arm_behavior_raw_ttl(state, event)
+    if state.engine is not None:
+        await behavior_db.save_event_state(state.engine, event)
     return {"event_id": event.id, "status": event.status.value}
 
 
@@ -184,7 +213,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     if event.status in ("COMPLETED", "REJECTED_QUALITY", "FAILED_TERMINAL"):
         return {"event_id": event.id, "status": event.status, "noop": True}
 
-    quota = QuotaService(state.store)
+    quota = QuotaService(state.store, engine=state.engine)
     event.status = "OBSERVING"
     try:
         observation, usage = await state.digestive_vision.observe_stool(image_ref=event.image_path)
@@ -195,7 +224,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         # terminal event with quota refund (sez. 22), never crashes the worker.
         event.status = "FAILED_TERMINAL"
         if not event.quota_refunded and not event.quota_committed:
-            await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE)
+            await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
             event.quota_refunded = True
         event.completed_at = now_utc()
         schedule_digestive_raw_expiry(event, state.settings)
@@ -213,7 +242,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     if observation.image_quality == "insufficient":
         event.status = "REJECTED_QUALITY"
         if not event.quota_refunded and not event.quota_committed:
-            await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE)
+            await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
             event.quota_refunded = True
         event.completed_at = now_utc()
         schedule_digestive_raw_expiry(event, state.settings)
@@ -233,7 +262,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     event.status = "COMPLETED"
     event.completed_at = now_utc()
     if not event.quota_committed and not event.quota_refunded:
-        await quota.commit(event.user_id, AnalysisDomain.DIGESTIVE)
+        await quota.commit(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
         event.quota_committed = True
     schedule_digestive_raw_expiry(event, state.settings)
     return {"event_id": event.id, "status": event.status}

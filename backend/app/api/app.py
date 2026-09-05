@@ -21,10 +21,12 @@ from app.api.routes import (
     nutrition,
     patterns,
     privacy,
+    signals,
     subscription,
     webhooks,
 )
 from app.contracts.errors import ApiError, ErrorBody, ErrorCode
+from app.observability import init_sentry
 
 
 def create_app(state: AppState | None = None) -> FastAPI:
@@ -33,7 +35,9 @@ def create_app(state: AppState | None = None) -> FastAPI:
         version="1.0.0",
         description="Public API V1 (Spec V1 sez. 9). OpenAPI is the mobile client contract.",
     )
-    app.state.cbi = state or build_default_state()
+    resolved = state or build_default_state()
+    init_sentry(resolved.settings)
+    app.state.cbi = resolved
 
     @app.exception_handler(ApiError)
     async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
@@ -67,6 +71,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.include_router(behavior.router, prefix="/v1", tags=["behavior"])
     app.include_router(diary.router, prefix="/v1", tags=["diary"])
     app.include_router(patterns.router, prefix="/v1", tags=["patterns"])
+    app.include_router(signals.router, prefix="/v1", tags=["dogly-signals"])
     app.include_router(digestive.router, prefix="/v1", tags=["digestive"])
     app.include_router(nutrition.router, prefix="/v1", tags=["nutrition"])
     app.include_router(subscription.router, prefix="/v1", tags=["subscription", "usage"])

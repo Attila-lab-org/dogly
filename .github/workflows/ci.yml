@@ -77,3 +77,27 @@ jobs:
         working-directory: backend
       - name: Fail on uncommitted contract drift
         run: diff -u docs/openapi.json /tmp/openapi.generated.json
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Backend dependency audit (offline-friendly)
+        working-directory: backend
+        run: |
+          uv sync
+          uv pip compile pyproject.toml -o /tmp/reqs.txt
+          # No paid provider calls in CI — assert mock defaults in tests.
+          uv run pytest -q tests/test_config_fail_fast.py

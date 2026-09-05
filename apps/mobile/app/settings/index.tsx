@@ -6,11 +6,12 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, ScreenContainer } from '@/components';
+import { Button, Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { subscriptionMock } from '@/mocks/secondary';
 import { getDogProfileSnapshot } from '@/features/core/useDogProfile';
+import { useSession } from '@/features/auth/SessionProvider';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
@@ -21,6 +22,7 @@ interface Row {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { signOut, usingMockGate } = useSession();
   const isPremium = subscriptionMock.plan !== 'FREE';
   const dogId = getDogProfileSnapshot().dog.id;
 
@@ -82,6 +84,16 @@ export default function SettingsScreen() {
           </Pressable>
         ))}
       </Card>
+      {!usingMockGate ? (
+        <Button
+          title="Esci"
+          variant="outline"
+          onPress={() => {
+            void signOut().then(() => router.replace('/(auth)/welcome'));
+          }}
+          style={styles.signOut}
+        />
+      ) : null}
       <Text style={styles.version}>Dogly · V1 beta</Text>
     </ScreenContainer>
   );
@@ -127,5 +139,8 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     color: colors.textMuted,
     marginTop: spacing.lg,
+  },
+  signOut: {
+    marginTop: spacing.xl,
   },
 });

@@ -1,21 +1,30 @@
 /**
- * Sign-in (Spec V1 sez. 6) — Supabase Auth: Continue / Apple / Google.
- * Stati obbligatori: loading, auth error, account exists, offline.
- * Sessione in SecureStore (sez. 5.3); niente token in AsyncStorage.
- * Dopo il login: onboarding cane se non esiste, altrimenti Home (7.1).
+ * Sign-in (Spec V1 sez. 6) — Supabase Auth: email OTP/password + Google.
+ * Sessione in SecureStore via SessionProvider; dopo login → onboarding o Home.
  */
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
-import { demoFlags, type DemoSignInError } from '@/mocks/demo';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { useSession } from '@/features/auth/SessionProvider';
+import {
+  mapAuthError,
+  sendEmailOtp,
+  signInWithGoogle,
+  signInWithPassword,
+  verifyEmailOtp,
+  type AuthErrorKind,
+} from '@/features/auth/actions';
+import { demoFlags } from '@/mocks/demo';
 
-type AuthProvider = 'apple' | 'google' | 'email';
-type AuthError = DemoSignInError | null;
+const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
-const ERROR_COPY: Record<Exclude<AuthError, null>, string> = {
+type AuthProvider = 'google' | 'email';
+type EmailStep = 'idle' | 'enter_email' | 'enter_code';
+
+const ERROR_COPY: Record<AuthErrorKind, string> = {
   auth_error: 'Accesso non riuscito. Controlla le credenziali e riprova.',
   account_exists:
     'Esiste già un account con questa email: accedi con il metodo usato in precedenza.',
@@ -25,24 +34,107 @@ const ERROR_COPY: Record<Exclude<AuthError, null>, string> = {
 
 export default function SignInScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState<AuthProvider | null>(null);
-  const [error, setError] = useState<AuthError>(null);
+  const { sessionState, usingMockGate, loading } = useSession();
+  const [loadingProvider, setLoadingProvider] = useState<AuthProvider | null>(
+    null,
+  );
+  const [error, setError] = useState<AuthErrorKind | null>(null);
+  const [emailStep, setEmailStep] = useState<EmailStep>('idle');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
 
-  const signIn = (provider: AuthProvider) => {
+  useEffect(() => {
+    if (loading) return;
+    if (sessionState === 'authenticated-no-dog') {
+      router.replace('/onboarding/dog');
+    } else if (sessionState === 'authenticated-with-dog') {
+      router.replace('/(tabs)/home');
+    }
+  }, [sessionState, loading, router]);
+
+  const runMockSignIn = (provider: AuthProvider) => {
     setError(null);
-    setLoading(provider);
-    // Mock V1: Supabase Auth OAuth arriverà con il backend; qui simuliamo
-    // l'accesso riuscito e instradiamo al flusso 7.1 (onboarding cane).
-    // Stati errore (sez. 6) raggiungibili in dev via demoFlags.signInError:
-    // il tap su un provider mostra l'errore simulato invece di accedere.
+    setLoadingProvider(provider);
     setTimeout(() => {
-      setLoading(null);
+      setLoadingProvider(null);
       if (demoFlags.signInError) {
         setError(demoFlags.signInError);
         return;
       }
       router.replace('/onboarding/dog');
-    }, 900);
+    }, 600);
+  };
+
+  const signInOAuth = async () => {
+    if (usingMockGate) {
+      runMockSignIn('google');
+      return;
+    }
+    setError(null);
+    setLoadingProvider('google');
+    try {
+      await signInWithGoogle();
+      // SessionProvider onAuthStateChange → redirect via useEffect
+    } catch (err) {
+      setError(mapAuthError(err));
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
+
+  const startEmail = () => {
+    if (usingMockGate) {
+      runMockSignIn('email');
+      return;
+    }
+    setError(null);
+    setEmailStep('enter_email');
+  };
+
+  const sendOtp = async () => {
+    if (!email.trim()) {
+      setError('auth_error');
+      return;
+    }
+    setLoadingProvider('email');
+    setError(null);
+    try {
+      await sendEmailOtp(email);
+      setEmailStep('enter_code');
+    } catch (err) {
+      setError(mapAuthError(err));
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
+
+  const confirmPassword = async () => {
+    if (!email.trim() || !password) {
+      setError('auth_error');
+      return;
+    }
+    setLoadingProvider('email');
+    setError(null);
+    try {
+      await signInWithPassword(email, password);
+    } catch (err) {
+      setError(mapAuthError(err));
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
+
+  const confirmOtp = async () => {
+    setLoadingProvider('email');
+    setError(null);
+    try {
+      await verifyEmailOtp(email, otp);
+    } catch (err) {
+      setError(mapAuthError(err));
+    } finally {
+      setLoadingProvider(null);
+    }
   };
 
   return (
@@ -58,10 +150,18 @@ export default function SignInScreen() {
       </Pressable>
 
       <View style={styles.header}>
+        <View style={styles.logoBadge}>
+          <Image
+            source={logoMarkSource}
+            style={styles.logoMark}
+            resizeMode="contain"
+            accessibilityLabel="Dogly"
+          />
+        </View>
         <Text style={styles.title}>Accedi</Text>
         <Text style={styles.subtitle}>
-          Un account per tenere al sicuro ciò che imparo su Rocky, su tutti i
-          tuoi dispositivi.
+          Un account per tenere al sicuro ciò che imparo sul tuo cane, su tutti
+          i tuoi dispositivi.
         </Text>
       </View>
 
@@ -72,35 +172,97 @@ export default function SignInScreen() {
         </View>
       )}
 
-      <View style={styles.buttons}>
-        <Button
-          title="Continua con Apple"
-          variant="primary"
-          loading={loading === 'apple'}
-          disabled={loading !== null}
-          onPress={() => signIn('apple')}
-          icon={<Ionicons name="logo-apple" size={20} color={colors.textOnPrimary} />}
-          testID="signin-apple"
-        />
-        <Button
-          title="Continua con Google"
-          variant="outline"
-          loading={loading === 'google'}
-          disabled={loading !== null}
-          onPress={() => signIn('google')}
-          icon={<Ionicons name="logo-google" size={18} color={colors.accent} />}
-          testID="signin-google"
-        />
-        <Button
-          title="Continua con email"
-          variant="outline"
-          loading={loading === 'email'}
-          disabled={loading !== null}
-          onPress={() => signIn('email')}
-          icon={<Ionicons name="mail-outline" size={18} color={colors.accent} />}
-          testID="signin-email"
-        />
-      </View>
+      {emailStep === 'enter_email' && (
+        <View style={styles.emailBlock}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="tu@email.com"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            testID="signin-email-input"
+          />
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            autoCapitalize="none"
+            autoComplete="current-password"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            placeholder="La tua password"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            testID="signin-password-input"
+          />
+          <Button
+            title="Accedi con password"
+            loading={loadingProvider === 'email'}
+            onPress={() => void confirmPassword()}
+            testID="signin-password-submit"
+          />
+          <Button
+            title="Oppure invia un codice"
+            variant="outline"
+            loading={loadingProvider === 'email'}
+            onPress={() => void sendOtp()}
+            testID="signin-send-otp"
+          />
+          <Pressable onPress={() => setEmailStep('idle')}>
+            <Text style={styles.link}>Torna ai metodi di accesso</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {emailStep === 'enter_code' && (
+        <View style={styles.emailBlock}>
+          <Text style={styles.label}>Codice ricevuto via email</Text>
+          <TextInput
+            keyboardType="number-pad"
+            value={otp}
+            onChangeText={setOtp}
+            placeholder="123456"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+            testID="signin-otp-input"
+          />
+          <Button
+            title="Verifica e accedi"
+            loading={loadingProvider === 'email'}
+            onPress={() => void confirmOtp()}
+            testID="signin-verify-otp"
+          />
+          <Pressable onPress={() => void sendOtp()}>
+            <Text style={styles.link}>Reinvia codice</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {emailStep === 'idle' && (
+        <View style={styles.buttons}>
+          <Button
+            title="Continua con Google"
+            variant="primary"
+            loading={loadingProvider === 'google'}
+            disabled={loadingProvider !== null}
+            onPress={() => void signInOAuth()}
+            icon={<Ionicons name="logo-google" size={18} color={colors.accent} />}
+            testID="signin-google"
+          />
+          <Button
+            title="Continua con email"
+            variant="outline"
+            loading={loadingProvider === 'email'}
+            disabled={loadingProvider !== null}
+            onPress={startEmail}
+            icon={<Ionicons name="mail-outline" size={18} color={colors.accent} />}
+            testID="signin-email"
+          />
+        </View>
+      )}
 
       <Text style={styles.footer}>
         Il consenso per ricerca e miglioramento del modello è separato e
@@ -117,6 +279,20 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.xl,
+  },
+  logoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    ...shadows.card,
+  },
+  logoMark: {
+    width: 48,
+    height: 35,
   },
   title: {
     fontSize: typography.size.xxl,
@@ -146,6 +322,30 @@ const styles = StyleSheet.create({
   },
   buttons: {
     gap: spacing.md,
+  },
+  emailBlock: {
+    gap: spacing.md,
+  },
+  label: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: colors.text,
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.size.md,
+    color: colors.text,
+  },
+  link: {
+    textAlign: 'center',
+    color: colors.accent,
+    fontWeight: typography.weight.semibold,
+    fontSize: typography.size.sm,
   },
   footer: {
     marginTop: spacing.xl,

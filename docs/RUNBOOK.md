@@ -128,3 +128,20 @@ Vercel, spend limit (sez. 30 — G9 richiede "rollback/kill-switch tested").
 | Telemetria costi per evento | tabella `internal.ai_cost_events` (migrazione 0007); dashboard sez. 25.3 |
 | Quota reserve/commit/refund | migrazione 0006; test `backend/tests/test_quota.py` |
 | Checklist release | `docs/RELEASE_CHECKLIST.md` |
+
+
+## 8. Closed-beta kill switches & budgets
+
+Env flags (Vercel):
+- `AI_KILL_SWITCH=true` — disable all paid AI calls
+- `OBSERVER_KILL_SWITCH` / `REASONER_KILL_SWITCH` — per-stage disable
+- Daily budget caps: `OBSERVER_BUDGET_USD_PER_DAY`, `REASONER_BUDGET_USD_PER_DAY`
+
+Procedure: set flag → redeploy/promote → confirm `/health` → verify events stay `FAILED_RETRYABLE` without crashing mobile.
+Rollback: unset flag; drain Workflows; confirm cost meter resumes writing `internal.ai_cost_events`.
+
+## 9. Sentry & correlation
+
+- Backend: `SENTRY_DSN` on FastAPI (API + worker). Attach `correlation_id` from error body.
+- Mobile: initialize Sentry with staging DSN in EAS `preview`/`beta` profiles.
+- Alerting: error-rate spike on `/tasks/run`, quota refund rate anomaly, daily AI spend vs budget.

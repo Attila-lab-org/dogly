@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import Depends, Header, Request
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api.auth import JwksProvider, build_jwks_provider, validate_supabase_jwt
 from app.config import Settings, get_settings
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains.billing import QuotaService
+from app.domains.db import get_engine
 from app.domains.models import IdempotencyRec
 from app.domains.repository import InMemoryStore, now_utc
 from app.providers.base import (
@@ -21,14 +23,14 @@ from app.providers.base import (
     StorageProvider,
     VideoObserver,
 )
-from app.providers.mock import (
-    InMemoryCostMeter,
-    MockDigestiveVision,
-    MockReasoner,
-    MockStorageProvider,
-    MockVideoObserver,
+from app.providers.factory import (
+    build_cost_meter,
+    build_digestive_vision,
+    build_observer,
+    build_queue,
+    build_reasoner,
+    build_storage,
 )
-from app.providers.vercel_workflows import build_job_queue
 
 
 @dataclass
@@ -44,25 +46,26 @@ class AppState:
     reasoner: Reasoner
     digestive_vision: DigestiveVision
     cost_meter: CostMeter
+    engine: AsyncEngine | None = None
 
 
 def build_default_state(settings: Settings | None = None) -> AppState:
-    """Production-shaped wiring with MOCK providers by default (sez. 4: local
-    uses AI fixtures). Real adapters plug in behind the same protocols.
-    Queue backend from settings (SPEC_AMENDMENT_V1.1): fake locally, Vercel
-    Workflows in staging/production."""
+    """Wire adapters from Settings. Local/CI keep mocks; staging/production
+    fail-fast rejects mock providers (config validator)."""
     settings = settings or get_settings()
     store = InMemoryStore()
+    engine = get_engine(settings)
     return AppState(
         settings=settings,
         store=store,
         jwks_provider=build_jwks_provider(settings),
-        storage=MockStorageProvider(),
-        queue=build_job_queue(settings),
-        observer=MockVideoObserver(settings),
-        reasoner=MockReasoner(settings),
-        digestive_vision=MockDigestiveVision(settings),
-        cost_meter=InMemoryCostMeter(),
+        storage=build_storage(settings),
+        queue=build_queue(settings),
+        observer=build_observer(settings),
+        reasoner=build_reasoner(settings),
+        digestive_vision=build_digestive_vision(settings),
+        cost_meter=build_cost_meter(settings),
+        engine=engine,
     )
 
 
@@ -74,7 +77,7 @@ StateDep = Annotated[AppState, Depends(get_state)]
 
 
 def get_quota(state: StateDep) -> QuotaService:
-    return QuotaService(state.store)
+    return QuotaService(state.store, engine=state.engine)
 
 
 QuotaDep = Annotated[QuotaService, Depends(get_quota)]
@@ -97,15 +100,18 @@ UserIdDep = Annotated[str, Depends(current_user_id)]
 
 
 class IdempotencyGuard:
-    """X-Idempotency-Key handling (sez. 9.1/22).
+    """X-Idempotency-Key handling (sez. 9.1/22)."""
 
-    Scope = user + endpoint + key. A replayed request returns the recorded
-    response; a key reused with a different payload is a conflict. Endpoints
-    with a unique client_request_id in the body are idempotent at the domain
-    level; the header adds a transport-level guard."""
-
-    def __init__(self, store: InMemoryStore, scope_prefix: str, key: str | None, payload_hash: str | None) -> None:
+    def __init__(
+        self,
+        store: InMemoryStore,
+        scope_prefix: str,
+        key: str | None,
+        payload_hash: str | None,
+        engine: AsyncEngine | None = None,
+    ) -> None:
         self._store = store
+        self._engine = engine
         self.key = key
         self._scope = f"{scope_prefix}:{key}" if key else None
         self._payload_hash = payload_hash
@@ -113,6 +119,7 @@ class IdempotencyGuard:
     def lookup(self) -> dict[str, Any] | None:
         if not self._scope:
             return None
+        # Sync lookup uses memory; async DB lookup is hydrated by routes if needed.
         rec = self._store.idempotency.get(self._scope)
         if rec is None:
             return None
@@ -147,12 +154,25 @@ async def idempotency_guard(
         body = await request.body()
         if body:
             payload_hash = hashlib.sha256(body).hexdigest()
-    return IdempotencyGuard(
+    guard = IdempotencyGuard(
         state.store,
         scope_prefix=f"{user_id}:{request.url.path}",
         key=x_idempotency_key,
         payload_hash=payload_hash,
+        engine=state.engine,
     )
+    if state.engine is not None and guard._scope:
+        from app.domains import idempotency_db
+
+        cached = await idempotency_db.lookup(
+            state.engine, scope=guard._scope, payload_hash=payload_hash
+        )
+        if cached is not None:
+            # Seed memory so sync lookup() works for this request.
+            state.store.idempotency[guard._scope] = IdempotencyRec(
+                scope=guard._scope, status_code=200, response_body=cached, created_at=now_utc()
+            )
+    return guard
 
 
 IdempotencyDep = Annotated[IdempotencyGuard, Depends(idempotency_guard)]

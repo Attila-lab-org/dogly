@@ -1571,6 +1571,204 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/signals": {
+      "get": {
+        "tags": [
+          "dogly-signals"
+        ],
+        "summary": "Get Signal Map",
+        "operationId": "get_signal_map_v1_dogs__dog_id__signals_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalMapResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/signals/experiments": {
+      "get": {
+        "tags": [
+          "dogly-signals"
+        ],
+        "summary": "List Signal Experiments",
+        "operationId": "list_signal_experiments_v1_dogs__dog_id__signals_experiments_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalExperimentListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "dogly-signals"
+        ],
+        "summary": "Create Signal Experiment",
+        "operationId": "create_signal_experiment_v1_dogs__dog_id__signals_experiments_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignalExperimentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalExperimentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/digestive/fecal/init": {
       "post": {
         "tags": [
@@ -4948,6 +5146,281 @@
         ],
         "title": "SafetyFlag",
         "description": "Structured flags consumed by the deterministic copy layer (sez. 16.3).\nGenerated text may never downgrade a safety flag (sez. 19.3)."
+      },
+      "SignalBehavior": {
+        "type": "string",
+        "enum": [
+          "HEAD_TURN",
+          "EAR_RAISE",
+          "APPROACH",
+          "PLAY_READY",
+          "STILL_ATTENTIVE",
+          "NO_VISIBLE_RESPONSE"
+        ],
+        "title": "SignalBehavior"
+      },
+      "SignalCategory": {
+        "type": "string",
+        "enum": [
+          "PLAY",
+          "ATTENTION",
+          "CURIOSITY",
+          "CONTACT"
+        ],
+        "title": "SignalCategory",
+        "description": "Consumer-safe acoustic signal categories for Dogly Signals."
+      },
+      "SignalExperimentCreate": {
+        "properties": {
+          "client_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Client Request Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/SignalCategory"
+          },
+          "sound_key": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Sound Key"
+          },
+          "observed_behaviors": {
+            "items": {
+              "$ref": "#/components/schemas/SignalBehavior"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Observed Behaviors"
+          },
+          "reaction_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Latency Ms"
+          },
+          "owner_feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_request_id",
+          "category",
+          "sound_key",
+          "observed_behaviors"
+        ],
+        "title": "SignalExperimentCreate"
+      },
+      "SignalExperimentListResponse": {
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SignalExperimentOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SignalExperimentListResponse"
+      },
+      "SignalExperimentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/SignalCategory"
+          },
+          "sound_key": {
+            "type": "string",
+            "title": "Sound Key"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SignalExperimentStatus"
+          },
+          "observed_behaviors": {
+            "items": {
+              "$ref": "#/components/schemas/SignalBehavior"
+            },
+            "type": "array",
+            "title": "Observed Behaviors"
+          },
+          "reaction_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Latency Ms"
+          },
+          "result_summary": {
+            "type": "string",
+            "title": "Result Summary"
+          },
+          "owner_feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dog_id",
+          "category",
+          "sound_key",
+          "status",
+          "result_summary",
+          "created_at"
+        ],
+        "title": "SignalExperimentOut"
+      },
+      "SignalExperimentStatus": {
+        "type": "string",
+        "enum": [
+          "PLANNED",
+          "COMPLETED",
+          "DISCARDED"
+        ],
+        "title": "SignalExperimentStatus"
+      },
+      "SignalMapEntryOut": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/SignalCategory"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SignalMapState"
+          },
+          "attempt_count": {
+            "type": "integer",
+            "title": "Attempt Count"
+          },
+          "confirm_count": {
+            "type": "integer",
+            "title": "Confirm Count"
+          },
+          "contradict_count": {
+            "type": "integer",
+            "title": "Contradict Count"
+          },
+          "unknown_count": {
+            "type": "integer",
+            "title": "Unknown Count"
+          },
+          "last_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Summary"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "category",
+          "state",
+          "attempt_count",
+          "confirm_count",
+          "contradict_count",
+          "unknown_count",
+          "updated_at"
+        ],
+        "title": "SignalMapEntryOut"
+      },
+      "SignalMapResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SignalMapEntryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_category": {
+            "$ref": "#/components/schemas/SignalCategory",
+            "default": "ATTENTION"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SignalMapResponse"
+      },
+      "SignalMapState": {
+        "type": "string",
+        "enum": [
+          "DISCOVERING",
+          "LEARNING",
+          "RECURRING"
+        ],
+        "title": "SignalMapState"
       },
       "SignedUpload": {
         "properties": {

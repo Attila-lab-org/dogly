@@ -29,6 +29,8 @@ from app.domains.models import (
     IdempotencyRec,
     PersonalPatternRec,
     ProfileRec,
+    SignalExperimentRec,
+    SignalMapEntryRec,
     SubscriptionRec,
     UsageLedgerRec,
 )
@@ -70,6 +72,8 @@ class InMemoryStore:
         self.behavior_events: dict[str, BehaviorEventRec] = {}
         self.behavior_feedback: dict[str, BehaviorFeedbackRec] = {}
         self.care_events: dict[str, CareEventRec] = {}
+        self.signal_experiments: dict[str, SignalExperimentRec] = {}
+        self.signal_map_entries: dict[tuple[str, str], SignalMapEntryRec] = {}
         self.patterns: dict[str, PersonalPatternRec] = {}
         self.fecal_events: dict[str, FecalEventRec] = {}
         self.food_products: dict[str, FoodProductRec] = {}

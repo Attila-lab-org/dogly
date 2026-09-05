@@ -165,13 +165,13 @@ describe('mock Home e Diario', () => {
     );
   });
 
-  it('salva il feedback con un solo tap e lo mantiene nel Diario', () => {
+  it('salva il feedback con un solo tap e lo mantiene nel Diario', async () => {
     const result = behaviorResultsMock['evt-play'];
     const entry = diaryEntriesMock.find((item) => item.refId === result.eventId);
     const previousFeedback = result.feedback;
     const previousSubtitle = entry?.subtitle ?? null;
 
-    expect(saveBehaviorFeedback(result.eventId, 'NO')).toBe('NO');
+    await expect(saveBehaviorFeedback(result.eventId, 'NO')).resolves.toBe('NO');
     expect(result.feedback).toBe('NO');
     expect(entry?.subtitle).toContain('Feedback: non credo');
 

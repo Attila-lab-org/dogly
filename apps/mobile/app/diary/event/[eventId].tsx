@@ -50,7 +50,7 @@ export default function DiaryEventScreen() {
 
   const handleFeedback = (value: FeedbackValue) => {
     if (!behaviorResult) return;
-    setFeedback(saveBehaviorFeedback(behaviorResult.eventId, value));
+    void saveBehaviorFeedback(behaviorResult.eventId, value).then(setFeedback);
   };
 
   return (

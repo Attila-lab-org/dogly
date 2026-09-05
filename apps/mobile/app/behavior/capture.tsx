@@ -1,18 +1,23 @@
 /**
- * Behavior capture (Spec V1 sez. 6, 13) — registrazione video in-app.
- * Stati obbligatori: ready, recording, too short, hard cap 20 s,
- * permission denied. Mic separato: se negato si prosegue video-only
- * con evidenza ridotta (sez. 13.1), mai bloccante.
- *
- * La logica di stato vive in src/features/core/captureMachine.ts (pura,
- * testata). L'integrazione nativa expo-camera è un blocker aperto
- * (docs/DECISIONS.md): questa schermata implementa UX e contratto con
- * una preview simulata, pronta a ospitare la CameraView.
+ * Behavior capture (Spec V1 sez. 6, 13) — CameraView reale, 5–20s, mic opzionale.
  */
-import React, { useEffect, useReducer, useRef } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import {
+  AppState,
+  type AppStateStatus,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  CameraView,
+  useCameraPermissions,
+  useMicrophonePermissions,
+} from 'expo-camera';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import {
@@ -24,50 +29,251 @@ import {
 } from '@/features/core/captureMachine';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
+import { useSession } from '@/features/auth/SessionProvider';
+import { enqueueAndUploadBehaviorClip } from '@/features/behavior/upload';
+import { isApiConfigured } from '@/features/auth/env';
 
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
-  const params = useLocalSearchParams<{ from?: string; care?: string }>();
-  const fromCheckIn = params.from === 'checkin' || analysisContext?.concern === 'off';
-  const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const params = useLocalSearchParams<{ from?: string }>();
+  const fromCheckIn =
+    params.from === 'checkin' || analysisContext?.concern === 'off';
 
-  // Permesso camera just-in-time (sez. 13.1): simulato finché non
-  // integriamo expo-camera. Mic concesso nel mock; il permesso negato è
-  // comunque coperto dallo stato permission_denied della macchina.
+  const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+  const [cameraReady, setCameraReady] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const cameraRef = useRef<CameraView | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedRef = useRef(0);
+  const pendingUriRef = useRef<string | null>(null);
+  const uploadStartedRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const micGranted = Boolean(micPermission?.granted);
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
   useEffect(() => {
-    const t = setTimeout(
-      () => dispatch({ type: 'PERMISSION_GRANTED', micGranted: true }),
-      400,
-    );
-    return () => clearTimeout(t);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimer();
+      try {
+        cameraRef.current?.stopRecording();
+      } catch {
+        // noop
+      }
+    };
   }, []);
 
-  // Timer di registrazione: 1 tick/secondo, stop automatico all'hard cap
   useEffect(() => {
-    if (state.phase === 'recording') {
-      timerRef.current = setInterval(() => dispatch({ type: 'TICK' }), 1000);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+    (async () => {
+      if (!cameraPermission) return;
+      if (!cameraPermission.granted) {
+        const cam = await requestCameraPermission();
+        if (!cam.granted) {
+          dispatch({ type: 'PERMISSION_DENIED' });
+          return;
+        }
+      }
+      let micOk = Boolean(micPermission?.granted);
+      if (!micOk) {
+        const mic = await requestMicPermission();
+        micOk = mic.granted;
+      }
+      dispatch({ type: 'PERMISSION_GRANTED', micGranted: micOk });
+    })();
+  }, [
+    cameraPermission,
+    micPermission,
+    requestCameraPermission,
+    requestMicPermission,
+  ]);
+
+  useEffect(() => {
+    const onAppState = (next: AppStateStatus) => {
+      if (next !== 'active' && state.phase === 'recording') {
+        try {
+          cameraRef.current?.stopRecording();
+        } catch {
+          // noop
+        }
+      }
     };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => sub.remove();
   }, [state.phase]);
 
-  // Clip valida → upload/processing (mock: evento in lavorazione)
-  useEffect(() => {
-    if (state.phase === 'completed') {
-      router.replace('/behavior/processing/evt-processing');
+  const finishWithUri = useCallback((uri: string | null, seconds: number) => {
+    clearTimer();
+    if (!uri || seconds < CAPTURE_MIN_SECONDS) {
+      pendingUriRef.current = null;
+      dispatch({ type: 'RESET' });
+      // Force too_short UI
+      dispatch({ type: 'START' });
+      for (let i = 0; i < Math.max(0, seconds); i += 1) {
+        dispatch({ type: 'TICK' });
+      }
+      dispatch({ type: 'STOP' });
+      return;
     }
-  }, [state.phase, router]);
+    pendingUriRef.current = uri;
+    uploadStartedRef.current = false;
+    dispatch({ type: 'RESET' });
+    dispatch({ type: 'START' });
+    for (let i = 0; i < Math.min(seconds, CAPTURE_MAX_SECONDS); i += 1) {
+      dispatch({ type: 'TICK' });
+    }
+    if (seconds < CAPTURE_MAX_SECONDS) {
+      dispatch({ type: 'STOP' });
+    }
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    setUploadError(null);
+    pendingUriRef.current = null;
+    uploadStartedRef.current = false;
+    if (!cameraReady || !cameraRef.current) return;
+
+    dispatch({ type: 'START' });
+    elapsedRef.current = 0;
+    clearTimer();
+    timerRef.current = setInterval(() => {
+      elapsedRef.current += 1;
+      dispatch({ type: 'TICK' });
+      if (elapsedRef.current >= CAPTURE_MAX_SECONDS) {
+        try {
+          cameraRef.current?.stopRecording();
+        } catch {
+          // noop
+        }
+      }
+    }, 1000);
+
+    try {
+      const result = await cameraRef.current.recordAsync({
+        maxDuration: CAPTURE_MAX_SECONDS,
+      });
+      if (!mountedRef.current) return;
+      finishWithUri(result?.uri ?? null, elapsedRef.current);
+    } catch {
+      clearTimer();
+      if (mountedRef.current) {
+        setUploadError('Registrazione interrotta. Riprova.');
+        dispatch({ type: 'RESET' });
+      }
+    }
+  }, [cameraReady, micGranted, finishWithUri]);
+
+  const stopRecording = useCallback(() => {
+    try {
+      cameraRef.current?.stopRecording();
+    } catch {
+      // noop
+    }
+  }, []);
+
+  const retake = useCallback(() => {
+    pendingUriRef.current = null;
+    uploadStartedRef.current = false;
+    setUploadError(null);
+    setUploading(false);
+    dispatch({ type: 'RESET' });
+  }, []);
+
+  // Upload dopo clip valida
+  useEffect(() => {
+    if (state.phase !== 'completed') return;
+    if (uploadStartedRef.current) return;
+    const uri = pendingUriRef.current;
+    if (!uri) return;
+
+    uploadStartedRef.current = true;
+    setUploading(true);
+    setUploadError(null);
+
+    (async () => {
+      try {
+        if (usingMockGate || !isApiConfigured() || !userId || !dog.id) {
+          router.replace('/behavior/processing/evt-processing');
+          return;
+        }
+        const durationMs = Math.max(
+          CAPTURE_MIN_SECONDS * 1000,
+          Math.min(CAPTURE_MAX_SECONDS * 1000, elapsedRef.current * 1000),
+        );
+        const { eventId } = await enqueueAndUploadBehaviorClip({
+          userId,
+          dogId: dog.id,
+          localUri: uri,
+          durationMs,
+          hasAudio: micGranted && !state.audioDegraded,
+        });
+        router.replace(`/behavior/processing/${eventId}`);
+      } catch {
+        uploadStartedRef.current = false;
+        setUploading(false);
+        setUploadError(
+          'Upload non riuscito. Il video resta in coda: puoi riprovare.',
+        );
+      }
+    })();
+  }, [
+    state.phase,
+    state.audioDegraded,
+    usingMockGate,
+    userId,
+    dog.id,
+    micGranted,
+    router,
+  ]);
+
+  const retryUpload = async () => {
+    const uri = pendingUriRef.current;
+    if (!uri || !userId || !dog.id) {
+      retake();
+      return;
+    }
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const durationMs = Math.max(
+        CAPTURE_MIN_SECONDS * 1000,
+        elapsedRef.current * 1000,
+      );
+      const { eventId } = await enqueueAndUploadBehaviorClip({
+        userId,
+        dogId: dog.id,
+        localUri: uri,
+        durationMs,
+        hasAudio: micGranted && !state.audioDegraded,
+      });
+      router.replace(`/behavior/processing/${eventId}`);
+    } catch {
+      setUploading(false);
+      setUploadError('Upload non riuscito. Riprova.');
+    }
+  };
 
   const progress = state.elapsedSeconds / CAPTURE_MAX_SECONDS;
+  const showCamera =
+    state.phase !== 'permission_denied' && Boolean(cameraPermission?.granted);
 
   return (
     <ScreenContainer padded={false}>
       <View style={styles.container}>
-        {/* Top bar */}
         <View style={styles.topBar}>
           <Pressable
             accessibilityRole="button"
@@ -87,24 +293,23 @@ export default function BehaviorCaptureScreen() {
           <Text style={styles.careBanner}>{analysisContext.note}</Text>
         ) : null}
 
-        {/* Preview camera (simulata: placeholder fino a expo-camera) */}
         <View style={styles.preview}>
           {state.phase === 'permission_denied' ? (
             <View style={styles.previewCenter}>
-              <Ionicons name="videocam-off-outline" size={48} color={colors.textMuted} />
+              <Ionicons
+                name="videocam-off-outline"
+                size={48}
+                color={colors.textMuted}
+              />
               <Text style={styles.permissionTitle}>Serve la fotocamera</Text>
               <Text style={styles.permissionText}>
-                Per capire Rocky registro un breve video. Il microfono è
+                Per capire {dog.name} registro un breve video. Il microfono è
                 facoltativo: senza audio l'analisi funziona comunque, con meno
                 segnali.
               </Text>
               <Button
                 title="Abilita fotocamera"
-                onPress={() => {
-                  // Mock: in produzione requestCameraPermission(); se l'utente
-                  // ha negato in modo permanente → Linking.openSettings()
-                  dispatch({ type: 'PERMISSION_GRANTED', micGranted: true });
-                }}
+                onPress={() => void requestCameraPermission()}
                 style={styles.permissionButton}
               />
               <Pressable
@@ -115,8 +320,23 @@ export default function BehaviorCaptureScreen() {
               </Pressable>
             </View>
           ) : (
-            <View style={styles.previewCenter}>
-              <Ionicons name="paw" size={64} color={colors.textMuted} />
+            <>
+              {showCamera ? (
+                <CameraView
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill}
+                  facing="back"
+                  mode="video"
+                  mute={!micGranted}
+                  active
+                  onCameraReady={() => setCameraReady(true)}
+                  onMountError={() => setCameraReady(false)}
+                />
+              ) : (
+                <View style={styles.previewCenter}>
+                  <Ionicons name="paw" size={64} color={colors.textMuted} />
+                </View>
+              )}
               {state.phase === 'recording' && (
                 <View style={styles.recordingChip}>
                   <View style={styles.recordingDot} />
@@ -126,16 +346,19 @@ export default function BehaviorCaptureScreen() {
                   </Text>
                 </View>
               )}
-            </View>
+            </>
           )}
         </View>
 
-        {/* Area controlli */}
         <View style={styles.controls}>
-          {state.phase === 'ready' && (
+          {uploadError ? (
+            <Text style={styles.audioNote}>{uploadError}</Text>
+          ) : null}
+
+          {state.phase === 'ready' && !uploading && (
             <>
               <Text style={styles.hint}>
-                Inquadra Rocky e registra da {CAPTURE_MIN_SECONDS} a{' '}
+                Inquadra {dog.name} e registra da {CAPTURE_MIN_SECONDS} a{' '}
                 {CAPTURE_MAX_SECONDS} secondi: mi fermo da solo.
               </Text>
               {state.audioDegraded && (
@@ -146,7 +369,7 @@ export default function BehaviorCaptureScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Inizia registrazione"
-                onPress={() => dispatch({ type: 'START' })}
+                onPress={() => void startRecording()}
                 style={({ pressed }) => [
                   styles.recordButton,
                   pressed && styles.recordButtonPressed,
@@ -171,7 +394,7 @@ export default function BehaviorCaptureScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Termina registrazione"
-                onPress={() => dispatch({ type: 'STOP' })}
+                onPress={stopRecording}
                 style={({ pressed }) => [
                   styles.recordButton,
                   pressed && styles.recordButtonPressed,
@@ -192,21 +415,28 @@ export default function BehaviorCaptureScreen() {
                 <Ionicons name="time-outline" size={22} color={colors.warning} />
                 <Text style={styles.tooShortText}>
                   Il video è troppo corto: mi servono almeno{' '}
-                  {CAPTURE_MIN_SECONDS} secondi per osservare Rocky. Nessuna
+                  {CAPTURE_MIN_SECONDS} secondi per osservare {dog.name}. Nessuna
                   analisi è stata usata.
                 </Text>
               </View>
               <Button
                 title="Registra di nuovo"
-                onPress={() => dispatch({ type: 'START' })}
+                onPress={retake}
                 testID="capture-retry"
               />
             </>
           )}
 
-          {state.phase === 'completed' && (
+          {(state.phase === 'completed' || uploading) && !uploadError && (
             <Text style={styles.hint}>Video pronto: lo sto inviando…</Text>
           )}
+
+          {uploadError ? (
+            <View style={{ gap: spacing.md, alignSelf: 'stretch' }}>
+              <Button title="Riprova invio" onPress={() => void retryUpload()} />
+              <Button title="Registra di nuovo" variant="outline" onPress={retake} />
+            </View>
+          ) : null}
         </View>
       </View>
     </ScreenContainer>

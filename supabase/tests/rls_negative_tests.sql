@@ -68,6 +68,12 @@ select pg_temp.assert(
   not has_table_privilege('authenticated', 'public.knowledge_scores', 'INSERT'),
   'authenticated cannot INSERT knowledge_scores (server-computed)');
 select pg_temp.assert(
+  not has_table_privilege('authenticated', 'public.signal_experiments', 'INSERT'),
+  'authenticated cannot INSERT signal_experiments directly (API only)');
+select pg_temp.assert(
+  not has_table_privilege('authenticated', 'public.signal_map_entries', 'UPDATE'),
+  'authenticated cannot UPDATE signal_map_entries (deterministic aggregate)');
+select pg_temp.assert(
   not has_table_privilege('anon', 'public.dogs', 'SELECT'),
   'anon has no SELECT on public.dogs');
 select pg_temp.assert(

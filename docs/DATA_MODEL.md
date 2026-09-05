@@ -25,6 +25,8 @@ AI-derived data (Spec §10 principle).
 | `public.dogs` | User (create/update own) | Source | V1 plan limit 1 dog enforced by API entitlement |
 | `internal.dog_profile_versions` | API (service role) | Derived audit | Snapshot on profile-affecting changes |
 | `public.device_installations` | User (own devices) | Source | Push tokens; no hardware fingerprinting |
+| `public.signal_experiments` | API/user-owned flow | Source observation | Idempotent attempt: allowlisted sound, visible reaction, measured latency, owner feedback |
+| `public.signal_map_entries` | Deterministic Signals service | Derived aggregate | Per-dog sound reaction map; never a universal vocabulary |
 | `public.behavior_captures` | API init/complete (service role) | Source metadata | Unique `(user_id, client_request_id)` idempotency |
 | `public.behavior_events` | Worker/API only (service role) | Source + AI-derived fields | Statuses per §33.1; client read-only |
 | `internal.behavior_observations` | Worker | Derived (observer output) | Evidence only — objective facts, no intent |
@@ -75,8 +77,9 @@ refund_usage(reference_id, reason)  RESERVED -> REFUNDED|RELEASED  reserved-=u (
   migration and re-asserted in `0009_rls_grants.sql`.
 - `authenticated`: own-row SELECT on user data; writes only where the matrix allows
   (dogs create/update, consents grant/revoke, feedback own event, food/feeding CRUD,
-  devices CRUD, profiles locale/timezone). No writes to events, patterns, scores,
-  baselines, insights, ledgers, subscriptions.
+  devices CRUD, profiles locale/timezone). Signals writes go through the versioned
+  API/service role; client roles can read only their own signal rows. No writes to
+  behavior events, patterns, scores, baselines, insights, ledgers, subscriptions.
 - `anon`: nothing.
 - `internal.*`: no privileges for client roles (schema + table + routine + sequence level).
 - Storage: private buckets `dog-avatars`, `behavior-raw`, `digestive-raw`, `food-labels`,
@@ -105,5 +108,8 @@ patterns survive raw-media deletion — that is the durable product value.
 - Migrations are forward-only; applied migrations are never edited.
 - Every migration is reproducible from an empty local Supabase (`supabase db reset`).
 - Provider/model/version are stored per call; model strings never appear in schema.
+- Dogly Signals stores `client_request_id`, sound keys, observable behavior codes
+  and optional reaction latency only; no raw video/audio, no voiceprint, no
+  universal “meaning” labels.
 - Tests: `supabase/tests/run_tests.sh` (reset → RLS negatives → quota serial →
   privacy/retention integration → quota race).

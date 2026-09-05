@@ -21,6 +21,11 @@ gli handler worker non mutano mai i Personal Patterns da output generativo; gli 
 passano dal servizio deterministico di Personal Intelligence (workstream G, P0
 conservativo). Release blocker 31.2.
 
+Dogly Signals segue lo stesso firewall: un esperimento sonoro registra categoria,
+sound key allowlisted, reazioni osservabili e feedback owner. Non produce intenti,
+non traduce abbai e non scrive Personal Patterns universali; aggiorna solo la
+mappa sonora personale del cane (`signal_map_entries`) con logica deterministica.
+
 Adapter V1 local/CI: mock fixture-backed (`backend/app/providers/mock.py`,
 fixtures in `backend/app/providers/fixtures/`), stessi Protocol dei provider reali.
 Adapter reali Gemini (observer) / OpenAI (reasoner, structured output) in gate G3;

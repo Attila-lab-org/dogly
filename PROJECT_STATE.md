@@ -6,10 +6,10 @@ Ultimo aggiornamento: 2026-09-05 • Branch: `main`
 
 | Gate | Stato | Evidenza |
 | --- | --- | --- |
-| **G1 — Data/security contract** | ✅ **COMPLETATO** | Migrazioni `0001–0014` (agenda salute inclusa); RLS; OpenAPI; pytest. |
+| **G1 — Data/security contract** | ✅ **COMPLETATO** | Migrazioni `0001–0016` (Signals + write hardening); RLS; OpenAPI; pytest. |
 | **Amendment V1.1** | ✅ | Hosting Vercel + Workflows. |
-| **G0 — Platform spike (mobile)** | 🔶 **PARZIALE** | Expo SDK 57, pnpm, EAS preview APK Android; camera/RevenueCat sandbox in checklist. |
-| **G4 — Consumer UX** | 🔶 **UX V1 su mock + API** | Hub profilo, album, agenda salute e promemoria locali. |
+| **G0 — Platform spike (mobile)** | 🔶 **PARZIALE** | Expo SDK 57, pnpm, EAS preview APK Android; RevenueCat sandbox in checklist. |
+| **G4 — Consumer UX** | 🔶 **UX V1 su mock + API** | Hub profilo, album, agenda salute, promemoria locali. Brand in Home (badge logo + slogan), set icone custom `CuteIcon` (evidence semantiche + hero risultato per-intent), welcome/sign-in rebrand. Signals sospeso e non visibile. |
 | **GATE UX/SPEC (Stage 3)** | ✅ **PASS** (statico) | Non implica integrazioni reali complete. |
 | G2 — Async e2e | 🔶 Parziale | Retention TTL al completion + cleanup job; giro mobile→upload→worker da chiudere. |
 | G3, G5–G9 | ⬜ | Non avviati. |
@@ -19,6 +19,8 @@ Ultimo aggiornamento: 2026-09-05 • Branch: `main`
 - Backend preview: Vercel; shim `api/index.py` presente.
 - Mobile: `packageManager: pnpm@10.34.5`; brand **Dogly** / `com.attilalab.dogly`.
 - Env: `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- Signals: migrazioni `0015–0016` applicate su Supabase; API usa PostgreSQL quando
+  `DATABASE_URL` è configurato e mock in-memory soltanto in locale/test.
 
 ## Blocker aperti
 
@@ -37,10 +39,16 @@ Ultimo aggiornamento: 2026-09-05 • Branch: `main`
 - Brand **Dogly**; digestione + nutrizione in V1; admin dopo.
 - Confidenza: bande; raw video 24h dal completion; album privati + share OS.
 - Profilo privato default / pubblico opt-in; messaggio quotidiano interattivo.
+- Dogly Signals: **POSTICIPATO**; nessun ingresso visibile e deep link disattivati.
+  Schema e prototipo restano isolati per una futura rivalutazione.
 
 ## Riferimenti
 
 - UX: `docs/ux/UX_REFERENCE.md`
 - Billing: `docs/BILLING_V1.md`
 - Device QA: `docs/DEVICE_TEST_CHECKLIST.md`
-- ADR/open: `docs/DECISIONS.md` (O-01/O-05 aggiornati)
+- ADR/open: `docs/DECISIONS.md` (ADR-010 Signals)
+
+## Production path (2026-09-05)
+
+Closed Android beta path wired: fail-fast staging/production config, Postgres dogs/behavior/quota/idempotency, Supabase Storage + Gemini/OpenAI adapters, durable workflow entry, mobile OTP+Google + real capture/upload/poll, privacy docs, Sentry/CI/EAS beta profiles. Signals remain postponed/hidden. Payments out of scope.

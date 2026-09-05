@@ -6,7 +6,25 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "channel": "staging",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "APP_ENV": "staging",
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "EXPO_PUBLIC_API_URL": "https://dogly-eight.vercel.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://zcnzkpxgpbdspfmselwz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_PiOO12UvFge_Cpex5jrXMQ_BqcfAGuG"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -15,7 +33,27 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://dogly-eight.vercel.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://zcnzkpxgpbdspfmselwz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_PiOO12UvFge_Cpex5jrXMQ_BqcfAGuG"
+      }
+    },
+    "beta": {
+      "extends": "staging",
+      "distribution": "internal",
+      "channel": "beta",
+      "android": {
+        "buildType": "apk"
+      }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }

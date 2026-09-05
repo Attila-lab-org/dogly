@@ -88,3 +88,15 @@ Deployment Vercel (preview di origine): ______________  Deployment production: _
 
 > G8 richiede checklist firmata e zero blocker P0/P1 (sez. 30). G9 (public V1)
 > richiede inoltre monitoring attivo, spend alerts e rollback/kill-switch testati.
+
+
+## I. Closed Android beta authorization
+
+- [ ] `APP_ENV=staging` fail-fast verified (no mock providers)
+- [ ] Supabase staging isolated from production
+- [ ] EAS `beta`/`staging` APK built and installed on ≥2 physical Android devices
+- [ ] Device checklist signed (`docs/DEVICE_TEST_CHECKLIST.md`)
+- [ ] Privacy Policy + Terms beta linked from onboarding/settings
+- [ ] Sentry DSN active; budget/error alerts configured
+- [ ] Rollback / AI kill switch rehearsed (`docs/RUNBOOK.md`)
+- [ ] External testers authorized only after the above

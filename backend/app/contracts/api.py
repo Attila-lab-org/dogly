@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.contracts.interpretation import AlternativeIntent, EvidenceItem, SafetyFlag
 from app.contracts.taxonomy import (
@@ -23,6 +23,10 @@ from app.contracts.taxonomy import (
     IntentCode,
     PatternState,
     RetentionState,
+    SignalBehavior,
+    SignalCategory,
+    SignalExperimentStatus,
+    SignalMapState,
 )
 
 # ---------------------------------------------------------------------------
@@ -180,6 +184,63 @@ class CareEventOut(BaseModel):
 
 class CareEventListResponse(CursorPage):
     items: list[CareEventOut]
+
+
+# ---------------------------------------------------------------------------
+# Dogly Signals
+# ---------------------------------------------------------------------------
+
+
+class SignalExperimentCreate(BaseModel):
+    client_request_id: str = Field(min_length=8, max_length=128)
+    category: SignalCategory
+    sound_key: str = Field(min_length=1, max_length=80)
+    observed_behaviors: list[SignalBehavior] = Field(min_length=1, max_length=5)
+    reaction_latency_ms: int | None = Field(default=None, ge=0, le=10000)
+    owner_feedback: FeedbackValue | None = None
+
+    @model_validator(mode="after")
+    def no_response_is_exclusive(self) -> SignalExperimentCreate:
+        if (
+            SignalBehavior.NO_VISIBLE_RESPONSE in self.observed_behaviors
+            and len(self.observed_behaviors) > 1
+        ):
+            raise ValueError("NO_VISIBLE_RESPONSE cannot be combined with other behaviors")
+        return self
+
+
+class SignalExperimentOut(BaseModel):
+    id: str
+    dog_id: str
+    category: SignalCategory
+    sound_key: str
+    status: SignalExperimentStatus
+    observed_behaviors: list[SignalBehavior] = Field(default_factory=list)
+    reaction_latency_ms: int | None = None
+    result_summary: str
+    owner_feedback: FeedbackValue | None = None
+    created_at: datetime
+
+
+class SignalMapEntryOut(BaseModel):
+    dog_id: str
+    category: SignalCategory
+    state: SignalMapState
+    attempt_count: int
+    confirm_count: int
+    contradict_count: int
+    unknown_count: int
+    last_summary: str | None = None
+    updated_at: datetime
+
+
+class SignalMapResponse(BaseModel):
+    items: list[SignalMapEntryOut]
+    next_category: SignalCategory = SignalCategory.ATTENTION
+
+
+class SignalExperimentListResponse(CursorPage):
+    items: list[SignalExperimentOut]
 
 
 # ---------------------------------------------------------------------------

@@ -1,55 +1,107 @@
 /**
- * Welcome (Spec V1 sez. 6, 7.1.1) — schermata iniziale con logo Dogly.
- * Auth reale (Google / registrazione / login) arriverà con Supabase;
- * V1 demo: bottoni visualmente spenti ma tap → entrata in app.
+ * Welcome (Spec V1 sez. 6, 7.1.1) — brand Dogly + Google / email.
  */
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenContainer } from '@/components';
-import { DoglyLogo } from '@/features/brand/DoglyLogo';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Button, ScreenContainer } from '@/components';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { useSession } from '@/features/auth/SessionProvider';
+import { mapAuthError, signInWithGoogle } from '@/features/auth/actions';
+
+const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { sessionState, usingMockGate, loading } = useSession();
+  const [busy, setBusy] = useState<'google' | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  /** Demo: entra comunque (cane Rocky già in mock). */
-  const enterApp = () => {
+  useEffect(() => {
+    if (loading) return;
+    if (sessionState === 'authenticated-no-dog') {
+      router.replace('/onboarding/dog');
+    } else if (sessionState === 'authenticated-with-dog') {
+      router.replace('/(tabs)/home');
+    }
+  }, [sessionState, loading, router]);
+
+  const enterMock = () => {
     router.replace('/(tabs)/home');
+  };
+
+  const oauth = async () => {
+    if (usingMockGate) {
+      enterMock();
+      return;
+    }
+    setError(null);
+    setBusy('google');
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      const kind = mapAuthError(err);
+      setError(
+        kind === 'offline'
+          ? 'Sei offline. Riprova quando hai connessione.'
+          : 'Accesso non riuscito. Riprova.',
+      );
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
     <ScreenContainer contentStyle={styles.screen}>
+      <LinearGradient
+        colors={['#DCEBFE', 'rgba(220, 235, 254, 0)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.heroWash}
+      />
       <View style={styles.hero}>
-        <DoglyLogo width={240} />
-        <Text style={styles.tagline}>
-          Capisci cosa ti sta dicendo il tuo cane
-        </Text>
+        <View style={styles.logoBadge}>
+          <Image
+            source={logoMarkSource}
+            style={styles.logoMark}
+            resizeMode="contain"
+            accessibilityLabel="Dogly"
+          />
+        </View>
+        <Text style={styles.wordmark}>DOGLY</Text>
+        <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
       </View>
 
       <View style={styles.footer}>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>
-          <AuthEntry
+          <Button
             title="Continua con Google"
-            icon="logo-google"
-            onPress={enterApp}
+            variant="primary"
+            loading={busy === 'google'}
+            disabled={busy !== null}
+            onPress={() => void oauth()}
+            icon={
+              <Ionicons name="logo-google" size={19} color={colors.textOnPrimary} />
+            }
             testID="welcome-google"
           />
-          <AuthEntry
-            title="Registrazione"
-            icon="person-add-outline"
-            onPress={enterApp}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Registrati con email"
+            onPress={() => router.push('/(auth)/sign-in')}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.emailLink,
+              pressed && styles.emailLinkPressed,
+            ]}
             testID="welcome-register"
-          />
-          <AuthEntry
-            title="Login"
-            icon="log-in-outline"
-            onPress={enterApp}
-            testID="welcome-login"
-          />
+          >
+            <Text style={styles.emailLinkText}>Oppure registrati con email</Text>
+          </Pressable>
         </View>
-        <Text style={styles.hint}>Auth in arrivo — tap per entrare in demo</Text>
         <Text style={styles.terms}>
           Continuando accetti i termini e l'informativa privacy del servizio.
         </Text>
@@ -58,88 +110,76 @@ export default function WelcomeScreen() {
   );
 }
 
-function AuthEntry({
-  title,
-  icon,
-  onPress,
-  testID,
-}: {
-  title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-  testID: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityHint="Modalità demo: entra direttamente nell'app"
-      onPress={onPress}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.entry,
-        pressed && styles.entryPressed,
-      ]}
-    >
-      <Ionicons name={icon} size={20} color={colors.textMuted} />
-      <Text style={styles.entryLabel}>{title}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     justifyContent: 'space-between',
   },
+  heroWash: {
+    position: 'absolute',
+    top: -spacing.lg,
+    left: -spacing.lg,
+    right: -spacing.lg,
+    height: 400,
+  },
   hero: {
     alignItems: 'center',
-    marginTop: spacing.xxxl,
-    gap: spacing.xl,
+    marginTop: spacing.xxxl * 2,
+    gap: spacing.md,
+  },
+  logoBadge: {
+    width: 132,
+    height: 132,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.raised,
+  },
+  logoMark: {
+    width: 96,
+    height: 71,
+  },
+  wordmark: {
+    marginTop: spacing.sm,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
+    letterSpacing: 5,
   },
   tagline: {
-    fontSize: typography.size.lg,
+    fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
+    color: colors.accent,
+    letterSpacing: 0.4,
     textAlign: 'center',
-    lineHeight: typography.size.lg * typography.lineHeight.tight,
-    paddingHorizontal: spacing.lg,
   },
   footer: {
     paddingBottom: spacing.md,
   },
+  error: {
+    marginBottom: spacing.md,
+    color: colors.danger,
+    textAlign: 'center',
+    fontSize: typography.size.sm,
+  },
   actions: {
     gap: spacing.md,
   },
-  entry: {
-    flexDirection: 'row',
+  emailLink: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceMuted,
-    opacity: 0.48,
+    paddingVertical: spacing.sm,
   },
-  entryPressed: {
-    opacity: 0.62,
+  emailLinkPressed: {
+    opacity: 0.6,
   },
-  entryLabel: {
+  emailLinkText: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-    color: colors.textMuted,
-  },
-  hint: {
-    marginTop: spacing.lg,
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    textAlign: 'center',
+    color: colors.accent,
   },
   terms: {
-    marginTop: spacing.sm,
+    marginTop: spacing.lg,
     marginBottom: spacing.md,
     fontSize: typography.size.xs,
     color: colors.textMuted,

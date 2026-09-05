@@ -1,19 +1,11 @@
 /**
- * Behavior result (Spec V1 sez. 6, 6.1) — replica fedele di
- * docs/ux/mockup-result.png con riconciliazioni spec:
- * - pill di confidenza a band (bassa/media/alta), MAI percentuale (O-07);
- * - headline + summary probabilistici ("sembra / probabilmente / possibile");
- * - 3–5 evidence bullet con fonte tipizzata; alternativa quando incerto;
- * - feedback a tre vie one-tap ("Sì, è così / Non credo / Non lo so"),
- *   nessuna penalità per "Non lo so";
- * - ambiguous/insufficient sono risultati validi completati (sez. 6.1).
- * Stati obbligatori (sez. 6): clear, ambiguous, insufficient, safety message
- * (FEAR_INSECURITY/DISCOMFORT con copy prudente).
+ * Behavior result — GET evento reale + POST feedback.
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import type { FeedbackValue } from '@/contracts/types';
@@ -22,26 +14,57 @@ import { saveBehaviorFeedback } from '@/features/core/feedback';
 import { behaviorResultsMock } from '@/mocks/core';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
+import {
+  getBehaviorEvent,
+  mapApiEventToResult,
+} from '@/features/behavior/api';
+import { isApiConfigured } from '@/features/auth/env';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { analysisContext } = useCheckIn();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const result = eventId ? behaviorResultsMock[eventId] : undefined;
+  const useApi =
+    isApiConfigured() && Boolean(eventId) && !eventId?.startsWith('evt-');
 
-  // Feedback one-tap: locale finché non c'è POST /v1/.../feedback (sez. 9)
+  const query = useQuery({
+    queryKey: ['behavior-event', eventId],
+    queryFn: () => getBehaviorEvent(eventId!),
+    enabled: useApi,
+  });
+
+  const result = useApi
+    ? query.data
+      ? mapApiEventToResult(query.data)
+      : undefined
+    : eventId
+      ? behaviorResultsMock[eventId]
+      : undefined;
+
   const [feedback, setFeedback] = useState<FeedbackValue | null>(
     result?.feedback ?? null,
   );
+  const [savingFeedback, setSavingFeedback] = useState(false);
 
-  // Evento non ancora completato: rimanda alla schermata di processing
+  useEffect(() => {
+    if (result?.feedback) setFeedback(result.feedback);
+  }, [result?.feedback]);
+
   const notCompleted = result !== undefined && result.status !== 'COMPLETED';
   useEffect(() => {
     if (notCompleted && result) {
       router.replace(`/behavior/processing/${result.eventId}`);
     }
   }, [notCompleted, result, router]);
+
+  if (useApi && query.isLoading) {
+    return (
+      <ScreenContainer>
+        <ErrorState title="Caricamento" message="Sto aprendo il risultato…" />
+      </ScreenContainer>
+    );
+  }
 
   if (!result) {
     return (
@@ -50,7 +73,10 @@ export default function BehaviorResultScreen() {
           title="Risultato non trovato"
           message="Non riesco ad aprire questa analisi. Controlla il Diario."
         />
-        <Button title="Apri il Diario" onPress={() => router.replace('/(tabs)/diary')} />
+        <Button
+          title="Apri il Diario"
+          onPress={() => router.replace('/(tabs)/diary')}
+        />
       </ScreenContainer>
     );
   }
@@ -58,18 +84,26 @@ export default function BehaviorResultScreen() {
   if (notCompleted) {
     return (
       <ScreenContainer>
-        <ErrorState title="Analisi in corso" message="Ti porto allo stato dell'analisi…" />
+        <ErrorState
+          title="Analisi in corso"
+          message="Ti porto allo stato dell'analisi…"
+        />
       </ScreenContainer>
     );
   }
 
-  const handleFeedback = (value: FeedbackValue) => {
-    setFeedback(saveBehaviorFeedback(result.eventId, value));
+  const handleFeedback = async (value: FeedbackValue) => {
+    setSavingFeedback(true);
+    try {
+      const saved = await saveBehaviorFeedback(result.eventId, value);
+      setFeedback(saved);
+    } finally {
+      setSavingFeedback(false);
+    }
   };
 
   return (
     <ScreenContainer padded={false}>
-      {/* Top bar: back + titolo centrato (mockup) */}
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
@@ -91,13 +125,14 @@ export default function BehaviorResultScreen() {
           result={result}
           dogName={dog.name}
           feedback={feedback}
-          onFeedback={handleFeedback}
+          onFeedback={(v) => {
+            if (!savingFeedback) void handleFeedback(v);
+          }}
           careNote={
             analysisContext?.concern === 'off' ? analysisContext.note : null
           }
         />
 
-        {/* Safety message (sez. 6): copy prudente, mai diagnostico */}
         {(result.primary_intent === 'FEAR_INSECURITY' ||
           result.primary_intent === 'DISCOMFORT_AVOIDANCE') && (
           <Text style={styles.safetyNote}>

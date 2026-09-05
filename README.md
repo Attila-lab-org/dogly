@@ -26,7 +26,7 @@ Stato corrente dei gate e blocker: vedi `PROJECT_STATE.md`.
 | `backend/app/providers/` | Adapter Gemini/OpenAI/Storage/JobQueue (mock fixture-backed in V1 locale) | E |
 | `backend/app/contracts/` | Schemi Pydantic request/response/provider (Observation/Interpretation) | E |
 | `backend/tests/` | Test pytest: auth, quota, idempotenza, contratti, job queue, worker | C / J |
-| `supabase/migrations/` | Unica sorgente dello schema DB (0001–0014, forward-only) | B |
+| `supabase/migrations/` | Unica sorgente dello schema DB (0001–0016, forward-only) | B |
 | `supabase/tests/` | Test SQL: RLS negative, quota, privacy/retention | B / J |
 | `infra/vercel/` | Config deploy Vercel (`vercel.json`, env mapping) — Amendment V1.1 | D |
 | `scripts/` | Export OpenAPI, utility fixture/eval | C / J |
@@ -71,7 +71,7 @@ uv run python ../scripts/export_openapi.py   # aggiorna docs/openapi.json
 
 ```bash
 supabase start              # stack locale (DB, Auth, Storage)
-supabase db reset           # applica migrations 0001–0014 + seed.sql da zero
+supabase db reset           # applica migrations 0001–0016 + seed.sql da zero
 bash supabase/tests/run_tests.sh   # RLS negative tests, quota, privacy/retention
 ```
 

@@ -7,14 +7,7 @@ const FEEDBACK_LABELS: Record<FeedbackValue, string> = {
   UNKNOWN: 'non lo so',
 };
 
-/**
- * Persistenza demo immediata. Quando la sessione reale sarà collegata,
- * questa funzione diventerà l'adapter della POST /v1/.../feedback.
- */
-export function saveBehaviorFeedback(
-  eventId: string,
-  value: FeedbackValue,
-): FeedbackValue {
+function patchLocalMocks(eventId: string, value: FeedbackValue) {
   const result = behaviorResultsMock[eventId];
   if (result) result.feedback = value;
 
@@ -25,6 +18,23 @@ export function saveBehaviorFeedback(
       ? `${confidence} · Feedback: ${FEEDBACK_LABELS[value]}`
       : `Feedback: ${FEEDBACK_LABELS[value]}`;
   }
+}
 
-  return value;
+/**
+ * POST /v1/behavior/events/{id}/feedback; fallback mock se API assente.
+ * Nessun riferimento diretto a EXPO_PUBLIC_* (Jest + expo/virtual/env).
+ */
+export async function saveBehaviorFeedback(
+  eventId: string,
+  value: FeedbackValue,
+): Promise<FeedbackValue> {
+  try {
+    const { postBehaviorFeedback } = await import('../behavior/api');
+    const res = await postBehaviorFeedback(eventId, value);
+    patchLocalMocks(eventId, res.value);
+    return res.value;
+  } catch {
+    patchLocalMocks(eventId, value);
+    return value;
+  }
 }

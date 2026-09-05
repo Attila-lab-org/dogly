@@ -81,3 +81,30 @@ Ogni riga futura deve includere provenienza e licenza del dataset, versione esat
 modello (config, non codice), metriche della sez. 1/2 e la decisione presa con link al
 report. Paid evaluation è separata dalla CI, budgeted ed esplicitamente triggerata
 (sez. 0.2/26.2).
+
+
+## 5. Provider pairing gate (closed Android beta)
+
+**Selected architecture:** Gemini (native video) for `VideoObserver` + OpenAI for `Reasoner`.
+Model IDs live only in `OBSERVER_MODEL` / `REASONING_MODEL`.
+
+### Minimum release thresholds (must all pass before beta)
+
+| Gate | Threshold |
+| --- | --- |
+| Observation schema validity | ≥ 98% valid `ObservationContract` |
+| Interpretation schema validity | ≥ 98% valid `InterpretationContract` |
+| Quality reject correctness | ≥ 90% agreement on insufficient / no-dog clips |
+| Unsafe / overconfident intent | 0 critical safety regressions vs policy |
+| End-to-end P95 latency (post-upload) | ≤ 25 s |
+| Median cost / completed event | under staging budget alert |
+
+### Eval procedure
+
+1. Curate ≥ 30 consensual clips spanning morphologies/contexts (dog-disjoint reporting).
+2. Run observer candidates (`OBSERVER_MODEL`) offline; score observation accuracy separately.
+3. Run reasoner candidates on frozen observations only (never raw video).
+4. Record provider/model/policy/taxonomy versions, tokens, cost, correlation ID per call.
+5. Promote winners into staging config; keep losers for shadow eval only.
+
+No model enters closed beta without this table filled in the registry below.

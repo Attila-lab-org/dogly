@@ -22,6 +22,10 @@ from app.contracts.taxonomy import (
     IntentCode,
     PatternState,
     RetentionState,
+    SignalBehavior,
+    SignalCategory,
+    SignalExperimentStatus,
+    SignalMapState,
 )
 
 
@@ -65,6 +69,34 @@ class CareEventRec(BaseModel):
     completed_at: datetime | None = None
     reminder_sent_at: datetime | None = None
     created_at: datetime
+    updated_at: datetime
+
+
+class SignalExperimentRec(BaseModel):
+    id: str
+    dog_id: str
+    user_id: str
+    client_request_id: str
+    category: SignalCategory
+    sound_key: str
+    status: SignalExperimentStatus = SignalExperimentStatus.COMPLETED
+    observed_behaviors: list[SignalBehavior] = Field(default_factory=list)
+    reaction_latency_ms: int | None = None
+    result_summary: str
+    owner_feedback: FeedbackValue | None = None
+    created_at: datetime
+
+
+class SignalMapEntryRec(BaseModel):
+    dog_id: str
+    user_id: str
+    category: SignalCategory
+    state: SignalMapState = SignalMapState.DISCOVERING
+    attempt_count: int = 0
+    confirm_count: int = 0
+    contradict_count: int = 0
+    unknown_count: int = 0
+    last_summary: str | None = None
     updated_at: datetime
 
 

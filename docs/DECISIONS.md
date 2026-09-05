@@ -132,6 +132,33 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
 - **Rationale:** dare utilità quotidiana senza appesantire navigazione e
   onboarding, mantenendo il controllo del promemoria sempre esplicito.
 
+### ADR-010 — Dogly Signals: mappa sonora personale
+
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** POSTPONED
+- **Decisione:**
+  - Dogly Signals non è un traduttore uomo-cane e non attribuisce parole a un
+    abbaio o a un segnale.
+  - La promessa è personale e osservabile: Dogly aiuta a conoscere il modo in
+    cui quel cane risponde a segnali sonori selezionati.
+  - Categorie V1 consumer-safe: gioco, attenzione, curiosità, contatto.
+    Disagio, minaccia e segnali agonistici restano fuori dalla V1.
+  - Ingresso rapido in Home, accanto alle capacità secondarie, senza diventare
+    una quarta tab. Mappa completa nel profilo del cane.
+  - Copy Home: “Conosci il suo modo di rispondere” + “Un esperimento semplice,
+    personale, guidato da Dogly.”
+  - Feedback a tre vie “Sì / No / Non saprei”; il risultato salva solo
+    reazioni osservabili nella mappa personale del cane.
+  - Il telefono riproduce il segnale automaticamente dopo una baseline breve;
+    il tap “Ha reagito” misura il tempo di risposta.
+  - Nessun risultato AI viene simulato: un osservatore video automatico potrà
+    essere aggiunto solo con un provider reale validato.
+- **Rationale:** rendere Dogly più identitario e monetizzabile senza false
+  certezze: misuriamo comportamenti visibili e progressivi, non significati
+  universali inventati.
+- **Aggiornamento 2026-09-05:** servizio sospeso per evitare complessità e una
+  libreria sonora non ancora validata. Home, Profilo e deep link non lo
+  espongono; eventuale riattivazione richiede una nuova decisione prodotto.
+
 ## Decisioni aperte (Spec V1 sez. 32) — NON inventare risoluzioni
 
 | ID | Decisione | Si può codificare? | Regola vigente |

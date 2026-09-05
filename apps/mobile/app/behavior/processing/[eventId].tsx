@@ -1,60 +1,85 @@
 /**
- * Behavior processing (Spec V1 sez. 6, 7.2) — attesa guidata.
- * Stati obbligatori: queued, observing, interpreting, retrying
- * (FAILED_RETRYABLE con retry automatico idempotente), quality rejected
- * (REJECTED_QUALITY con rimborso quota, sez. 7.3), provider error
- * (FAILED_TERMINAL con rimborso + telemetria supporto).
- *
- * V1 mock: lo stato arriva da behaviorResultsMock; con il backend sarà
- * polling TanStack Query su GET /v1/behavior-events/{id} (sez. 9) +
- * aggiornamento push a COMPLETED.
+ * Behavior processing — polling GET /v1/behavior/events/{id}.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
 import { PROCESSING_STEP_ORDER, PROCESSING_STEPS } from '@/features/core/copy';
 import { behaviorResultsMock } from '@/mocks/core';
-
-/** Sequenza demo per l'evento appena registrato (mock del flusso 7.2). */
-const DEMO_PROGRESSION: BehaviorEventStatus[] = [
-  'QUEUED',
-  'OBSERVING',
-  'INTERPRETING',
-  'COMPLETED',
-];
+import {
+  getBehaviorEvent,
+  IN_PROGRESS_STATUSES,
+  isTerminalBehaviorStatus,
+} from '@/features/behavior/api';
+import { markUploadCompletedForEvent } from '@/features/behavior/upload';
+import { isApiConfigured } from '@/features/auth/env';
+import { useDogProfile } from '@/features/core/useDogProfile';
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const event = eventId ? behaviorResultsMock[eventId] : undefined;
+  const useApi = isApiConfigured() && Boolean(eventId) && !eventId?.startsWith('evt-');
 
-  // Evento ancora in pipeline (appena registrato): simula la progressione
-  // QUEUED → OBSERVING → INTERPRETING → COMPLETED (mock del flusso 7.2).
-  const isInProgress =
-    event?.status === 'QUEUED' ||
-    event?.status === 'OBSERVING' ||
-    event?.status === 'INTERPRETING';
-  const [demoIndex, setDemoIndex] = useState(0);
-  const status: BehaviorEventStatus | undefined = isInProgress
-    ? DEMO_PROGRESSION[demoIndex]
-    : event?.status;
+  const query = useQuery({
+    queryKey: ['behavior-event', eventId],
+    queryFn: () => getBehaviorEvent(eventId!),
+    enabled: useApi,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status;
+      if (!status || isTerminalBehaviorStatus(status)) return false;
+      return 2000;
+    },
+  });
 
+  const mockEvent = eventId ? behaviorResultsMock[eventId] : undefined;
+  const status: BehaviorEventStatus | undefined = useApi
+    ? query.data?.status
+    : mockEvent?.status === 'QUEUED' ||
+        mockEvent?.status === 'OBSERVING' ||
+        mockEvent?.status === 'INTERPRETING'
+      ? mockEvent.status
+      : mockEvent?.status;
+
+  // Mock progression for demo ids
   useEffect(() => {
-    if (!isInProgress) return;
-    if (demoIndex >= DEMO_PROGRESSION.length - 1) {
-      // COMPLETED → result (mobile fetch/push update, sez. 7.2)
-      router.replace('/behavior/result/evt-play');
+    if (useApi || !mockEvent) return;
+    if (mockEvent.status === 'COMPLETED') {
+      router.replace(`/behavior/result/${mockEvent.eventId}`);
       return;
     }
-    const t = setTimeout(() => setDemoIndex((i) => i + 1), 1600);
-    return () => clearTimeout(t);
-  }, [demoIndex, isInProgress, router]);
+    const order: BehaviorEventStatus[] = [
+      'QUEUED',
+      'OBSERVING',
+      'INTERPRETING',
+      'COMPLETED',
+    ];
+    let i = 0;
+    const t = setInterval(() => {
+      i += 1;
+      if (i >= order.length - 1) {
+        clearInterval(t);
+        router.replace('/behavior/result/evt-play');
+      }
+    }, 1600);
+    return () => clearInterval(t);
+  }, [useApi, mockEvent, router]);
 
-  if (!event) {
+  useEffect(() => {
+    if (!useApi || !query.data) return;
+    const s = query.data.status;
+    if (s === 'COMPLETED') {
+      markUploadCompletedForEvent(query.data.id);
+      router.replace(`/behavior/result/${query.data.id}`);
+    }
+  }, [useApi, query.data, router]);
+
+  if (useApi && query.isError) {
     return (
       <ScreenContainer>
         <ErrorState
@@ -66,7 +91,18 @@ export default function BehaviorProcessingScreen() {
     );
   }
 
-  /* Quality rejected: clip inutilizzabile, quota rimborsata (sez. 7.3) */
+  if (!useApi && !mockEvent) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          title="Analisi non trovata"
+          message="Non riesco a trovare questa analisi. Torna alla Home e riprova."
+        />
+        <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
+      </ScreenContainer>
+    );
+  }
+
   if (status === 'REJECTED_QUALITY') {
     return (
       <ScreenContainer>
@@ -76,7 +112,7 @@ export default function BehaviorProcessingScreen() {
           </View>
           <Text style={styles.stateTitle}>Il video non è abbastanza chiaro</Text>
           <Text style={styles.stateText}>
-            Non riesco a vedere bene Rocky: possibile scarsa luce, movimento
+            Non riesco a vedere bene {dog.name}: possibile scarsa luce, movimento
             sfocato o inquadratura parziale. Nessuna analisi è stata usata:
             riprova quando vuoi.
           </Text>
@@ -94,7 +130,6 @@ export default function BehaviorProcessingScreen() {
     );
   }
 
-  /* Provider error terminale: rimborso + telemetria supporto (sez. 7.2) */
   if (status === 'FAILED_TERMINAL') {
     return (
       <ScreenContainer>
@@ -122,9 +157,17 @@ export default function BehaviorProcessingScreen() {
     );
   }
 
-  /* Pipeline attiva: stepper + eventuale banner retry */
-  const currentOrder = PROCESSING_STEP_ORDER[status ?? 'QUEUED'] ?? 0;
-  const isRetrying = status === 'FAILED_RETRYABLE';
+  const displayStatus: BehaviorEventStatus =
+    status && IN_PROGRESS_STATUSES.includes(status)
+      ? status === 'FAILED_RETRYABLE'
+        ? 'FAILED_RETRYABLE'
+        : status === 'OBSERVING' || status === 'INTERPRETING' || status === 'QUEUED'
+          ? status
+          : 'QUEUED'
+      : status ?? 'QUEUED';
+
+  const currentOrder = PROCESSING_STEP_ORDER[displayStatus] ?? 0;
+  const isRetrying = displayStatus === 'FAILED_RETRYABLE';
 
   return (
     <ScreenContainer>
@@ -141,7 +184,7 @@ export default function BehaviorProcessingScreen() {
         <View style={styles.topSpacer} />
       </View>
 
-      <Text style={styles.heroTitle}>Sto osservando Rocky…</Text>
+      <Text style={styles.heroTitle}>Sto osservando {dog.name}…</Text>
       <Text style={styles.heroText}>
         Puoi chiudere questa schermata: ti avviso quando il risultato è pronto.
       </Text>

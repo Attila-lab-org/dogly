@@ -1,5 +1,5 @@
 /**
- * Modifica profilo cane — riusa campi onboarding, single source useDogProfile.
+ * Modifica profilo cane — PATCH /v1/dogs/{id} via react-query.
  */
 import React, { useState } from 'react';
 import {
@@ -16,9 +16,11 @@ import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
-  updateDogProfile,
+  profileToUpdateBody,
   useDogProfile,
+  useUpdateDogMutation,
 } from '@/features/core/useDogProfile';
+import { useSession } from '@/features/auth/SessionProvider';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { pickAvatarPhoto } from '@/features/photos/share';
 import { BreedPicker } from '@/features/dogs/BreedPicker';
@@ -35,6 +37,7 @@ import {
   ageLabelFromYears,
   ageYearsFromLabel,
 } from '@/features/dogs/profileDates';
+import { setProfileVisibility as apiSetVisibility } from '@/features/photos/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
 
@@ -42,6 +45,8 @@ export default function DogEditScreen() {
   const router = useRouter();
   const { dogId } = useLocalSearchParams<{ dogId: string }>();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
+  const updateMutation = useUpdateDogMutation(dogId ?? dog.id);
   const [name, setName] = useState(dog.name);
   const [ageYears, setAgeYears] = useState<number | null>(
     dog.birthDate
@@ -57,9 +62,8 @@ export default function DogEditScreen() {
   const [profileVisibility, setProfileVisibility] = useState(
     dog.profileVisibility,
   );
-  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  const save = async () => {
     if (!name.trim()) {
       Alert.alert('Nome richiesto', 'Il nome del cane è obbligatorio.');
       return;
@@ -68,22 +72,34 @@ export default function DogEditScreen() {
       Alert.alert('Età richiesta', 'Seleziona l’età.');
       return;
     }
-    setSaving(true);
     const breedLabel = breedLabelFromSelection(breedSelection);
-    updateDogProfile({
-      name: name.trim(),
-      ageLabel: ageLabelFromYears(ageYears),
-      birthDate,
-      sizeLabel,
-      breedLabel,
-      isMix: breedSelection.kind === 'mixed',
-      photoUri,
-      profileVisibility,
-      publicConsentVersion:
-        profileVisibility === 'public' ? 'public-profile-v1' : null,
-    });
-    setSaving(false);
-    router.back();
+    const ageLabel = ageLabelFromYears(ageYears);
+
+    try {
+      if (!usingMockGate && dogId) {
+        await updateMutation.mutateAsync(
+          profileToUpdateBody({
+            name: name.trim(),
+            ageLabel,
+            birthDate,
+            sizeLabel,
+            breedLabel,
+            isMix: breedSelection.kind === 'mixed',
+          }),
+        );
+        await apiSetVisibility(
+          dogId,
+          profileVisibility === 'public' ? 'PUBLIC' : 'PRIVATE',
+          profileVisibility === 'public' ? 'public-profile-v1' : undefined,
+        );
+      }
+      router.back();
+    } catch {
+      Alert.alert(
+        'Salvataggio non riuscito',
+        'Controlla la connessione e riprova.',
+      );
+    }
   };
 
   return (
@@ -146,10 +162,7 @@ export default function DogEditScreen() {
           <Pressable
             key={size}
             onPress={() => setSizeLabel(size)}
-            style={[
-              styles.chip,
-              sizeLabel === size && styles.chipActive,
-            ]}
+            style={[styles.chip, sizeLabel === size && styles.chipActive]}
           >
             <Text
               style={[
@@ -222,7 +235,11 @@ export default function DogEditScreen() {
         ))}
       </View>
 
-      <Button title="Salva" loading={saving} onPress={save} />
+      <Button
+        title="Salva"
+        loading={updateMutation.isPending}
+        onPress={() => void save()}
+      />
     </ScreenContainer>
   );
 }
