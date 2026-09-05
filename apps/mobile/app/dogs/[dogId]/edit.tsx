@@ -21,7 +21,7 @@ import {
   useDogProfile,
   useUpdateDogMutation,
 } from '@/features/core/useDogProfile';
-import { persistDogAvatar } from '@/features/dogs/avatar';
+import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
 import { useSession } from '@/features/auth/SessionProvider';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { pickAvatarPhoto } from '@/features/photos/share';
@@ -113,7 +113,32 @@ export default function DogEditScreen() {
   };
 
   const save = async () => {
-    if (pendingPhotoUri) {
+    let photoUploadedOnSave = false;
+    if (
+      !usingMockGate &&
+      dogId &&
+      photoUri &&
+      isLocalPhotoUri(photoUri)
+    ) {
+      setUploadingPhoto(true);
+      try {
+        const savedUrl = await persistDogAvatar(dogId, photoUri);
+        if (savedUrl) setPhotoUri(savedUrl);
+        if (userId) {
+          await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
+        }
+        setPendingPhotoUri(null);
+        photoUploadedOnSave = true;
+      } catch (error) {
+        const detail =
+          error instanceof Error ? error.message : 'Errore sconosciuto';
+        Alert.alert('Foto non salvata', detail);
+        return;
+      } finally {
+        setUploadingPhoto(false);
+      }
+    }
+    if (pendingPhotoUri && !photoUploadedOnSave) {
       Alert.alert(
         'Foto non ancora salvata',
         'Tocca nuovamente la foto e completa il caricamento prima di uscire.',
