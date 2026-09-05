@@ -11,13 +11,24 @@ from __future__ import annotations
 import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import Settings
 
 _engine: AsyncEngine | None = None
+
+
+def _asyncpg_connect_args() -> dict[str, Any]:
+    """Disable caches and use collision-free names for Supavisor transaction mode."""
+    return {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+    }
 
 
 def get_engine(settings: Settings) -> AsyncEngine | None:
@@ -64,7 +75,11 @@ def get_engine(settings: Settings) -> AsyncEngine | None:
                 parts.fragment,
             )
         )
-        _engine = create_async_engine(database_url, pool_pre_ping=True)
+        _engine = create_async_engine(
+            database_url,
+            connect_args=_asyncpg_connect_args(),
+            poolclass=NullPool,
+        )
     return _engine
 
 
