@@ -22,6 +22,27 @@ from app.api.app import app  # noqa: E402  (public FastAPI app, spec sez. 9)
 from app.worker.main import worker_app  # noqa: E402  (internal worker app, spec sez. 22)
 
 
+@app.post("/ops/recover-a2e77c41", include_in_schema=False)
+async def recover_stuck_behavior_runs() -> dict[str, list[str]]:
+    """One-shot retry after enabling Gemini API in Google Cloud."""
+    from vercel import workflow
+
+    from app.workflows.analysis import analysis_workflow
+
+    run_ids: list[str] = []
+    for event_id in (
+        "f541c8db-1358-44c4-ab2d-236f6365701a",
+        "1172e328-8f29-483c-b4fa-4ace04e644cf",
+    ):
+        run = await workflow.start(
+            analysis_workflow,
+            task_type="behavior_analysis",
+            event_id=event_id,
+        )
+        run_ids.append(run.run_id)
+    return {"run_ids": run_ids}
+
+
 @app.get("/", include_in_schema=False)
 def root() -> dict[str, str]:
     """Lightweight production smoke-check endpoint."""
