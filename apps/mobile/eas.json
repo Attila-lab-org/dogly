@@ -9,7 +9,8 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "development"
     },
     "staging": {
       "distribution": "internal",
@@ -30,7 +31,8 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -42,7 +44,8 @@
         "EXPO_PUBLIC_API_URL": "https://dogly-eight.vercel.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://zcnzkpxgpbdspfmselwz.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_PiOO12UvFge_Cpex5jrXMQ_BqcfAGuG"
-      }
+      },
+      "channel": "production"
     },
     "beta": {
       "extends": "staging",

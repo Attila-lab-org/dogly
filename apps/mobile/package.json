@@ -6,8 +6,10 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "web": "expo start --web --port 8083",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "update:staging": "eas update --channel staging --environment preview",
     "typecheck": "tsc --noEmit",
     "test": "jest"
   },
@@ -38,6 +40,7 @@
     "expo-splash-screen": "~57.0.8",
     "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.21",
     "expo-web-browser": "~57.0.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",

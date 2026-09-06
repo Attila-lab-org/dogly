@@ -76,6 +76,12 @@
         "projectId": "6061c72f-e31c-44fe-ade3-ac1c1a76bfc1"
       }
     },
-    "owner": "attila-lab-di-loredana-guida"
+    "owner": "attila-lab-di-loredana-guida",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6061c72f-e31c-44fe-ade3-ac1c1a76bfc1"
+    }
   }
 }

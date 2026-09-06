@@ -2,6 +2,8 @@
 
 Checklist manuale per chiudere G0 / B-3. Eseguire su device fisico o emulatore
 con build EAS `preview` (Android) e, quando disponibile, iOS TestFlight.
+Per il ciclo quotidiano web → OTA staging → smoke nativo seguire
+`docs/TESTING_WORKFLOW.md`.
 
 ## Auth & profilo
 - [ ] Sign-in Supabase (email magic / provider configurato)
