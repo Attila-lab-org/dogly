@@ -4,6 +4,7 @@
  * viene cancellato solo dopo upload verificato (complete OK).
  */
 import { deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { completeFecalCapture, initFecalCapture } from './api';
 import { putSignedUpload } from '../../lib/signedUpload';
@@ -16,6 +17,17 @@ function newId(prefix: string): string {
 }
 
 async function fileBytes(localUri: string): Promise<number> {
+  if (
+    Platform.OS === 'web' &&
+    (localUri.startsWith('blob:') || localUri.startsWith('http'))
+  ) {
+    const response = await fetch(localUri);
+    if (!response.ok) {
+      throw new Error(`Lettura foto fallita (${response.status})`);
+    }
+    return Math.max(1, (await response.blob()).size);
+  }
+
   try {
     const info = await getInfoAsync(localUri);
     if (info.exists && 'size' in info && typeof info.size === 'number') {
@@ -28,6 +40,11 @@ async function fileBytes(localUri: string): Promise<number> {
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {
+  if (Platform.OS === 'web' && uri.startsWith('blob:')) {
+    URL.revokeObjectURL(uri);
+    return;
+  }
+
   try {
     await deleteAsync(uri, { idempotent: true });
   } catch {

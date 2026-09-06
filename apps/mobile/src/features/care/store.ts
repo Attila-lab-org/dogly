@@ -92,6 +92,7 @@ function snapshot() {
 export function useCareEvents(dogId: string): CareEvent[] {
   const allEvents = useSyncExternalStore(subscribe, snapshot, snapshot);
   useEffect(() => {
+    if (!dogId) return;
     void hydrateCareEvents(dogId);
   }, [dogId]);
   return useMemo(
@@ -104,6 +105,7 @@ export function useCareEvents(dogId: string): CareEvent[] {
 }
 
 async function hydrateCareEvents(dogId: string): Promise<void> {
+  if (!dogId) return;
   if (hydratedDogs.has(dogId)) return;
   hydratedDogs.add(dogId);
   if (!(await getAccessToken())) return;
