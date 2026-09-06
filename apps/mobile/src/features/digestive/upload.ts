@@ -6,6 +6,7 @@
 import { deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
 
 import { completeFecalCapture, initFecalCapture } from './api';
+import { putSignedUpload } from '../../lib/signedUpload';
 import { discardUploadsForUri, getUploadQueue } from '../../lib/uploadQueue';
 
 const draining = new Set<string>();
@@ -24,23 +25,6 @@ async function fileBytes(localUri: string): Promise<number> {
     // fallback
   }
   return 1;
-}
-
-async function putSignedUpload(
-  uploadUrl: string,
-  localUri: string,
-  contentType: string,
-): Promise<void> {
-  const fileResponse = await fetch(localUri);
-  const body = await fileResponse.blob();
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body,
-  });
-  if (!response.ok) {
-    throw new Error(`Upload firmato fallito (${response.status})`);
-  }
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {

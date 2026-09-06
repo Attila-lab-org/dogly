@@ -9,6 +9,8 @@ import {
   completeBehaviorCapture,
   initBehaviorCapture,
 } from './api';
+import { processPendingDigestiveUpload } from '../digestive/upload';
+import { putSignedUpload } from '../../lib/signedUpload';
 import { discardUploadsForUri, getUploadQueue } from '../../lib/uploadQueue';
 
 const draining = new Set<string>();
@@ -31,23 +33,6 @@ async function fileBytes(localUri: string): Promise<number> {
     // fallback
   }
   return 1;
-}
-
-async function putSignedUpload(
-  uploadUrl: string,
-  localUri: string,
-  contentType: string,
-): Promise<void> {
-  const fileResponse = await fetch(localUri);
-  const body = await fileResponse.blob();
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body,
-  });
-  if (!response.ok) {
-    throw new Error(`Upload firmato fallito (${response.status})`);
-  }
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {
@@ -232,7 +217,11 @@ export async function recoverAndDrainUploads(userId: string): Promise<void> {
       item.state === 'uploaded'
     ) {
       try {
-        await processPendingUpload(item.id);
+        if (item.domain === 'DIGESTIVE') {
+          await processPendingDigestiveUpload(item.id);
+        } else {
+          await processPendingUpload(item.id);
+        }
       } catch {
         // resta in recoverable; riproverà al prossimo resume
       }
