@@ -90,6 +90,7 @@ export function getSupabaseClient(): SupabaseClient {
       storage: Platform.OS === 'web' ? webAuthStorage : secureAuthStorage,
       autoRefreshToken: true,
       persistSession: true,
+      flowType: 'pkce',
       detectSessionInUrl: false,
     },
   });
