@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "framework": "fastapi"
+  "framework": "fastapi",
+  "env": {
+    "OBSERVER_MODEL": "gemini-3.8-flash"
+  }
 }
