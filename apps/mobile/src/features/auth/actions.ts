@@ -7,9 +7,11 @@ import { Platform } from 'react-native';
 
 import { getSupabaseClient } from '../../lib/supabase';
 import { isSupabaseConfigured } from './env';
-import { parseOAuthCallbackUrl } from './oauthCallback';
+import { oauthRedirectTo, parseOAuthCallbackUrl } from './oauthCallback';
 
-WebBrowser.maybeCompleteAuthSession();
+if (Platform.OS !== 'web') {
+  WebBrowser.maybeCompleteAuthSession();
+}
 
 export type AuthErrorKind = 'auth_error' | 'account_exists' | 'offline';
 
@@ -119,20 +121,21 @@ export async function signInWithGoogle(): Promise<void> {
   const supabase = getSupabaseClient();
   const web = Platform.OS === 'web';
   const redirectTo = web
-    ? `${globalThis.location.origin}/auth/callback`
+    ? oauthRedirectTo('web', globalThis.location.origin)
     : Linking.createURL('auth/callback');
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
-      skipBrowserRedirect: !web,
+      skipBrowserRedirect: true,
     },
   });
   if (error) throw error;
-  // Sul web Supabase trasferisce la pagina corrente a Google e ritorna
-  // sull'URL HTTP sopra. WebBrowser serve solo alla build nativa.
-  if (web) return;
   if (!data.url) throw new Error('URL OAuth mancante');
+  if (web) {
+    globalThis.location.assign(data.url);
+    return;
+  }
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success' || !result.url) {

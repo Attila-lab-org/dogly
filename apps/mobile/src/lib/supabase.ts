@@ -96,7 +96,7 @@ export function getSupabaseClient(): SupabaseClient {
       autoRefreshToken: true,
       persistSession: true,
       flowType: 'pkce',
-      detectSessionInUrl: false,
+      detectSessionInUrl: Platform.OS === 'web',
     },
   });
   // Fast Refresh può rivalutare il modulo sul web. Conservare il client sul

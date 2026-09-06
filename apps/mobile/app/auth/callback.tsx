@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 
 import { Button, ScreenContainer } from '@/components';
 import { completeOAuthCallback } from '@/features/auth/actions';
+import { resolveAuthCallbackUrl } from '@/features/auth/oauthCallback';
 import { colors, spacing, typography } from '@/theme/tokens';
 
 export default function OAuthCallbackScreen() {
   const router = useRouter();
-  const currentUrl = Linking.useURL();
+  const linkingUrl = Linking.useURL();
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +20,14 @@ export default function OAuthCallbackScreen() {
 
     void (async () => {
       try {
-        const callbackUrl = currentUrl ?? (await Linking.getInitialURL());
+        const callbackUrl = resolveAuthCallbackUrl({
+          platform: Platform.OS,
+          browserHref:
+            typeof globalThis.location === 'undefined'
+              ? null
+              : globalThis.location.href,
+          linkingUrl: linkingUrl ?? (await Linking.getInitialURL()),
+        });
         if (!callbackUrl) {
           throw new Error('URL di accesso mancante');
         }
@@ -31,7 +39,7 @@ export default function OAuthCallbackScreen() {
         );
       }
     })();
-  }, [currentUrl, router]);
+  }, [linkingUrl, router]);
 
   return (
     <ScreenContainer>
