@@ -49,6 +49,13 @@ export function captureReducer(
 ): CaptureState {
   switch (event.type) {
     case 'PERMISSION_GRANTED':
+      if (
+        state.phase === 'recording' ||
+        state.phase === 'completed' ||
+        state.phase === 'too_short'
+      ) {
+        return { ...state, audioDegraded: !event.micGranted };
+      }
       return {
         phase: 'ready',
         elapsedSeconds: 0,

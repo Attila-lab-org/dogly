@@ -50,6 +50,7 @@ export default function BehaviorCaptureScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [cameraReady, setCameraReady] = useState(false);
+  const [canStop, setCanStop] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -59,8 +60,12 @@ export default function BehaviorCaptureScreen() {
   const pendingUriRef = useRef<string | null>(null);
   const uploadStartedRef = useRef(false);
   const mountedRef = useRef(true);
-  const sessionActiveRef = useRef(false);
-  const ignoreStopUntilRef = useRef(0);
+  const permissionReadyRef = useRef(false);
+  const recordingPromiseRef = useRef<Promise<{ uri?: string } | undefined> | null>(
+    null,
+  );
+  const canStopRef = useRef(false);
+  const allowStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const micGranted = Boolean(micPermission?.granted);
 
@@ -71,11 +76,19 @@ export default function BehaviorCaptureScreen() {
     }
   };
 
+  const clearAllowStopTimer = () => {
+    if (allowStopTimerRef.current) {
+      clearTimeout(allowStopTimerRef.current);
+      allowStopTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       clearTimer();
+      clearAllowStopTimer();
       try {
         cameraRef.current?.stopRecording();
       } catch {
@@ -85,6 +98,7 @@ export default function BehaviorCaptureScreen() {
   }, []);
 
   useEffect(() => {
+    if (permissionReadyRef.current) return;
     (async () => {
       if (!cameraPermission) return;
       if (!cameraPermission.granted) {
@@ -99,6 +113,7 @@ export default function BehaviorCaptureScreen() {
         const mic = await requestMicPermission();
         micOk = mic.granted;
       }
+      permissionReadyRef.current = true;
       dispatch({ type: 'PERMISSION_GRANTED', micGranted: micOk });
     })();
   }, [
@@ -110,7 +125,11 @@ export default function BehaviorCaptureScreen() {
 
   useEffect(() => {
     const onAppState = (next: AppStateStatus) => {
-      if (next !== 'active' && state.phase === 'recording') {
+      if (
+        next !== 'active' &&
+        state.phase === 'recording' &&
+        canStopRef.current
+      ) {
         try {
           cameraRef.current?.stopRecording();
         } catch {
@@ -148,21 +167,31 @@ export default function BehaviorCaptureScreen() {
   }, []);
 
   const startRecording = useCallback(async () => {
-    if (sessionActiveRef.current) return;
+    if (recordingPromiseRef.current) return;
+    if (!cameraReady || !cameraRef.current) {
+      setUploadError('Fotocamera non pronta. Aspetta un attimo e riprova.');
+      return;
+    }
+
     setUploadError(null);
     pendingUriRef.current = null;
     uploadStartedRef.current = false;
-    if (!cameraReady || !cameraRef.current) return;
-
-    sessionActiveRef.current = true;
-    ignoreStopUntilRef.current = Date.now() + 900;
-    dispatch({ type: 'START' });
+    canStopRef.current = false;
+    setCanStop(false);
     elapsedRef.current = 0;
     clearTimer();
+    clearAllowStopTimer();
+    dispatch({ type: 'START' });
+
+    const recording = cameraRef.current.recordAsync({
+      maxDuration: CAPTURE_MAX_SECONDS,
+    });
+    recordingPromiseRef.current = recording;
+
     timerRef.current = setInterval(() => {
       elapsedRef.current += 1;
       dispatch({ type: 'TICK' });
-      if (elapsedRef.current >= CAPTURE_MAX_SECONDS) {
+      if (elapsedRef.current >= CAPTURE_MAX_SECONDS && canStopRef.current) {
         try {
           cameraRef.current?.stopRecording();
         } catch {
@@ -171,43 +200,40 @@ export default function BehaviorCaptureScreen() {
       }
     }, 1000);
 
+    // Android: stopRecording prima che il muxer abbia frame → video vuoto.
+    allowStopTimerRef.current = setTimeout(() => {
+      canStopRef.current = true;
+      if (mountedRef.current) setCanStop(true);
+    }, 700);
+
     try {
-      const result = await cameraRef.current.recordAsync({
-        maxDuration: CAPTURE_MAX_SECONDS,
-      });
+      const result = await recording;
       if (!mountedRef.current) return;
       finishWithUri(result?.uri ?? null, elapsedRef.current);
     } catch {
       clearTimer();
       if (mountedRef.current) {
-        setUploadError('Registrazione interrotta. Riprova.');
+        setUploadError(
+          'La registrazione si è chiusa subito. Riprova tenendo fermo il telefono.',
+        );
         dispatch({ type: 'RESET' });
       }
     } finally {
-      sessionActiveRef.current = false;
+      recordingPromiseRef.current = null;
+      canStopRef.current = false;
+      clearAllowStopTimer();
+      if (mountedRef.current) setCanStop(false);
     }
   }, [cameraReady, finishWithUri]);
 
   const stopRecording = useCallback(() => {
+    if (!canStopRef.current || !recordingPromiseRef.current) return;
     try {
       cameraRef.current?.stopRecording();
     } catch {
       // noop
     }
   }, []);
-
-  const onRecordPressIn = useCallback(() => {
-    if (state.phase === 'ready') {
-      void startRecording();
-      return;
-    }
-    if (
-      state.phase === 'recording' &&
-      Date.now() >= ignoreStopUntilRef.current
-    ) {
-      stopRecording();
-    }
-  }, [state.phase, startRecording, stopRecording]);
 
   const retake = useCallback(() => {
     const discardedUri = pendingUriRef.current;
@@ -367,6 +393,7 @@ export default function BehaviorCaptureScreen() {
                   facing="back"
                   mode="video"
                   mute={!micGranted}
+                  videoStabilizationMode="off"
                   active
                   onCameraReady={() => setCameraReady(true)}
                   onMountError={() => setCameraReady(false)}
@@ -408,9 +435,9 @@ export default function BehaviorCaptureScreen() {
                 </View>
               ) : (
                 <Text style={styles.hint}>
-                  Tocca una volta per iniziare. Non serve tenere premuto:
-                  registro da {CAPTURE_MIN_SECONDS} a {CAPTURE_MAX_SECONDS}{' '}
-                  secondi e mi fermo da solo.
+                  {cameraReady
+                    ? `Tocca il pulsante rosso. Non tenere premuto: registro da ${CAPTURE_MIN_SECONDS} a ${CAPTURE_MAX_SECONDS} secondi.`
+                    : 'Attendi, sto aprendo la fotocamera…'}
                 </Text>
               )}
               {state.phase === 'ready' && state.audioDegraded && (
@@ -418,36 +445,44 @@ export default function BehaviorCaptureScreen() {
                   Microfono non disponibile: analizzerò solo il video.
                 </Text>
               )}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  state.phase === 'recording'
-                    ? 'Termina registrazione'
-                    : 'Inizia registrazione'
-                }
-                onPressIn={onRecordPressIn}
-                delayPressIn={0}
-                hitSlop={16}
-                style={[
-                  styles.recordButton,
-                  state.phase === 'recording' && styles.recordButtonActive,
-                ]}
-                testID={
-                  state.phase === 'recording' ? 'capture-stop' : 'capture-start'
-                }
-              >
-                <View
-                  style={
-                    state.phase === 'recording'
-                      ? styles.stopButtonInner
-                      : styles.recordButtonInner
-                  }
-                />
-              </Pressable>
+              {state.phase === 'ready' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Inizia registrazione"
+                  disabled={!cameraReady}
+                  onPress={() => void startRecording()}
+                  hitSlop={16}
+                  style={({ pressed }) => [
+                    styles.recordButton,
+                    !cameraReady && styles.recordButtonDisabled,
+                    pressed && styles.recordButtonPressed,
+                  ]}
+                  testID="capture-start"
+                >
+                  <View style={styles.recordButtonInner} />
+                </Pressable>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Termina registrazione"
+                  disabled={!canStop}
+                  onPress={stopRecording}
+                  hitSlop={16}
+                  style={[
+                    styles.recordButton,
+                    styles.recordButtonActive,
+                    !canStop && styles.recordButtonDisabled,
+                  ]}
+                  testID="capture-stop"
+                >
+                  <View style={styles.stopButtonInner} />
+                </Pressable>
+              )}
               {state.phase === 'recording' ? (
                 <Text style={styles.hintSmall}>
-                  Sto registrando. Tocca di nuovo per fermare, dopo almeno{' '}
-                  {CAPTURE_MIN_SECONDS} secondi.
+                  {canStop
+                    ? `Sto registrando. Tocca il quadratino per fermare, dopo almeno ${CAPTURE_MIN_SECONDS} secondi.`
+                    : 'Attendi: sto avviando la registrazione…'}
                 </Text>
               ) : null}
             </>
@@ -608,6 +643,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dangerSoft,
     borderWidth: 6,
     transform: [{ scale: 1.04 }],
+  },
+  recordButtonDisabled: {
+    opacity: 0.45,
   },
   recordButtonInner: {
     width: 54,

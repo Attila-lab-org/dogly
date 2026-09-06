@@ -36,6 +36,14 @@ describe('captureMachine (sez. 13)', () => {
     ).toBe('permission_denied');
   });
 
+  it('permesso ripetuto non interrompe una registrazione già partita', () => {
+    let s = captureReducer(ready, { type: 'START' });
+    s = captureReducer(s, { type: 'TICK' });
+    s = captureReducer(s, { type: 'PERMISSION_GRANTED', micGranted: true });
+    expect(s.phase).toBe('recording');
+    expect(s.elapsedSeconds).toBe(1);
+  });
+
   it('permesso concesso → ready; mic negato → audioDegraded ma non bloccante', () => {
     expect(ready.phase).toBe('ready');
     const noMic = captureReducer(initialCaptureState, {
