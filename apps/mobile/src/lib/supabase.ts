@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 import {
   getSupabasePublishableKey,
@@ -13,6 +14,18 @@ import {
  */
 
 const CHUNK = 1800;
+
+const webAuthStorage = {
+  async getItem(key: string): Promise<string | null> {
+    return globalThis.localStorage?.getItem(key) ?? null;
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    globalThis.localStorage?.setItem(key, value);
+  },
+  async removeItem(key: string): Promise<void> {
+    globalThis.localStorage?.removeItem(key);
+  },
+};
 
 const secureAuthStorage = {
   async getItem(key: string): Promise<string | null> {
@@ -74,7 +87,7 @@ export function getSupabaseClient(): SupabaseClient {
 
   client = createClient(url, publishableKey, {
     auth: {
-      storage: secureAuthStorage,
+      storage: Platform.OS === 'web' ? webAuthStorage : secureAuthStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

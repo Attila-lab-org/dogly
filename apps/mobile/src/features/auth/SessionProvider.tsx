@@ -37,6 +37,7 @@ import {
 } from '../../mocks/session';
 
 type DogListResponse = { items: Array<{ id: string; name: string }> };
+const SESSION_BOOT_TIMEOUT_MS = 8_000;
 
 export type SessionContextValue = {
   /** Bootstrapping auth + dogs */
@@ -137,12 +138,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     let cancelled = false;
     const supabase = getSupabaseClient();
+    const bootTimeout = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, SESSION_BOOT_TIMEOUT_MS);
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      await applySession(data.session);
-      if (!cancelled) setLoading(false);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        await applySession(data.session);
+      } catch {
+        if (!cancelled) {
+          setSession(null);
+          setHasDog(false);
+          setPrimaryDogId(null);
+        }
+      } finally {
+        clearTimeout(bootTimeout);
+        if (!cancelled) setLoading(false);
+      }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
@@ -154,6 +168,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
+      clearTimeout(bootTimeout);
       sub.subscription.unsubscribe();
     };
   }, [authConfigured, usingMockGate, applySession]);
