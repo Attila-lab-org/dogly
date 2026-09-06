@@ -59,6 +59,8 @@ export default function BehaviorCaptureScreen() {
   const pendingUriRef = useRef<string | null>(null);
   const uploadStartedRef = useRef(false);
   const mountedRef = useRef(true);
+  const sessionActiveRef = useRef(false);
+  const ignoreStopUntilRef = useRef(0);
 
   const micGranted = Boolean(micPermission?.granted);
 
@@ -146,11 +148,14 @@ export default function BehaviorCaptureScreen() {
   }, []);
 
   const startRecording = useCallback(async () => {
+    if (sessionActiveRef.current) return;
     setUploadError(null);
     pendingUriRef.current = null;
     uploadStartedRef.current = false;
     if (!cameraReady || !cameraRef.current) return;
 
+    sessionActiveRef.current = true;
+    ignoreStopUntilRef.current = Date.now() + 900;
     dispatch({ type: 'START' });
     elapsedRef.current = 0;
     clearTimer();
@@ -178,8 +183,10 @@ export default function BehaviorCaptureScreen() {
         setUploadError('Registrazione interrotta. Riprova.');
         dispatch({ type: 'RESET' });
       }
+    } finally {
+      sessionActiveRef.current = false;
     }
-  }, [cameraReady, micGranted, finishWithUri]);
+  }, [cameraReady, finishWithUri]);
 
   const stopRecording = useCallback(() => {
     try {
@@ -188,6 +195,19 @@ export default function BehaviorCaptureScreen() {
       // noop
     }
   }, []);
+
+  const onRecordPressIn = useCallback(() => {
+    if (state.phase === 'ready') {
+      void startRecording();
+      return;
+    }
+    if (
+      state.phase === 'recording' &&
+      Date.now() >= ignoreStopUntilRef.current
+    ) {
+      stopRecording();
+    }
+  }, [state.phase, startRecording, stopRecording]);
 
   const retake = useCallback(() => {
     const discardedUri = pendingUriRef.current;
@@ -374,57 +394,62 @@ export default function BehaviorCaptureScreen() {
             <Text style={styles.audioNote}>{uploadError}</Text>
           ) : null}
 
-          {state.phase === 'ready' && !uploading && (
+          {(state.phase === 'ready' || state.phase === 'recording') &&
+            !uploading && (
             <>
-              <Text style={styles.hint}>
-                Inquadra {dog.name} e registra da {CAPTURE_MIN_SECONDS} a{' '}
-                {CAPTURE_MAX_SECONDS} secondi: mi fermo da solo.
-              </Text>
-              {state.audioDegraded && (
+              {state.phase === 'recording' ? (
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.min(100, progress * 100)}%` },
+                    ]}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.hint}>
+                  Tocca una volta per iniziare. Non serve tenere premuto:
+                  registro da {CAPTURE_MIN_SECONDS} a {CAPTURE_MAX_SECONDS}{' '}
+                  secondi e mi fermo da solo.
+                </Text>
+              )}
+              {state.phase === 'ready' && state.audioDegraded && (
                 <Text style={styles.audioNote}>
                   Microfono non disponibile: analizzerò solo il video.
                 </Text>
               )}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Inizia registrazione"
-                onPress={() => void startRecording()}
-                style={({ pressed }) => [
+                accessibilityLabel={
+                  state.phase === 'recording'
+                    ? 'Termina registrazione'
+                    : 'Inizia registrazione'
+                }
+                onPressIn={onRecordPressIn}
+                delayPressIn={0}
+                hitSlop={16}
+                style={[
                   styles.recordButton,
-                  pressed && styles.recordButtonPressed,
+                  state.phase === 'recording' && styles.recordButtonActive,
                 ]}
-                testID="capture-start"
+                testID={
+                  state.phase === 'recording' ? 'capture-stop' : 'capture-start'
+                }
               >
-                <View style={styles.recordButtonInner} />
-              </Pressable>
-            </>
-          )}
-
-          {state.phase === 'recording' && (
-            <>
-              <View style={styles.progressTrack}>
                 <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${Math.min(100, progress * 100)}%` },
-                  ]}
+                  style={
+                    state.phase === 'recording'
+                      ? styles.stopButtonInner
+                      : styles.recordButtonInner
+                  }
                 />
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Termina registrazione"
-                onPress={stopRecording}
-                style={({ pressed }) => [
-                  styles.recordButton,
-                  pressed && styles.recordButtonPressed,
-                ]}
-                testID="capture-stop"
-              >
-                <View style={styles.stopButtonInner} />
               </Pressable>
-              <Text style={styles.hintSmall}>
-                Puoi fermarti quando vuoi dopo {CAPTURE_MIN_SECONDS} secondi
-              </Text>
+              {state.phase === 'recording' ? (
+                <Text style={styles.hintSmall}>
+                  Sto registrando. Tocca di nuovo per fermare, dopo almeno{' '}
+                  {CAPTURE_MIN_SECONDS} secondi.
+                </Text>
+              ) : null}
             </>
           )}
 
@@ -578,6 +603,11 @@ const styles = StyleSheet.create({
   },
   recordButtonPressed: {
     opacity: 0.85,
+  },
+  recordButtonActive: {
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 6,
+    transform: [{ scale: 1.04 }],
   },
   recordButtonInner: {
     width: 54,
