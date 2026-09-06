@@ -55,8 +55,17 @@ def build_reasoner(settings: Settings) -> Reasoner:
 
 
 def build_digestive_vision(settings: Settings) -> DigestiveVision:
-    # Digestive real provider is out of first Android beta core path.
-    return MockDigestiveVision(settings)
+    provider = (settings.digestive_vision_provider or "mock").lower()
+    if provider == "mock":
+        return MockDigestiveVision(settings)
+    if provider == "openai":
+        from app.providers.openai_digestive_vision import OpenAIDigestiveVision
+
+        return OpenAIDigestiveVision(settings)
+    raise ValueError(
+        f"Unsupported DIGESTIVE_VISION_PROVIDER: "
+        f"{settings.digestive_vision_provider}"
+    )
 
 
 def build_cost_meter(settings: Settings) -> CostMeter:

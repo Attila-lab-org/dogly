@@ -5,9 +5,14 @@ to a NON-retryable terminal failure (never RetryableTaskError)."""
 import httpx
 import pytest
 from app.config import Settings
-from app.providers import gemini_observer, openai_reasoner
+from app.providers import (
+    gemini_observer,
+    openai_digestive_vision,
+    openai_reasoner,
+)
 from app.providers.budget import BudgetExceededError, check_daily_budget
 from app.providers.gemini_observer import GeminiVideoObserver
+from app.providers.openai_digestive_vision import OpenAIDigestiveVision
 from app.providers.openai_reasoner import OpenAIReasoner
 from app.worker.handlers import process_behavior_event
 
@@ -94,6 +99,7 @@ def _settings(**overrides) -> Settings:
         "app_env": "local",
         "observer_budget_usd_per_day": 0.5,
         "reasoner_budget_usd_per_day": 0.5,
+        "digestive_vision_budget_usd_per_day": 0.5,
     }
     values.update(overrides)
     return Settings(**values)
@@ -127,6 +133,25 @@ async def test_openai_reasoner_refuses_before_any_api_call(monkeypatch):
             eligible_memory=[],
             knowledge_context=None,
             dog_context=None,
+        )
+
+
+async def test_openai_digestive_refuses_before_any_api_call(monkeypatch):
+    monkeypatch.setattr(
+        openai_digestive_vision,
+        "get_engine",
+        lambda s: _FakeEngine(spent_usd=0.9),
+    )
+    observer = OpenAIDigestiveVision(
+        _settings(
+            digestive_vision_provider="openai",
+            digestive_vision_model="gpt-5-mini",
+            openai_api_key="oai-key",
+        )
+    )
+    with pytest.raises(BudgetExceededError):
+        await observer.observe_stool(
+            image_ref="https://example.test/stool.jpg"
         )
 
 

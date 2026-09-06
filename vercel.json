@@ -3,6 +3,8 @@
   "version": 2,
   "framework": "fastapi",
   "env": {
-    "OBSERVER_MODEL": "gemini-3.8-flash"
+    "OBSERVER_MODEL": "gemini-3.8-flash",
+    "DIGESTIVE_VISION_PROVIDER": "openai",
+    "DIGESTIVE_VISION_MODEL": "gpt-5-mini"
   }
 }

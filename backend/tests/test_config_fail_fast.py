@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from app.api.deps import build_default_state
 from app.config import Settings
+from pydantic import ValidationError
 
 
 def test_local_allows_mocks() -> None:
@@ -36,6 +35,8 @@ def test_staging_accepts_complete_non_mock_wiring() -> None:
         observer_model="gemini-2.0-flash",
         reasoning_provider="openai",
         reasoning_model="gpt-4.1-mini",
+        digestive_vision_provider="openai",
+        digestive_vision_model="gpt-5-mini",
         gemini_api_key="gem-key",
         openai_api_key="oai-key",
     )

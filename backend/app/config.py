@@ -55,8 +55,10 @@ class Settings(BaseSettings):
     ai_kill_switch: bool = False
     observer_kill_switch: bool = False
     reasoner_kill_switch: bool = False
+    digestive_vision_kill_switch: bool = False
     observer_budget_usd_per_day: float = 50.0
     reasoner_budget_usd_per_day: float = 50.0
+    digestive_vision_budget_usd_per_day: float = 25.0
 
     # --- Storage ---
     storage_provider: str = "mock"
@@ -107,9 +109,17 @@ class Settings(BaseSettings):
             missing.append("OBSERVER_PROVIDER!=mock")
         if self.reasoning_provider in _FORBIDDEN_MOCK:
             missing.append("REASONING_PROVIDER!=mock")
+        if self.digestive_vision_provider in _FORBIDDEN_MOCK:
+            missing.append("DIGESTIVE_VISION_PROVIDER!=mock")
         if self.observer_provider == "gemini" and not self.gemini_api_key:
             missing.append("GEMINI_API_KEY")
-        if self.reasoning_provider == "openai" and not self.openai_api_key:
+        if (
+            (
+                self.reasoning_provider == "openai"
+                or self.digestive_vision_provider == "openai"
+            )
+            and not self.openai_api_key
+        ):
             missing.append("OPENAI_API_KEY")
 
         if missing:

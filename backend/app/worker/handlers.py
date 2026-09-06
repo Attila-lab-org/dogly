@@ -411,6 +411,26 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             await digestive_db.save_fecal_state(state.engine, event)
             await arm_fecal_expiry(state.engine, event.id)
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_TIMEOUT.value}
+    except BudgetExceededError:
+        event.status = "FAILED_TERMINAL"
+        event.last_error_code = ErrorCode.AI_BUDGET_EXCEEDED.value
+        if not event.quota_refunded and not event.quota_committed:
+            await quota.refund(
+                event.user_id,
+                AnalysisDomain.DIGESTIVE,
+                reference_id=event.id,
+            )
+            event.quota_refunded = True
+        event.completed_at = now_utc()
+        schedule_digestive_raw_expiry(event, state.settings)
+        if state.engine is not None:
+            await digestive_db.save_fecal_state(state.engine, event)
+            await arm_fecal_expiry(state.engine, event.id)
+        return {
+            "event_id": event.id,
+            "status": event.status,
+            "error": ErrorCode.AI_BUDGET_EXCEEDED.value,
+        }
     except Exception:  # noqa: BLE001 -- deliberate: any digestive-vision failure is a
         # terminal event with quota refund (sez. 22), never crashes the worker.
         event.status = "FAILED_TERMINAL"

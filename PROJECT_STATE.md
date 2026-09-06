@@ -89,5 +89,6 @@ Fix da audit esterno verificati su codice reale e implementati; backend `131 pas
 - **Coda locale reale**: `InMemoryJobQueue` con dispatcher in-process (il fake queue smaltisce davvero; prima gli eventi restavano `QUEUED` per sempre in locale). Sweep CLI: `uv run python -m app.worker.sweep` ripesca `QUEUED/FAILED_RETRYABLE` e li analizza con drain.
 - **Migrazione 0028** (`rls_fk_searchpath_hardening`): 71 policy riscritte con `(select auth.uid())`, 6 indici FK mancanti, `search_path` fissato su 4 funzioni — applicata a Supabase production il 2026-09-07.
 - **Video web coerente**: il MIME reale prodotto da `MediaRecorder` viene propagato fino a storage e Gemini; WebM non viene più caricato dichiarandolo falsamente MP4.
+- **Digestive vision reale**: le foto digestive private vengono passate a OpenAI tramite URL Supabase firmato a breve durata; output validato come `StoolObservationContract`, un solo tentativo di repair, budget/kill switch dedicati e regole di sicurezza deterministiche separate dal modello.
 
-Verifica locale: backend `131 passed`; mobile TypeScript verde, Jest `115 passed` in 20 suite.
+Verifica locale: backend `134 passed`; mobile TypeScript verde, Jest `115 passed` in 20 suite.
