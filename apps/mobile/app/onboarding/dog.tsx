@@ -6,7 +6,7 @@
  * Validazione con zod (schema condiviso, pronto a essere spostato lato
  * contratti quando il backend espone POST /v1/dogs).
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -67,7 +67,8 @@ type DogDraft = z.infer<typeof dogSchema>;
 export default function DogOnboardingScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { usingMockGate, markDogCreated, userId } = useSession();
+  const { usingMockGate, markDogCreated, userId, hasDog, refreshDogs } =
+    useSession();
   const createDog = useCreateDogMutation();
   const [savingPhoto, setSavingPhoto] = useState(false);
   const [draft, setDraft] = useState<DogDraft>({
@@ -82,6 +83,16 @@ export default function DogOnboardingScreen() {
     kind: 'unselected',
   });
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshDogs();
+  }, [refreshDogs]);
+
+  useEffect(() => {
+    if (hasDog) {
+      router.replace('/(tabs)/home');
+    }
+  }, [hasDog, router]);
 
   const patch = (partial: Partial<DogDraft>) =>
     setDraft((d) => ({ ...d, ...partial }));
@@ -155,6 +166,13 @@ export default function DogOnboardingScreen() {
         saveError instanceof Error && saveError.message
           ? saveError.message
           : 'Controlla la connessione e riprova.';
+      if (detail.includes('limited number of active dogs')) {
+        setError(
+          'Su questo account c’è già un cane. Il piano attuale ne permette uno solo.',
+        );
+        void refreshDogs();
+        return;
+      }
       setError(`Non sono riuscito a salvare il profilo. ${detail}`);
     }
   };
