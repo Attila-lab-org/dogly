@@ -103,6 +103,14 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     expect(derived.lastInsight?.label).toBe('Sembra rilassato');
   });
 
+  it('upload bloccato non tiene la Home sul banner analisi in corso', () => {
+    const derived = deriveHomeState(
+      [diaryItem({ id: 'evt-upload', status: 'UPLOADING' })],
+      now,
+    );
+    expect(derived.processingEventId).toBeNull();
+  });
+
   it('eventi falliti terminali non contano come processing', () => {
     const derived = deriveHomeState(
       [diaryItem({ id: 'evt-fail', status: 'FAILED_TERMINAL' })],

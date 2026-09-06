@@ -63,10 +63,9 @@ export async function fetchUsageSummary(): Promise<UsageSummary> {
   };
 }
 
-/** Stati non terminali: l'evento è ancora in lavorazione (sez. 6 Home). */
+/** Analisi server in corso. UPLOADING/DRAFT non sono analisi: se restano
+ *  bloccati non devono tenere la Home sul banner “in corso”. */
 const IN_PROGRESS_STATUSES = new Set<string>([
-  'DRAFT',
-  'UPLOADING',
   'QUEUED',
   'OBSERVING',
   'INTERPRETING',
