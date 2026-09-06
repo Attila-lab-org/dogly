@@ -150,8 +150,12 @@ export default function DogOnboardingScreen() {
         }
       }
       router.replace('/(tabs)/home');
-    } catch {
-      setError('Non sono riuscito a salvare il profilo. Controlla la connessione.');
+    } catch (saveError) {
+      const detail =
+        saveError instanceof Error && saveError.message
+          ? saveError.message
+          : 'Controlla la connessione e riprova.';
+      setError(`Non sono riuscito a salvare il profilo. ${detail}`);
     }
   };
 

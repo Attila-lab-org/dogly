@@ -6,6 +6,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.deps import AppState, build_default_state
@@ -39,6 +40,18 @@ def create_app(state: AppState | None = None) -> FastAPI:
     resolved = state or build_default_state()
     init_sentry(resolved.settings)
     app.state.cbi = resolved
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:8083",
+            "http://127.0.0.1:8083",
+            "http://localhost:8081",
+            "http://127.0.0.1:8081",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.exception_handler(ApiError)
     async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:

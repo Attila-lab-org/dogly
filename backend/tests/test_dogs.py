@@ -75,3 +75,18 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     listed = await client.get("/v1/dogs", headers=auth_headers)
     assert listed.json()["items"][0]["photo_path"] == path
     assert listed.json()["items"][0]["photo_url"]
+
+
+async def test_web_preview_can_call_dogs_from_localhost(
+    client: httpx.AsyncClient,
+) -> None:
+    preflight = await client.options(
+        "/v1/dogs",
+        headers={
+            "Origin": "http://localhost:8083",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == "http://localhost:8083"
