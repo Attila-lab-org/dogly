@@ -4,13 +4,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from pydantic import ValidationError
-
 from app.api.pagination import paginate_desc
 from app.api.routes.digestive import _public_digestive_status
 from app.contracts.api import BehaviorCaptureInitRequest, FecalInitRequest
 from app.domains.billing_db import _webhook_status_to_db
 from app.providers.billing import map_revenuecat_event
+from pydantic import ValidationError
 
 
 @dataclass
@@ -74,14 +73,22 @@ def test_revenuecat_billing_issue_maps_to_grace_period():
     assert _webhook_status_to_db(update["status"]) == "GRACE_PERIOD"
 
 
-def test_capture_contracts_reject_unsupported_media():
+def test_capture_contracts_allow_webm_and_reject_unsupported_media():
+    request = BehaviorCaptureInitRequest(
+        dog_id="dog",
+        client_request_id="request-123",
+        duration_ms=8_000,
+        bytes=1_000,
+        content_type="video/webm",
+    )
+    assert request.content_type == "video/webm"
     with pytest.raises(ValidationError):
         BehaviorCaptureInitRequest(
             dog_id="dog",
             client_request_id="request-123",
             duration_ms=8_000,
             bytes=1_000,
-            content_type="video/webm",
+            content_type="video/x-msvideo",
         )
     with pytest.raises(ValidationError):
         FecalInitRequest(

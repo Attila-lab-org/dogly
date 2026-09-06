@@ -6,6 +6,7 @@ import {
   AppState,
   type AppStateStatus,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -35,6 +36,10 @@ import {
   enqueueAndUploadBehaviorClip,
 } from '@/features/behavior/upload';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
+import {
+  startWebVideoRecording,
+  type WebVideoRecording,
+} from '@/features/behavior/webRecord';
 import { isApiConfigured } from '@/features/auth/env';
 
 export default function BehaviorCaptureScreen() {
@@ -66,6 +71,7 @@ export default function BehaviorCaptureScreen() {
   );
   const canStopRef = useRef(false);
   const allowStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webRecordingRef = useRef<WebVideoRecording | null>(null);
 
   const micGranted = Boolean(micPermission?.granted);
 
@@ -89,10 +95,14 @@ export default function BehaviorCaptureScreen() {
       mountedRef.current = false;
       clearTimer();
       clearAllowStopTimer();
-      try {
-        cameraRef.current?.stopRecording();
-      } catch {
-        // noop
+      if (Platform.OS === 'web') {
+        webRecordingRef.current?.stop();
+      } else {
+        try {
+          cameraRef.current?.stopRecording();
+        } catch {
+          // noop
+        }
       }
     };
   }, []);
@@ -130,10 +140,14 @@ export default function BehaviorCaptureScreen() {
         state.phase === 'recording' &&
         canStopRef.current
       ) {
-        try {
-          cameraRef.current?.stopRecording();
-        } catch {
-          // noop
+        if (Platform.OS === 'web') {
+          webRecordingRef.current?.stop();
+        } else {
+          try {
+            cameraRef.current?.stopRecording();
+          } catch {
+            // noop
+          }
         }
       }
     };
@@ -168,7 +182,7 @@ export default function BehaviorCaptureScreen() {
 
   const startRecording = useCallback(async () => {
     if (recordingPromiseRef.current) return;
-    if (!cameraReady || !cameraRef.current) {
+    if (!cameraReady || (Platform.OS !== 'web' && !cameraRef.current)) {
       setUploadError('Fotocamera non pronta. Aspetta un attimo e riprova.');
       return;
     }
@@ -181,26 +195,48 @@ export default function BehaviorCaptureScreen() {
     elapsedRef.current = 0;
     clearTimer();
     clearAllowStopTimer();
-    dispatch({ type: 'START' });
 
-    const recording = cameraRef.current.recordAsync({
-      maxDuration: CAPTURE_MAX_SECONDS,
-    });
+    let recording: Promise<{ uri?: string } | undefined>;
+    if (Platform.OS === 'web') {
+      try {
+        const session = startWebVideoRecording();
+        webRecordingRef.current = session;
+        recording = session.finished.then((uri) =>
+          uri ? { uri } : { uri: undefined },
+        );
+      } catch (error) {
+        setUploadError(
+          error instanceof Error
+            ? error.message
+            : 'Non sono riuscito ad avviare la registrazione.',
+        );
+        return;
+      }
+    } else {
+      recording = cameraRef.current!.recordAsync({
+        maxDuration: CAPTURE_MAX_SECONDS,
+      });
+    }
+
+    dispatch({ type: 'START' });
     recordingPromiseRef.current = recording;
 
     timerRef.current = setInterval(() => {
       elapsedRef.current += 1;
       dispatch({ type: 'TICK' });
       if (elapsedRef.current >= CAPTURE_MAX_SECONDS && canStopRef.current) {
-        try {
-          cameraRef.current?.stopRecording();
-        } catch {
-          // noop
+        if (Platform.OS === 'web') {
+          webRecordingRef.current?.stop();
+        } else {
+          try {
+            cameraRef.current?.stopRecording();
+          } catch {
+            // noop
+          }
         }
       }
     }, 1000);
 
-    // Android: stopRecording prima che il muxer abbia frame → video vuoto.
     allowStopTimerRef.current = setTimeout(() => {
       canStopRef.current = true;
       if (mountedRef.current) setCanStop(true);
@@ -220,6 +256,7 @@ export default function BehaviorCaptureScreen() {
       }
     } finally {
       recordingPromiseRef.current = null;
+      webRecordingRef.current = null;
       canStopRef.current = false;
       clearAllowStopTimer();
       if (mountedRef.current) setCanStop(false);
@@ -228,6 +265,10 @@ export default function BehaviorCaptureScreen() {
 
   const stopRecording = useCallback(() => {
     if (!canStopRef.current || !recordingPromiseRef.current) return;
+    if (Platform.OS === 'web') {
+      webRecordingRef.current?.stop();
+      return;
+    }
     try {
       cameraRef.current?.stopRecording();
     } catch {

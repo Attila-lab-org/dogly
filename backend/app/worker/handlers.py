@@ -56,8 +56,13 @@ from app.domains.retention import (
 )
 from app.knowledge.advice import build_advice
 from app.knowledge.retrieval import retrieve_evidence
+from app.knowledge.safety import (
+    deterministic_safety_flags as behavior_safety_flags,
+)
+from app.knowledge.safety import merge_safety_flags
 from app.providers import supabase_auth_admin
 from app.providers.base import EligiblePatternSummary
+from app.providers.budget import BudgetExceededError
 from app.providers.expo_push import send_push
 
 MAX_TASK_ATTEMPTS = 5
@@ -66,6 +71,18 @@ logger = logging.getLogger(__name__)
 
 class InvalidTransition(Exception):
     pass
+
+
+class RetryableTaskError(Exception):
+    """Transient task failure: the event is durably persisted as
+    FAILED_RETRYABLE and the raised error signals the platform (Vercel
+    Workflows step retry with backoff, sez. 22) to re-run the task.
+    Exhausted attempts and non-retryable failures (e.g. budget errors) never
+    raise this: they resolve to a normal FAILED_TERMINAL result."""
+
+    def __init__(self, payload: dict):
+        super().__init__(payload["error"])
+        self.payload = payload
 
 
 def transition(event: BehaviorEventRec, to: BehaviorEventStatus) -> None:
@@ -137,7 +154,11 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
         transition(event, BehaviorEventStatus.FAILED_RETRYABLE)
         if state.engine is not None:
             await behavior_db.save_event_state(state.engine, event)
-        return {"event_id": event.id, "status": event.status.value, "error": code.value}
+        # The transient failure MUST propagate: only a raised error makes the
+        # workflow step fail so the platform retries with backoff (sez. 22).
+        raise RetryableTaskError(
+            {"event_id": event.id, "status": event.status.value, "error": code.value}
+        )
     # Terminal: refund the reservation once (sez. 7.3 / 22).
     if event.status == BehaviorEventStatus.FAILED_RETRYABLE or event.status in (BehaviorEventStatus.OBSERVING, BehaviorEventStatus.INTERPRETING):
         transition(event, BehaviorEventStatus.FAILED_TERMINAL)
@@ -196,11 +217,17 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             )
         observation, obs_usage = await state.observer.observe(
             video_ref=video_ref,
+            content_type=capture.content_type,
             policy_version=INTERPRETATION_POLICY_VERSION,
             duration_ms=capture.duration_ms,
         )
     except TimeoutError:
         return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
+    except BudgetExceededError:
+        # Budget exhaustion is operational, not transient (sez. 25):
+        # always a NON-retryable terminal failure — retrying would burn
+        # budget. Never raises RetryableTaskError.
+        return await _fail(state, event, ErrorCode.AI_BUDGET_EXCEEDED, retryable=False)
     except Exception:  # noqa: BLE001 -- deliberate: any non-timeout provider/observer
         # failure maps to a retryable job failure (sez. 22), never crashes the worker.
         return await _fail(state, event, ErrorCode.PROCESSING_FAILED, retryable=True)
@@ -234,6 +261,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         knowledge_context = retrieve_evidence(
             observation, capture.context_bucket, dog_context
         )
+        # Sicurezza deterministica PRIMA dell'LLM (stesse regole SAFE_*_001 del
+        # retrieval, fonte unica in knowledge.safety): il reasoner le riceve
+        # come vincoli stabiliti e il merge finale le rende effettive anche se
+        # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
+        det_flags = behavior_safety_flags(observation, dog_context)
         interpretation, rea_usage = await state.reasoner.interpret(
             observation=observation,
             context_bucket=capture.context_bucket,
@@ -241,6 +273,14 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             eligible_memory=await _eligible_memory(state, event.dog_id),
             knowledge_context=knowledge_context,
             dog_context=dog_context,
+            deterministic_safety_flags=det_flags,
+        )
+        interpretation = interpretation.model_copy(
+            update={
+                "safety_flags": merge_safety_flags(
+                    interpretation.safety_flags, det_flags
+                )
+            }
         )
         if (
             knowledge_context.coverage == "LOW"
@@ -251,6 +291,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             )
     except TimeoutError:
         return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
+    except BudgetExceededError:
+        # Budget exhaustion is operational, not transient (sez. 25):
+        # always a NON-retryable terminal failure — retrying would burn
+        # budget. Never raises RetryableTaskError.
+        return await _fail(state, event, ErrorCode.AI_BUDGET_EXCEEDED, retryable=False)
     except Exception:  # noqa: BLE001 -- deliberate: schema/validation/provider errors
         # follow the one-repair-then-terminal path (sez. 22), never crash the worker.
         return await _fail(state, event, ErrorCode.PROVIDER_SCHEMA_INVALID, retryable=True)
@@ -339,25 +384,32 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         observation, usage = await state.digestive_vision.observe_stool(image_ref=image_ref)
     except TimeoutError:
         event.last_error_code = ErrorCode.PROVIDER_TIMEOUT.value
-        event.status = (
-            "FAILED_RETRYABLE"
-            if event.attempt_count < MAX_TASK_ATTEMPTS
-            else "FAILED_TERMINAL"
-        )
-        if event.status == "FAILED_TERMINAL":
-            if not event.quota_refunded and not event.quota_committed:
-                await quota.refund(
-                    event.user_id,
-                    AnalysisDomain.DIGESTIVE,
-                    reference_id=event.id,
-                )
-                event.quota_refunded = True
-            event.completed_at = now_utc()
-            schedule_digestive_raw_expiry(event, state.settings)
+        if event.attempt_count < MAX_TASK_ATTEMPTS:
+            event.status = "FAILED_RETRYABLE"
+            if state.engine is not None:
+                await digestive_db.save_fecal_state(state.engine, event)
+            # Transient failure must propagate so the workflow step fails and
+            # the platform retries with backoff (sez. 22).
+            raise RetryableTaskError(
+                {
+                    "event_id": event.id,
+                    "status": event.status,
+                    "error": ErrorCode.PROVIDER_TIMEOUT.value,
+                }
+            )
+        event.status = "FAILED_TERMINAL"
+        if not event.quota_refunded and not event.quota_committed:
+            await quota.refund(
+                event.user_id,
+                AnalysisDomain.DIGESTIVE,
+                reference_id=event.id,
+            )
+            event.quota_refunded = True
+        event.completed_at = now_utc()
+        schedule_digestive_raw_expiry(event, state.settings)
         if state.engine is not None:
             await digestive_db.save_fecal_state(state.engine, event)
-            if event.status == "FAILED_TERMINAL":
-                await arm_fecal_expiry(state.engine, event.id)
+            await arm_fecal_expiry(state.engine, event.id)
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_TIMEOUT.value}
     except Exception:  # noqa: BLE001 -- deliberate: any digestive-vision failure is a
         # terminal event with quota refund (sez. 22), never crashes the worker.

@@ -32,6 +32,7 @@ from app.providers.factory import (
     build_reasoner,
     build_storage,
 )
+from app.providers.mock import InMemoryJobQueue
 
 
 @dataclass
@@ -58,7 +59,7 @@ def build_default_state(settings: Settings | None = None) -> AppState:
         get_registry()
     store = InMemoryStore()
     engine = get_engine(settings)
-    return AppState(
+    state = AppState(
         settings=settings,
         store=store,
         jwks_provider=build_jwks_provider(settings),
@@ -70,6 +71,14 @@ def build_default_state(settings: Settings | None = None) -> AppState:
         cost_meter=build_cost_meter(settings),
         engine=engine,
     )
+    if settings.job_queue_backend == "fake" and isinstance(state.queue, InMemoryJobQueue):
+        # Local dev: la coda fake smaltisce davvero in-process (altrimenti gli
+        # eventi restano QUEUED per sempre — vedi app/worker/local.py).
+        from app.worker.local import make_local_dispatcher
+
+        state.queue.dispatcher = make_local_dispatcher(state)
+
+    return state
 
 
 def get_state(request: Request) -> AppState:

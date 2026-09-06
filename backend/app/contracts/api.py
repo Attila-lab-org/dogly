@@ -7,9 +7,9 @@ No endpoint accepts owner_id/user_id from the client as authority (sez. 9.1).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.contracts.interpretation import AlternativeIntent, EvidenceItem, SafetyFlag
 from app.contracts.taxonomy import (
@@ -166,27 +166,99 @@ class DogListResponse(CursorPage):
     items: list[DogOut]
 
 
+LifestyleProvenance = Literal[
+    "OWNER_REPORTED", "DOGLY_OBSERVED", "SYSTEM_INFERRED", "VET_RECORDED"
+]
+
+# Progressive-profiling single-choice answers sent by the mobile client
+# (apps/mobile/src/features/lifestyle/types.ts); null = "non so" / unset.
+LifestyleActivityChoice = Literal["CALM", "MODERATE", "VERY_ACTIVE"]
+LifestyleSleepChoice = Literal["REGULAR", "IRREGULAR"]
+LifestyleTimeAloneChoice = Literal["LITTLE", "SOME_HOURS", "MANY_HOURS"]
+LifestyleSocialChoice = Literal["DOGS", "PEOPLE", "BOTH", "LITTLE"]
+LifestyleEnrichmentChoice = Literal["TOYS", "NEW_WALKS", "NOTHING_SPECIAL"]
+
+_ShortNote = Annotated[str, Field(max_length=100)]
+_LongNote = Annotated[str, Field(max_length=200)]
+
+
+class MealSchedule(BaseModel):
+    """Structured meal rhythm (quantified routine fields)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    meals_per_day: int = Field(ge=0, le=10)
+    typical_times: list[Annotated[str, Field(max_length=16)]] = Field(
+        default_factory=list, max_length=6
+    )
+
+
+class LifestyleRoutine(BaseModel):
+    """Typed owner-reported daily routine.
+
+    Closed key set with bounds (extra="forbid"): the API is the enforcement
+    point, since the DB column stays jsonb. `null` clears a previously
+    reported value. Keys match the mobile client's snake_case payload
+    (activity, sleep, time_alone, social, enrichment) plus quantified fields.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # --- Mobile progressive-profiling fields (brief V2 sez. 7/13) ---
+    activity: LifestyleActivityChoice | None = None
+    sleep: LifestyleSleepChoice | None = None
+    time_alone: LifestyleTimeAloneChoice | None = None
+    social: LifestyleSocialChoice | None = None
+    enrichment: LifestyleEnrichmentChoice | None = None
+    # --- Quantified routine fields ---
+    sleep_hours: float | None = Field(default=None, ge=0, le=24)
+    walks_per_day: int | None = Field(default=None, ge=0, le=10)
+    walk_minutes_average: int | None = Field(default=None, ge=0, le=500)
+    activity_level: Literal["low", "moderate", "high"] | None = None
+    alone_hours: float | None = Field(default=None, ge=0, le=24)
+    meal_schedule: MealSchedule | None = None
+    usual_rest_periods: list[_ShortNote] | None = Field(default=None, max_length=20)
+    social_contacts: list[_ShortNote] | None = Field(default=None, max_length=20)
+    usual_triggers: list[_ShortNote] | None = Field(default=None, max_length=20)
+    recent_changes: list[_LongNote] | None = Field(default=None, max_length=10)
+
+
+class LifestylePreferences(BaseModel):
+    """Typed owner-reported preferences (closed key set, extra="forbid")."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    walk_environment: Literal["CITY", "COUNTRY", "MIXED"] | None = None
+    preferred_activities: list[_ShortNote] | None = Field(default=None, max_length=20)
+    toys: list[_ShortNote] | None = Field(default=None, max_length=20)
+    dislikes: list[_ShortNote] | None = Field(default=None, max_length=20)
+    notes: str | None = Field(default=None, max_length=500)
+
+
 class DogLifestyleOut(BaseModel):
     dog_id: str
+    # Read path stays dict-shaped: legacy jsonb rows (pre-typing) must not
+    # fail GET validation. Writes are validated via DogLifestylePatch.
     routine: dict[str, Any] = Field(default_factory=dict)
     preferences: dict[str, Any] = Field(default_factory=dict)
-    provenance: dict[
-        str,
-        Literal["OWNER_REPORTED", "DOGLY_OBSERVED", "SYSTEM_INFERRED", "VET_RECORDED"],
-    ] = Field(default_factory=dict)
+    provenance: dict[str, LifestyleProvenance] = Field(default_factory=dict)
     last_confirmed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
 
 class DogLifestylePatch(BaseModel):
-    routine: dict[str, Any] | None = None
-    preferences: dict[str, Any] | None = None
-    provenance: dict[
-        str,
-        Literal["OWNER_REPORTED", "DOGLY_OBSERVED", "SYSTEM_INFERRED", "VET_RECORDED"],
-    ] | None = None
+    routine: LifestyleRoutine | None = None
+    preferences: LifestylePreferences | None = None
+    provenance: dict[str, LifestyleProvenance] | None = None
     confirm: bool = False
+
+    def routine_update(self) -> dict[str, Any]:
+        """Validated routine patch, only keys explicitly sent (null clears)."""
+        return self.routine.model_dump(exclude_unset=True) if self.routine else {}
+
+    def preferences_update(self) -> dict[str, Any]:
+        return self.preferences.model_dump(exclude_unset=True) if self.preferences else {}
 
     @model_validator(mode="after")
     def require_lifestyle_change(self) -> DogLifestylePatch:
@@ -342,7 +414,7 @@ class BehaviorCaptureInitRequest(BaseModel):
     duration_ms: int = Field(gt=0)
     has_audio: bool = True
     bytes: int = Field(gt=0, le=100_000_000)
-    content_type: Literal["video/mp4", "video/quicktime"] = "video/mp4"
+    content_type: Literal["video/mp4", "video/quicktime", "video/webm"] = "video/mp4"
     context_bucket: ContextBucket = ContextBucket.UNKNOWN
 
 

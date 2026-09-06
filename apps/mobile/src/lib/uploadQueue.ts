@@ -1,4 +1,5 @@
 import type { AnalysisDomain, MediaUploadState } from '../contracts/types';
+import { openUploadQueueDatabase } from './openUploadQueueDatabase';
 
 /**
  * Coda pending-upload su SQLite (Spec V1 sez. 5.3):
@@ -229,8 +230,6 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
   return queue;
 }
 
-const DB_NAME = 'cbi-pending-uploads.db';
-
 /**
  * Rimuove dalla coda tutte le righe pending per un file locale (es. "Registra
  * di nuovo" dopo un upload fallito): senza rimozione la coda riproverebbe un
@@ -253,23 +252,10 @@ export function discardUploadsForUri(
 
 let defaultQueue: UploadQueue | null = null;
 
-/** Coda di produzione (SQLite on-device). Lazy: aperta al primo uso. */
+/** Coda di produzione: SQLite sul telefono, memoria sul browser. */
 export function getUploadQueue(): UploadQueue {
   if (!defaultQueue) {
-    // require lazy: expo-sqlite è un modulo nativo e non deve essere caricato
-    // in contesti senza runtime nativo (es. unit test jest in node).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const SQLite = require('expo-sqlite') as typeof import('expo-sqlite');
-    const native = SQLite.openDatabaseSync(DB_NAME);
-    const db: UploadQueueDatabase = {
-      exec: (sql) => native.execSync(sql),
-      run: (sql, params) => {
-        const r = native.runSync(sql, ...(params as never[] ?? []));
-        return { changes: r.changes };
-      },
-      all: (sql, params) => native.getAllSync(sql, ...(params as never[] ?? [])),
-    };
-    defaultQueue = createUploadQueue(db);
+    defaultQueue = createUploadQueue(openUploadQueueDatabase());
   }
   return defaultQueue;
 }

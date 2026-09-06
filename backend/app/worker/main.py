@@ -69,15 +69,20 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
         handler = TASK_HANDLERS.get(envelope.task_type)
         if handler is None:
             raise ApiError(ErrorCode.VALIDATION_FAILED, f"Unknown task type {envelope.task_type}")
-        if envelope.task_type in {"media_retention_cleanup", "care_reminder_dispatch"}:
+        if envelope.task_type not in {"media_retention_cleanup", "care_reminder_dispatch"} and not envelope.event_id:
+            raise ApiError(ErrorCode.VALIDATION_FAILED, "event_id is required for this task.")
+        try:
             result = await handler(st, event_id=envelope.event_id)
-        else:
-            if not envelope.event_id:
-                raise ApiError(ErrorCode.VALIDATION_FAILED, "event_id is required for this task.")
-            result = await handler(st, event_id=envelope.event_id)
-        # Non-2xx fails the workflow run and the platform retries with
-        # backoff; FAILED_RETRYABLE is signaled explicitly in the result so
-        # the caller can re-enqueue. Handlers are idempotent on redelivery.
+        except handlers.RetryableTaskError as exc:
+            from fastapi.responses import JSONResponse
+
+            # A retryable failure answers non-2xx: the workflow step fails and
+            # the platform retries with backoff (max_retries on the step). In
+            # local mode there is no platform retry — the event is already
+            # durably persisted as FAILED_RETRYABLE for a future sweep, and
+            # the caller still gets an honest 503. Handlers are idempotent on
+            # redelivery.
+            return JSONResponse(status_code=503, content=exc.payload)
         return result
 
     return app

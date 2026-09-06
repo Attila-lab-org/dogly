@@ -16,7 +16,13 @@ import { discardUploadsForUri, getUploadQueue } from '../../lib/uploadQueue';
 const draining = new Set<string>();
 let recoverStarted = false;
 
-type UploadMeta = { durationMs: number; hasAudio: boolean; captureId?: string };
+type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm';
+type UploadMeta = {
+  durationMs: number;
+  hasAudio: boolean;
+  contentType: VideoContentType;
+  captureId?: string;
+};
 const uploadMeta = new Map<string, UploadMeta>();
 
 function newId(prefix: string): string {
@@ -24,6 +30,11 @@ function newId(prefix: string): string {
 }
 
 async function fileBytes(localUri: string): Promise<number> {
+  if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    return Math.max(1, blob.size);
+  }
   try {
     const info = await getInfoAsync(localUri);
     if (info.exists && 'size' in info && typeof info.size === 'number') {
@@ -35,7 +46,20 @@ async function fileBytes(localUri: string): Promise<number> {
   return 1;
 }
 
+async function detectVideoContentType(localUri: string): Promise<VideoContentType> {
+  if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
+    const response = await fetch(localUri);
+    const type = (await response.blob()).type.split(';', 1)[0].toLowerCase();
+    if (type === 'video/webm' || type === 'video/quicktime') return type;
+  }
+  return 'video/mp4';
+}
+
 async function deleteLocalIfExists(uri: string): Promise<void> {
+  if (uri.startsWith('blob:')) {
+    URL.revokeObjectURL(uri);
+    return;
+  }
   try {
     await deleteAsync(uri, { idempotent: true });
   } catch {
@@ -66,8 +90,12 @@ export async function processPendingUpload(id: string): Promise<string | null> {
     }
 
     item = queue.get(id)!;
-    const meta = uploadMeta.get(id) ?? { durationMs: 8000, hasAudio: true };
-    const contentType = 'video/mp4';
+    const meta = uploadMeta.get(id) ?? {
+      durationMs: 8000,
+      hasAudio: true,
+      contentType: 'video/mp4',
+    };
+    const contentType = meta.contentType;
 
     if (
       item.state === 'upload_initializing' ||
@@ -178,9 +206,11 @@ export async function enqueueAndUploadBehaviorClip(
   const queue = getUploadQueue();
   const uploadId = newId('upl');
   const clientRequestId = newId('crid');
+  const contentType = await detectVideoContentType(input.localUri);
   uploadMeta.set(uploadId, {
     durationMs: input.durationMs,
     hasAudio: input.hasAudio,
+    contentType,
   });
 
   queue.enqueue({

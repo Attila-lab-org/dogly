@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from app.contracts.observation import ObservationContract, TriState
+from app.contracts.observation import (
+    BodyHeight,
+    ObservationContract,
+    Posture,
+    TailHeight,
+    TailMovement,
+    TriState,
+)
 from app.contracts.taxonomy import ContextBucket
 from app.knowledge.models import (
     DogContextSnapshot,
@@ -10,6 +17,7 @@ from app.knowledge.models import (
     ScientificEvidenceSummary,
 )
 from app.knowledge.registry import get_registry
+from app.knowledge.safety import fired_safety_ids
 
 
 def _candidate_ids(
@@ -19,7 +27,10 @@ def _candidate_ids(
 ) -> list[str]:
     ids: list[str] = []
     body = observation.body
-    if body.body_height == "lowered" or body.posture in {"crouch", "lowered"}:
+    if body.body_height == BodyHeight.LOWERED or body.posture in {
+        Posture.CROUCH,
+        Posture.LOWERED,
+    }:
         ids.append("OBS_BODY_001")
     if body.rigidity_candidate == TriState.YES:
         ids.append("OBS_BODY_002")
@@ -31,15 +42,15 @@ def _candidate_ids(
             "withdrawal": ["OBS_BODY_006"],
         }.get(movement, [])
     )
-    if "play_bow" in body.posture:
+    if body.posture == Posture.PLAY_BOW:
         ids.append("OBS_BODY_004")
 
     tail = observation.tail
-    if tail.neutral_relative_height in {"below", "tucked"}:
+    if tail.neutral_relative_height in {TailHeight.BELOW, TailHeight.TUCKED}:
         ids.append("OBS_TAIL_001")
-    elif tail.neutral_relative_height == "above":
+    elif tail.neutral_relative_height == TailHeight.ABOVE:
         ids.append("OBS_TAIL_002")
-    if tail.movement in {"wagging", "stiff_sweep"}:
+    if tail.movement in {TailMovement.WAGGING, TailMovement.STIFF_SWEEP}:
         ids.append("OBS_TAIL_003")
 
     ears = observation.ears.position.lower()
@@ -76,21 +87,90 @@ def _candidate_ids(
         ids.append("PRIOR_BREED_001")
     if observation.capture_quality.overall_quality != "good":
         ids.append("ABSTAIN_001")
-    distress_signals = sum(
-        (
-            body.body_height == "lowered",
-            body.approach_withdrawal_freeze in {"freeze", "withdrawal"},
-            tail.neutral_relative_height == "tucked",
-            observation.head_face.lip_lick_candidate == TriState.YES,
-        )
+    # Le regole SAFE_*_001 vivono in knowledge.safety (fonte unica di verità):
+    # qui diventano solo card di evidenza, in testa alla lista.
+    return list(dict.fromkeys([*fired_safety_ids(observation, dog_context), *ids]))
+
+
+# Famiglia di segnali per card id: la copertura conta famiglie indipendenti,
+# non numero di card (3 card sulla sola famiglia "body" restano poca evidenza).
+_CARD_FAMILY: dict[str, str] = {
+    "OBS_BODY_001": "body",
+    "OBS_BODY_002": "body",
+    "OBS_BODY_004": "body",
+    "OBS_BODY_003": "locomotion",
+    "OBS_BODY_005": "locomotion",
+    "OBS_BODY_006": "locomotion",
+    "OBS_TAIL_001": "tail",
+    "OBS_TAIL_002": "tail",
+    "OBS_TAIL_003": "tail",
+    "OBS_EAR_001": "ears",
+    "OBS_EAR_002": "ears",
+    "OBS_FACE_003": "face",
+    "OBS_FACE_005": "face",
+    "AUD_BARK_001": "vocalization",
+    "AUD_GROWL_001": "vocalization",
+    "AUD_WHINE_001": "vocalization",
+    "AUD_HOWL_001": "vocalization",
+    "CTX_HUMAN_001": "context",
+    "CTX_DOG_001": "context",
+    "CTX_RESOURCE_001": "context",
+    "CTX_SEP_001": "context",
+    "PRIOR_BREED_001": "context",
+}
+
+# Coppie di evidenze mutuamente incompatibili rilevate sull'osservazione
+# (ciascuna coppia presente = 1 contraddizione).
+_CONTRADICTION_PAIRS = (
+    (frozenset({"OBS_TAIL_003"}), frozenset({"OBS_TAIL_001"})),
+    (frozenset({"OBS_BODY_005"}), frozenset({"OBS_BODY_006", "OBS_BODY_003"})),
+    (frozenset({"OBS_EAR_002"}), frozenset({"OBS_EAR_001"})),
+)
+
+
+def _compute_coverage(
+    cards: list[ScientificEvidenceSummary],
+    observation: ObservationContract,
+) -> str:
+    """Copertura a punteggio su famiglie di segnali indipendenti.
+
+    Formula (banda LOW/MEDIUM/HIGH invariata nel contratto):
+        famiglie = #{famiglie distinte con almeno 1 card di evidenza}
+                 (body, locomotion, tail, ears, vocalization, context, face)
+        score  = 2 * famiglie                                  (max 14)
+               + min(3, #card con evidence_grade "A")          (bonus qualità)
+               - 2 * contraddizioni rilevate                   (min 0)
+        banda  = HIGH se score >= 8, MEDIUM se score >= 4, altrimenti LOW.
+
+    Vincoli:
+    - ABSTAIN_001 e le card SAFE_*_001 NON danno punteggio: giustificano solo
+      astensione/sicurezza, non alzano MAI la copertura;
+    - capture_quality "degraded" tappa la banda a MEDIUM (il caso
+      "insufficient" è già respinto upstream dal quality gate sez. 13);
+    - una contraddizione tra segnali (es. coda che scodinzola + coda tucked)
+      abbassa la confidenza di banda.
+    """
+    scored = [card for card in cards if card.card_id in _CARD_FAMILY]
+    families = {_CARD_FAMILY[card.card_id] for card in scored}
+    grade_bonus = min(3, sum(1 for card in scored if card.evidence_grade == "A"))
+    card_ids = {card.card_id for card in scored}
+    contradictions = sum(
+        1 for positive, negative in _CONTRADICTION_PAIRS if card_ids & positive and card_ids & negative
     )
-    if distress_signals >= 2:
-        ids.insert(0, "SAFE_DISTRESS_001")
-    if body.rigidity_candidate == TriState.YES and "growl" in vocalizations:
-        ids.insert(0, "SAFE_ESCALATION_001")
-    if any("pain" in fact.key.lower() for fact in dog_context.health_context):
-        ids.insert(0, "SAFE_PAIN_001")
-    return list(dict.fromkeys(ids))
+    score = max(0, 2 * len(families) + grade_bonus - 2 * contradictions)
+    if score >= 8:
+        coverage = "HIGH"
+    elif score >= 4:
+        coverage = "MEDIUM"
+    else:
+        coverage = "LOW"
+    if (
+        coverage == "HIGH"
+        and observation.capture_quality.overall_quality != "good"
+    ):
+        # Qualità degradata: tappo prudenziale a MEDIUM.
+        coverage = "MEDIUM"
+    return coverage
 
 
 def retrieve_evidence(
@@ -113,9 +193,8 @@ def retrieve_evidence(
         for card_id in _candidate_ids(observation, context_bucket, dog_context)[:6]
         if (card := by_id.get(card_id)) is not None
     ]
-    coverage = "LOW" if not cards else "HIGH" if len(cards) >= 3 else "MEDIUM"
     return KnowledgeContext(
         registry_version=str(registry.metadata["version"]),
-        coverage=coverage,
+        coverage=_compute_coverage(cards, observation),
         cards=cards,
     )

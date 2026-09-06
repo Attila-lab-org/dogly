@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -76,6 +77,21 @@ def _facts(
     ]
 
 
+def _fact_values(raw: Any) -> dict[str, Any]:
+    """Grouping payloads are key->value maps; the typed lifestyle schema
+    stores some of them (e.g. recent_changes) as lists — index those into
+    stable keys so they become facts like any other reported value."""
+    if isinstance(raw, Mapping):
+        return dict(raw)
+    if isinstance(raw, list):
+        return {
+            f"item_{index + 1}": value
+            for index, value in enumerate(raw)
+            if value is not None
+        }
+    return {}
+
+
 def build_dog_context(dog: DogRec, lifestyle: dict[str, Any] | None = None) -> DogContextSnapshot:
     lifestyle = lifestyle or {}
     routine_raw = dict(lifestyle.get("routine") or {})
@@ -85,9 +101,9 @@ def build_dog_context(dog: DogRec, lifestyle: dict[str, Any] | None = None) -> D
     if isinstance(confirmed, str):
         confirmed = datetime.fromisoformat(confirmed)
 
-    today_vs_usual = dict(routine_raw.pop("today_vs_usual", {}) or {})
-    recent_changes = dict(routine_raw.pop("recent_changes", {}) or {})
-    health_context = dict(routine_raw.pop("health_context", {}) or {})
+    today_vs_usual = _fact_values(routine_raw.pop("today_vs_usual", None))
+    recent_changes = _fact_values(routine_raw.pop("recent_changes", None))
+    health_context = _fact_values(routine_raw.pop("health_context", None))
     routine = {
         fact.key: fact
         for fact in _facts(routine_raw, provenance, confirmed)

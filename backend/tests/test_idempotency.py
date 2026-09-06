@@ -38,6 +38,9 @@ async def test_duplicate_init_returns_same_reservation(client: httpx.AsyncClient
 
 
 async def test_duplicate_complete_is_idempotent(client: httpx.AsyncClient, auth_headers, state):
+    # Senza dispatcher la coda registra soltanto: il test misura l'idempotenza
+    # dell'enqueue, non il processing (coperto da test_local_dispatch.py).
+    state.queue.dispatcher = None
     dog_id = await create_dog(client, auth_headers)
     r = await client.post(
         "/v1/behavior/captures/init", json=_init_payload(dog_id, "crid-00000002"), headers=auth_headers

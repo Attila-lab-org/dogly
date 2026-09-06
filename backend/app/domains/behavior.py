@@ -25,9 +25,19 @@ from app.providers.base import JobQueue, StorageProvider
 BEHAVIOR_BUCKET = "behavior-raw"
 
 
-def _storage_path(user_id: str, dog_id: str, event_id: str) -> str:
+def _storage_path(
+    user_id: str, dog_id: str, event_id: str, content_type: str
+) -> str:
     """Server-generated object key (sez. 12.1): never client-supplied."""
-    return f"users/{user_id}/dogs/{dog_id}/behavior/{event_id}/{new_id()}.mp4"
+    extension = {
+        "video/mp4": "mp4",
+        "video/quicktime": "mov",
+        "video/webm": "webm",
+    }.get(content_type, "mp4")
+    return (
+        f"users/{user_id}/dogs/{dog_id}/behavior/{event_id}/"
+        f"{new_id()}.{extension}"
+    )
 
 
 async def init_capture(
@@ -74,7 +84,7 @@ async def init_capture(
     await quota.reserve(user_id, AnalysisDomain.BEHAVIOR)
 
     capture_id, event_id = new_id(), new_id()
-    path = _storage_path(user_id, dog.id, event_id)
+    path = _storage_path(user_id, dog.id, event_id, payload.content_type)
     capture = BehaviorCaptureRec(
         id=capture_id,
         dog_id=dog.id,

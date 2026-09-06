@@ -4,14 +4,19 @@ contracts; invalid fixtures fail loudly like a real schema failure."""
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from app.config import Settings
 from app.contracts.digestive import StoolObservationContract
-from app.contracts.interpretation import InterpretationContract
+from app.contracts.interpretation import InterpretationContract, SafetyFlag
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
 from app.knowledge.models import DogContextSnapshot, KnowledgeContext
@@ -38,8 +43,14 @@ class MockVideoObserver:
         self._model = settings.observer_model
 
     async def observe(
-        self, *, video_ref: str, policy_version: str, duration_ms: int
+        self,
+        *,
+        video_ref: str,
+        content_type: str,
+        policy_version: str,
+        duration_ms: int,
     ) -> tuple[ObservationContract, ProviderUsage]:
+        del content_type
         started = time.perf_counter()
         raw = load_fixture("observation.fixture.json")
         if "nodog" in video_ref:
@@ -81,8 +92,9 @@ class MockReasoner:
         eligible_memory: list[EligiblePatternSummary],
         knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
+        deterministic_safety_flags: list[SafetyFlag] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
-        del eligible_memory, knowledge_context, dog_context
+        del eligible_memory, knowledge_context, dog_context, deterministic_safety_flags
         started = time.perf_counter()
         raw = load_fixture("interpretation.fixture.json")
         raw["policy_version"] = policy_version
@@ -201,12 +213,31 @@ class MockStorageProvider:
 
 class InMemoryJobQueue:
     """Fake queue for local/dev (sez. 4: local uses a fake queue). Payloads are
-    IDs only. Optionally wired to an in-process dispatcher for tests."""
+    IDs only. When ``dispatcher`` is set (wiring in ``build_default_state``),
+    ogni enqueue viene smaltito davvero in un task asyncio in-process: senza
+    dispatcher la coda registra soltanto (comportamento storico di test)."""
 
     def __init__(self) -> None:
         self.tasks: list[dict] = []
+        self.dispatcher: Callable[[str, dict[str, str]], Awaitable[None]] | None = None
+        self._inflight: set[asyncio.Task] = set()
 
     async def enqueue(self, *, task_type: str, payload: dict[str, str]) -> str:
         task_id = f"task-{uuid.uuid4().hex[:12]}"
         self.tasks.append({"task_id": task_id, "task_type": task_type, "payload": payload})
+        if self.dispatcher is not None:
+            task = asyncio.get_running_loop().create_task(self._dispatch(task_type, payload))
+            self._inflight.add(task)
+            task.add_done_callback(self._inflight.discard)
         return task_id
+
+    async def wait_drained(self, timeout: float = 300.0) -> None:
+        """Attende che tutti i dispatch in-flight terminino (drain per sweep/CLI)."""
+        await asyncio.wait_for(asyncio.gather(*self._inflight, return_exceptions=True), timeout=timeout)
+
+    async def _dispatch(self, task_type: str, payload: dict[str, str]) -> None:
+        assert self.dispatcher is not None
+        try:
+            await self.dispatcher(task_type, payload)
+        except Exception:
+            logger.exception("local dispatch failed for task_type=%s", task_type)

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import httpx
-
 from app.contracts.interpretation import (
     EvidenceItem,
     InterpretationContract,
@@ -131,13 +130,13 @@ async def test_lifestyle_api_is_owner_scoped(
         f"/v1/dogs/{dog_id}/lifestyle",
         headers=auth_headers,
         json={
-            "routine": {"sleep_pattern": "regular"},
-            "provenance": {"sleep_pattern": "OWNER_REPORTED"},
+            "routine": {"sleep": "REGULAR"},
+            "provenance": {"sleep": "OWNER_REPORTED"},
             "confirm": True,
         },
     )
     assert updated.status_code == 200, updated.text
-    assert updated.json()["routine"]["sleep_pattern"] == "regular"
+    assert updated.json()["routine"]["sleep"] == "REGULAR"
     assert updated.json()["last_confirmed_at"] is not None
 
     from tests.conftest import make_token

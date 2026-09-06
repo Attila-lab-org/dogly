@@ -31,10 +31,10 @@ def patch_lifestyle(
     now = now_utc().isoformat()
     existing = store.dog_lifestyle_profiles.get(dog_id, {})
     row = {
-        "routine": {**existing.get("routine", {}), **(payload.routine or {})},
+        "routine": {**existing.get("routine", {}), **payload.routine_update()},
         "preferences": {
             **existing.get("preferences", {}),
-            **(payload.preferences or {}),
+            **payload.preferences_update(),
         },
         "provenance": {
             **existing.get("provenance", {}),

@@ -12,7 +12,7 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from app.contracts.digestive import StoolObservationContract
-from app.contracts.interpretation import InterpretationContract
+from app.contracts.interpretation import InterpretationContract, SafetyFlag
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
 from app.knowledge.models import DogContextSnapshot, KnowledgeContext
@@ -46,14 +46,21 @@ class VideoObserver(Protocol):
     Invariant: describes observables only; no final intent (sez. 14.1)."""
 
     async def observe(
-        self, *, video_ref: str, policy_version: str, duration_ms: int
+        self,
+        *,
+        video_ref: str,
+        content_type: str,
+        policy_version: str,
+        duration_ms: int,
     ) -> tuple[ObservationContract, ProviderUsage]: ...
 
 
 @runtime_checkable
 class Reasoner(Protocol):
     """Reasoner.interpret: observation + context + policy + eligible memory
-    -> InterpretationContract. Must support abstention/alternatives."""
+    -> InterpretationContract. Must support abstention/alternatives.
+    deterministic_safety_flags are pre-LLM established constraints: the reasoner
+    must propagate them and never downgrade them (sez. 19.3)."""
 
     async def interpret(
         self,
@@ -64,6 +71,7 @@ class Reasoner(Protocol):
         eligible_memory: list[EligiblePatternSummary],
         knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
+        deterministic_safety_flags: list[SafetyFlag] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]: ...
 
 

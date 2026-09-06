@@ -75,3 +75,19 @@ Closed Android beta path wired: fail-fast staging/production config, Postgres do
   e fallback testuale; nessun video, URL firmato o percorso storage viene
   condiviso.
 - Verifica locale: TypeScript verde; Jest `108 passed` in 19 suite.
+
+## Audit hardening backend (2026-09-06, seconda ondata)
+
+Fix da audit esterno verificati su codice reale e implementati; backend `131 passed`, Ruff verde.
+
+- **Retry AI reali**: `_fail` retryable solleva `RetryableTaskError` dopo aver persistito `FAILED_RETRYABLE` → lo step Vercel fallisce davvero e `max_retries=5` ingaggia; tentativi persistenti (`attempt_count`), terminale con rimborso quota oltre il cap. Worker HTTP mappa retryable → 503.
+- **Enum osservazione chiusi**: `BodyHeight/Posture/Locomotion/ApproachWithdrawalFreeze/EarPosition/TailHeight/TailMovement/VocalizationType` come `StrEnum`; prompt Gemini porta i valori ammessi; `normalize_observation_dict` con tabella alias difensiva prima del retrieval (garbage → `unknown`, mai crash).
+- **Safety deterministica pre-LLM**: `app/knowledge/safety.py` è la singola fonte delle regole (≥2 distress / rigidità+growl / pain nel contesto); le flag deterministiche (`SAFE_*_001`) entrano nel prompt del reasoner come vincoli e si mergiano in `interpretation.safety_flags` (vince la severità deterministica). Il gate urgente dell'Advice Engine non dipende più solo dall'LLM.
+- **Coverage robusta**: punteggio per famiglie di segnali indipendenti + grade A − contraddizioni, cap a MEDIUM se qualità media ≠ good; `ABSTAIN_001`/`SAFE_*` escluse dal contributo positivo.
+- **Lifestyle schema chiuso**: `DogLifestylePatch` con modelli pydantic tipizzati (campi reali mobile + quantificati del brief), `extra="forbid"`, range e limiti dimensionali; la GET resta tollerante sulle righe legacy.
+- **Budget AI bloccante**: gate serializzato pre-chiamata (`pg_advisory_xact_lock` + somma giornaliera su `internal.ai_cost_events`) per observer e reasoner; superato il budget → `AI_BUDGET_EXCEEDED` come failure **terminale non retryable**. Kill switch già presenti confermati.
+- **Coda locale reale**: `InMemoryJobQueue` con dispatcher in-process (il fake queue smaltisce davvero; prima gli eventi restavano `QUEUED` per sempre in locale). Sweep CLI: `uv run python -m app.worker.sweep` ripesca `QUEUED/FAILED_RETRYABLE` e li analizza con drain.
+- **Migrazione 0028** (`rls_fk_searchpath_hardening`): 71 policy riscritte con `(select auth.uid())`, 6 indici FK mancanti, `search_path` fissato su 4 funzioni — applicata a Supabase production il 2026-09-07.
+- **Video web coerente**: il MIME reale prodotto da `MediaRecorder` viene propagato fino a storage e Gemini; WebM non viene più caricato dichiarandolo falsamente MP4.
+
+Verifica locale: backend `131 passed`; mobile TypeScript verde, Jest `115 passed` in 20 suite.

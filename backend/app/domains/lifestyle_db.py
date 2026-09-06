@@ -90,8 +90,8 @@ async def patch_lifestyle(
                 {
                     "dog_id": dog_id,
                     "user_id": user_id,
-                    "routine": json.dumps(payload.routine or {}),
-                    "preferences": json.dumps(payload.preferences or {}),
+                    "routine": json.dumps(payload.routine_update()),
+                    "preferences": json.dumps(payload.preferences_update()),
                     "provenance": json.dumps(payload.provenance or {}),
                     "confirm": payload.confirm,
                 },

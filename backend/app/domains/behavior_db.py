@@ -26,8 +26,18 @@ from app.providers.base import JobQueue, StorageProvider
 BEHAVIOR_BUCKET = "behavior-raw"
 
 
-def _storage_path(user_id: str, dog_id: str, event_id: str) -> str:
-    return f"users/{user_id}/dogs/{dog_id}/behavior/{event_id}/{new_id()}.mp4"
+def _storage_path(
+    user_id: str, dog_id: str, event_id: str, content_type: str
+) -> str:
+    extension = {
+        "video/mp4": "mp4",
+        "video/quicktime": "mov",
+        "video/webm": "webm",
+    }.get(content_type, "mp4")
+    return (
+        f"users/{user_id}/dogs/{dog_id}/behavior/{event_id}/"
+        f"{new_id()}.{extension}"
+    )
 
 
 def _as_str(value: Any) -> str:
@@ -111,7 +121,9 @@ async def init_capture(
             capture_id = f"{capture_id[:8]}-{capture_id[8:12]}-{capture_id[12:16]}-{capture_id[16:20]}-{capture_id[20:]}"
         if len(event_id) == 32:
             event_id = f"{event_id[:8]}-{event_id[8:12]}-{event_id[12:16]}-{event_id[16:20]}-{event_id[20:]}"
-        path = _storage_path(user_id, payload.dog_id, event_id)
+        path = _storage_path(
+            user_id, payload.dog_id, event_id, payload.content_type
+        )
 
         # Reserve quota keyed by event_id (reference_id) BEFORE insert (sez. 7.3).
         reserved = await reserve_usage_sql(

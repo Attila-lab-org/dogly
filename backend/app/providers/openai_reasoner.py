@@ -14,11 +14,13 @@ import httpx
 from pydantic import ValidationError
 
 from app.config import Settings
-from app.contracts.interpretation import InterpretationContract
+from app.contracts.interpretation import InterpretationContract, SafetyFlag
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import ContextBucket
+from app.domains.db import get_engine
 from app.knowledge.models import DogContextSnapshot, KnowledgeContext
 from app.providers.base import EligiblePatternSummary, ProviderUsage
+from app.providers.budget import check_daily_budget
 
 _SYSTEM = """You are a cautious canine behavior reasoner for a consumer app.
 Given structured observations only (no video), produce a probabilistic interpretation.
@@ -29,6 +31,8 @@ General pretrained knowledge is only a tentative LOW-confidence hypothesis for
 uncovered observations and must not introduce consumer recommendations.
 Support abstention when evidence is insufficient. Never invent unobserved facts,
 write personal patterns, or create advice. Return InterpretationContract JSON only.
+Deterministic safety_flags in the input are established constraints: carry them
+into safety_flags and never downgrade or drop them (sez. 19.3).
 """
 
 
@@ -52,15 +56,23 @@ class OpenAIReasoner:
         eligible_memory: list[EligiblePatternSummary],
         knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
+        deterministic_safety_flags: list[SafetyFlag] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
         if self._settings.ai_kill_switch or self._settings.reasoner_kill_switch:
             raise ProviderDisabled("Reasoner kill switch is active")
+        await check_daily_budget(
+            get_engine(self._settings),
+            role="reasoner",
+            budget_usd=self._settings.reasoner_budget_usd_per_day,
+            operation="reasoner.interpret",
+        )
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured")
 
         started = time.perf_counter()
         request_id = f"oai-{uuid.uuid4().hex[:12]}"
         memory_payload = [m.model_dump() for m in eligible_memory]
+        safety_payload = [f.model_dump() for f in (deterministic_safety_flags or [])]
         user_payload = {
             "policy_version": policy_version,
             "context_bucket": context_bucket.value if hasattr(context_bucket, "value") else str(context_bucket),
@@ -68,6 +80,7 @@ class OpenAIReasoner:
             "eligible_memory": memory_payload,
             "knowledge_context": knowledge_context.model_dump(mode="json"),
             "dog_context": dog_context.model_dump(mode="json"),
+            "deterministic_safety_flags": safety_payload,
         }
 
         response = await self._client.post(

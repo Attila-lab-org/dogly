@@ -3,8 +3,20 @@ interpreting -> completed with mock providers; idempotent redelivery; quota
 commit/refund semantics; internal auth on workflow routes."""
 
 import httpx
+import pytest
+from app.worker.handlers import (
+    MAX_TASK_ATTEMPTS,
+    RetryableTaskError,
+    process_behavior_event,
+)
 
 from tests.conftest import create_dog
+
+
+class TimeoutObserver:
+    async def observe(self, *, video_ref, content_type, policy_version, duration_ms):
+        del video_ref, content_type, policy_version, duration_ms
+        raise TimeoutError
 
 
 async def _queue_behavior_event(client, headers, crid: str) -> str:
@@ -90,3 +102,61 @@ async def test_worker_unknown_event_acknowledged(worker_client: httpx.AsyncClien
     )
     assert r.status_code == 200
     assert r.json()["status"] == "ignored_unknown_event"
+
+
+async def test_behavior_timeout_raises_retryable_and_persists(client, auth_headers, state):
+    event_id = await _queue_behavior_event(client, auth_headers, "crid-retry-0001")
+    state.observer = TimeoutObserver()
+
+    with pytest.raises(RetryableTaskError) as exc_info:
+        await process_behavior_event(state, event_id=event_id)
+
+    assert exc_info.value.payload["event_id"] == event_id
+    assert exc_info.value.payload["status"] == "FAILED_RETRYABLE"
+    assert exc_info.value.payload["error"] == "PROVIDER_TIMEOUT"
+    event = state.store.behavior_events[event_id]
+    assert event.status.value == "FAILED_RETRYABLE"
+    assert event.attempt_count == 1
+    assert event.last_error_code == "PROVIDER_TIMEOUT"
+
+
+async def test_behavior_retry_exhaustion_is_terminal_without_raise(
+    client, auth_headers, state, user_id
+):
+    event_id = await _queue_behavior_event(client, auth_headers, "crid-retry-0002")
+    state.observer = TimeoutObserver()
+
+    for attempt in range(1, MAX_TASK_ATTEMPTS):
+        with pytest.raises(RetryableTaskError):
+            await process_behavior_event(state, event_id=event_id)
+        assert state.store.behavior_events[event_id].attempt_count == attempt
+
+    result = await process_behavior_event(state, event_id=event_id)
+    assert result["status"] == "FAILED_TERMINAL"
+    event = state.store.behavior_events[event_id]
+    assert event.attempt_count == MAX_TASK_ATTEMPTS
+    assert event.completed_at is not None
+
+    # Terminal failure refunds the reservation once (sez. 7.3 / 22).
+    ledger = state.store.ensure_ledger(user_id)
+    assert ledger.behavior_reserved == 0 and ledger.behavior_used == 0
+
+
+async def test_worker_retryable_failure_returns_503(
+    client, auth_headers, worker_client: httpx.AsyncClient, state
+):
+    event_id = await _queue_behavior_event(client, auth_headers, "crid-retry-0003")
+    state.observer = TimeoutObserver()
+
+    resp = await worker_client.post(
+        "/tasks/run",
+        json={"task_type": "behavior_analysis", "event_id": event_id},
+        headers={"x-internal-token": "test-internal-token"},
+    )
+
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["event_id"] == event_id
+    assert body["status"] == "FAILED_RETRYABLE"
+    assert body["error"] == "PROVIDER_TIMEOUT"
+    assert state.store.behavior_events[event_id].attempt_count == 1
