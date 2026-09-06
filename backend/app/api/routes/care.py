@@ -96,7 +96,10 @@ async def update_care_event(
     payload: CareEventUpdate,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> CareEventOut:
+    if cached := guard.lookup():
+        return CareEventOut.model_validate(cached)
     if state.engine is not None:
         event = await care_db.update_care_event(
             state.engine,
@@ -111,7 +114,9 @@ async def update_care_event(
             event_id=event_id,
             payload=payload,
         )
-    return to_out(event)
+    response = to_out(event)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.delete("/care-events/{event_id}", status_code=204)
@@ -119,7 +124,10 @@ async def delete_care_event(
     event_id: str,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> Response:
+    if guard.lookup():
+        return Response(status_code=204)
     if state.engine is not None:
         await care_db.delete_care_event(state.engine, user_id=user_id, event_id=event_id)
     else:
@@ -128,4 +136,5 @@ async def delete_care_event(
             user_id=user_id,
             event_id=event_id,
         )
+    await _record_guard(state, guard, {"deleted": True})
     return Response(status_code=204)

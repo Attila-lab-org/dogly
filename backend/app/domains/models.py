@@ -130,6 +130,10 @@ class BehaviorEventRec(BaseModel):
     observation_json: dict[str, Any] | None = None
     policy_version: str | None = None
     taxonomy_version: str | None = None
+    knowledge_version: str | None = None
+    knowledge_card_ids: list[str] = Field(default_factory=list)
+    advice_code: str | None = None
+    advice_json: dict[str, Any] | None = None
     quota_committed: bool = False
     quota_refunded: bool = False
     attempt_count: int = 0
@@ -183,6 +187,8 @@ class FecalEventRec(BaseModel):
     expires_at: datetime | None = None
     quota_committed: bool = False
     quota_refunded: bool = False
+    attempt_count: int = 0
+    last_error_code: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
 

@@ -66,8 +66,14 @@ async def init_food_scan(
 
 @router.patch("/nutrition/foods/{food_id}/verify", response_model=FoodProductOut)
 async def verify_food(
-    food_id: str, payload: FoodVerifyRequest, state: StateDep, user_id: UserIdDep
+    food_id: str,
+    payload: FoodVerifyRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> FoodProductOut:
+    if cached := guard.lookup():
+        return FoodProductOut.model_validate(cached)
     if state.engine is not None:
         product = await digestive_db.verify_food_product(
             state.engine, user_id=user_id, food_id=food_id, payload=payload
@@ -76,7 +82,14 @@ async def verify_food(
         product = digestive_domain.verify_food_product(
             state.store, user_id=user_id, food_id=food_id, payload=payload
         )
-    return FoodProductOut(id=product.id, brand=product.brand, name=product.name, verified_at=product.verified_at)
+    response = FoodProductOut(
+        id=product.id,
+        brand=product.brand,
+        name=product.name,
+        verified_at=product.verified_at,
+    )
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/nutrition/feeding-periods", response_model=FeedingPeriodOut, status_code=201)

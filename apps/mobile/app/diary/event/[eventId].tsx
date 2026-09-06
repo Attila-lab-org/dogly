@@ -29,6 +29,12 @@ import {
 import { queryKeys } from '@/lib/queryClient';
 import { behaviorResultsMock, diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain } from '@/features/core/types';
+import {
+  AdviceCard,
+  AdviceOutcomePrompt,
+} from '@/features/advice/AdviceCard';
+import { mapApiAdviceItem } from '@/features/advice/map';
+import { selectAdvice } from '@/features/advice/logic';
 
 export default function DiaryEventScreen() {
   const router = useRouter();
@@ -74,6 +80,12 @@ export default function DiaryEventScreen() {
           ? mapApiEventToResult(query.data)
           : (eventId ? behaviorResultsMock[eventId] : undefined)
       : undefined;
+  const advice = behaviorResult
+    ? selectAdvice(behaviorResult, {
+        apiAdvice: useApi ? mapApiAdviceItem(query.data?.advice) : null,
+        useMockCatalog: !useApi,
+      })
+    : null;
 
   const [feedback, setFeedback] = useState<FeedbackValue | null>(
     behaviorResult?.feedback ?? null,
@@ -167,12 +179,25 @@ export default function DiaryEventScreen() {
         )}
 
         {domain === 'BEHAVIOR' && behaviorResult ? (
-          <BehaviorResultView
-            result={behaviorResult}
-            dogName={dog.name}
-            feedback={feedback}
-            onFeedback={handleFeedback}
-          />
+          <>
+            <BehaviorResultView
+              result={behaviorResult}
+              dogName={dog.name}
+              feedback={feedback}
+              onFeedback={handleFeedback}
+            />
+            {advice ? (
+              <>
+                <AdviceCard advice={advice} dogName={dog.name} />
+                <AdviceOutcomePrompt
+                  eventId={behaviorResult.eventId}
+                  adviceCode={advice.code}
+                  existingOutcome={query.data?.advice_outcome}
+                  deferred
+                />
+              </>
+            ) : null}
+          </>
         ) : (
           /* Evento digestivo: il dettaglio completo vive nel flusso F2 */
           <Card>

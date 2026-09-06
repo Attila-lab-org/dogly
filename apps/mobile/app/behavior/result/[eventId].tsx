@@ -20,6 +20,12 @@ import {
   mapApiEventToResult,
 } from '@/features/behavior/api';
 import { isApiConfigured } from '@/features/auth/env';
+import {
+  AdviceCard,
+  AdviceOutcomePrompt,
+} from '@/features/advice/AdviceCard';
+import { mapApiAdviceItem } from '@/features/advice/map';
+import { selectAdvice } from '@/features/advice/logic';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
@@ -42,6 +48,12 @@ export default function BehaviorResultScreen() {
     : eventId
       ? behaviorResultsMock[eventId]
       : undefined;
+  const advice = result
+    ? selectAdvice(result, {
+        apiAdvice: useApi ? mapApiAdviceItem(query.data?.advice) : null,
+        useMockCatalog: !useApi,
+      })
+    : null;
 
   const [feedback, setFeedback] = useState<FeedbackValue | null>(
     result?.feedback ?? null,
@@ -141,6 +153,17 @@ export default function BehaviorResultScreen() {
           }
         />
 
+        {advice ? (
+          <>
+            <AdviceCard advice={advice} dogName={dog.name} />
+            <AdviceOutcomePrompt
+              eventId={result.eventId}
+              adviceCode={advice.code}
+              existingOutcome={query.data?.advice_outcome}
+            />
+          </>
+        ) : null}
+
         {(result.primary_intent === 'FEAR_INSECURITY' ||
           result.primary_intent === 'DISCOMFORT_AVOIDANCE') && (
           <Text style={styles.safetyNote}>
@@ -153,7 +176,9 @@ export default function BehaviorResultScreen() {
           title="Condividi"
           variant="outline"
           icon={<Ionicons name="share-outline" size={18} color={colors.accent} />}
-          onPress={() => void shareBehaviorResult(result, dog.name)}
+          onPress={() =>
+            void shareBehaviorResult(result, dog.name, dog.photoUri)
+          }
           style={styles.saveButton}
           testID="share-result"
         />

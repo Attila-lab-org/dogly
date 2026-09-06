@@ -247,7 +247,8 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
         "dogs": "select * from public.dogs where owner_id = :uid order by created_at, id",
         "behavior_events": """
             select id, capture_id, dog_id, status, primary_intent, confidence_band, summary,
-                   context_bucket, policy_version, taxonomy_version, created_at, completed_at
+                   context_bucket, policy_version, taxonomy_version, knowledge_version,
+                   knowledge_card_ids, advice_code, advice_json, created_at, completed_at
             from public.behavior_events
             where user_id = :uid
             order by created_at, id
@@ -264,7 +265,8 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
             select id, dog_id, client_request_id, image_quality, fecal_score_estimate,
                    consistency, shape, color, mucus_candidate, blood_candidate,
                    melena_candidate, foreign_material_candidate, confidence_band, status,
-                   feeding_period_id, created_at, completed_at, retention_state, expires_at
+                   feeding_period_id, attempt_count, last_error_code,
+                   created_at, completed_at, retention_state, expires_at
             from public.fecal_events
             where user_id = :uid
             order by created_at, id
@@ -285,6 +287,14 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
             order by fp.start_at, fp.id
         """,
         "consents": "select * from public.user_consents where user_id = :uid order by created_at, id",
+        "lifestyle_profiles": """
+            select * from public.dog_lifestyle_profiles
+            where user_id = :uid order by created_at, dog_id
+        """,
+        "advice_outcomes": """
+            select * from public.advice_outcomes
+            where user_id = :uid order by created_at, id
+        """,
         "subscriptions": "select * from public.subscriptions where user_id = :uid",
     }
     payload: dict[str, Any] = {"user_id": user_id, "generated_at": now_utc().isoformat()}
@@ -336,6 +346,8 @@ async def count_user_rows(engine: AsyncEngine, user_id: str) -> dict[str, int]:
         (select count(*) from public.food_products where owner_id = :uid)::int as food_products,
         (select count(*) from public.feeding_periods where dog_id in (select id from owned_dogs))::int as feeding_periods,
         (select count(*) from public.user_consents where user_id = :uid)::int as consents,
+        (select count(*) from public.dog_lifestyle_profiles where user_id = :uid)::int as lifestyle_profiles,
+        (select count(*) from public.advice_outcomes where user_id = :uid)::int as advice_outcomes,
         (select count(*) from public.subscriptions where user_id = :uid)::int as subscriptions,
         (select count(*) from public.device_installations where user_id = :uid)::int as devices
     """

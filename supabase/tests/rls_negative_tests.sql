@@ -62,6 +62,12 @@ select pg_temp.assert(
   not has_table_privilege('authenticated', 'public.behavior_events', 'INSERT'),
   'authenticated cannot INSERT behavior_events (worker/API only)');
 select pg_temp.assert(
+  not has_table_privilege('authenticated', 'public.dog_lifestyle_profiles', 'INSERT'),
+  'authenticated cannot INSERT lifestyle profiles directly (API only)');
+select pg_temp.assert(
+  not has_table_privilege('authenticated', 'public.advice_outcomes', 'INSERT'),
+  'authenticated cannot INSERT advice outcomes directly (API only)');
+select pg_temp.assert(
   not has_table_privilege('authenticated', 'public.personal_patterns', 'UPDATE'),
   'authenticated cannot UPDATE personal_patterns (anti-feedback-loop firewall)');
 select pg_temp.assert(
@@ -148,6 +154,14 @@ select pg_temp.assert(
   (select count(*) = 0 from public.care_events
     where user_id = '11111111-1111-1111-1111-111111111111'),
   'cross-user SELECT care_events returns nothing');
+select pg_temp.assert(
+  (select count(*) = 0 from public.dog_lifestyle_profiles
+    where user_id = '11111111-1111-1111-1111-111111111111'),
+  'cross-user SELECT dog_lifestyle_profiles returns nothing');
+select pg_temp.assert(
+  (select count(*) = 0 from public.advice_outcomes
+    where user_id = '11111111-1111-1111-1111-111111111111'),
+  'cross-user SELECT advice_outcomes returns nothing');
 
 -- B2. Writes: Bob cannot create/update rows owned by Alice
 --     (WITH CHECK violations raise; we assert via savepoint-free try blocks)

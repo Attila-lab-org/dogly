@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import AppState, build_default_state
 from app.api.routes import (
+    advice,
     behavior,
     care,
     devices,
@@ -65,6 +66,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         return JSONResponse(status_code=500, content=body.model_dump(mode="json"))
 
     app.include_router(me.router, prefix="/v1", tags=["me"])
+    app.include_router(advice.router, prefix="/v1", tags=["advice"])
     app.include_router(dogs.router, prefix="/v1", tags=["dogs"])
     app.include_router(gallery.router, prefix="/v1", tags=["gallery"])
     app.include_router(care.router, prefix="/v1", tags=["care-agenda"])

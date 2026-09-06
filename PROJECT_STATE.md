@@ -1,6 +1,6 @@
 # PROJECT STATE — Dogly
 
-Ultimo aggiornamento: 2026-09-05 • Branch: `main`
+Ultimo aggiornamento: 2026-09-06 • Branch: `main`
 
 ## Gate corrente
 
@@ -9,7 +9,7 @@ Ultimo aggiornamento: 2026-09-05 • Branch: `main`
 | **G1 — Data/security contract** | ✅ **COMPLETATO** | Migrazioni `0001–0016` (Signals + write hardening); RLS; OpenAPI; pytest. |
 | **Amendment V1.1** | ✅ | Hosting Vercel + Workflows. |
 | **G0 — Platform spike (mobile)** | 🔶 **PARZIALE** | Expo SDK 57, pnpm, EAS preview APK Android; RevenueCat sandbox in checklist. |
-| **G4 — Consumer UX** | 🔶 **UX V1 su mock + API** | Hub profilo, album, agenda salute, promemoria locali. Brand in Home (badge logo + slogan), set icone custom `CuteIcon` (evidence semantiche + hero risultato per-intent), welcome/sign-in rebrand. Signals sospeso e non visibile. |
+| **G4 — Consumer UX** | ✅ **UX V1 integrata** | Flussi Home/Diario/Digestione/API reali, Advice V2 e outcome, routine lifestyle progressiva, attesa accessibile e share card branded. Mock isolati nel solo demo gate. |
 | **GATE UX/SPEC (Stage 3)** | ✅ **PASS** (statico) | Non implica integrazioni reali complete. |
 | G2 — Async e2e | 🔶 Parziale | Retention TTL al completion + cleanup job; giro mobile→upload→worker da chiudere. |
 | G3, G5–G9 | ⬜ | Non avviati. |
@@ -53,3 +53,25 @@ Ultimo aggiornamento: 2026-09-05 • Branch: `main`
 ## Production path (2026-09-05)
 
 Closed Android beta path wired: fail-fast staging/production config, Postgres dogs/behavior/quota/idempotency, Supabase Storage + Gemini/OpenAI adapters, durable workflow entry, mobile OTP+Google + real capture/upload/poll, privacy docs, Sentry/CI/EAS beta profiles. Signals remain postponed/hidden. Payments out of scope.
+
+## Backend execution (2026-09-06)
+
+- Fase 1 fondamenta: implementata nel codice (SQL domains, GDPR worker, retention DB, test SQL in CI); resta da aggiungere copertura pytest contro Postgres effimero per i repository DB.
+- Fase 2 Knowledge + Advice V2: implementata; registry scientifico 2.0 validato, contesto cane/lifestyle, retrieval bounded, Advice Engine deterministico max 1, API owner-scoped, audit DB e outcome append-only. Migrazioni remote applicate e RLS/write boundary verificati.
+- Fase 3 billing/integrità: implementata nel codice (billing DB-backed, webhook HTTP autenticato/idempotente, retry behavior e digestive persistiti, consensi e diario). Il consenso retention resta da collegare a un'eventuale eccezione prodotto esplicita.
+- Fase 4: copertina album, Knowledge Score read API e push result/care dispatch implementati. Restano operative la schedulazione periodica care e la separazione edge del worker.
+- Verifica locale: backend `73 passed`, Ruff verde, OpenAPI 40 path senza drift. Reset SQL locale non eseguito su questa macchina perché Docker Desktop non è installato; schema, migrazioni e RLS verificati sul progetto Supabase remoto.
+
+## Mobile UX completion (2026-09-06)
+
+- Advice V2 collegato al risultato e al Diario; il payload backend viene mappato
+  senza inventare fallback in produzione e l'outcome già salvato non viene
+  richiesto nuovamente.
+- “Routine e abitudini” collegata alle API lifestyle, al profilo cane e alla
+  micro-card progressiva in Home; “Non so” resta un valore realmente ignoto.
+- Attesa analisi resa viva con messaggi per stato, anelli pulsanti e breve
+  conferma finale; `Reduce Motion` disattiva l'animazione.
+- Condivisione risultato trasformata in card grafica branded con foto del cane
+  e fallback testuale; nessun video, URL firmato o percorso storage viene
+  condiviso.
+- Verifica locale: TypeScript verde; Jest `108 passed` in 19 suite.

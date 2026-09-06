@@ -23,6 +23,9 @@ class EvidenceSource(StrEnum):
     OBSERVATION = "observation"
     CONTEXT = "context"
     PERSONAL_PATTERN = "personal_pattern"
+    SCIENTIFIC_KB = "scientific_kb"
+    LIFE_STAGE = "life_stage"
+    LIFESTYLE_BASELINE = "lifestyle_baseline"
 
 
 class EvidenceItem(BaseModel):

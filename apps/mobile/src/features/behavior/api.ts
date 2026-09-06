@@ -12,6 +12,8 @@ import type {
 } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { api, ApiError } from '../../lib/apiClient';
+import type { ApiAdviceItem } from '../advice/map';
+import type { AdviceOutcomeValue } from '../advice/types';
 
 /**
  * Quota esaurita lato server (ErrorCode.QUOTA_EXHAUSTED, HTTP 402 — vedi
@@ -51,6 +53,9 @@ export type ApiBehaviorEvent = {
   context_question: string | null;
   policy_version: string | null;
   taxonomy_version: string | null;
+  feedback?: FeedbackValue | null;
+  advice?: ApiAdviceItem | null;
+  advice_outcome?: AdviceOutcomeValue | null;
   created_at: string;
   completed_at: string | null;
 };
@@ -119,7 +124,7 @@ export function mapApiEventToResult(event: ApiBehaviorEvent): BehaviorEventResul
       intent: alt.intent as BehaviorIntent,
       rationale: alt.rationale,
     })),
-    feedback: null,
+    feedback: event.feedback ?? null,
     schema_version: 'behavior-result/1.0',
     policy_version: event.policy_version ?? 'canine-interpretation/v0',
     taxonomy_version: event.taxonomy_version ?? 'intent-taxonomy/v0',

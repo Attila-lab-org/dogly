@@ -176,6 +176,62 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
   read-model separato consente di introdurre RBAC e audit senza accoppiamento.
 - **Riferimenti:** `docs/ADMIN_CONTROL_CENTER.md` (route map, fasi, ruoli).
 
+### ADR-012 — Knowledge Base scientifica + Advice Engine V2 come fonti registrate
+
+- **Data:** 2026-09-06 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Decisione:**
+  - Le fonti scientifiche V1/V2 sono copiate in `docs/kb/` e fungono da
+    "Scientific / Dataset Intelligence research" (fonte n.5 della gerarchia
+    Spec V1 sez. 0.1): KB V1 (35 knowledge card, evidence registry, dataset e
+    licenze) + Advice Engine V2 (DogContextSnapshot, life stage, lifestyle,
+    catalogo consigli, outcome learning).
+  - **Tassonomia: confermata quella del repo** — `backend/app/contracts/taxonomy.py`
+    (12 IntentCode) resta la source of truth; le label concettuali della
+    ricerca non la sostituiscono (brief V2 sez. 6). Chiude il potenziale
+    conflitto tassonomia KB vs Spec 16.2.
+  - Retrieval KB strutturato e limitato (card, tag-based); **nessun RAG runtime
+    su PDF** in V1 (coerente con Spec sez. 1.2 out-of-scope).
+  - Consigli consumer: max 1 per risultato, azione dal catalogo (mai inventata
+    dall'LLM), priorità safety > vet > gestione; outcome feedback owner come
+    evidenza personale, non verità scientifica.
+  - Dataset con licenza CC BY-NC/NC-SA (DogFLW, DogSpeak): solo
+    ricerca/benchmark, **mai training commerciale** senza licenza separata.
+  - Implementazione: brief repo-aware in `docs/kb/CURSOR_IMPLEMENTATION_BRIEF_*.md`
+    (moduli `backend/app/knowledge/`, `domains/dog_context.py`, 2 migrazioni,
+    API lifestyle/advice; UX mobile: profiling progressivo, card "Cosa puoi fare
+    adesso", outcome "Ti è sembrato utile?").
+- **Rationale:** smettere di affidare la conoscenza cinofila al pretraining dei
+  provider: le card scientifiche versionate diventano l'evidenza autorevole di
+  prodotto; il provider resta solo generatore di ipotesi per i casi scoperti.
+
+### ADR-013 — "Piacevole per tutti": linguaggio, delight e accessibilità come requisiti
+
+- **Data:** 2026-09-06 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Decisione:**
+  - **Linguaggio**: frasi corte, app in prima persona ("Sto guardando Rocky…"),
+    zero gergo. Vietato: "confidenza", "arousal", "errore del server",
+    percentuali. Consentito: "Ne sono abbastanza sicuro", "è molto eccitato",
+    "Non ci sono riuscito — riprova, non hai speso nulla". Test di accettazione:
+    ogni schermata comprensibile a un ragazzino di 12 anni. L'astensione è
+    presentata come cura ("non ho abbastanza elementi, mostramelo meglio"),
+    mai come fallimento.
+  - **Delight voluto**: icone disegnate (`CuteIcon`), micro-animazioni on-brand
+    (attesa analisi "viva" col cane che osserva, niente spinner nudi),
+    celebrazioni dei momenti del cane (compleanno, traguardi di conoscenza).
+  - **Share card branded**: la condivisione del risultato è una card grafica
+    con foto del cane, risultato in linguaggio semplice e logo Dogly — asset di
+    marketing organico ("Guarda cosa ha capito Dogly del mio cane"). Mai raw
+    media, mai dati tecnici.
+  - **Accessibilità = piacevolezza per tutti**: dynamic type, contrasto
+    leggibile all'aperto, target ≥44pt, mai affidarsi solo al colore per gli
+    stati, nessuna gesture nascosta (tutto raggiungibile con un tap visibile).
+  - **Free tier completo in qualità, limitato in quantità**: la prima analisi
+    gratis è l'esperienza piena (coerente con ADR-005 e paywall mai prima del
+    primo valore).
+- **Rationale:** il target sono proprietari di cani non tecnici (tutte le età);
+  la semplicità calda e l'onestà sono il livello di servizio e il
+  differenziale di brand.
+
 ## Decisioni aperte (Spec V1 sez. 32) — NON inventare risoluzioni
 
 | ID | Decisione | Si può codificare? | Regola vigente |

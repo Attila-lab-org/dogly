@@ -27,6 +27,9 @@ TASK_HANDLERS = {
     "behavior_analysis": handlers.process_behavior_event,
     "digestive_analysis": handlers.process_digestive_event,
     "media_retention_cleanup": handlers.process_media_retention_cleanup,
+    "care_reminder_dispatch": handlers.process_care_reminder_dispatch,
+    "behavior_result_notification": handlers.process_behavior_result_notification,
+    "digestive_result_notification": handlers.process_digestive_result_notification,
     "privacy_export": handlers.process_privacy_export,
     "account_deletion": handlers.process_account_deletion,
 }
@@ -66,8 +69,8 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
         handler = TASK_HANDLERS.get(envelope.task_type)
         if handler is None:
             raise ApiError(ErrorCode.VALIDATION_FAILED, f"Unknown task type {envelope.task_type}")
-        if envelope.task_type == "media_retention_cleanup":
-            result = await handlers.process_media_retention_cleanup(st, event_id=envelope.event_id)
+        if envelope.task_type in {"media_retention_cleanup", "care_reminder_dispatch"}:
+            result = await handler(st, event_id=envelope.event_id)
         else:
             if not envelope.event_id:
                 raise ApiError(ErrorCode.VALIDATION_FAILED, "event_id is required for this task.")

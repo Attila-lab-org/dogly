@@ -15,6 +15,7 @@ from app.contracts.digestive import StoolObservationContract
 from app.contracts.interpretation import InterpretationContract
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
+from app.knowledge.models import DogContextSnapshot, KnowledgeContext
 
 
 class ProviderUsage(BaseModel):
@@ -61,6 +62,8 @@ class Reasoner(Protocol):
         context_bucket: ContextBucket,
         policy_version: str,
         eligible_memory: list[EligiblePatternSummary],
+        knowledge_context: KnowledgeContext,
+        dog_context: DogContextSnapshot,
     ) -> tuple[InterpretationContract, ProviderUsage]: ...
 
 

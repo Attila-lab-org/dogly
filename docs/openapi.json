@@ -161,6 +161,288 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/knowledge-score": {
+      "get": {
+        "tags": [
+          "advice"
+        ],
+        "summary": "Get Knowledge Score",
+        "operationId": "get_knowledge_score_v1_dogs__dog_id__knowledge_score_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeScoreOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/lifestyle": {
+      "get": {
+        "tags": [
+          "advice"
+        ],
+        "summary": "Get Lifestyle",
+        "operationId": "get_lifestyle_v1_dogs__dog_id__lifestyle_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DogLifestyleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "advice"
+        ],
+        "summary": "Patch Lifestyle",
+        "operationId": "patch_lifestyle_v1_dogs__dog_id__lifestyle_patch",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DogLifestylePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DogLifestyleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/behavior/events/{event_id}/advice-outcome": {
+      "post": {
+        "tags": [
+          "advice"
+        ],
+        "summary": "Post Advice Outcome",
+        "operationId": "post_advice_outcome_v1_behavior_events__event_id__advice_outcome_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdviceOutcomeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdviceOutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/dogs": {
       "get": {
         "tags": [
@@ -1202,6 +1484,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -1267,6 +1565,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
             }
           }
         ],
@@ -2383,6 +2697,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -2887,6 +3217,119 @@
   },
   "components": {
     "schemas": {
+      "AdviceItem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale"
+          },
+          "follow_up": {
+            "type": "string",
+            "title": "Follow Up"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "risk": {
+            "type": "string",
+            "title": "Risk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "category",
+          "action",
+          "rationale",
+          "follow_up",
+          "source_ids",
+          "risk"
+        ],
+        "title": "AdviceItem"
+      },
+      "AdviceOutcomeCreate": {
+        "properties": {
+          "advice_code": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^ADVICE_[A-Z0-9_]+$",
+            "title": "Advice Code"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AdviceOutcomeValue"
+          }
+        },
+        "type": "object",
+        "required": [
+          "advice_code",
+          "outcome"
+        ],
+        "title": "AdviceOutcomeCreate"
+      },
+      "AdviceOutcomeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "advice_code": {
+            "type": "string",
+            "title": "Advice Code"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AdviceOutcomeValue"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "event_id",
+          "dog_id",
+          "advice_code",
+          "outcome",
+          "created_at"
+        ],
+        "title": "AdviceOutcomeOut"
+      },
+      "AdviceOutcomeValue": {
+        "type": "string",
+        "enum": [
+          "HELPED",
+          "DID_NOT_HELP",
+          "UNKNOWN",
+          "NOT_TRIED"
+        ],
+        "title": "AdviceOutcomeValue"
+      },
       "AlternativeIntent": {
         "properties": {
           "intent": {
@@ -3103,6 +3546,26 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FeedbackValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "advice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdviceItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "advice_outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdviceOutcomeValue"
               },
               {
                 "type": "null"
@@ -3859,6 +4322,33 @@
             ],
             "title": "Summary"
           },
+          "active_food_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Food Name"
+          },
+          "baseline_comparison": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "BELOW_USUAL",
+                  "NEAR_USUAL",
+                  "ABOVE_USUAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Comparison"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -3996,6 +4486,17 @@
               }
             ],
             "title": "Cover Photo Id"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
           },
           "photo_count": {
             "type": "integer",
@@ -4197,6 +4698,133 @@
           "name"
         ],
         "title": "DogCreate"
+      },
+      "DogLifestyleOut": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "routine": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Routine"
+          },
+          "preferences": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Preferences"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "OWNER_REPORTED",
+                "DOGLY_OBSERVED",
+                "SYSTEM_INFERRED",
+                "VET_RECORDED"
+              ]
+            },
+            "type": "object",
+            "title": "Provenance"
+          },
+          "last_confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Confirmed At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id"
+        ],
+        "title": "DogLifestyleOut"
+      },
+      "DogLifestylePatch": {
+        "properties": {
+          "routine": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routine"
+          },
+          "preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferences"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "OWNER_REPORTED",
+                    "DOGLY_OBSERVED",
+                    "SYSTEM_INFERRED",
+                    "VET_RECORDED"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "DogLifestylePatch"
       },
       "DogListResponse": {
         "properties": {
@@ -4810,7 +5438,10 @@
         "enum": [
           "observation",
           "context",
-          "personal_pattern"
+          "personal_pattern",
+          "scientific_kb",
+          "life_stage",
+          "lifestyle_baseline"
         ],
         "title": "EvidenceSource"
       },
@@ -5261,6 +5892,62 @@
         ],
         "title": "IntentCode",
         "description": "Initial closed intent taxonomy (sez. 16.2).\n\nClosed allowlist: provider output outside this set is schema-invalid."
+      },
+      "KnowledgeScoreOut": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "components": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Components"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "calculated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id"
+        ],
+        "title": "KnowledgeScoreOut"
       },
       "MeResponse": {
         "properties": {

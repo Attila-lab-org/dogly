@@ -40,12 +40,18 @@ async def test_care_agenda_crud(
 
     completed = await client.patch(
         f"/v1/care-events/{body['id']}",
-        headers=auth_headers,
+        headers={**auth_headers, "X-Idempotency-Key": "care-complete-1"},
         json={"status": "COMPLETED"},
     )
     assert completed.status_code == 200
     assert completed.json()["status"] == "COMPLETED"
     assert completed.json()["completed_at"] is not None
+    repeated_completion = await client.patch(
+        f"/v1/care-events/{body['id']}",
+        headers={**auth_headers, "X-Idempotency-Key": "care-complete-1"},
+        json={"status": "COMPLETED"},
+    )
+    assert repeated_completion.json() == completed.json()
 
     upcoming = await client.get(
         f"/v1/dogs/{dog_id}/care-events",
@@ -61,6 +67,11 @@ async def test_care_agenda_crud(
 
     deleted = await client.delete(
         f"/v1/care-events/{body['id']}",
-        headers=auth_headers,
+        headers={**auth_headers, "X-Idempotency-Key": "care-delete-1"},
     )
     assert deleted.status_code == 204
+    repeated_delete = await client.delete(
+        f"/v1/care-events/{body['id']}",
+        headers={**auth_headers, "X-Idempotency-Key": "care-delete-1"},
+    )
+    assert repeated_delete.status_code == 204

@@ -239,6 +239,62 @@ async def get_fecal_event(engine: AsyncEngine, *, user_id: str, event_id: str) -
     return _fecal_from_row(row)
 
 
+async def get_fecal_context(
+    engine: AsyncEngine, *, user_id: str, event_id: str
+) -> tuple[str | None, str | None]:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    select food.name as active_food_name,
+                           case
+                             when base.data_sufficiency not in ('PARTIAL', 'SUFFICIENT')
+                               or event.fecal_score_estimate is null
+                               or base.rolling_score is null then null
+                             when event.fecal_score_estimate < base.rolling_score - 0.75
+                               then 'BELOW_USUAL'
+                             when event.fecal_score_estimate > base.rolling_score + 0.75
+                               then 'ABOVE_USUAL'
+                             else 'NEAR_USUAL'
+                           end as baseline_comparison
+                    from public.fecal_events event
+                    left join lateral (
+                      select fp.food_product_id
+                      from public.feeding_periods fp
+                      where fp.dog_id = event.dog_id
+                        and fp.start_at <= event.created_at
+                        and (fp.end_at is null or fp.end_at >= event.created_at)
+                      order by fp.start_at desc, fp.id desc
+                      limit 1
+                    ) active_period on true
+                    left join public.food_products food
+                      on food.id = coalesce(
+                        (select fp.food_product_id
+                         from public.feeding_periods fp
+                         where fp.id = event.feeding_period_id),
+                        active_period.food_product_id
+                      )
+                    left join lateral (
+                      select rolling_score, data_sufficiency
+                      from public.digestive_baselines db
+                      where db.dog_id = event.dog_id
+                        and db.calculated_at <= event.created_at
+                      order by db.calculated_at desc, db.id desc
+                      limit 1
+                    ) base on true
+                    where event.id = cast(:event_id as uuid)
+                      and event.user_id = cast(:user_id as uuid)
+                    """
+                ),
+                {"event_id": event_id, "user_id": user_id},
+            )
+        ).mappings().first()
+    if not row:
+        return None, None
+    return row["active_food_name"], row["baseline_comparison"]
+
+
 async def load_fecal_event(engine: AsyncEngine, *, event_id: str) -> FecalEventRec | None:
     async with engine.connect() as conn:
         row = (
@@ -266,6 +322,8 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                   summary = :summary,
                   quota_committed = :quota_committed,
                   quota_refunded = :quota_refunded,
+                  attempt_count = :attempt_count,
+                  last_error_code = :last_error_code,
                   expires_at = :expires_at,
                   completed_at = :completed_at
                 where id = :id and user_id = :user_id
@@ -286,6 +344,8 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 "summary": event.summary,
                 "quota_committed": event.quota_committed,
                 "quota_refunded": event.quota_refunded,
+                "attempt_count": event.attempt_count,
+                "last_error_code": event.last_error_code,
                 "expires_at": event.expires_at,
                 "completed_at": event.completed_at,
             },

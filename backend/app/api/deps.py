@@ -15,6 +15,7 @@ from app.domains.billing import QuotaService
 from app.domains.db import get_engine
 from app.domains.models import IdempotencyRec
 from app.domains.repository import InMemoryStore, now_utc
+from app.knowledge.registry import get_registry
 from app.providers.base import (
     CostMeter,
     DigestiveVision,
@@ -53,6 +54,8 @@ def build_default_state(settings: Settings | None = None) -> AppState:
     """Wire adapters from Settings. Local/CI keep mocks; staging/production
     fail-fast rejects mock providers (config validator)."""
     settings = settings or get_settings()
+    if settings.app_env.strip().lower() in {"staging", "production"}:
+        get_registry()
     store = InMemoryStore()
     engine = get_engine(settings)
     return AppState(

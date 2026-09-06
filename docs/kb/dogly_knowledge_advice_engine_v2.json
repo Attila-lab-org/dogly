@@ -1,0 +1,1580 @@
+{
+  "metadata": {
+    "product": "Dogly",
+    "version": "2.0",
+    "date": "2026-09-06",
+    "status": "implementation_spec_ready_for_cursor",
+    "primary_principle": "Scientific KB + personal baseline + age/life-stage + lifestyle + current observation; general model knowledge is fallback hypothesis only.",
+    "current_intent_taxonomy": "Use repository IntentCode from backend/app/contracts/taxonomy.py as source of truth."
+  },
+  "source_registry": [
+    {
+      "id": "S01",
+      "type": "peer_reviewed_review",
+      "quality": "A",
+      "citation": "Siniscalchi M. et al. (2018). Communication in Dogs. Animals, 8(8), 131.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6116041/",
+      "use": "Core review for visual, acoustic, tactile and olfactory canine communication; context dependence."
+    },
+    {
+      "id": "S02",
+      "type": "peer_reviewed_method",
+      "quality": "A",
+      "citation": "Waller B.M. et al. (2013). Paedomorphic Facial Expressions Give Dogs a Selective Advantage. PLOS ONE 8(12):e82686.",
+      "url": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0082686",
+      "use": "DogFACS development; anatomically grounded facial movement coding. Use movements as observables, not emotion labels."
+    },
+    {
+      "id": "S03",
+      "type": "peer_reviewed_experiment",
+      "quality": "B",
+      "citation": "Kaminski J. et al. (2017). Human attention affects facial expressions in domestic dogs. Scientific Reports.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5648750/",
+      "use": "Facial movements are affected by human attention; warning against context-free emotion reading."
+    },
+    {
+      "id": "S04",
+      "type": "peer_reviewed_experiment",
+      "quality": "B",
+      "citation": "Caeiro C.C. et al. (2017). Dogs and humans respond to emotionally competent stimuli by producing different facial actions. Scientific Reports.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5686192/",
+      "use": "Distinct facial-action patterns across experimental contexts; supports feature-level coding."
+    },
+    {
+      "id": "S05",
+      "type": "peer_reviewed_experiment",
+      "quality": "B",
+      "citation": "Bremhorst A. et al. (2022). Evaluating the accuracy of facial expressions as emotion indicators across contexts in dogs. Animal Cognition.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8904359/",
+      "use": "Facial indicators can fail to generalize across contexts; reinforces abstention and context weighting."
+    },
+    {
+      "id": "S06",
+      "type": "peer_reviewed_ml",
+      "quality": "B",
+      "citation": "Bremhorst A. et al. (2023). Explainable automated recognition of emotional states from canine facial expressions. Scientific Reports.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9803655/",
+      "use": "Controlled-state automated classification evidence; narrow population/context, not universal emotion decoder."
+    },
+    {
+      "id": "S07",
+      "type": "peer_reviewed_dataset",
+      "quality": "B",
+      "citation": "Martvel G. et al. (2025). Dog facial landmarks detection and its applications for facial analysis. Scientific Reports 15, 21886.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12218811/",
+      "use": "DogFLW landmarks and DogFACS-related facial analysis; dataset is CC BY-NC 4.0."
+    },
+    {
+      "id": "S08",
+      "type": "peer_reviewed_genetics",
+      "quality": "A",
+      "citation": "Morrill K. et al. (2022). Ancestry-inclusive dog genomics challenges popular breed stereotypes. Science 376:eabk0639.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9675396/",
+      "use": "Breed explains about 9% of individual behavioral variation; breed is a weak prior, not a behavioral verdict."
+    },
+    {
+      "id": "S09",
+      "type": "peer_reviewed_review",
+      "quality": "A",
+      "citation": "Mellor-related state-of-the-art review: Where Do We Stand in the Domestic Dog Positive-Emotion Assessment? Frontiers in Psychology (2020).",
+      "url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2020.02131/full",
+      "use": "Positive/negative affect indicators overlap; individual variability and multimodal assessment are essential."
+    },
+    {
+      "id": "S10",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA Canine and Feline Behavior Management Guidelines — Common Signs of Anxiety/Distress.",
+      "url": "https://www.aaha.org/resources/2015-aaha-canine-and-feline-behavior-management-guidelines/common-signs-of-anxietydistress/",
+      "use": "Clinical list of nonspecific anxiety/distress signs; use for safety escalation, not diagnosis."
+    },
+    {
+      "id": "S11",
+      "type": "peer_reviewed_review",
+      "quality": "A",
+      "citation": "Mota-Rojas D. et al. (2021). Current Advances in Assessment of Dog’s Emotions, Facial Expressions, and Their Use for Clinical Recognition of Pain. Animals 11, 3334.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8614696/",
+      "use": "Pain-related behavioral/facial changes exist but no single facial trait is diagnostic; combine signals and history."
+    },
+    {
+      "id": "S12",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA/AAFP Pain Management Guidelines for Dogs and Cats.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10911498/",
+      "use": "Behavioral change is central to pain assessment; validated scales and veterinary evaluation required."
+    },
+    {
+      "id": "S13",
+      "type": "peer_reviewed_review",
+      "quality": "A",
+      "citation": "Brady K. et al. (2018). Systematic Review of Reliability and Validity of Behavioural Tests in Working Dogs. Frontiers in Veterinary Science 5:103.",
+      "url": "https://www.frontiersin.org/journals/veterinary-science/articles/10.3389/fvets.2018.00103/full",
+      "use": "Behavior tests vary in reliability/validity; test context and repeatability matter."
+    },
+    {
+      "id": "S14",
+      "type": "peer_reviewed_scoping_review",
+      "quality": "A",
+      "citation": "Methods of behavioral testing in dogs: a scoping review and analysis of test stimuli. Frontiers in Veterinary Science (2024).",
+      "url": "https://www.frontiersin.org/journals/veterinary-science/articles/10.3389/fvets.2024.1455574/full",
+      "use": "392 publications / 2,362 tests; supports standardized context taxonomy and low-stress testing."
+    },
+    {
+      "id": "S15",
+      "type": "peer_reviewed_bioacoustics",
+      "quality": "B",
+      "citation": "Yin S., McCowan B. (2004). Barking in domestic dogs: context specificity and individual identification. Animal Behaviour.",
+      "url": "https://www.sciencedirect.com/science/article/pii/S000334720400123X",
+      "use": "Barks differ acoustically by context and individual; context classification is probabilistic."
+    },
+    {
+      "id": "S16",
+      "type": "peer_reviewed_bioacoustics",
+      "quality": "B",
+      "citation": "Faragó T. et al. (2017). Dog growls express various contextual and affective content for human listeners. Royal Society Open Science.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5451822/",
+      "use": "Growls vary by social context; human interpretation is above chance but imperfect."
+    },
+    {
+      "id": "S17",
+      "type": "peer_reviewed_ml",
+      "quality": "B",
+      "citation": "Abzaliev A., Pérez-Espinosa H., Mihalcea R. (2024). Towards Dog Bark Decoding: Leveraging Human Speech Processing for Automated Bark Classification. LREC-COLING.",
+      "url": "https://aclanthology.org/2024.lrec-main.1432/",
+      "use": "Human speech embeddings support dog bark classification for individual, breed, sex and context; limited dataset."
+    },
+    {
+      "id": "S18",
+      "type": "university_summary",
+      "quality": "B",
+      "citation": "University of Michigan Engineering (2024). Using AI to decode dog vocalizations.",
+      "url": "https://ece.engin.umich.edu/stories/using-ai-to-decode-dog-vocalizations",
+      "use": "Accessible summary of 74-dog dataset and up-to-70% classification results."
+    },
+    {
+      "id": "S19",
+      "type": "dataset",
+      "quality": "B",
+      "citation": "Google AudioSet — Dog/Bark ontology and dataset.",
+      "url": "https://research.google.com/audioset/download.html",
+      "use": "Large weakly contextual audio-event corpus; dataset CC BY 4.0, ontology CC BY-SA 4.0. Good for bark/noise detection, not intent labels."
+    },
+    {
+      "id": "S20",
+      "type": "dataset",
+      "quality": "C",
+      "citation": "DogSpeak Dataset (ACM MM 2025 release / Hugging Face).",
+      "url": "https://huggingface.co/datasets/ArlingtonCL2/DogSpeak_Dataset",
+      "use": "Large canine vocalization corpus for representation learning; CC BY-NC-SA 4.0, therefore not suitable for commercial training without separate permission."
+    },
+    {
+      "id": "S21",
+      "type": "dataset",
+      "quality": "C",
+      "citation": "Canine Age Transition Vocalization Dataset (Hugging Face).",
+      "url": "https://huggingface.co/datasets/ArlingtonCL2/Canine-Age-Transition-Vocalization-Dataset",
+      "use": "Longitudinal bark units with age/breed metadata; CC BY-NC-SA 4.0, research/benchmark only unless relicensed."
+    },
+    {
+      "id": "S22",
+      "type": "tool",
+      "quality": "A",
+      "citation": "BORIS — Behavioral Observation Research Interactive Software.",
+      "url": "https://www.boris.unito.it/",
+      "use": "Open-source GPLv3 annotation/logging tool; suitable annotation workflow utility."
+    },
+    {
+      "id": "S23",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "WSAVA Global Nutrition Guidelines and Toolkit.",
+      "url": "https://wsava.org/global-guidelines/global-nutrition-guidelines/",
+      "use": "Nutrition assessment must be individualized and tied to veterinary context; supports data model for diet history and body condition."
+    },
+    {
+      "id": "S24",
+      "type": "peer_reviewed_validation",
+      "quality": "B",
+      "citation": "Consistency of faecal scoring using two canine faecal scoring systems (2021). Journal of Small Animal Practice.",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33491796/",
+      "use": "Fecal scoring has inter-observer variability; image model should expose uncertainty and trend, not false precision."
+    },
+    {
+      "id": "S25",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "WSAVA/ENOVAT Canine Acute Diarrhea Treatment Summary (2025).",
+      "url": "https://wsava.org/wp-content/uploads/2025/02/Canine-acute-diarrhea_V11.pdf",
+      "use": "Systemic clinical signs matter more than stool appearance alone for severity; supports escalation logic."
+    },
+    {
+      "id": "S26",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA — Help! Is This a Pet Emergency? (2024).",
+      "url": "https://www.aaha.org/resources/help-is-this-a-pet-emergency/",
+      "use": "Emergency red flags for persistent vomiting/diarrhea, breathing difficulty, collapse, severe weakness, sudden behavior change."
+    },
+    {
+      "id": "S27",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA (2026). Why is my Dog throwing up? Vets explain when it's serious.",
+      "url": "https://www.aaha.org/resources/why-is-my-dog-throwing-up-vets-explain-when-its-serious/",
+      "use": "GI red flags: repeated vomiting, inability to keep water down, blood, black/tarry stool, lethargy/collapse, painful/bloated abdomen."
+    },
+    {
+      "id": "S28",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA (2019). Canine Life Stage Definitions / 2019 Canine Life Stage Guidelines.",
+      "url": "https://www.aaha.org/resources/life-stage-canine-2019/canine-life-stage-definitions/",
+      "use": "Life stage should be individualized by age, size, lifestyle, health status and breed; stages phase in/out rather than changing abruptly."
+    },
+    {
+      "id": "S29",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA (2019). Behavior — Canine Life Stage Guidelines.",
+      "url": "https://www.aaha.org/resources/life-stage-canine-2019/behavior/",
+      "use": "Behavioral recommendations vary across puppy, young/mature adult and senior stages; individual exercise/cognitive engagement and monitoring of change are emphasized."
+    },
+    {
+      "id": "S30",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA (2019). Life Stage Checklists.",
+      "url": "https://www.aaha.org/resources/life-stage-canine-2019/life-stage-checklist/",
+      "use": "Lifestyle, exercise, mental stimulation and enrichment should be appropriate to age, breed and temperament; senior dogs require environmental and cognitive monitoring."
+    },
+    {
+      "id": "S31",
+      "type": "professional_position",
+      "quality": "A",
+      "citation": "AVSAB (2024 revision). Puppy Socialization Position Statement.",
+      "url": "https://avsab.org/wp-content/uploads/2024/12/Puppy-Socialization-Position-Statement-FINAL.pdf",
+      "use": "Early socialization is important, must be positive, safe and not forced; fearful puppies warrant veterinary guidance."
+    },
+    {
+      "id": "S32",
+      "type": "professional_position",
+      "quality": "A",
+      "citation": "AVSAB (2021). Humane Dog Training Position Statement.",
+      "url": "https://avsab.org/wp-content/uploads/2021/08/AVSAB-Humane-Dog-Training-Position-Statement-2021.pdf",
+      "use": "Reward-based methods are recommended; aversive methods should not be used as standard training/behavior modification advice."
+    },
+    {
+      "id": "S33",
+      "type": "clinical_guideline",
+      "quality": "A",
+      "citation": "AAHA (2023). Senior Care Guidelines — Managing Cognitive Dysfunction and Behavioral Anxiety.",
+      "url": "https://www.aaha.org/resources/2023-aaha-senior-care-guidelines-for-dogs-and-cats/managing-cognitive-dysfunction-and-behavioral-anxiety/",
+      "use": "Senior behavior changes in disorientation, interaction, sleep-wake, house training, activity and anxiety warrant monitoring and veterinary evaluation; early recognition matters."
+    },
+    {
+      "id": "S34",
+      "type": "longitudinal_cohort",
+      "quality": "A",
+      "citation": "Dog Aging Project environmental/lifestyle data infrastructure (longitudinal companion-dog research).",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12369580/",
+      "use": "Supports longitudinal capture of demographics, behavior, physical activity, environment, diet, medications/preventatives and health context."
+    },
+    {
+      "id": "S35",
+      "type": "cohort_study",
+      "quality": "A",
+      "citation": "Social determinants of health and disease in companion dogs — Dog Aging Project cohort.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10306367/",
+      "use": "Large cohort demonstrates value of combining dog demographics, activity, environment, behavior, diet and health variables."
+    },
+    {
+      "id": "S36",
+      "type": "welfare_review",
+      "quality": "B",
+      "citation": "The Science and Social Validity of Companion Animal Welfare (2023).",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10251938/",
+      "use": "Learning, sniffing, play and species-appropriate enrichment can support welfare; recommendations must still be individualized."
+    }
+  ],
+  "base_knowledge_cards": [
+    {
+      "id": "OBS_BODY_001",
+      "domain": "visual_body",
+      "label": "Postura corporea abbassata / crouch",
+      "observable": "Tronco e/o testa portati più in basso del baseline; possibile riduzione apparente della sagoma.",
+      "compatible": [
+        "incertezza/evitamento",
+        "paura o distress",
+        "appeasement in specifici contesti"
+      ],
+      "not_conclude": "Non equivale da sola a 'ha paura' o 'è sottomesso'.",
+      "modifiers": [
+        "contesto sociale",
+        "movimento di avvicinamento/allontanamento",
+        "coda",
+        "orecchie",
+        "baseline individuale"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S10",
+        "S09"
+      ]
+    },
+    {
+      "id": "OBS_BODY_002",
+      "domain": "visual_body",
+      "label": "Irrigidimento / tensione corporea",
+      "observable": "Riduzione del movimento fluido, postura rigida, muscolatura apparentemente tesa.",
+      "compatible": [
+        "alta attivazione/arousal",
+        "tensione",
+        "possibile escalation difensiva se associata ad altri segnali"
+      ],
+      "not_conclude": "Non classificare automaticamente come aggressività.",
+      "modifiers": [
+        "freeze",
+        "distanza dallo stimolo",
+        "sguardo",
+        "growl/bark",
+        "coda rigida"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S10"
+      ]
+    },
+    {
+      "id": "OBS_BODY_003",
+      "domain": "visual_body",
+      "label": "Freeze / immobilità improvvisa",
+      "observable": "Interruzione marcata del movimento rispetto ai secondi precedenti.",
+      "compatible": [
+        "orientamento intenso",
+        "incertezza",
+        "stress/paura",
+        "pre-escalation in alcuni contesti"
+      ],
+      "not_conclude": "Il freeze è aspecifico: non è una diagnosi né una previsione certa di morso.",
+      "modifiers": [
+        "stimolo presente",
+        "rigidità",
+        "orecchie/coda",
+        "distanza",
+        "vocalizzazione"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S10",
+        "S01"
+      ]
+    },
+    {
+      "id": "OBS_BODY_004",
+      "domain": "visual_body",
+      "label": "Play bow",
+      "observable": "Arti anteriori abbassati con posteriore sollevato, spesso associato a movimenti elastici.",
+      "compatible": [
+        "invito al gioco",
+        "regolazione di interazione ludica"
+      ],
+      "not_conclude": "Non usare come prova assoluta di stato emotivo positivo se il resto della sequenza è conflittuale.",
+      "modifiers": [
+        "movimenti rimbalzanti",
+        "ritorni reciproci",
+        "assenza di rigidità persistente",
+        "partner sociale"
+      ],
+      "evidence": "B",
+      "consensus": "alto",
+      "sources": [
+        "S01"
+      ]
+    },
+    {
+      "id": "OBS_BODY_005",
+      "domain": "visual_body",
+      "label": "Approccio volontario",
+      "observable": "Riduzione attiva della distanza verso persona/cane/oggetto.",
+      "compatible": [
+        "interesse",
+        "esplorazione",
+        "affiliazione",
+        "goal-directed approach"
+      ],
+      "not_conclude": "Approccio non significa necessariamente amicizia o comfort.",
+      "modifiers": [
+        "velocità",
+        "curva vs linea diretta",
+        "postura",
+        "ritiro successivo",
+        "contesto"
+      ],
+      "evidence": "B",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S14"
+      ]
+    },
+    {
+      "id": "OBS_BODY_006",
+      "domain": "visual_body",
+      "label": "Allontanamento / evitamento",
+      "observable": "Aumento attivo della distanza, spostamento laterale o uscita dal campo rispetto allo stimolo.",
+      "compatible": [
+        "evitamento",
+        "incertezza",
+        "riduzione del contatto",
+        "paura/distress se convergono altri segnali"
+      ],
+      "not_conclude": "Non attribuire causa senza conoscere lo stimolo e la sequenza.",
+      "modifiers": [
+        "testa girata",
+        "coda bassa",
+        "orecchie",
+        "freeze precedente",
+        "trigger"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S10"
+      ]
+    },
+    {
+      "id": "OBS_TAIL_001",
+      "domain": "visual_tail",
+      "label": "Coda bassa o tucked",
+      "observable": "Coda tenuta sotto il livello abituale; tucked = tra gli arti posteriori.",
+      "compatible": [
+        "paura/ansia",
+        "appeasement",
+        "riduzione della sagoma"
+      ],
+      "not_conclude": "La conformazione di razza e il baseline individuale possono limitare l'interpretazione.",
+      "modifiers": [
+        "morfologia",
+        "baseline",
+        "postura generale",
+        "stimolo"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S08"
+      ]
+    },
+    {
+      "id": "OBS_TAIL_002",
+      "domain": "visual_tail",
+      "label": "Coda alta",
+      "observable": "Coda tenuta sopra il livello abituale del cane.",
+      "compatible": [
+        "arousal",
+        "sicurezza/approccio in alcuni contesti",
+        "attenzione sociale"
+      ],
+      "not_conclude": "Coda alta non significa automaticamente dominanza o aggressività.",
+      "modifiers": [
+        "rigidità",
+        "wag",
+        "postura",
+        "partner sociale"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S01"
+      ]
+    },
+    {
+      "id": "OBS_TAIL_003",
+      "domain": "visual_tail",
+      "label": "Tail wag",
+      "observable": "Movimento laterale ripetuto della coda; registrare ampiezza, velocità, rigidità e posizione.",
+      "compatible": [
+        "arousal sociale",
+        "eccitazione positiva o negativa a seconda del contesto"
+      ],
+      "not_conclude": "Scodinzolare non equivale a 'felice'.",
+      "modifiers": [
+        "altezza coda",
+        "ampiezza",
+        "rigidità",
+        "resto del corpo",
+        "contesto"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S09"
+      ]
+    },
+    {
+      "id": "OBS_EAR_001",
+      "domain": "visual_ears",
+      "label": "Orecchie appiattite / backward",
+      "observable": "Padiglioni portati indietro o aderenti rispetto al baseline.",
+      "compatible": [
+        "distress/paura",
+        "interazione affiliativa in alcuni contesti",
+        "attenzione direzionale"
+      ],
+      "not_conclude": "Morfologia delle orecchie e razza modificano la visibilità; segnale non univoco.",
+      "modifiers": [
+        "morfologia",
+        "coda",
+        "postura",
+        "occhi",
+        "stimolo"
+      ],
+      "evidence": "A",
+      "consensus": "medio-alto",
+      "sources": [
+        "S03",
+        "S04",
+        "S10"
+      ]
+    },
+    {
+      "id": "OBS_EAR_002",
+      "domain": "visual_ears",
+      "label": "Orecchie in avanti",
+      "observable": "Padiglioni orientati anteriormente rispetto al baseline.",
+      "compatible": [
+        "attenzione/orientamento",
+        "interesse",
+        "arousal"
+      ],
+      "not_conclude": "Non equivale da solo a stato positivo o minaccia.",
+      "modifiers": [
+        "direzione sguardo",
+        "testa",
+        "postura",
+        "trigger"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S01",
+        "S03"
+      ]
+    },
+    {
+      "id": "OBS_FACE_001",
+      "domain": "visual_face",
+      "label": "Blink / chiusura occhi",
+      "observable": "Chiusura palpebrale breve o prolungata; codificabile come movimento facciale.",
+      "compatible": [
+        "risposta contestuale",
+        "regolazione sociale",
+        "possibile stress se converge con altri segnali"
+      ],
+      "not_conclude": "Non attribuire emozione da un singolo blink.",
+      "modifiers": [
+        "frequenza",
+        "stimolo",
+        "altre azioni facciali",
+        "qualità video"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S02",
+        "S03",
+        "S05"
+      ]
+    },
+    {
+      "id": "OBS_FACE_002",
+      "domain": "visual_face",
+      "label": "Inner brow raiser / AU101-like",
+      "observable": "Sollevamento della parte mediale del sopracciglio, se visibile e compatibile con morfologia.",
+      "compatible": [
+        "segnale facciale sociale/attenzionale"
+      ],
+      "not_conclude": "Non usarlo come sinonimo di tristezza, colpa o richiesta.",
+      "modifiers": [
+        "attenzione umana",
+        "morfologia",
+        "contesto",
+        "altre AU"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S02",
+        "S03",
+        "S04"
+      ]
+    },
+    {
+      "id": "OBS_FACE_003",
+      "domain": "visual_face",
+      "label": "Lip lick / nose lick",
+      "observable": "Lingua che passa su labbra o naso.",
+      "compatible": [
+        "distress/ansia in alcuni contesti",
+        "anticipazione alimentare",
+        "risposta a stimoli gustativi/olfattivi"
+      ],
+      "not_conclude": "È un segnale altamente aspecifico: mai etichettarlo da solo come stress.",
+      "modifiers": [
+        "presenza cibo",
+        "frequenza",
+        "contesto veterinario/sociale",
+        "postura"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S09",
+        "S10"
+      ]
+    },
+    {
+      "id": "OBS_FACE_004",
+      "domain": "visual_face",
+      "label": "Panting fuori contesto termico/esercizio",
+      "observable": "Respirazione a bocca aperta con lingua esposta; annotare se non spiegata da caldo/esercizio.",
+      "compatible": [
+        "arousal/distress",
+        "dolore/discomfort",
+        "termoregolazione"
+      ],
+      "not_conclude": "Senza temperatura, attività e stato clinico non attribuire stress.",
+      "modifiers": [
+        "temperatura",
+        "esercizio",
+        "dolore",
+        "durata",
+        "altri segni"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S10",
+        "S11"
+      ]
+    },
+    {
+      "id": "OBS_FACE_005",
+      "domain": "visual_face",
+      "label": "Yawning / sbadiglio",
+      "observable": "Apertura ampia e temporanea della bocca con pattern tipico di sbadiglio.",
+      "compatible": [
+        "sonnolenza",
+        "distress/arousal in alcuni contesti",
+        "transizione comportamentale"
+      ],
+      "not_conclude": "Sbadiglio ≠ stress in modo automatico.",
+      "modifiers": [
+        "ora del giorno",
+        "contesto",
+        "ripetizione",
+        "altri indicatori"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S10",
+        "S09"
+      ]
+    },
+    {
+      "id": "OBS_GAZE_001",
+      "domain": "visual_head_gaze",
+      "label": "Head turn / orientamento via dallo stimolo",
+      "observable": "Rotazione della testa o del corpo che riduce l'allineamento con lo stimolo.",
+      "compatible": [
+        "disengagement",
+        "evitamento",
+        "regolazione sociale"
+      ],
+      "not_conclude": "Non interpretare automaticamente come 'non vuole' senza sequenza e contesto.",
+      "modifiers": [
+        "distanza",
+        "movimento corporeo",
+        "sguardo",
+        "stimolo"
+      ],
+      "evidence": "A",
+      "consensus": "medio-alto",
+      "sources": [
+        "S10",
+        "S01"
+      ]
+    },
+    {
+      "id": "OBS_GAZE_002",
+      "domain": "visual_head_gaze",
+      "label": "Gaze alternation persona-oggetto",
+      "observable": "Alternanza ripetuta dello sguardo tra una persona e un target/luogo.",
+      "compatible": [
+        "comunicazione referenziale",
+        "richiesta di supporto/attenzione",
+        "goal-directed signaling"
+      ],
+      "not_conclude": "Il target desiderato va inferito solo se la sequenza e la storia personale lo supportano.",
+      "modifiers": [
+        "target",
+        "ripetizione",
+        "prossimità",
+        "feedback proprietario",
+        "pattern personale"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S01"
+      ]
+    },
+    {
+      "id": "AUD_BARK_001",
+      "domain": "audio_vocalization",
+      "label": "Bark event",
+      "observable": "Sequenza di abbai; estrarre pitch, durata, intervalli, tonality/noise, repetition rate.",
+      "compatible": [
+        "contesto di disturbo",
+        "isolamento",
+        "gioco",
+        "richiamo/attenzione — solo probabilisticamente"
+      ],
+      "not_conclude": "Mai tradurre un abbaio come parola o frase.",
+      "modifiers": [
+        "contesto visivo",
+        "individuo",
+        "età",
+        "taglia",
+        "sequenza",
+        "rumore"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S15",
+        "S17",
+        "S18"
+      ]
+    },
+    {
+      "id": "AUD_GROWL_001",
+      "domain": "audio_vocalization",
+      "label": "Growl event",
+      "observable": "Vocalizzazione gutturale a bassa frequenza; registrare bout, durata, pulsazione e contesto.",
+      "compatible": [
+        "gioco",
+        "difesa risorsa",
+        "minaccia/evitamento — a seconda del contesto"
+      ],
+      "not_conclude": "Growl ≠ aggressione certa; è un segnale contestuale e può comparire nel gioco.",
+      "modifiers": [
+        "toy/food/stranger",
+        "postura",
+        "distanza",
+        "sequenza"
+      ],
+      "evidence": "B",
+      "consensus": "alto",
+      "sources": [
+        "S16",
+        "S01"
+      ]
+    },
+    {
+      "id": "AUD_WHINE_001",
+      "domain": "audio_vocalization",
+      "label": "Whine / whimper",
+      "observable": "Vocalizzazione più acuta e spesso tonale; annotare durata e ripetizione.",
+      "compatible": [
+        "distress/isolamento",
+        "anticipazione",
+        "richiesta/attenzione",
+        "discomfort"
+      ],
+      "not_conclude": "Non identificare la causa senza contesto e stato clinico.",
+      "modifiers": [
+        "separazione",
+        "porta/target",
+        "postura",
+        "durata",
+        "pattern personale"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S10",
+        "S01"
+      ]
+    },
+    {
+      "id": "AUD_HOWL_001",
+      "domain": "audio_vocalization",
+      "label": "Howl / ululato",
+      "observable": "Vocalizzazione lunga e sostenuta con struttura tonale.",
+      "compatible": [
+        "risposta sociale/acustica",
+        "isolamento",
+        "pattern individuale/di razza"
+      ],
+      "not_conclude": "Non assegnare significato unico.",
+      "modifiers": [
+        "stimolo sonoro",
+        "isolamento",
+        "individuo",
+        "storia"
+      ],
+      "evidence": "B",
+      "consensus": "medio",
+      "sources": [
+        "S01",
+        "S19"
+      ]
+    },
+    {
+      "id": "CTX_HUMAN_001",
+      "domain": "context",
+      "label": "Attenzione umana",
+      "observable": "Persona guarda/interagisce/parla al cane oppure è presente ma inattiva.",
+      "compatible": [
+        "modificatore primario di espressioni e comunicazione"
+      ],
+      "not_conclude": "La stessa azione facciale può cambiare frequenza in funzione dell'attenzione umana.",
+      "modifiers": [
+        "familiarità persona",
+        "distanza",
+        "tono voce",
+        "interazione precedente"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S03",
+        "S01"
+      ]
+    },
+    {
+      "id": "CTX_DOG_001",
+      "domain": "context",
+      "label": "Interazione cane-cane",
+      "observable": "Presenza e comportamento di un conspecifico; distanza, orientamento, reciprocità.",
+      "compatible": [
+        "gioco",
+        "approccio",
+        "evitamento",
+        "tensione",
+        "competizione risorse"
+      ],
+      "not_conclude": "Etichette sociali richiedono sequenza reciproca, non singolo frame.",
+      "modifiers": [
+        "risorsa",
+        "spazio",
+        "familiarità",
+        "reciprocità",
+        "vie di fuga"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S01",
+        "S14"
+      ]
+    },
+    {
+      "id": "CTX_RESOURCE_001",
+      "domain": "context",
+      "label": "Risorsa / cibo / toy",
+      "observable": "Cibo, ciotola, osso, toy o oggetto di valore nel contesto immediato.",
+      "compatible": [
+        "gioco",
+        "anticipazione",
+        "frustrazione",
+        "difesa risorsa"
+      ],
+      "not_conclude": "Non attribuire 'possessività' senza pattern e interazione.",
+      "modifiers": [
+        "approccio di altri",
+        "growl",
+        "freeze",
+        "postura",
+        "storia"
+      ],
+      "evidence": "B",
+      "consensus": "alto",
+      "sources": [
+        "S16",
+        "S14"
+      ]
+    },
+    {
+      "id": "CTX_SEP_001",
+      "domain": "context",
+      "label": "Separazione / isolamento",
+      "observable": "Proprietario esce o cane resta senza referente abituale.",
+      "compatible": [
+        "distress da separazione",
+        "vocalizzazione contestuale",
+        "ricerca sociale"
+      ],
+      "not_conclude": "Un singolo episodio non diagnostica ansia da separazione.",
+      "modifiers": [
+        "durata",
+        "ripetizione",
+        "distruzione/eliminazione",
+        "video longitudinali",
+        "baseline"
+      ],
+      "evidence": "B",
+      "consensus": "alto",
+      "sources": [
+        "S10",
+        "S15"
+      ]
+    },
+    {
+      "id": "SAFE_DISTRESS_001",
+      "domain": "safety",
+      "label": "Cluster distress/fear",
+      "observable": "Convergenza di più segnali: coda tucked, postura abbassata, freeze/escape, tremore, lip lick ripetuto, panting fuori contesto, disengagement.",
+      "compatible": [
+        "distress/paura da considerare seriamente"
+      ],
+      "not_conclude": "Non diagnosticare disturbo d'ansia; raccomandare aumento distanza e valutazione professionale se persistente/severo.",
+      "modifiers": [
+        "numero segnali",
+        "persistenza",
+        "trigger",
+        "possibilità di allontanarsi"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S10",
+        "S09"
+      ]
+    },
+    {
+      "id": "SAFE_ESCALATION_001",
+      "domain": "safety",
+      "label": "Cluster possibile escalation difensiva",
+      "observable": "Rigidità/freeze + orientamento intenso + growl/snarl/teeth display o avanzamento/ritiro rapido.",
+      "compatible": [
+        "alta tensione con possibile rischio di escalation"
+      ],
+      "not_conclude": "Non prevedere morso con certezza. Output deve essere prudente: non avvicinarsi, non testare il cane, aumentare distanza in sicurezza.",
+      "modifiers": [
+        "distanza",
+        "risorsa",
+        "vie di fuga",
+        "precedenti",
+        "persona/cane target"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S10",
+        "S01",
+        "S16"
+      ]
+    },
+    {
+      "id": "SAFE_PAIN_001",
+      "domain": "safety",
+      "label": "Possibile dolore/discomfort",
+      "observable": "Cambiamento improvviso di comportamento, postura anomala, vocalizzazioni, ridotta interazione, tensione facciale/orecchie, restlessness o concealment.",
+      "compatible": [
+        "dolore/discomfort tra le possibilità"
+      ],
+      "not_conclude": "Dogly non diagnostica dolore né causa. Se nuovo, intenso o persistente, indirizzare al veterinario.",
+      "modifiers": [
+        "baseline individuale",
+        "trauma",
+        "mobilità",
+        "appetito",
+        "durata"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S11",
+        "S12",
+        "S26"
+      ]
+    },
+    {
+      "id": "DIGESTIVE_001",
+      "domain": "digestive",
+      "label": "Consistenza fecale da immagine",
+      "observable": "Forma/consistenza visiva stimata in fascia qualitativa; registrare colore apparente e presenza visibile di sangue/muco senza diagnosi.",
+      "compatible": [
+        "monitoraggio trend digestivo"
+      ],
+      "not_conclude": "Una foto non identifica causa, infezione, parassiti o malattia; lo scoring umano stesso ha variabilità.",
+      "modifiers": [
+        "serie temporale",
+        "dieta",
+        "frequenza",
+        "vomito",
+        "energia",
+        "appetito"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S24",
+        "S23",
+        "S25"
+      ]
+    },
+    {
+      "id": "DIGESTIVE_002",
+      "domain": "digestive",
+      "label": "Red flags gastrointestinali",
+      "observable": "Vomito ripetuto, incapacità di trattenere acqua, sangue evidente, feci nere/catramose, letargia/collasso, addome doloroso o gonfio, segni di disidratazione.",
+      "compatible": [
+        "necessità di contatto veterinario rapido/urgente secondo gravità"
+      ],
+      "not_conclude": "Non tentare diagnosi o trattamento farmacologico automatico.",
+      "modifiers": [
+        "età",
+        "durata",
+        "frequenza",
+        "stato mentale",
+        "idratazione"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S25",
+        "S26",
+        "S27"
+      ]
+    },
+    {
+      "id": "NUTRITION_001",
+      "domain": "nutrition",
+      "label": "Valutazione nutrizionale contestuale",
+      "observable": "Età/life stage, peso/BCS se disponibile, alimento, quantità, snack, cambi dieta, attività e ambiente.",
+      "compatible": [
+        "personalizzazione e correlazione con trend digestivi"
+      ],
+      "not_conclude": "Dogly non prescrive diete terapeutiche o fabbisogni clinici senza supervisione veterinaria.",
+      "modifiers": [
+        "patologie",
+        "farmaci",
+        "gravidanza",
+        "attività",
+        "obesità/sottopeso"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S23"
+      ]
+    },
+    {
+      "id": "PRIOR_BREED_001",
+      "domain": "priors",
+      "label": "Razza come prior debole",
+      "observable": "Razza o mix dichiarato dall'utente.",
+      "compatible": [
+        "prior leggero su morfologia/visibilità e alcuni tratti di popolazione"
+      ],
+      "not_conclude": "Non predire comportamento individuale dalla razza; non usare stereotipi per rischio/aggressività.",
+      "modifiers": [
+        "individuo",
+        "storia",
+        "età",
+        "ambiente",
+        "morfologia reale"
+      ],
+      "evidence": "A",
+      "consensus": "alto",
+      "sources": [
+        "S08"
+      ]
+    },
+    {
+      "id": "PERSONAL_001",
+      "domain": "personalization",
+      "label": "Pattern personale",
+      "observable": "Stessa configurazione di segnali + contesto ripetuta nello stesso cane con esito/feedback coerente.",
+      "compatible": [
+        "inferenza personalizzata più forte del prior di popolazione"
+      ],
+      "not_conclude": "Non promuovere a pattern dopo singolo evento o solo feedback proprietario.",
+      "modifiers": [
+        "numero episodi",
+        "diversità giorni",
+        "coerenza",
+        "contraddizioni",
+        "qualità osservazioni"
+      ],
+      "evidence": "PRODUCT_RULE",
+      "consensus": "design",
+      "sources": [
+        "S13",
+        "S14"
+      ]
+    },
+    {
+      "id": "ABSTAIN_001",
+      "domain": "decision_policy",
+      "label": "Astensione obbligatoria",
+      "observable": "Video insufficiente, cane non visibile, audio scarso, segnali contraddittori, contesto assente o evidenza bassa.",
+      "compatible": [
+        "output 'non ho abbastanza elementi' + eventuale singola domanda utile"
+      ],
+      "not_conclude": "Mai forzare una traduzione per completare la UX.",
+      "modifiers": [
+        "capture quality",
+        "evidence convergence",
+        "memory quality"
+      ],
+      "evidence": "PRODUCT_RULE",
+      "consensus": "non_negoziabile",
+      "sources": [
+        "S05",
+        "S09"
+      ]
+    }
+  ],
+  "life_stage_policy": {
+    "version": "life_stage_policy.v1",
+    "principle": "Use exact age plus an approximate life-stage context. Life stages are context, not deterministic behavior labels.",
+    "stages": [
+      {
+        "code": "PUPPY",
+        "definition": "Birth through cessation of rapid growth; AAHA gives roughly 6-9 months with variation by breed/size.",
+        "advice_bias": [
+          "positive_safe_socialization",
+          "short_learning_sessions",
+          "choice_and_recovery",
+          "avoid_forced_exposure"
+        ],
+        "forbidden": [
+          "forced_flooding",
+          "aversive_training",
+          "assuming_fear_will_just_pass"
+        ],
+        "sources": [
+          "S28",
+          "S29",
+          "S31",
+          "S32"
+        ]
+      },
+      {
+        "code": "YOUNG_ADULT",
+        "definition": "From end of rapid growth through completion of physical/social maturation; often up to 3-4 years, with individual variation.",
+        "advice_bias": [
+          "continued_training",
+          "appropriate_activity",
+          "cognitive_engagement",
+          "monitor_emerging_fear_or_reactivity"
+        ],
+        "forbidden": [
+          "dismiss_new_reactivity_as_just_adolescence",
+          "aversive_training"
+        ],
+        "sources": [
+          "S28",
+          "S29",
+          "S30",
+          "S32"
+        ]
+      },
+      {
+        "code": "MATURE_ADULT",
+        "definition": "After social/physical maturity until the last approximately 25% of estimated lifespan; exact boundary depends on the individual.",
+        "advice_bias": [
+          "maintain_routine",
+          "individual_activity",
+          "monitor_change_from_baseline",
+          "continued_learning"
+        ],
+        "forbidden": [
+          "one_size_fits_all_exercise_targets"
+        ],
+        "sources": [
+          "S28",
+          "S29",
+          "S30"
+        ]
+      },
+      {
+        "code": "SENIOR",
+        "definition": "Last approximately 25% of estimated lifespan; size/breed/health affect timing, so use as an approximate context.",
+        "advice_bias": [
+          "monitor_change_from_baseline",
+          "mobility_friendly_environment",
+          "sleep_wake_monitoring",
+          "early_vet_escalation_for_new_changes"
+        ],
+        "forbidden": [
+          "normalizing_new_changes_as_old_age",
+          "high_intensity_generic_advice"
+        ],
+        "sources": [
+          "S28",
+          "S30",
+          "S33"
+        ]
+      },
+      {
+        "code": "UNKNOWN",
+        "definition": "Insufficient profile data or uncertain stage.",
+        "advice_bias": [
+          "low_risk_general_management",
+          "ask_one_material_question"
+        ],
+        "forbidden": [
+          "stage_specific_claims"
+        ],
+        "sources": [
+          "S28"
+        ]
+      }
+    ],
+    "implementation_note": "Keep current DB age_stage for compatibility. Build a derived LifeStageContext object from birth_date + age_stage + size; include source/confidence. Do not silently rewrite current enum values."
+  },
+  "dog_context_schema": {
+    "version": "dog_context.v1",
+    "provenance_values": [
+      "OWNER_REPORTED",
+      "DOGLY_OBSERVED",
+      "SYSTEM_INFERRED",
+      "VET_RECORDED"
+    ],
+    "fields": {
+      "identity": [
+        "dog_id",
+        "age_months",
+        "life_stage",
+        "size",
+        "breed_label",
+        "is_mix"
+      ],
+      "routine": [
+        "typical_activity_level",
+        "walk_pattern",
+        "sleep_pattern",
+        "feeding_pattern",
+        "time_alone_pattern",
+        "social_pattern",
+        "enrichment_pattern"
+      ],
+      "preferences": [
+        "preferred_rewards",
+        "preferred_play",
+        "preferred_enrichment",
+        "known_triggers"
+      ],
+      "current_day": [
+        "activity_vs_usual",
+        "sleep_vs_usual",
+        "feeding_vs_usual",
+        "alone_time_vs_usual",
+        "routine_disruption"
+      ],
+      "recent_change": [
+        "new_behavior",
+        "frequency_change",
+        "intensity_change",
+        "duration_change"
+      ],
+      "health_context": [
+        "recent_vet_event",
+        "mobility_concern_owner_reported",
+        "pain_concern_owner_reported",
+        "medication_change_owner_reported"
+      ]
+    },
+    "rules": [
+      "Owner-reported data is context, not objective truth.",
+      "System-inferred routine changes require multiple observations or explicit confirmation.",
+      "Absence of data must remain UNKNOWN, never imputed as normal.",
+      "Prefer deviation from the dog's own baseline over population averages when enough longitudinal data exists."
+    ]
+  },
+  "advice_catalog": [
+    {
+      "code": "ADVICE_DISTANCE_CHOICE",
+      "category": "LOW_RISK_MANAGEMENT",
+      "action": "Increase distance from the trigger and give the dog a real option to disengage; do not force contact.",
+      "applies_to_intents": [
+        "FEAR_INSECURITY",
+        "DISCOMFORT_AVOIDANCE",
+        "RESOURCE_TENSION",
+        "HIGH_AROUSAL"
+      ],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR",
+        "UNKNOWN"
+      ],
+      "requires": [],
+      "contraindications": [],
+      "follow_up": "Observe whether body tension, avoidance or vocalization decreases after distance is increased.",
+      "sources": [
+        "S10",
+        "S29"
+      ],
+      "risk": "LOW"
+    },
+    {
+      "code": "ADVICE_REWARD_BASED_REDIRECT",
+      "category": "TRAINING",
+      "action": "Use a reward-based alternative behavior or redirect; avoid punishment, intimidation or physical correction.",
+      "applies_to_intents": [
+        "ATTENTION_REQUEST",
+        "FRUSTRATION",
+        "HIGH_AROUSAL",
+        "PLAY_INTERACTION"
+      ],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR"
+      ],
+      "requires": [
+        "no_urgent_safety_flag"
+      ],
+      "contraindications": [
+        "severe_pain_possible",
+        "immediate_danger"
+      ],
+      "follow_up": "Ask whether the dog can re-engage calmly and whether the unwanted behavior decreases without escalation.",
+      "sources": [
+        "S32"
+      ],
+      "risk": "LOW"
+    },
+    {
+      "code": "ADVICE_SNIFF_EXPLORATION",
+      "category": "ENRICHMENT",
+      "action": "If the dog's health and environment allow it, offer a calm sniffing/exploration opportunity rather than only high-intensity exercise.",
+      "applies_to_intents": [
+        "FRUSTRATION",
+        "HIGH_AROUSAL",
+        "ATTENTION_REQUEST"
+      ],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR"
+      ],
+      "requires": [
+        "no_urgent_safety_flag",
+        "no_pain_red_flag"
+      ],
+      "contraindications": [
+        "owner_reports_mobility_limit_without_vet_clearance"
+      ],
+      "follow_up": "Check whether the dog settles more easily afterward compared with its usual baseline.",
+      "sources": [
+        "S30",
+        "S36"
+      ],
+      "risk": "LOW"
+    },
+    {
+      "code": "ADVICE_RESTORE_FAMILIAR_ROUTINE",
+      "category": "ROUTINE",
+      "action": "When today's routine is clearly different from usual, first restore a familiar low-stress routine where practical.",
+      "applies_to_intents": [
+        "ATTENTION_REQUEST",
+        "FRUSTRATION",
+        "HIGH_AROUSAL",
+        "AMBIGUOUS"
+      ],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR"
+      ],
+      "requires": [
+        "routine_disruption_known"
+      ],
+      "contraindications": [],
+      "follow_up": "Compare behavior after the routine returns closer to normal.",
+      "sources": [
+        "S30",
+        "S34",
+        "S35"
+      ],
+      "risk": "LOW"
+    },
+    {
+      "code": "ADVICE_PUPPY_SAFE_EXPOSURE",
+      "category": "DEVELOPMENT",
+      "action": "For a puppy, use gradual positive exposure at a distance where the puppy can stay comfortable; do not force approach.",
+      "applies_to_intents": [
+        "FEAR_INSECURITY",
+        "DISCOMFORT_AVOIDANCE",
+        "ALERT_VIGILANCE"
+      ],
+      "life_stage": [
+        "PUPPY"
+      ],
+      "requires": [
+        "no_urgent_safety_flag"
+      ],
+      "contraindications": [
+        "intense_or_persistent_fear"
+      ],
+      "follow_up": "If fear is intense or persistent, recommend veterinary/behavior professional guidance rather than repeated exposure.",
+      "sources": [
+        "S31",
+        "S32"
+      ],
+      "risk": "LOW"
+    },
+    {
+      "code": "ADVICE_SENIOR_CHANGE_VET",
+      "category": "VET_ESCALATION",
+      "action": "A new or persistent change in sleep, orientation, house training, activity, interaction or anxiety in a senior dog deserves veterinary discussion rather than being attributed to age alone.",
+      "applies_to_intents": [
+        "AMBIGUOUS",
+        "DISCOMFORT_AVOIDANCE",
+        "FEAR_INSECURITY",
+        "RELAX_REST"
+      ],
+      "life_stage": [
+        "SENIOR"
+      ],
+      "requires": [
+        "recent_change_present"
+      ],
+      "contraindications": [],
+      "follow_up": "Escalate sooner if the change is sudden, severe or accompanied by pain, collapse, breathing difficulty or other red flags.",
+      "sources": [
+        "S33"
+      ],
+      "risk": "MEDICAL_ESCALATION"
+    },
+    {
+      "code": "ADVICE_MONITOR_BASELINE_CHANGE",
+      "category": "MONITOR",
+      "action": "Record the episode and compare frequency, duration and context with the dog's normal baseline before making a strong conclusion.",
+      "applies_to_intents": [
+        "AMBIGUOUS",
+        "INSUFFICIENT",
+        "ALERT_VIGILANCE",
+        "RELAX_REST"
+      ],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR",
+        "UNKNOWN"
+      ],
+      "requires": [],
+      "contraindications": [
+        "urgent_safety_flag"
+      ],
+      "follow_up": "Use future repeated observations to decide whether this is a stable personal pattern or a new change.",
+      "sources": [
+        "S13",
+        "S14",
+        "S34"
+      ],
+      "risk": "LOW"
+    },
+    {
+      "code": "ADVICE_NO_GENERIC_EXERCISE_DOSE",
+      "category": "POLICY_GUARDRAIL",
+      "action": "Do not prescribe fixed exercise minutes from age/breed alone; adapt activity to individual health, temperament, life stage, environment and usual baseline.",
+      "applies_to_intents": [],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR",
+        "UNKNOWN"
+      ],
+      "requires": [],
+      "contraindications": [],
+      "follow_up": "If activity advice could be limited by health or mobility, recommend veterinary guidance.",
+      "sources": [
+        "S28",
+        "S30"
+      ],
+      "risk": "POLICY"
+    }
+  ],
+  "advice_policy": {
+    "version": "advice_policy.v1",
+    "max_consumer_advice_items": 1,
+    "selection_order": [
+      "URGENT_SAFETY",
+      "VET_ESCALATION",
+      "LOW_RISK_MANAGEMENT",
+      "DEVELOPMENT",
+      "ROUTINE",
+      "ENRICHMENT",
+      "TRAINING",
+      "MONITOR"
+    ],
+    "rules": [
+      "Advice text must come from a closed evidence-backed catalog, not free-form model invention.",
+      "The LLM may explain why a catalog item was selected, but may not create a new action or override contraindications.",
+      "If safety flags are present, safety policy overrides lifestyle optimization.",
+      "Use exact age and life-stage context only as modifiers, never as deterministic explanation.",
+      "Prefer the dog's own recent-vs-usual deviation when supported by longitudinal data.",
+      "If owner-reported context is the only support, say so internally and keep confidence limited.",
+      "Advice outcome feedback is personal learning evidence, not scientific ground truth."
+    ]
+  },
+  "outcome_learning": {
+    "version": "advice_outcome.v1",
+    "values": [
+      "HELPED",
+      "DID_NOT_HELP",
+      "UNKNOWN",
+      "NOT_TRIED"
+    ],
+    "capture": "After an appropriate delay or next related interaction, ask a single low-friction question: 'Ti è sembrato utile?'",
+    "personal_learning_rules": [
+      "Never update scientific KB from one user's outcome.",
+      "Personal advice affinity can rise only after repeated comparable episodes.",
+      "Track contradictory outcomes explicitly.",
+      "Do not turn advice success into causal certainty.",
+      "Safety/veterinary escalation recommendations are not optimized away by owner feedback."
+    ]
+  },
+  "repository_implementation_map": {
+    "current_pipeline": [
+      "backend/app/providers/gemini_observer.py -> ObservationContract only",
+      "backend/app/worker/handlers.py -> observer then reasoner with eligible_memory",
+      "backend/app/providers/openai_reasoner.py -> observation + context_bucket + eligible_memory",
+      "backend/app/contracts/interpretation.py -> no scientific-KB evidence source and no advice contract yet",
+      "backend/app/contracts/taxonomy.py -> keep current IntentCode allowlist; do not replace it with new research-only intent names"
+    ],
+    "target_pipeline": "Observer -> DogContext assembler -> KB retrieval -> Reasoner -> deterministic AdviceEngine -> persist -> mobile result",
+    "new_modules": [
+      "backend/app/knowledge/models.py",
+      "backend/app/knowledge/registry.py",
+      "backend/app/knowledge/retrieval.py",
+      "backend/app/knowledge/advice.py",
+      "backend/app/knowledge/data/dogly_knowledge_advice_v2.json",
+      "backend/app/domains/dog_context.py"
+    ]
+  }
+}

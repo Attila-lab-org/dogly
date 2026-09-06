@@ -16,6 +16,8 @@ async def process_analysis_step(*, task_type: str, event_id: str | None = None) 
     state = build_default_state()
     if task_type == "media_retention_cleanup":
         return await handlers.process_media_retention_cleanup(state, event_id=event_id)
+    if task_type == "care_reminder_dispatch":
+        return await handlers.process_care_reminder_dispatch(state, event_id=event_id)
     if not event_id:
         raise ValueError(f"event_id is required for workflow task type: {task_type}")
     if task_type == "behavior_analysis":
@@ -26,6 +28,10 @@ async def process_analysis_step(*, task_type: str, event_id: str | None = None) 
         return await handlers.process_privacy_export(state, event_id=event_id)
     if task_type == "account_deletion":
         return await handlers.process_account_deletion(state, event_id=event_id)
+    if task_type == "behavior_result_notification":
+        return await handlers.process_behavior_result_notification(state, event_id=event_id)
+    if task_type == "digestive_result_notification":
+        return await handlers.process_digestive_result_notification(state, event_id=event_id)
     raise ValueError(f"Unsupported workflow task type: {task_type}")
 
 

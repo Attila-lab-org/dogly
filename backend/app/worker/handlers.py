@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 
 from app.api.deps import AppState
 from app.contracts.errors import ErrorCode
@@ -25,11 +26,24 @@ from app.contracts.taxonomy import (
     TERMINAL_EVENT_STATUSES,
     AnalysisDomain,
     BehaviorEventStatus,
+    ConfidenceBand,
 )
-from app.domains import behavior_db, digestive_db, patterns_db, privacy_db
+from app.domains import (
+    behavior_db,
+    care_db,
+    devices_db,
+    digestive_db,
+    dogs_db,
+    lifestyle_db,
+    patterns_db,
+    privacy_db,
+)
+from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
 from app.domains.billing import QuotaService
+from app.domains.consents import get_consents
 from app.domains.digestive import deterministic_safety_flags
+from app.domains.dog_context import build_dog_context
 from app.domains.models import BehaviorEventRec
 from app.domains.repository import now_utc
 from app.domains.retention import (
@@ -40,10 +54,14 @@ from app.domains.retention import (
     schedule_behavior_raw_expiry,
     schedule_digestive_raw_expiry,
 )
+from app.knowledge.advice import build_advice
+from app.knowledge.retrieval import retrieve_evidence
 from app.providers import supabase_auth_admin
 from app.providers.base import EligiblePatternSummary
+from app.providers.expo_push import send_push
 
 MAX_TASK_ATTEMPTS = 5
+logger = logging.getLogger(__name__)
 
 
 class InvalidTransition(Exception):
@@ -72,6 +90,34 @@ async def _eligible_memory(state: AppState, dog_id: str) -> list[EligiblePattern
         )
         for p in state.store.patterns.values()
         if p.dog_id == dog_id and p.state in ELIGIBLE_PATTERN_STATES
+    ]
+
+
+async def _dog_context(state: AppState, event: BehaviorEventRec):
+    if state.engine is not None:
+        dog = await dogs_db.get_owned_dog(
+            state.engine, user_id=event.user_id, dog_id=event.dog_id
+        )
+        lifestyle = await lifestyle_db.get_lifestyle(
+            state.engine, event.user_id, event.dog_id
+        )
+    else:
+        dog = state.store.dogs[event.dog_id]
+        lifestyle = lifestyle_domain.get_lifestyle(
+            state.store, event.user_id, event.dog_id
+        )
+    return build_dog_context(dog, lifestyle.model_dump())
+
+
+async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
+    if state.engine is not None:
+        return await devices_db.list_notification_tokens(state.engine, user_id)
+    if not get_consents(state.store, user_id).notifications:
+        return []
+    return [
+        device.push_token
+        for device in state.store.devices.values()
+        if device.user_id == user_id
     ]
 
 
@@ -184,12 +230,25 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     # OBSERVING -> INTERPRETING
     transition(event, BehaviorEventStatus.INTERPRETING)
     try:
+        dog_context = await _dog_context(state, event)
+        knowledge_context = retrieve_evidence(
+            observation, capture.context_bucket, dog_context
+        )
         interpretation, rea_usage = await state.reasoner.interpret(
             observation=observation,
             context_bucket=capture.context_bucket,
             policy_version=INTERPRETATION_POLICY_VERSION,
             eligible_memory=await _eligible_memory(state, event.dog_id),
+            knowledge_context=knowledge_context,
+            dog_context=dog_context,
         )
+        if (
+            knowledge_context.coverage == "LOW"
+            and interpretation.confidence_band != ConfidenceBand.LOW
+        ):
+            interpretation = interpretation.model_copy(
+                update={"confidence_band": ConfidenceBand.LOW}
+            )
     except TimeoutError:
         return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
     except Exception:  # noqa: BLE001 -- deliberate: schema/validation/provider errors
@@ -205,12 +264,31 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
 
     # INTERPRETING -> COMPLETED: persist event + finalize quota (sez. 7.2).
     transition(event, BehaviorEventStatus.COMPLETED)
-    event.interpretation_json = interpretation.model_dump(mode="json")
+    try:
+        advice = build_advice(interpretation, dog_context, knowledge_context)
+    except Exception:  # noqa: BLE001 -- advice failure must not discard interpretation
+        advice = None
+    interpretation_json = interpretation.model_dump(mode="json")
+    interpretation_json["knowledge_audit"] = {
+        "registry_version": knowledge_context.registry_version,
+        "coverage": knowledge_context.coverage,
+        "card_ids": [card.card_id for card in knowledge_context.cards],
+    }
+    interpretation_json["advice"] = (
+        advice.model_dump(mode="json") if advice is not None else None
+    )
+    event.interpretation_json = interpretation_json
     event.primary_intent = interpretation.primary_intent
     event.confidence_band = interpretation.confidence_band
     event.summary = interpretation.consumer_summary
     event.policy_version = interpretation.policy_version
     event.taxonomy_version = interpretation.taxonomy_version
+    event.knowledge_version = knowledge_context.registry_version
+    event.knowledge_card_ids = [
+        card.card_id for card in knowledge_context.cards
+    ]
+    event.advice_code = advice.code if advice is not None else None
+    event.advice_json = advice.model_dump(mode="json") if advice is not None else None
     event.completed_at = now_utc()
     if not event.quota_committed and not event.quota_refunded:
         await quota.commit(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
@@ -218,6 +296,13 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     await _arm_behavior_raw_ttl(state, event)
     if state.engine is not None:
         await behavior_db.save_event_state(state.engine, event)
+    try:
+        await state.queue.enqueue(
+            task_type="behavior_result_notification",
+            payload={"event_id": event.id},
+        )
+    except Exception:
+        logger.exception("Could not enqueue behavior result notification")
     return {"event_id": event.id, "status": event.status.value}
 
 
@@ -236,6 +321,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         return {"event_id": event.id, "status": event.status, "noop": True}
 
     quota = QuotaService(state.store, engine=state.engine)
+    event.attempt_count += 1
     event.status = "OBSERVING"
     if state.engine is not None:
         await digestive_db.save_fecal_state(state.engine, event)
@@ -252,13 +338,31 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             )
         observation, usage = await state.digestive_vision.observe_stool(image_ref=image_ref)
     except TimeoutError:
-        event.status = "FAILED_RETRYABLE"
+        event.last_error_code = ErrorCode.PROVIDER_TIMEOUT.value
+        event.status = (
+            "FAILED_RETRYABLE"
+            if event.attempt_count < MAX_TASK_ATTEMPTS
+            else "FAILED_TERMINAL"
+        )
+        if event.status == "FAILED_TERMINAL":
+            if not event.quota_refunded and not event.quota_committed:
+                await quota.refund(
+                    event.user_id,
+                    AnalysisDomain.DIGESTIVE,
+                    reference_id=event.id,
+                )
+                event.quota_refunded = True
+            event.completed_at = now_utc()
+            schedule_digestive_raw_expiry(event, state.settings)
         if state.engine is not None:
             await digestive_db.save_fecal_state(state.engine, event)
+            if event.status == "FAILED_TERMINAL":
+                await arm_fecal_expiry(state.engine, event.id)
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_TIMEOUT.value}
     except Exception:  # noqa: BLE001 -- deliberate: any digestive-vision failure is a
         # terminal event with quota refund (sez. 22), never crashes the worker.
         event.status = "FAILED_TERMINAL"
+        event.last_error_code = ErrorCode.PROVIDER_SCHEMA_INVALID.value
         if not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
             event.quota_refunded = True
@@ -275,6 +379,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         event_id=event.id,
         user_id=event.user_id,
     )
+    event.last_error_code = None
 
     obs_json = observation.model_dump(mode="json")
     event.observation_json = obs_json
@@ -310,6 +415,13 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     if state.engine is not None:
         await digestive_db.save_fecal_state(state.engine, event)
         await arm_fecal_expiry(state.engine, event.id)
+    try:
+        await state.queue.enqueue(
+            task_type="digestive_result_notification",
+            payload={"event_id": event.id},
+        )
+    except Exception:
+        logger.exception("Could not enqueue digestive result notification")
     return {"event_id": event.id, "status": event.status}
 
 
@@ -319,6 +431,83 @@ async def process_media_retention_cleanup(state: AppState, *, event_id: str | No
     if state.engine is not None:
         return await cleanup_expired_raw_media_db(state.engine, storage=state.storage)
     return await cleanup_expired_raw_media(state.store, storage=state.storage)
+
+
+async def process_behavior_result_notification(
+    state: AppState, *, event_id: str
+) -> dict:
+    event = (
+        await behavior_db.load_event(state.engine, event_id=event_id)
+        if state.engine is not None
+        else state.store.behavior_events.get(event_id)
+    )
+    if event is None or event.status != BehaviorEventStatus.COMPLETED:
+        return {"event_id": event_id, "status": "ignored"}
+    tokens = await _notification_tokens(state, event.user_id)
+    sent = await send_push(
+        tokens,
+        title="Analisi pronta",
+        body="Il risultato dell'analisi di Dogly è disponibile.",
+        data={"href": f"/behavior/result/{event.id}", "event_id": event.id},
+    )
+    return {"event_id": event.id, "status": "sent", "devices": sent}
+
+
+async def process_digestive_result_notification(
+    state: AppState, *, event_id: str
+) -> dict:
+    event = (
+        await digestive_db.load_fecal_event(state.engine, event_id=event_id)
+        if state.engine is not None
+        else state.store.fecal_events.get(event_id)
+    )
+    if event is None or event.status != "COMPLETED":
+        return {"event_id": event_id, "status": "ignored"}
+    tokens = await _notification_tokens(state, event.user_id)
+    sent = await send_push(
+        tokens,
+        title="Analisi digestiva pronta",
+        body="Il risultato dell'analisi di Dogly è disponibile.",
+        data={"href": f"/digestive/result/{event.id}", "event_id": event.id},
+    )
+    return {"event_id": event.id, "status": "sent", "devices": sent}
+
+
+async def process_care_reminder_dispatch(
+    state: AppState, *, event_id: str | None = None
+) -> dict:
+    del event_id
+    if state.engine is not None:
+        due = await care_db.list_due_reminders(state.engine)
+    else:
+        now = now_utc()
+        due = [
+            item
+            for item in state.store.care_events.values()
+            if item.status.value == "SCHEDULED"
+            and item.reminder_enabled
+            and item.reminder_sent_at is None
+            and item.scheduled_at.timestamp()
+            - item.reminder_minutes_before * 60
+            <= now.timestamp()
+            and item.scheduled_at.timestamp() >= now.timestamp() - 86400
+        ][:100]
+    sent = 0
+    for item in due:
+        tokens = await _notification_tokens(state, item.user_id)
+        delivered = await send_push(
+            tokens,
+            title="Promemoria Dogly",
+            body=item.title,
+            data={"href": f"/care/{item.id}", "event_id": item.id},
+        )
+        if delivered:
+            if state.engine is not None:
+                await care_db.mark_reminder_sent(state.engine, event_id=item.id)
+            else:
+                item.reminder_sent_at = now_utc()
+            sent += delivered
+    return {"status": "completed", "events_due": len(due), "devices_sent": sent}
 
 
 async def process_privacy_export(state: AppState, *, event_id: str) -> dict:

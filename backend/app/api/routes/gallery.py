@@ -36,13 +36,39 @@ async def photo_with_url(photo: DogPhotoOut, state: AppState) -> DogPhotoOut:
     return photo.model_copy(update={"photo_url": url})
 
 
+async def album_with_cover(
+    album: DogAlbumOut, state: AppState, user_id: str
+) -> DogAlbumOut:
+    if not album.cover_photo_id:
+        return album
+    if state.engine is not None:
+        path = await gallery_db.get_album_cover_path(
+            state.engine, user_id=user_id, album_id=album.id
+        )
+    else:
+        photo = state.store.dog_photos.get(album.cover_photo_id)
+        path = photo.storage_path if photo is not None and photo.owner_id == user_id else None
+    if not path:
+        return album
+    try:
+        url = await state.storage.create_signed_read_url(
+            bucket=GALLERY_BUCKET,
+            path=path,
+            ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
+        )
+    except Exception:  # noqa: BLE001 -- gallery cover URL is best-effort
+        url = None
+    return album.model_copy(update={"cover_url": url})
+
+
 @router.get("/dogs/{dog_id}/albums", response_model=DogAlbumListResponse)
 async def list_albums(dog_id: str, state: StateDep, user_id: UserIdDep) -> DogAlbumListResponse:
     if state.engine is not None:
         items = await gallery_db.list_albums(state.engine, user_id=user_id, dog_id=dog_id)
-        return DogAlbumListResponse(items=items)
+    else:
+        items = gallery_domain.list_albums(state.store, user_id=user_id, dog_id=dog_id)
     return DogAlbumListResponse(
-        items=gallery_domain.list_albums(state.store, user_id=user_id, dog_id=dog_id)
+        items=[await album_with_cover(item, state, user_id) for item in items]
     )
 
 
@@ -62,8 +88,10 @@ async def create_album(
 @router.get("/albums/{album_id}", response_model=DogAlbumOut)
 async def get_album(album_id: str, state: StateDep, user_id: UserIdDep) -> DogAlbumOut:
     if state.engine is not None:
-        return await gallery_db.get_album(state.engine, user_id=user_id, album_id=album_id)
-    return gallery_domain.get_album(state.store, user_id=user_id, album_id=album_id)
+        album = await gallery_db.get_album(state.engine, user_id=user_id, album_id=album_id)
+    else:
+        album = gallery_domain.get_album(state.store, user_id=user_id, album_id=album_id)
+    return await album_with_cover(album, state, user_id)
 
 
 @router.get("/albums/{album_id}/photos", response_model=DogPhotoListResponse)

@@ -108,8 +108,26 @@ async def complete_fecal(
 async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep) -> DigestiveEventOut:
     if state.engine is not None:
         e = await digestive_db.get_fecal_event(state.engine, user_id=user_id, event_id=event_id)
+        active_food_name, baseline_comparison = await digestive_db.get_fecal_context(
+            state.engine, user_id=user_id, event_id=event_id
+        )
     else:
         e = digestive_domain.get_fecal_event(state.store, user_id=user_id, event_id=event_id)
+        periods = [
+            period
+            for period in state.store.feeding_periods.values()
+            if period.dog_id == e.dog_id
+            and period.start_at <= e.created_at
+            and (period.end_at is None or period.end_at >= e.created_at)
+        ]
+        active = max(periods, key=lambda period: period.start_at) if periods else None
+        food = (
+            state.store.food_products.get(active.food_product_id)
+            if active is not None
+            else None
+        )
+        active_food_name = food.name if food is not None else None
+        baseline_comparison = None
     observation = e.observation_json or {}
     return DigestiveEventOut(
         id=e.id,
@@ -129,6 +147,8 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         confidence_band=e.confidence_band,
         safety_flags=e.safety_flags,
         summary=e.summary,
+        active_food_name=active_food_name,
+        baseline_comparison=baseline_comparison,
         created_at=e.created_at,
     )
 

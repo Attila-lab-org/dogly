@@ -87,6 +87,8 @@ class InMemoryStore:
         self.export_jobs: dict[str, AnalysisJobRec] = {}
         self.deletion_jobs: dict[str, AnalysisJobRec] = {}
         self.user_consents: list[dict] = []
+        self.dog_lifestyle_profiles: dict[str, dict] = {}
+        self.advice_outcomes: list[dict] = []
         self.dog_profile_versions: list[dict] = []
         self.dog_albums: dict[str, DogAlbumRec] = {}
         self.dog_photos: dict[str, DogPhotoRec] = {}

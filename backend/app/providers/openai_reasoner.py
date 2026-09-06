@@ -17,12 +17,18 @@ from app.config import Settings
 from app.contracts.interpretation import InterpretationContract
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import ContextBucket
+from app.knowledge.models import DogContextSnapshot, KnowledgeContext
 from app.providers.base import EligiblePatternSummary, ProviderUsage
 
 _SYSTEM = """You are a cautious canine behavior reasoner for a consumer app.
 Given structured observations only (no video), produce a probabilistic interpretation.
-Support abstention (INSUFFICIENT / low confidence). Never invent unobserved facts.
-Never write personal patterns. Return JSON for InterpretationContract only.
+Scientific cards are authoritative product evidence. Personal patterns may
+personalize but never override safety. Life stage and lifestyle are modifiers,
+not deterministic causes, and owner-reported facts must remain owner-reported.
+General pretrained knowledge is only a tentative LOW-confidence hypothesis for
+uncovered observations and must not introduce consumer recommendations.
+Support abstention when evidence is insufficient. Never invent unobserved facts,
+write personal patterns, or create advice. Return InterpretationContract JSON only.
 """
 
 
@@ -44,6 +50,8 @@ class OpenAIReasoner:
         context_bucket: ContextBucket,
         policy_version: str,
         eligible_memory: list[EligiblePatternSummary],
+        knowledge_context: KnowledgeContext,
+        dog_context: DogContextSnapshot,
     ) -> tuple[InterpretationContract, ProviderUsage]:
         if self._settings.ai_kill_switch or self._settings.reasoner_kill_switch:
             raise ProviderDisabled("Reasoner kill switch is active")
@@ -58,6 +66,8 @@ class OpenAIReasoner:
             "context_bucket": context_bucket.value if hasattr(context_bucket, "value") else str(context_bucket),
             "observation": observation.model_dump(mode="json"),
             "eligible_memory": memory_payload,
+            "knowledge_context": knowledge_context.model_dump(mode="json"),
+            "dog_context": dog_context.model_dump(mode="json"),
         }
 
         response = await self._client.post(

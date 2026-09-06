@@ -1,7 +1,7 @@
 /**
  * Behavior processing — polling GET /v1/behavior/events/{id}.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ import {
 import { markUploadCompletedForEvent } from '@/features/behavior/upload';
 import { isApiConfigured } from '@/features/auth/env';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
@@ -31,6 +32,16 @@ export default function BehaviorProcessingScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi = isApiConfigured() && Boolean(eventId) && !eventId?.startsWith('evt-');
   const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
+  const [finishing, setFinishing] = useState(false);
+  const completionStarted = useRef(false);
+  const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (completionTimer.current) clearTimeout(completionTimer.current);
+    },
+    [],
+  );
 
   const query = useQuery({
     queryKey: ['behavior-event', eventId],
@@ -67,8 +78,12 @@ export default function BehaviorProcessingScreen() {
       i += 1;
       if (i >= steps.length) {
         clearInterval(t);
+        setFinishing(true);
         void cancelResultReadyNotification(mockEvent.eventId);
-        router.replace('/behavior/result/evt-play');
+        completionTimer.current = setTimeout(
+          () => router.replace('/behavior/result/evt-play'),
+          850,
+        );
       }
     }, 1600);
     return () => clearInterval(t);
@@ -77,10 +92,15 @@ export default function BehaviorProcessingScreen() {
   useEffect(() => {
     if (!useApi || !query.data) return;
     const s = query.data.status;
-    if (s === 'COMPLETED') {
+    if (s === 'COMPLETED' && !completionStarted.current) {
+      completionStarted.current = true;
+      setFinishing(true);
       markUploadCompletedForEvent(query.data.id);
       void cancelResultReadyNotification(query.data.id);
-      router.replace(`/behavior/result/${query.data.id}`);
+      completionTimer.current = setTimeout(
+        () => router.replace(`/behavior/result/${query.data!.id}`),
+        850,
+      );
     }
   }, [useApi, query.data, router]);
 
@@ -205,9 +225,14 @@ export default function BehaviorProcessingScreen() {
         <View style={styles.topSpacer} />
       </View>
 
-      <Text style={styles.heroTitle}>Sto osservando {dog.name}…</Text>
+      <ProcessingCompanion
+        dogName={dog.name}
+        status={displayStatus}
+        finishing={finishing}
+      />
+
       <Text style={styles.heroText}>
-        Puoi chiudere questa schermata: ti avviso quando il risultato è pronto.
+        Puoi anche chiudere: ti avviso io quando il risultato è pronto.
       </Text>
 
       {isRetrying && (
@@ -287,17 +312,12 @@ const styles = StyleSheet.create({
   topSpacer: {
     width: 26,
   },
-  heroTitle: {
-    fontSize: typography.size.xl,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-  },
   heroText: {
-    marginTop: spacing.xs,
     fontSize: typography.size.sm,
     color: colors.textSecondary,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     marginBottom: spacing.xl,
+    textAlign: 'center',
   },
   retryBanner: {
     flexDirection: 'row',

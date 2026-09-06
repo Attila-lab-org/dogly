@@ -7,7 +7,7 @@ No endpoint accepts owner_id/user_id from the client as authority (sez. 9.1).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -28,6 +28,7 @@ from app.contracts.taxonomy import (
     SignalExperimentStatus,
     SignalMapState,
 )
+from app.knowledge.models import AdviceItem, AdviceOutcomeValue
 
 # ---------------------------------------------------------------------------
 # Common
@@ -163,6 +164,62 @@ class DogOut(BaseModel):
 
 class DogListResponse(CursorPage):
     items: list[DogOut]
+
+
+class DogLifestyleOut(BaseModel):
+    dog_id: str
+    routine: dict[str, Any] = Field(default_factory=dict)
+    preferences: dict[str, Any] = Field(default_factory=dict)
+    provenance: dict[
+        str,
+        Literal["OWNER_REPORTED", "DOGLY_OBSERVED", "SYSTEM_INFERRED", "VET_RECORDED"],
+    ] = Field(default_factory=dict)
+    last_confirmed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class DogLifestylePatch(BaseModel):
+    routine: dict[str, Any] | None = None
+    preferences: dict[str, Any] | None = None
+    provenance: dict[
+        str,
+        Literal["OWNER_REPORTED", "DOGLY_OBSERVED", "SYSTEM_INFERRED", "VET_RECORDED"],
+    ] | None = None
+    confirm: bool = False
+
+    @model_validator(mode="after")
+    def require_lifestyle_change(self) -> DogLifestylePatch:
+        if (
+            self.routine is None
+            and self.preferences is None
+            and self.provenance is None
+            and not self.confirm
+        ):
+            raise ValueError("At least one lifestyle field is required")
+        return self
+
+
+class AdviceOutcomeCreate(BaseModel):
+    advice_code: str = Field(pattern=r"^ADVICE_[A-Z0-9_]+$", max_length=100)
+    outcome: AdviceOutcomeValue
+
+
+class AdviceOutcomeOut(BaseModel):
+    id: str
+    event_id: str
+    dog_id: str
+    advice_code: str
+    outcome: AdviceOutcomeValue
+    created_at: datetime
+
+
+class KnowledgeScoreOut(BaseModel):
+    dog_id: str
+    score: float | None = Field(default=None, ge=0, le=1)
+    components: dict[str, float] = Field(default_factory=dict)
+    version: str | None = None
+    calculated_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +396,8 @@ class BehaviorEventOut(BaseModel):
     policy_version: str | None = None
     taxonomy_version: str | None = None
     feedback: FeedbackValue | None = None
+    advice: AdviceItem | None = None
+    advice_outcome: AdviceOutcomeValue | None = None
     created_at: datetime
     completed_at: datetime | None = None
 
@@ -450,6 +509,8 @@ class DigestiveEventOut(BaseModel):
     confidence_band: ConfidenceBand | None = None
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
     summary: str | None = None
+    active_food_name: str | None = None
+    baseline_comparison: Literal["BELOW_USUAL", "NEAR_USUAL", "ABOVE_USUAL"] | None = None
     created_at: datetime
 
 
@@ -576,6 +637,7 @@ class DogAlbumOut(BaseModel):
     dog_id: str
     title: str
     cover_photo_id: str | None = None
+    cover_url: str | None = None
     photo_count: int = 0
     default_visibility: Literal["PRIVATE", "PUBLISHED"] = "PRIVATE"
     created_at: datetime

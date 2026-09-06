@@ -45,3 +45,21 @@ Scoperti mentre il mobile veniva collegato agli endpoint reali:
 23. **`DigestiveEventOut` incompleto** — mancano candidati (muco/sangue/melena/materiale estraneo), `image_quality`, `quality_warnings`, `active_food_name`, `baseline_comparison`: la UI digestiva reale è più povera del mock. Mancano anche stati espliciti `INSUFFICIENT_IMAGE` / `FAILED_*` nel dominio digestivo.
 24. **Nessun endpoint Knowledge Score** — il punteggio resta mock anche con API attiva.
 25. **Notifica "risultato pronto"** — oggi locale con delay fisso 30s; se il backend esponesse ETA o push server-side, sostituire.
+
+
+---
+
+## Task V2 — AI Knowledge + Advice Engine (2026-09-06, ADR-012)
+
+**Fonte vincolante:** `docs/kb/CURSOR_IMPLEMENTATION_BRIEF_Dogly_AI_Knowledge_Advice_V2.md` — brief repo-aware completo, già indirizzato a Cursor. Eseguire quel brief così com'è; punti chiave:
+
+1. `backend/app/knowledge/` (models, registry, retrieval, advice + `data/dogly_knowledge_advice_v2.json` da `docs/kb/`), validazione registry a load-time, fail-fast in staging/prod.
+2. `backend/app/domains/dog_context.py` — DogContextSnapshot (età esatta + life stage derivato + lifestyle owner-reported con provenance).
+3. Reasoner boundary esteso: `knowledge_context` + `dog_context` (mai storia completa del cane).
+4. AdviceEngine **deterministico**: max 1 consiglio consumer, azione solo dal catalogo, LLM solo per la razionale breve.
+5. 2 migrazioni nuove (verificare la numerazione reale prima — c'è stato drift): `dog_lifestyle_profiles` (RLS owner-only) + `advice_outcomes` (append-only).
+6. API owner-scoped: lifestyle GET/PATCH, advice outcome POST. Estendere `EvidenceSource` con `SCIENTIFIC_KB`, `LIFE_STAGE`, `LIFESTYLE_BASELINE`.
+7. NON toccare `IntentCode` (tassonomia repo confermata, ADR-012). Nessun RAG runtime. Niente diagnosi.
+8. Test di accettazione: elenco alla sez. 15 del brief.
+
+**Parte mobile (Kimi, dopo il backend):** profiling progressivo "Routine e abitudini" nel profilo, micro-card Home "Aiutami a conoscerlo meglio", card risultato "Cosa puoi fare adesso", outcome "Ti è sembrato utile?" (Sì/No/Non so).

@@ -196,3 +196,47 @@ async def delete_care_event(
             text("delete from public.care_events where id = :event_id and user_id = :user_id"),
             {"event_id": event_id, "user_id": user_id},
         )
+
+
+async def list_due_reminders(
+    engine: AsyncEngine, *, limit: int = 100
+) -> list[CareEventRec]:
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    f"""
+                    select {_CARE_COLUMNS}
+                    from public.care_events
+                    where status = 'SCHEDULED'
+                      and reminder_enabled
+                      and reminder_sent_at is null
+                      and scheduled_at
+                            - make_interval(mins => reminder_minutes_before)
+                          <= now()
+                      and scheduled_at >= now() - interval '24 hours'
+                    order by scheduled_at asc, id asc
+                    limit :limit
+                    """
+                ),
+                {"limit": limit},
+            )
+        ).mappings().all()
+    return [_row_to_care(row) for row in rows]
+
+
+async def mark_reminder_sent(
+    engine: AsyncEngine, *, event_id: str
+) -> bool:
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text(
+                """
+                update public.care_events
+                set reminder_sent_at = now()
+                where id = :event_id and reminder_sent_at is null
+                """
+            ),
+            {"event_id": event_id},
+        )
+    return bool(result.rowcount)

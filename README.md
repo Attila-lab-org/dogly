@@ -18,6 +18,7 @@ Stato corrente dei gate e blocker: vedi `PROJECT_STATE.md`.
 | Path | Contenuto | Owner (workstream) |
 | --- | --- | --- |
 | `apps/mobile/` | App Expo React Native + TypeScript (Router, 3 tab) — brand Dogly | A / F |
+| `apps/admin/` | Admin Control Center web (Next.js, console interna — ADR-011) | F / J |
 | `api/index.py` | Shim serverless Vercel (public API + worker mount) | D / C |
 | `vercel.json` | Config deploy root (includeFiles backend) | D |
 | `backend/app/api/` | Public FastAPI API (route `/v1/*`, JWT Supabase) | C |
@@ -26,7 +27,7 @@ Stato corrente dei gate e blocker: vedi `PROJECT_STATE.md`.
 | `backend/app/providers/` | Adapter Gemini/OpenAI/Storage/JobQueue (mock fixture-backed in V1 locale) | E |
 | `backend/app/contracts/` | Schemi Pydantic request/response/provider (Observation/Interpretation) | E |
 | `backend/tests/` | Test pytest: auth, quota, idempotenza, contratti, job queue, worker | C / J |
-| `supabase/migrations/` | Unica sorgente dello schema DB (0001–0016, forward-only) | B |
+| `supabase/migrations/` | Unica sorgente dello schema DB (0001–0022, forward-only) | B |
 | `supabase/tests/` | Test SQL: RLS negative, quota, privacy/retention | B / J |
 | `infra/vercel/` | Config deploy Vercel (`vercel.json`, env mapping) — Amendment V1.1 | D |
 | `scripts/` | Export OpenAPI, utility fixture/eval | C / J |
@@ -51,7 +52,7 @@ GitHub Actions + EAS (CI/CD).
 cd backend
 cp .env.example .env        # default local: provider mock, queue fake, repo in-memory
 uv sync                     # installa dipendenze (venv)
-uv run pytest               # suite unit/contract/integration (27 test al gate G1)
+uv run pytest               # suite unit/contract/integration
 uv run uvicorn app.api.app:app --reload          # public API locale
 uv run uvicorn app.worker.main:worker_app --reload --port 8001  # worker locale
 ```
@@ -71,7 +72,7 @@ uv run python ../scripts/export_openapi.py   # aggiorna docs/openapi.json
 
 ```bash
 supabase start              # stack locale (DB, Auth, Storage)
-supabase db reset           # applica migrations 0001–0016 + seed.sql da zero
+supabase db reset           # applica migrations 0001–0022 + seed.sql da zero
 bash supabase/tests/run_tests.sh   # RLS negative tests, quota, privacy/retention
 ```
 
@@ -126,6 +127,7 @@ Dettaglio completo deploy/env: `infra/vercel/README.md`.
 | File | Contenuto |
 | --- | --- |
 | `PROJECT_STATE.md` | Gate corrente, scope implementato, blocker, evidenze |
+| `docs/ARCHITECTURE.md` | Vista d'insieme, confini runtime/dati, flussi chiave, limiti (Appendix B) |
 | `docs/DECISIONS.md` | ADR e decisioni LOCKED/aperte (O-01…O-09) |
 | `docs/DATA_MODEL.md` | Tabelle, ownership, retention, RLS |
 | `docs/AI_CONTRACTS.md` | Contratti Observation/Interpretation, policy, provider routing |
@@ -134,4 +136,4 @@ Dettaglio completo deploy/env: `infra/vercel/README.md`.
 | `docs/RELEASE_CHECKLIST.md` | Checklist firmabile staging→production |
 | `docs/EVALS.md` | Strategia di valutazione AI (spike video/foto, metriche) |
 | `docs/ux/` | Riferimento UX ufficiale e mockup |
-| `docs/openapi.json` | Snapshot OpenAPI V1 (31 path) per contract-drift check |
+| `docs/openapi.json` | Snapshot OpenAPI V1 per contract-drift check |

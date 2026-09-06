@@ -36,6 +36,8 @@ import { albumsMock, photosForAlbum } from '@/mocks/photos';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
+import { useLifestyle } from '@/features/lifestyle/api';
+import { lifestyleCompletionLabel } from '@/features/lifestyle/types';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -55,6 +57,7 @@ export default function DogProfileTabScreen() {
     : undefined;
   const previewPhotos = photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
+  const lifestyle = useLifestyle(dog.id);
 
   return (
     <View style={styles.root}>
@@ -212,6 +215,26 @@ export default function DogProfileTabScreen() {
             onPress={() => router.push('/care' as never)}
           />
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Routine e abitudini di ${dog.name}`}
+          onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
+          style={[styles.detailsRow, styles.lifestyleRow]}
+        >
+          <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
+            <Ionicons name="sparkles-outline" size={20} color={colors.accent} />
+          </View>
+          <View style={styles.detailsText}>
+            <Text style={styles.detailsTitle}>Routine e abitudini</Text>
+            <Text style={styles.detailsSubtitle}>
+              {lifestyle.profile
+                ? lifestyleCompletionLabel(lifestyle.profile)
+                : 'Aiutami a conoscerlo meglio'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
@@ -529,10 +552,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
   detailsTitle: {
-    flex: 1,
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
+  },
+  detailsText: {
+    flex: 1,
+  },
+  detailsSubtitle: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+  },
+  lifestyleIcon: {
+    backgroundColor: colors.accentSoft,
+  },
+  lifestyleRow: {
+    marginBottom: spacing.md,
   },
   pressed: {
     opacity: 0.7,

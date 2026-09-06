@@ -15,14 +15,17 @@ from app.contracts.api import (
 )
 from app.contracts.taxonomy import FeedbackValue
 from app.domains import behavior as behavior_domain
-from app.domains import behavior_db, idempotency_db
+from app.domains import behavior_db, idempotency_db, lifestyle, lifestyle_db
 from app.domains.models import BehaviorEventRec
+from app.knowledge.models import AdviceOutcomeValue
 
 router = APIRouter()
 
 
 def event_out(
-    event: BehaviorEventRec, feedback: FeedbackValue | None = None
+    event: BehaviorEventRec,
+    feedback: FeedbackValue | None = None,
+    advice_outcome: AdviceOutcomeValue | None = None,
 ) -> BehaviorEventOut:
     interp = event.interpretation_json or {}
     return BehaviorEventOut(
@@ -40,6 +43,8 @@ def event_out(
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
         feedback=feedback,
+        advice=event.advice_json or interp.get("advice"),
+        advice_outcome=advice_outcome,
         created_at=event.created_at,
         completed_at=event.completed_at,
     )
@@ -131,11 +136,17 @@ async def get_behavior_event(event_id: str, state: StateDep, user_id: UserIdDep)
         feedback = await behavior_db.get_feedback_value(
             state.engine, user_id=user_id, event_id=event_id
         )
+        advice_outcome = await lifestyle_db.get_latest_advice_outcome(
+            state.engine, user_id=user_id, event_id=event_id
+        )
     else:
         event = behavior_domain.get_event(state.store, user_id=user_id, event_id=event_id)
         rec = state.store.behavior_feedback.get(event_id)
         feedback = rec.value if rec is not None and rec.user_id == user_id else None
-    return event_out(event, feedback)
+        advice_outcome = lifestyle.get_latest_advice_outcome(
+            state.store, user_id=user_id, event_id=event_id
+        )
+    return event_out(event, feedback, advice_outcome)
 
 
 @router.post("/behavior/events/{event_id}/feedback", response_model=BehaviorFeedbackResponse)

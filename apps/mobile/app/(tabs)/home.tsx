@@ -36,6 +36,12 @@ import {
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
+import { useLifestyle } from '@/features/lifestyle/api';
+import {
+  dismissLifestyleHomeCard,
+  isLifestyleHomeCardDismissed,
+} from '@/features/lifestyle/store';
+import { isLifestyleComplete } from '@/features/lifestyle/types';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
@@ -61,6 +67,10 @@ export default function HomeScreen() {
   // useCareEvents idrata lo store e rende reattiva la card.
   useCareEvents(dog.id);
   const nextCare = nextCareEvent(dog.id);
+  const lifestyle = useLifestyle(dog.id);
+  const showLifestyleCard =
+    !isLifestyleHomeCardDismissed(dog.id) &&
+    (!lifestyle.profile || !isLifestyleComplete(lifestyle.profile));
 
   const startCapture = () => {
     if (processingEventId) {
@@ -200,6 +210,41 @@ export default function HomeScreen() {
               </Text>
             </Card>
           )}
+
+          {showLifestyleCard ? (
+            <Card style={styles.lifestyleCard}>
+              <View style={styles.lifestyleHeading}>
+                <View style={styles.lifestyleIcon}>
+                  <Ionicons name="sparkles-outline" size={20} color={colors.accent} />
+                </View>
+                <View style={styles.lifestyleText}>
+                  <Text style={styles.lifestyleTitle}>
+                    Aiutami a conoscere meglio {dog.name}
+                  </Text>
+                  <Text style={styles.lifestyleSubtitle}>
+                    Bastano poche risposte, quando vuoi.
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Nascondi questo suggerimento"
+                  onPress={() => dismissLifestyleHomeCard(dog.id)}
+                  hitSlop={10}
+                >
+                  <Ionicons name="close" size={20} color={colors.textMuted} />
+                </Pressable>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Aggiungi routine e abitudini di ${dog.name}`}
+                onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
+                style={styles.lifestyleAction}
+              >
+                <Text style={styles.lifestyleActionText}>Iniziamo</Text>
+                <Ionicons name="arrow-forward" size={17} color={colors.accent} />
+              </Pressable>
+            </Card>
+          ) : null}
 
           {/* Evento in lavorazione (sez. 6: "processing existing event") */}
           {processingEventId && (
@@ -465,6 +510,48 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.text,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  lifestyleCard: {
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.accentSoft,
+  },
+  lifestyleHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  lifestyleIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentSoft,
+  },
+  lifestyleText: { flex: 1 },
+  lifestyleTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  lifestyleSubtitle: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+  },
+  lifestyleAction: {
+    minHeight: 44,
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+  },
+  lifestyleActionText: {
+    color: colors.accent,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
   },
   processingBanner: {
     flexDirection: 'row',

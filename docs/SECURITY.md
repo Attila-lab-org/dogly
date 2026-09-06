@@ -34,7 +34,7 @@ invariati. Mappatura concreta sulle variabili di `backend/app/config.py`:
 
 | Segreto (sez. 4.2) | Variabile / dove vive | Mai consentito |
 | --- | --- | --- |
-| Supabase publishable key | Mobile env (`EXPO_PUBLIC_SUPABASE_ANON_KEY`) | Funzionalità service role |
+| Supabase publishable key | Mobile env (`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) | Funzionalità service role |
 | Supabase service role / credenziali DB | Vercel Env Var (`DATABASE_URL` via pooler) — solo deployment Vercel | Mobile / log / client generato |
 | Gemini API key / credenziali Google | Vercel Env Var `GEMINI_API_KEY` — solo route workflow interne (G3) | Mobile |
 | OpenAI API key | Vercel Env Var `OPENAI_API_KEY` — solo route workflow interne (G3) | Mobile |

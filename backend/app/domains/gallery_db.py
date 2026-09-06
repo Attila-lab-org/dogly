@@ -137,6 +137,27 @@ async def get_album(engine: AsyncEngine, *, user_id: str, album_id: str) -> DogA
     return _album_out(row)
 
 
+async def get_album_cover_path(
+    engine: AsyncEngine, *, user_id: str, album_id: str
+) -> str | None:
+    async with engine.connect() as conn:
+        return (
+            await conn.execute(
+                text(
+                    """
+                    select p.storage_path
+                    from public.dog_albums a
+                    join public.dog_photos p on p.id = a.cover_photo_id
+                    where a.id = :album_id
+                      and a.owner_id = :user_id
+                      and p.deleted_at is null
+                    """
+                ),
+                {"album_id": album_id, "user_id": user_id},
+            )
+        ).scalar_one_or_none()
+
+
 async def list_photos(engine: AsyncEngine, *, user_id: str, album_id: str) -> list[DogPhotoOut]:
     async with engine.connect() as conn:
         album = (
