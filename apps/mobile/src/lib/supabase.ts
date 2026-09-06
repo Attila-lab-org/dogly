@@ -69,7 +69,12 @@ const secureAuthStorage = {
   },
 };
 
-let client: SupabaseClient | undefined;
+type DoglyGlobal = typeof globalThis & {
+  __doglySupabaseClient?: SupabaseClient;
+};
+
+const doglyGlobal = globalThis as DoglyGlobal;
+let client: SupabaseClient | undefined = doglyGlobal.__doglySupabaseClient;
 
 export { isSupabaseConfigured };
 
@@ -94,6 +99,9 @@ export function getSupabaseClient(): SupabaseClient {
       detectSessionInUrl: false,
     },
   });
+  // Fast Refresh può rivalutare il modulo sul web. Conservare il client sul
+  // global evita più GoTrueClient concorrenti sulla stessa chiave OAuth.
+  doglyGlobal.__doglySupabaseClient = client;
 
   return client;
 }
