@@ -16,5 +16,8 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.68.1",
 ]
 
+[tool.vercel]
+entrypoint = "api.index:app"
+
 [[tool.vercel.workflows]]
 entrypoint = "workflows:wf"
