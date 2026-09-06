@@ -21,8 +21,6 @@ import { diaryEntriesMock } from '@/mocks/core';
 import { demoFlags } from '@/mocks/demo';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { WelcomeCheckInModal } from '@/features/checkin/WelcomeCheckInModal';
-import { useCheckIn } from '@/features/checkin/store';
 import { StoriesRail } from '@/features/stories/StoriesRail';
 import { useStories } from '@/features/stories/data';
 import {
@@ -52,7 +50,6 @@ export default function HomeScreen() {
   const birthdayToday = isBirthdayToday(dog.birthDate);
   const { usage, lastInsight, processingEventId, isNewUser, source } =
     useHomeData(dog.id);
-  const { analysisContext } = useCheckIn();
 
   // Stato offline (sez. 6 Home): network monitor reale (expo-network);
   // demoFlags.homeOffline resta solo per forzare la demo in dev.
@@ -82,13 +79,7 @@ export default function HomeScreen() {
       router.push('/paywall');
       return;
     }
-    // Contesto check-in ("Sembra sereno" / "Non come al solito"): il capture
-    // mostra la nota coerente quando arriva con from=checkin.
-    router.push(
-      (analysisContext
-        ? '/behavior/capture?from=checkin'
-        : '/behavior/capture') as never,
-    );
+    router.push('/behavior/capture');
   };
 
   return (
@@ -388,7 +379,6 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
-      <WelcomeCheckInModal dogName={dog.name} />
     </View>
   );
 }
