@@ -123,7 +123,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const dogs = await fetchHasDog();
     setHasDog(dogs.hasDog);
     setPrimaryDogId(dogs.primaryDogId);
-    void recoverAndDrainUploads(next.user.id);
+    void recoverAndDrainUploads(next.user.id).catch(() => undefined);
   }, []);
 
   useEffect(() => {

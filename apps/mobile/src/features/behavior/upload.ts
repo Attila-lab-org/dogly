@@ -3,6 +3,7 @@
  * Cancella il file locale solo dopo upload verificato (complete OK).
  */
 import { deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import {
   completeBehaviorCapture,
@@ -215,6 +216,7 @@ export async function enqueueAndUploadBehaviorClip(
 
 /** Al boot / resume: recupera interrupted e drena la coda attiva. */
 export async function recoverAndDrainUploads(userId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
   const queue = getUploadQueue();
   if (!recoverStarted) {
     queue.recoverInterrupted();
