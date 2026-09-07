@@ -22,9 +22,12 @@ function emit() {
 
 function pruneExpired() {
   const cutoff = Date.now() - STORY_TTL_MS;
-  stories = stories.filter(
+  const activeStories = stories.filter(
     (story) => Date.parse(story.createdAt) > cutoff,
   );
+  if (activeStories.length !== stories.length) {
+    stories = activeStories;
+  }
 }
 
 export function subscribeMockStories(listener: () => void) {

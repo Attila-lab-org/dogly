@@ -6,6 +6,13 @@ import {
 } from '../features/stories/mockStore';
 
 describe('storie', () => {
+  it('mantiene uno snapshot stabile finché lo store non cambia', () => {
+    const first = getActiveStories();
+    const second = getActiveStories();
+
+    expect(second).toBe(first);
+  });
+
   it('aggiunge una storia separata e la rende disponibile nel viewer', () => {
     const story = addStory({
       dogId: 'dog-test',
