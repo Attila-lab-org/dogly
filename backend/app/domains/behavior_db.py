@@ -303,7 +303,7 @@ async def record_feedback(
                 ) values (
                   :event_id, :user_id, :value, :correction_label, :corrected_context, now(), now()
                 )
-                on conflict (event_id) do update set
+                on conflict (event_id, user_id) do update set
                   value = excluded.value,
                   correction_label = excluded.correction_label,
                   corrected_context = excluded.corrected_context,
@@ -326,8 +326,14 @@ async def record_feedback(
         )
         row = (
             await conn.execute(
-                text("select * from public.behavior_feedback where event_id = :event_id"),
-                {"event_id": event_id},
+                text(
+                    """
+                    select *
+                    from public.behavior_feedback
+                    where event_id = :event_id and user_id = :user_id
+                    """
+                ),
+                {"event_id": event_id, "user_id": user_id},
             )
         ).mappings().first()
     data = dict(row)

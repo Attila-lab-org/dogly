@@ -13,11 +13,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme/tokens';
-import {
-  getActiveStories,
-  markStorySeen,
-  storyById,
-} from '@/features/stories/data';
+import { markStorySeen, useStories } from '@/features/stories/data';
+import { useDogProfile } from '@/features/core/useDogProfile';
 
 export default function StoryViewerScreen() {
   const params = useLocalSearchParams<{ storyId?: string | string[] }>();
@@ -25,12 +22,13 @@ export default function StoryViewerScreen() {
     ? params.storyId[0] ?? ''
     : params.storyId ?? '';
   const router = useRouter();
-  const stories = getActiveStories();
+  const { dog } = useDogProfile();
+  const stories = useStories(dog.id, dog.name);
   const index = Math.max(
     0,
     stories.findIndex((s) => s.id === storyId),
   );
-  const story = storyById(storyId) ?? stories[index];
+  const story = stories.find((item) => item.id === storyId) ?? stories[index];
 
   useEffect(() => {
     if (story) markStorySeen(story.id);

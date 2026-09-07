@@ -25,12 +25,14 @@ import { markUploadCompletedForEvent } from '@/features/behavior/upload';
 import { isApiConfigured } from '@/features/auth/env';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
+import { useSession } from '@/features/auth/SessionProvider';
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const useApi = isApiConfigured() && Boolean(eventId) && !eventId?.startsWith('evt-');
+  const useApi = isApiConfigured() && Boolean(eventId) && !usingMockGate;
   const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
   const [finishing, setFinishing] = useState(false);
   const completionStarted = useRef(false);
@@ -54,7 +56,8 @@ export default function BehaviorProcessingScreen() {
     },
   });
 
-  const mockEvent = eventId ? behaviorResultsMock[eventId] : undefined;
+  const mockEvent =
+    usingMockGate && eventId ? behaviorResultsMock[eventId] : undefined;
   const status: BehaviorEventStatus | undefined = useApi
     ? query.data?.status
     : mockEvent?.status === 'QUEUED' ||

@@ -12,7 +12,6 @@ import {
 import { PHOTO_COPY } from '@/features/photos/copy';
 import { fetchAlbums } from '@/features/photos/api';
 import type { AlbumPhoto, PhotoAlbum } from '@/features/photos/types';
-import { photoById } from '@/mocks/photos';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { Button } from '@/components';
 
@@ -28,18 +27,16 @@ export default function AlbumIndexScreen() {
   });
   const albums = albumsQuery.data ?? [];
 
-  // Copertina: foto dell'album già in cache (aperta di recente) oppure,
-  // in demo senza backend, dal mock locale.
+  // Copertina firmata restituita dal backend; la cache locale evita un flash
+  // quando l'utente ha appena aggiunto la foto.
   const coverUriFor = (album: PhotoAlbum): string | null => {
     if (!album.coverPhotoId) return null;
     const cached = queryClient.getQueryData<AlbumPhoto[]>([
       'gallery-photos',
       album.id,
     ]);
-    const photo =
-      cached?.find((p) => p.id === album.coverPhotoId) ??
-      photoById(album.coverPhotoId);
-    return photo?.thumbnailUri ?? null;
+    const photo = cached?.find((p) => p.id === album.coverPhotoId);
+    return photo?.thumbnailUri ?? album.coverUri ?? null;
   };
 
   return (

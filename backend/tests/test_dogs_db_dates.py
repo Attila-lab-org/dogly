@@ -3,7 +3,15 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
-from app.domains.dogs_db import _normalize_size, _parse_birth_date, _row_to_dog
+import pytest
+
+from app.contracts.errors import ApiError, ErrorCode
+from app.domains.dogs_db import (
+    _normalize_size,
+    _parse_birth_date,
+    _row_to_dog,
+    get_owned_dog,
+)
 
 
 def test_parse_birth_date_returns_postgres_compatible_date() -> None:
@@ -37,3 +45,10 @@ def test_row_to_dog_serializes_database_date() -> None:
     )
 
     assert dog.birth_date == "2022-09-01"
+
+
+async def test_get_owned_dog_rejects_non_uuid_without_hitting_database() -> None:
+    with pytest.raises(ApiError) as exc:
+        await get_owned_dog(None, user_id=str(uuid4()), dog_id="dog-rocky")  # type: ignore[arg-type]
+
+    assert exc.value.code == ErrorCode.NOT_FOUND

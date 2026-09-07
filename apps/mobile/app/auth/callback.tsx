@@ -6,17 +6,30 @@ import { useRouter } from 'expo-router';
 import { Button, ScreenContainer } from '@/components';
 import { completeOAuthCallback } from '@/features/auth/actions';
 import { resolveAuthCallbackUrl } from '@/features/auth/oauthCallback';
+import { useSession } from '@/features/auth/SessionProvider';
 import { colors, spacing, typography } from '@/theme/tokens';
+
+const CALLBACK_TIMEOUT_MS = 10_000;
 
 export default function OAuthCallbackScreen() {
   const router = useRouter();
   const linkingUrl = Linking.useURL();
+  const { session } = useSession();
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
+  // openAuthSessionAsync può completare la sessione prima che Expo Router
+  // consegni il deep link a questa route. In quel caso la sessione è la fonte
+  // autorevole: non mostrare un falso errore di callback.
+  useEffect(() => {
+    if (session?.user) {
+      router.replace('/');
+    }
+  }, [router, session?.user]);
+
   useEffect(() => {
     if (started.current) return;
-    started.current = true;
+    let cancelled = false;
 
     void (async () => {
       try {
@@ -29,17 +42,38 @@ export default function OAuthCallbackScreen() {
           linkingUrl: linkingUrl ?? (await Linking.getInitialURL()),
         });
         if (!callbackUrl) {
-          throw new Error('URL di accesso mancante');
+          // Linking.useURL() parte spesso da null su Android e si aggiorna
+          // subito dopo. Non consumare il tentativo: l'effect ripartirà
+          // quando il deep link sarà disponibile.
+          return;
         }
+        if (cancelled || started.current) return;
+        started.current = true;
         await completeOAuthCallback(callbackUrl);
+        if (cancelled) return;
         router.replace('/');
       } catch (err) {
+        if (cancelled) return;
         setError(
           err instanceof Error ? err.message : 'Accesso non completato',
         );
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [linkingUrl, router]);
+
+  useEffect(() => {
+    if (session?.user || started.current || error) return;
+    const timeout = setTimeout(() => {
+      if (!started.current) {
+        setError('Il ritorno da Google non è arrivato. Riprova l’accesso.');
+      }
+    }, CALLBACK_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [error, session?.user]);
 
   return (
     <ScreenContainer>

@@ -23,14 +23,15 @@ import { isApiConfigured } from '@/features/auth/env';
 import { AdviceCard } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
 import { selectAdvice } from '@/features/advice/logic';
+import { useSession } from '@/features/auth/SessionProvider';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const useApi =
-    isApiConfigured() && Boolean(eventId) && !eventId?.startsWith('evt-');
+  const useApi = isApiConfigured() && Boolean(eventId) && !usingMockGate;
 
   const query = useQuery({
     queryKey: ['behavior-event', eventId],
@@ -42,7 +43,7 @@ export default function BehaviorResultScreen() {
     ? query.data
       ? mapApiEventToResult(query.data)
       : undefined
-    : eventId
+    : usingMockGate && eventId
       ? behaviorResultsMock[eventId]
       : undefined;
   const advice = result
@@ -107,7 +108,11 @@ export default function BehaviorResultScreen() {
     setSavingFeedback(true);
     setFeedbackError(null);
     try {
-      const saved = await saveBehaviorFeedback(result.eventId, value);
+      const saved = await saveBehaviorFeedback(
+        result.eventId,
+        value,
+        usingMockGate,
+      );
       setFeedback(saved);
     } catch {
       // Mai finto "Salvato": badge errore onesto, l'utente può riprovare.

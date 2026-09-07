@@ -3,11 +3,8 @@
  * Usa apiClient quando EXPO_PUBLIC_API_URL è configurato; altrimenti null.
  */
 import { apiRequest, getApiBaseUrl } from '../../lib/apiClient';
-import {
-  FileSystemUploadType,
-  getInfoAsync,
-  uploadAsync,
-} from 'expo-file-system/legacy';
+import { getInfoAsync } from 'expo-file-system/legacy';
+import { putSignedUpload } from '../../lib/signedUpload';
 import { contentTypeFromUri } from '../dogs/photoUri';
 import { albumById, albumsMock, photosForAlbum } from '../../mocks/photos';
 import type { AlbumPhoto, PhotoAlbum } from './types';
@@ -17,6 +14,7 @@ export type GalleryAlbumDto = {
   dog_id: string;
   title: string;
   cover_photo_id: string | null;
+  cover_url: string | null;
   photo_count: number;
   default_visibility: 'PRIVATE' | 'PUBLISHED';
   created_at: string;
@@ -55,6 +53,7 @@ function mapAlbum(album: GalleryAlbumDto): PhotoAlbum {
     dogId: album.dog_id,
     title: album.title,
     coverPhotoId: album.cover_photo_id,
+    coverUri: album.cover_url,
     photoCount: album.photo_count,
     defaultVisibility:
       album.default_visibility === 'PUBLISHED' ? 'published' : 'private',
@@ -119,6 +118,10 @@ export async function fetchAlbumPhotos(albumId: string): Promise<AlbumPhoto[]> {
 export async function uploadAlbumPhoto(
   albumId: string,
   localUri: string,
+  options: {
+    caption?: string;
+    visibility?: 'PRIVATE' | 'PUBLISHED';
+  } = {},
 ): Promise<AlbumPhoto> {
   const info = await getInfoAsync(localUri);
   const bytes = info.exists && 'size' in info && typeof info.size === 'number'
@@ -133,19 +136,13 @@ export async function uploadAlbumPhoto(
     body: {
       content_type: contentType,
       bytes,
-      visibility: 'PRIVATE',
+      caption: options.caption,
+      visibility: options.visibility ?? 'PRIVATE',
       taken_at: new Date().toISOString(),
     },
   });
   try {
-    const uploaded = await uploadAsync(created.upload.url, localUri, {
-      httpMethod: 'PUT',
-      headers: { 'Content-Type': contentType },
-      uploadType: FileSystemUploadType.BINARY_CONTENT,
-    });
-    if (uploaded.status < 200 || uploaded.status >= 300) {
-      throw new Error(`Upload foto fallito (${uploaded.status})`);
-    }
+    await putSignedUpload(created.upload.url, localUri, contentType);
   } catch (error) {
     await apiRequest<void>(`/v1/photos/${created.photo.id}`, {
       method: 'DELETE',

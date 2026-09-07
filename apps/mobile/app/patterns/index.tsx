@@ -7,10 +7,10 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, ScreenContainer } from '@/components';
+import { Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
-import { patternsMock } from '@/mocks/secondary';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { usePersonalPatterns } from '@/features/patterns/api';
 import {
   ConfidenceBandPill,
   PatternStateChip,
@@ -21,7 +21,8 @@ import {
 export default function PatternsScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const patterns = patternsMock.filter((p) => p.state !== 'ARCHIVED');
+  const patternsQuery = usePersonalPatterns(dog.id);
+  const patterns = patternsQuery.patterns.filter((p) => p.state !== 'ARCHIVED');
 
   return (
     <ScreenContainer scroll>
@@ -32,7 +33,17 @@ export default function PatternsScreen() {
         verificarli.
       </Text>
 
-      {patterns.length === 0 ? (
+      {patternsQuery.live && patternsQuery.isLoading ? (
+        <Card>
+          <Text style={styles.emptyText}>Carico i pattern di {dog.name}…</Text>
+        </Card>
+      ) : patternsQuery.live && patternsQuery.isError ? (
+        <ErrorState
+          title="Pattern non disponibili"
+          message="Non riesco a caricarli. Controlla la connessione e riprova."
+          onRetry={() => void patternsQuery.refetch()}
+        />
+      ) : patterns.length === 0 ? (
         <Card>
           <Text style={styles.emptyText}>
             Nessun pattern ancora. Continua ad analizzare i video di{' '}

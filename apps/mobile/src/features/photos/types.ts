@@ -20,6 +20,7 @@ export interface PhotoAlbum {
   dogId: string;
   title: string;
   coverPhotoId: string | null;
+  coverUri?: string | null;
   photoCount: number;
   defaultVisibility: PhotoVisibility;
   createdAt: string;

@@ -10,24 +10,42 @@ import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { takeStoryPhoto, pickAlbumPhoto } from '@/features/photos/share';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { addStory } from '@/features/stories/data';
+import { publishStory } from '@/features/stories/data';
+import { useSession } from '@/features/auth/SessionProvider';
 
 export default function CameraTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
   const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'camera' | 'gallery' | null>(null);
+  const [busy, setBusy] = useState<
+    'camera' | 'gallery' | 'publishing' | null
+  >(null);
 
-  const publishStory = (uri: string) => {
-    addStory({
-      dogId: dog.id,
-      dogName: dog.name,
-      photoUri: uri,
-      caption: `Storia di ${dog.name}`,
-    });
-    setPreviewUri(null);
-    router.replace('/(tabs)/home');
-    Alert.alert('Storia aggiunta', 'La trovi nei cerchi in alto nella Home.');
+  const saveStory = async (uri: string) => {
+    setBusy('publishing');
+    try {
+      await publishStory({
+        dogId: dog.id,
+        dogName: dog.name,
+        photoUri: uri,
+        caption: `Storia di ${dog.name}`,
+        mockGate: usingMockGate,
+      });
+      setPreviewUri(null);
+      router.replace('/(tabs)/home');
+      Alert.alert(
+        'Storia aggiunta',
+        'È stata salvata e resterà nella Home per 24 ore.',
+      );
+    } catch {
+      Alert.alert(
+        'Storia non salvata',
+        'Controlla la connessione e riprova. La foto non è stata pubblicata.',
+      );
+    } finally {
+      setBusy(null);
+    }
   };
 
   const fromCamera = async () => {
@@ -66,7 +84,9 @@ export default function CameraTabScreen() {
           <Image source={{ uri: previewUri }} style={styles.preview} />
           <Button
             title="Aggiungi alla storia"
-            onPress={() => publishStory(previewUri)}
+            onPress={() => void saveStory(previewUri)}
+            loading={busy === 'publishing'}
+            disabled={busy !== null}
             testID="story-publish"
           />
           <Button

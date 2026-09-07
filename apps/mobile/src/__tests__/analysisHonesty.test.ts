@@ -72,7 +72,7 @@ describe('fix 1 — feedback a 3 vie onesto (mai finto "Salvato")', () => {
   it('in mock gate (eventi demo evt-*) salva solo in locale', async () => {
     const result = behaviorResultsMock['evt-play'];
     const previous = result.feedback;
-    await expect(saveBehaviorFeedback('evt-play', 'YES')).resolves.toBe('YES');
+    await expect(saveBehaviorFeedback('evt-play', 'YES', true)).resolves.toBe('YES');
     expect(result.feedback).toBe('YES');
     expect(postFeedbackMock).not.toHaveBeenCalled();
     result.feedback = previous;
@@ -97,13 +97,13 @@ describe('fix 1 — feedback a 3 vie onesto (mai finto "Salvato")', () => {
     expect(behaviorResultsMock['real-event-2']).toBeUndefined();
   });
 
-  it('API non configurata (mock gate dev senza backend) → solo locale', async () => {
+  it('fuori dal mock gate, API non configurata → errore visibile', async () => {
     postFeedbackMock.mockRejectedValue(
       new Error('EXPO_PUBLIC_API_URL non configurata: imposta l’URL'),
     );
     await expect(
       saveBehaviorFeedback('real-event-3', 'UNKNOWN'),
-    ).resolves.toBe('UNKNOWN');
+    ).rejects.toThrow('EXPO_PUBLIC_API_URL non configurata');
   });
 });
 

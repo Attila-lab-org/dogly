@@ -12,12 +12,13 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ScreenContainer } from '@/components';
+import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
-import { api } from '@/lib/apiClient';
-import { patternsMock } from '@/mocks/secondary';
-import { isApiConfigured } from '@/features/auth/env';
-import { useSession } from '@/features/auth/SessionProvider';
+import {
+  reviewPattern,
+  usePersonalPatterns,
+} from '@/features/patterns/api';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   ConfidenceBandPill,
   PatternStateChip,
@@ -25,7 +26,7 @@ import {
 } from '@/features/secondary/components';
 
 type ReviewAction = 'CONFIRM' | 'CONTEST' | 'ARCHIVE';
-type ReviewOutcome = 'recorded' | 'demo' | 'unsupported';
+type ReviewOutcome = 'recorded' | 'demo';
 type IconName = keyof typeof Ionicons.glyphMap;
 
 const reviewCopy: Record<ReviewAction, string> = {
@@ -40,13 +41,38 @@ const reviewCopy: Record<ReviewAction, string> = {
 export default function PatternDetailScreen() {
   const { patternId } = useLocalSearchParams<{ patternId: string }>();
   const router = useRouter();
-  const { usingMockGate } = useSession();
-  const live = isApiConfigured() && !usingMockGate;
-  const pattern = patternsMock.find((p) => p.id === patternId);
+  const { dog } = useDogProfile();
+  const patternsQuery = usePersonalPatterns(dog.id);
+  const { live } = patternsQuery;
+  const pattern = patternsQuery.patterns.find((p) => p.id === patternId);
   const [reviewed, setReviewed] = useState<ReviewAction | null>(null);
   const [outcome, setOutcome] = useState<ReviewOutcome | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState(false);
+
+  if (live && patternsQuery.isLoading) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Pattern" />
+        <Card>
+          <Text style={styles.bodyText}>Caricamento…</Text>
+        </Card>
+      </ScreenContainer>
+    );
+  }
+
+  if (live && patternsQuery.isError) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Pattern" />
+        <ErrorState
+          title="Pattern non disponibile"
+          message="Non riesco a caricarlo. Controlla la connessione e riprova."
+          onRetry={() => void patternsQuery.refetch()}
+        />
+      </ScreenContainer>
+    );
+  }
 
   if (!pattern) {
     return (
@@ -72,17 +98,16 @@ export default function PatternDetailScreen() {
       setOutcome('demo');
       return;
     }
-    if (action === 'CONFIRM') {
-      // Il backend non ha un'azione "confirm" (sez. 9 enum): onestà > fake.
-      setReviewed(action);
-      setOutcome('unsupported');
-      return;
-    }
     setSubmitting(true);
     try {
-      await api.post(`/v1/patterns/${pattern.id}/review`, {
-        action: action === 'CONTEST' ? 'contest' : 'archive',
-      });
+      const apiAction =
+        action === 'CONFIRM'
+          ? 'confirm'
+          : action === 'CONTEST'
+            ? 'contest'
+            : 'archive';
+      await reviewPattern(pattern.id, apiAction);
+      await patternsQuery.refetch();
       setReviewed(action);
       setOutcome('recorded');
     } catch {
@@ -100,10 +125,6 @@ export default function PatternDetailScreen() {
     demo: {
       icon: 'information-circle-outline',
       text: 'Demo: il tuo parere non è stato inviato al server e nulla viene salvato. Con il backend collegato, Contesta e Archivia vengono registrati davvero.',
-    },
-    unsupported: {
-      icon: 'information-circle-outline',
-      text: 'La conferma esplicita non è registrabile in questa versione: nessuna azione è stata inviata. Il pattern si rafforza solo con nuove osservazioni dal diario.',
     },
   };
 

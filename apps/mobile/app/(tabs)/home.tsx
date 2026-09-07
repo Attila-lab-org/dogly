@@ -49,7 +49,7 @@ const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const stories = useStories();
+  const stories = useStories(dog.id, dog.name);
   const birthdayToday = isBirthdayToday(dog.birthDate);
   const {
     usage,

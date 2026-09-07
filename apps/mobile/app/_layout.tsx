@@ -8,6 +8,7 @@ import { SessionProvider } from '../src/features/auth/SessionProvider';
 import { queryClient } from '../src/lib/queryClient';
 import { configureCareNotifications } from '../src/features/care/notifications';
 import { registerNotificationResponseHandler } from '../src/features/home/notificationLinks';
+import { applyAvailableUpdate } from '../src/features/updates/applyAvailableUpdate';
 import { colors } from '../src/theme/tokens';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -29,6 +30,14 @@ if (sentryDsn) {
  */
 function RootLayout() {
   const router = useRouter();
+
+  useEffect(() => {
+    void applyAvailableUpdate().catch((error) => {
+      Sentry.captureException(error, {
+        tags: { subsystem: 'eas-update' },
+      });
+    });
+  }, []);
 
   useEffect(() => {
     void configureCareNotifications();

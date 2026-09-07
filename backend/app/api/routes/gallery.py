@@ -29,7 +29,7 @@ async def photo_with_url(photo: DogPhotoOut, state: AppState) -> DogPhotoOut:
         url = await state.storage.create_signed_read_url(
             bucket=GALLERY_BUCKET,
             path=photo.storage_path,
-            ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
+            ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
         )
     except Exception:  # noqa: BLE001 -- gallery read URL is best-effort
         url = None
@@ -54,7 +54,7 @@ async def album_with_cover(
         url = await state.storage.create_signed_read_url(
             bucket=GALLERY_BUCKET,
             path=path,
-            ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
+            ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
         )
     except Exception:  # noqa: BLE001 -- gallery cover URL is best-effort
         url = None

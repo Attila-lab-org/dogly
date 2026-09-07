@@ -1,3 +1,7 @@
+jest.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
+}));
+
 jest.mock('expo-file-system/legacy', () => ({
   FileSystemUploadType: { BINARY_CONTENT: 0 },
   uploadAsync: jest.fn(),

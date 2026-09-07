@@ -42,6 +42,10 @@ Fields documented with a list of strings are CLOSED vocabularies:
 use exactly one of the listed values, lowercase, never an alias or synonym.
 """
 
+_GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
+_GEMINI_UPLOAD_ROOT = "https://generativelanguage.googleapis.com/upload/v1beta"
+_FILE_READY_ATTEMPTS = 30
+
 
 def _enum_values(enum: type[StrEnum]) -> list[str]:
     return [member.value for member in enum]
@@ -80,20 +84,23 @@ class GeminiVideoObserver:
         started = time.perf_counter()
         request_id = f"gem-{uuid.uuid4().hex[:12]}"
 
-        # video_ref is a storage path; caller/worker must resolve to a readable URI.
-        # Staging/prod worker passes a short-lived signed HTTPS URL as video_ref.
-        file_part: dict[str, Any]
-        if video_ref.startswith(("http://", "https://")):
-            file_part = {
-                "file_data": {
-                    "file_uri": video_ref,
-                    "mime_type": content_type,
-                }
-            }
-        else:
-            # Fallback: ask model with path metadata only is invalid for production;
-            # require signed URL. Fail closed.
+        if not video_ref.startswith(("http://", "https://")):
             raise RuntimeError("Gemini observer requires an HTTPS signed video_ref")
+
+        # Gemini file_data does not accept an arbitrary Supabase signed URL.
+        # Import the clip into the Gemini Files API first, wait until ACTIVE,
+        # and always delete the provider copy after inference.
+        file_name, file_uri, media_bytes = await self._upload_video_file(
+            video_ref=video_ref,
+            content_type=content_type,
+            request_id=request_id,
+        )
+        file_part: dict[str, Any] = {
+            "file_data": {
+                "file_uri": file_uri,
+                "mime_type": content_type,
+            }
+        }
 
         schema_hint = {
             "schema_version": "observation.v0",
@@ -162,31 +169,35 @@ class GeminiVideoObserver:
             },
         }
 
-        response = await self._client.post(url, params={"key": self._api_key}, json=body)
-        if response.status_code >= 500:
-            raise TimeoutError(f"Gemini upstream {response.status_code}")
-        response.raise_for_status()
-        payload = response.json()
-        text = _extract_text(payload)
-        # Normalizzazione difensiva PRIMA della validazione: alias/sinonimi ->
-        # valore canonico, garbage -> "unknown" (il provider può ignorare il
-        # vocabolario chiuso del prompt; il pipeline non deve mai rompersi).
-        raw = normalize_observation_dict(json.loads(text))
-        raw.setdefault("observer_meta", {})
-        # Solo campi ammessi da ObserverMeta (extra="forbid"): policy_version
-        # vive nel prompt, non nel contratto.
-        raw["observer_meta"]["provider"] = "gemini"
-        raw["observer_meta"]["model"] = self._model
-        raw["observer_meta"]["request_id"] = request_id
-
         try:
-            contract = ObservationContract.model_validate(raw)
-        except ValidationError:
-            # One repair attempt: ask model to fix schema (sez. 22).
-            repaired = await self._repair(raw, request_id)
-            contract = ObservationContract.model_validate(
-                normalize_observation_dict(repaired)
+            response = await self._client.post(
+                url,
+                params={"key": self._api_key},
+                json=body,
             )
+            if response.status_code >= 500:
+                raise TimeoutError(f"Gemini upstream {response.status_code}")
+            response.raise_for_status()
+            payload = response.json()
+            text = _extract_text(payload)
+            # Normalizzazione difensiva PRIMA della validazione: alias/sinonimi ->
+            # valore canonico, garbage -> "unknown".
+            raw = normalize_observation_dict(json.loads(text))
+            raw.setdefault("observer_meta", {})
+            raw["observer_meta"]["provider"] = "gemini"
+            raw["observer_meta"]["model"] = self._model
+            raw["observer_meta"]["request_id"] = request_id
+
+            try:
+                contract = ObservationContract.model_validate(raw)
+            except ValidationError:
+                # One repair attempt: ask model to fix schema (sez. 22).
+                repaired = await self._repair(raw, request_id)
+                contract = ObservationContract.model_validate(
+                    normalize_observation_dict(repaired)
+                )
+        finally:
+            await self._delete_video_file(file_name)
 
         usage_meta = payload.get("usageMetadata") or {}
         usage = ProviderUsage(
@@ -194,12 +205,88 @@ class GeminiVideoObserver:
             model=self._model,
             input_tokens=int(usage_meta.get("promptTokenCount") or 0),
             output_tokens=int(usage_meta.get("candidatesTokenCount") or 0),
-            media_bytes=0,
+            media_bytes=media_bytes,
             latency_ms=int((time.perf_counter() - started) * 1000),
             cost_usd=_estimate_gemini_cost(usage_meta),
             request_id=request_id,
         )
         return contract, usage
+
+    async def _upload_video_file(
+        self,
+        *,
+        video_ref: str,
+        content_type: str,
+        request_id: str,
+    ) -> tuple[str, str, int]:
+        downloaded = await self._client.get(video_ref)
+        downloaded.raise_for_status()
+        media = downloaded.content
+        if not media:
+            raise RuntimeError("Downloaded behavior video is empty")
+
+        start = await self._client.post(
+            f"{_GEMINI_UPLOAD_ROOT}/files",
+            params={"key": self._api_key},
+            headers={
+                "X-Goog-Upload-Protocol": "resumable",
+                "X-Goog-Upload-Command": "start",
+                "X-Goog-Upload-Header-Content-Length": str(len(media)),
+                "X-Goog-Upload-Header-Content-Type": content_type,
+                "Content-Type": "application/json",
+            },
+            json={"file": {"display_name": request_id}},
+        )
+        start.raise_for_status()
+        upload_url = start.headers.get("x-goog-upload-url")
+        if not upload_url:
+            raise RuntimeError("Gemini Files API did not return an upload URL")
+
+        uploaded = await self._client.post(
+            upload_url,
+            headers={
+                "X-Goog-Upload-Offset": "0",
+                "X-Goog-Upload-Command": "upload, finalize",
+                "Content-Length": str(len(media)),
+                "Content-Type": content_type,
+            },
+            content=media,
+        )
+        uploaded.raise_for_status()
+        file_data = uploaded.json().get("file") or {}
+        name = str(file_data.get("name") or "")
+        if not name:
+            raise RuntimeError("Gemini Files API returned no file name")
+
+        for _ in range(_FILE_READY_ATTEMPTS):
+            state = str(file_data.get("state") or "")
+            if state == "ACTIVE":
+                uri = str(file_data.get("uri") or "")
+                if not uri:
+                    raise RuntimeError("Gemini active file has no URI")
+                return name, uri, len(media)
+            if state == "FAILED":
+                raise RuntimeError("Gemini rejected the uploaded behavior video")
+            await asyncio.sleep(1)
+            status = await self._client.get(
+                f"{_GEMINI_API_ROOT}/{name}",
+                params={"key": self._api_key},
+            )
+            status.raise_for_status()
+            file_data = status.json()
+
+        raise TimeoutError("Gemini video processing did not become ACTIVE")
+
+    async def _delete_video_file(self, name: str) -> None:
+        try:
+            await self._client.delete(
+                f"{_GEMINI_API_ROOT}/{name}",
+                params={"key": self._api_key},
+            )
+        except httpx.HTTPError:
+            # Provider retention cleanup is best-effort and must never replace
+            # the primary inference outcome.
+            return
 
     async def _repair(self, raw: dict, request_id: str) -> dict:
         await asyncio.sleep(0)  # checkpoint for durable workflows

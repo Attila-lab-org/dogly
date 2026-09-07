@@ -1,9 +1,9 @@
 import {
   addStory,
   getActiveStories,
-  markStorySeen,
+  markMockStorySeen,
   storyById,
-} from '../features/stories/data';
+} from '../features/stories/mockStore';
 
 describe('storie', () => {
   it('aggiunge una storia separata e la rende disponibile nel viewer', () => {
@@ -21,7 +21,7 @@ describe('storie', () => {
     const seeded = getActiveStories().find((story) => story.unseen);
     expect(seeded).toBeDefined();
 
-    markStorySeen(seeded!.id);
+    markMockStorySeen(seeded!.id);
 
     expect(storyById(seeded!.id)?.unseen).toBe(false);
   });

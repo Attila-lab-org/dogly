@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -51,6 +52,11 @@ async def list_dogs(engine: AsyncEngine, *, user_id: str) -> list[DogRec]:
 
 
 async def get_owned_dog(engine: AsyncEngine, *, user_id: str, dog_id: str) -> DogRec:
+    try:
+        UUID(dog_id)
+    except (TypeError, ValueError):
+        raise ApiError(ErrorCode.NOT_FOUND, "Dog not found") from None
+
     async with engine.connect() as conn:
         row = (
             await conn.execute(

@@ -188,7 +188,7 @@ describe('mock Home e Diario', () => {
     const previousFeedback = result.feedback;
     const previousSubtitle = entry?.subtitle ?? null;
 
-    await expect(saveBehaviorFeedback(result.eventId, 'NO')).resolves.toBe('NO');
+    await expect(saveBehaviorFeedback(result.eventId, 'NO', true)).resolves.toBe('NO');
     expect(result.feedback).toBe('NO');
     expect(entry?.subtitle).toContain('Feedback: non credo');
 

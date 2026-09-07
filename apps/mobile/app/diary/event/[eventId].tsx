@@ -50,7 +50,9 @@ export default function DiaryEventScreen() {
   }>();
   const { eventId } = params;
 
-  const entry = diaryEntriesMock.find((e) => e.id === eventId);
+  const entry = usingMockGate
+    ? diaryEntriesMock.find((e) => e.id === eventId)
+    : undefined;
   const domain: DiaryDomain =
     entry?.domain ?? (params.domain === 'DIGESTIVE' ? 'DIGESTIVE' : 'BEHAVIOR');
   const mediaDeleted = entry?.mediaDeleted ?? params.deleted === '1';
@@ -78,7 +80,9 @@ export default function DiaryEventScreen() {
         ? behaviorResultsMock[entry.refId]
         : query.data
           ? mapApiEventToResult(query.data)
-          : (eventId ? behaviorResultsMock[eventId] : undefined)
+          : (usingMockGate && eventId
+              ? behaviorResultsMock[eventId]
+              : undefined)
       : undefined;
   const advice = behaviorResult
     ? selectAdvice(behaviorResult, {
@@ -140,7 +144,11 @@ export default function DiaryEventScreen() {
 
   const handleFeedback = (value: FeedbackValue) => {
     if (!behaviorResult) return;
-    void saveBehaviorFeedback(behaviorResult.eventId, value).then(setFeedback);
+    void saveBehaviorFeedback(
+      behaviorResult.eventId,
+      value,
+      usingMockGate,
+    ).then(setFeedback);
   };
 
   const entryTitle = entry?.title ?? params.title ?? null;

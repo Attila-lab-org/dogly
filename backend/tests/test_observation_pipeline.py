@@ -250,8 +250,16 @@ def test_alias_normalization_roundtrip_through_contract():
 class _FakeGeminiResponse:
     status_code = 200
 
-    def __init__(self, payload: dict):
+    def __init__(
+        self,
+        payload: dict,
+        *,
+        content: bytes = b"",
+        headers: dict[str, str] | None = None,
+    ):
         self._payload = payload
+        self.content = content
+        self.headers = headers or {}
 
     def raise_for_status(self) -> None:
         return None
@@ -267,9 +275,38 @@ class _FakeGeminiClient:
         self._payload = payload
         self.captured = captured
 
-    async def post(self, url, params=None, json=None):
+    async def get(self, url, params=None):
+        if url == "https://example.test/clip.webm":
+            return _FakeGeminiResponse({}, content=b"real-video-bytes")
+        return _FakeGeminiResponse(
+            {
+                "name": "files/dogly-test",
+                "uri": "https://generativelanguage.googleapis.com/v1beta/files/dogly-test",
+                "state": "ACTIVE",
+            }
+        )
+
+    async def post(self, url, params=None, json=None, headers=None, content=None):
+        if "/upload/v1beta/files" in url:
+            return _FakeGeminiResponse(
+                {},
+                headers={"x-goog-upload-url": "https://upload.test/session"},
+            )
+        if url == "https://upload.test/session":
+            return _FakeGeminiResponse(
+                {
+                    "file": {
+                        "name": "files/dogly-test",
+                        "uri": "https://generativelanguage.googleapis.com/v1beta/files/dogly-test",
+                        "state": "ACTIVE",
+                    }
+                }
+            )
         self.captured.append(json)
         return _FakeGeminiResponse(self._payload)
+
+    async def delete(self, url, params=None):
+        return _FakeGeminiResponse({})
 
 
 def _gemini_payload(observation_text: str) -> dict:
