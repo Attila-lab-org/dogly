@@ -238,7 +238,7 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
 - **Decisione:**
   - Tab primarie: Home / Diario / Profilo.
   - Fotocamera Storie raggiungibile dalla `StoriesRail`; capture behavior dalla
-    CTA “Capisci {nome}”.
+    CTA “Scopri i segnali di {nome}”.
   - Palette esclusivamente dai token Dogly correnti.
   - Foto reali del cane nelle superfici personali; illustrazioni Dogly per
     onboarding, istruzioni, attese ed empty state.
@@ -267,7 +267,7 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
   memoria digestiva personale, prudente e utilizzabile.
 - **Riferimento:** `docs/ux/DOGLY_UX_V5_1_DECISIONS.md`.
 
-### ADR-016 — “Raccontami” e provenienza owner-reported
+### ADR-016 — “Dimmi qualcosa” e provenienza owner-reported
 
 - **Data:** 2026-09-07 • **Autorità:** Product Owner • **Stato:** LOCKED
 - **Decisione:**

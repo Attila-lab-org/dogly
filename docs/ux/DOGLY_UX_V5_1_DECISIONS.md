@@ -45,7 +45,7 @@ La decisione V5.1 sostituisce ADR-007 per la tab bar consumer:
 
 La route Fotocamera resta disponibile per creare Storie dalla `StoriesRail`,
 ma non occupa una tab primaria. Il video comportamentale parte dalla CTA
-“Capisci {nome}”. Digestione e voce restano capacità secondarie.
+“Scopri i segnali di {nome}”. Digestione e voce restano capacità secondarie.
 
 ## Riduzione delle schermate
 
@@ -67,9 +67,9 @@ Ordine:
 1. header reale;
 2. `StoriesRail`;
 3. identità visuale del cane;
-4. CTA dominante “Capisci {nome}”;
+4. CTA dominante “Scopri i segnali di {nome}”;
 5. ultima analisi;
-6. accesso compatto “Raccontami di {nome}”;
+6. accesso compatto “Dimmi qualcosa di {nome}”;
 7. strumenti realmente utili e non duplicati.
 
 Se Diario è una tab non viene duplicato negli strumenti. Quota normale,
@@ -114,7 +114,7 @@ Routine:
 - non torna come nag dopo “Non ora”;
 - usa i dati Nutrizione reali senza duplicarli.
 
-## Raccontami di {nome}
+## Dimmi qualcosa di {nome}
 
 La voce raccoglie dichiarazioni del proprietario; non analizza il comportamento
 dal solo audio.

@@ -234,7 +234,7 @@ export default function DiaryScreen() {
           }
           message={`Registra il primo video di ${dog.name}: le analisi appariranno qui, insieme ai controlli digestivi.`}
           icon={<Ionicons name="calendar-outline" size={40} color={colors.textMuted} />}
-          actionLabel={`Capisci ${dog.name}`}
+          actionLabel={`Scopri i segnali di ${dog.name}`}
           onAction={() => router.push('/behavior/capture')}
         />
       ) : (

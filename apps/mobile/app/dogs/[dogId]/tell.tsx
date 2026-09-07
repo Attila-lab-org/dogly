@@ -171,7 +171,11 @@ export default function TellDogScreen() {
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader
-        title={phase === 'compose' ? `Raccontami di ${dog.name}` : 'Controlla il racconto'}
+        title={
+          phase === 'compose'
+            ? `Dimmi qualcosa di ${dog.name}`
+            : 'Controlla il racconto'
+        }
       />
 
       {phase === 'compose' ? (

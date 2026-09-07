@@ -48,7 +48,7 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 | --- | --- | --- |
 | Welcome / Sign-in | `(auth)/welcome`, `(auth)/sign-in` | Privacy summary + auth |
 | Onboarding | `onboarding/dog` | Nome, meta, foto opzionale |
-| Home | `(tabs)/home` | Storie, modal check-in all’apertura, CTA Capisci, ultima analisi |
+| Home | `(tabs)/home` | Storie, CTA “Scopri i segnali”, ultima analisi |
 | Fotocamera | `(tabs)/camera` | Crea una storia da fotocamera o galleria |
 | Storie | `stories/[storyId]` | Viewer sequenziale, tap sinistra/destra |
 | Diario | `(tabs)/diary`, `diary/event/[id]` | Behavior + digestione; accesso dall’icona Home |
@@ -78,7 +78,7 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 - Dog card senza Knowledge Score.
 - Nessun check-in fisso in pagina.
 - All’apertura: modal tenero (scodinzolio) che sparisce dopo la risposta.
-- CTA "CAPISCI {NOME}", digestione, ultima analisi, quota.
+- CTA “SCOPRI I SEGNALI DI {NOME}”, digestione, ultima analisi, quota.
 - Dogly Signals non compare nella Home finché il servizio è sospeso.
 - Il prossimo appuntamento compare solo nei sette giorni precedenti, senza
   trasformare l'Agenda in una quarta tab.

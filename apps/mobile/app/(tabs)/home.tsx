@@ -1,7 +1,7 @@
 /**
  * Tab Home — accesso rapido a storie, analisi e diario.
  * Contenuti: header, storie, dog card,
- * CTA dominante gradiente "CAPISCI ROCKY" (mic + videocamera),
+ * CTA dominante gradiente "SCOPRI I SEGNALI DI ROCKY",
  * "Controlla digestione" secondario, ultima analisi, quota residua sottile.
  * Stati obbligatori (sez. 6): new user (cold-start), quota exhausted,
  * offline (banner con retry su network monitor reale; demoFlags.homeOffline
@@ -244,10 +244,10 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* CTA dominante: card gradiente blu "CAPISCI ROCKY" */}
+          {/* CTA dominante: osservazione video dei segnali */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Capisci ${dog.name}: registra un video`}
+            accessibilityLabel={`Scopri i segnali di ${dog.name}: registra un momento`}
             onPress={startCapture}
             disabled={!dog.id || loading}
           >
@@ -262,10 +262,10 @@ export default function HomeScreen() {
               </View>
               <View style={styles.ctaCopy}>
                 <Text style={styles.ctaTitle}>
-                  CAPISCI {dog.name.toUpperCase()}
+                  SCOPRI I SEGNALI DI {dog.name.toUpperCase()}
                 </Text>
                 <Text style={styles.ctaSubtitle}>
-                  Mostrami cosa sta facendo
+                  Registra un momento
                 </Text>
               </View>
               <Ionicons
@@ -324,7 +324,7 @@ export default function HomeScreen() {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Raccontami qualcosa di ${dog.name}`}
+            accessibilityLabel={`Dimmi qualcosa di ${dog.name}`}
             onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
             style={({ pressed }) => [
               styles.tellCard,
@@ -336,7 +336,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.tellCopy}>
               <Text style={styles.tellEyebrow}>UNA COSA IMPORTANTE</Text>
-              <Text style={styles.tellTitle}>Raccontami di {dog.name}</Text>
+              <Text style={styles.tellTitle}>Dimmi qualcosa di {dog.name}</Text>
               <Text style={styles.tellHint}>Parla oppure scrivi</Text>
             </View>
             <Ionicons name="chevron-forward" size={19} color={colors.primary} />

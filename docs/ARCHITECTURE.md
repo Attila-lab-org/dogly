@@ -165,7 +165,7 @@ Worker: DigestiveVision.observe_stool(foto) → StoolObservationContract
       → DigestiveIntelligenceResult consumer + prossimo passo → evento COMPLETED
 ```
 
-“Raccontami di {nome}” usa un flusso separato in due tempi: testo o audio
+“Dimmi qualcosa di {nome}” usa un flusso separato in due tempi: testo o audio
 temporaneo → trascrizione → fatti modificabili → conferma esplicita. Solo i
 fatti confermati vengono salvati con provenienza `OWNER_REPORTED`; non
 sovrascrivono dati nutrizionali verificati e non diventano automaticamente

@@ -390,7 +390,9 @@ export default function BehaviorCaptureScreen() {
             <Ionicons name="close" size={26} color={colors.text} />
           </Pressable>
           <Text style={styles.topTitle}>
-            {fromCheckIn ? `Guardiamo ${dog.name}` : `Capisci ${dog.name}`}
+            {fromCheckIn
+              ? `Guardiamo ${dog.name}`
+              : `I segnali di ${dog.name}`}
           </Text>
           <View style={styles.topSpacer} />
         </View>
