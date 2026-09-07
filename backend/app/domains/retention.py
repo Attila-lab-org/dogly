@@ -88,7 +88,13 @@ async def cleanup_expired_raw_media_db(
                 text(
                     """
                     select bucket, object_path, source_id, source_table
-                    from internal.media_due_for_deletion
+                    from (
+                      select bucket, object_path, source_id, source_table
+                      from internal.media_due_for_deletion
+                      union all
+                      select bucket, object_path, source_id, source_table
+                      from internal.storage_orphans_due_for_deletion
+                    ) due
                     limit :limit
                     """
                 ),
@@ -101,15 +107,17 @@ async def cleanup_expired_raw_media_db(
         "deleted_digestive": 0,
         "deleted_food_labels": 0,
         "deleted_exports": 0,
+        "deleted_orphans": 0,
         "status": "ok",
     }
     for row in rows:
         await storage.delete_object(bucket=str(row["bucket"]), path=str(row["object_path"]))
-        async with engine.begin() as conn:
-            await conn.execute(
-                text("select internal.mark_media_deleted(:source_table, :source_id)"),
-                {"source_table": row["source_table"], "source_id": row["source_id"]},
-            )
+        if row["source_table"] != "orphan_object":
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("select internal.mark_media_deleted(:source_table, :source_id)"),
+                    {"source_table": row["source_table"], "source_id": row["source_id"]},
+                )
         if row["source_table"] == "behavior_captures":
             counts["deleted_behavior"] += 1
         elif row["source_table"] == "fecal_events":
@@ -118,6 +126,8 @@ async def cleanup_expired_raw_media_db(
             counts["deleted_food_labels"] += 1
         elif row["source_table"] == "export_jobs":
             counts["deleted_exports"] += 1
+        elif row["source_table"] == "orphan_object":
+            counts["deleted_orphans"] += 1
     counts["deleted_total"] = sum(v for v in counts.values() if isinstance(v, int))
     return counts
 

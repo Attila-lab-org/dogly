@@ -1,6 +1,8 @@
 """Idempotency tests (spec 9.1 / 22): duplicate client taps and duplicate
 complete calls are safe."""
 
+import asyncio
+
 import httpx
 
 from tests.conftest import create_dog
@@ -53,6 +55,38 @@ async def test_duplicate_complete_is_idempotent(client: httpx.AsyncClient, auth_
     assert c2.status_code == 200, c2.text
     assert c2.json()["status"] == "QUEUED"  # no second enqueue
     assert len([t for t in state.queue.tasks if t["task_type"] == "behavior_analysis"]) == 1
+
+
+async def test_local_dispatch_sees_job_reserved_before_worker_starts(
+    client: httpx.AsyncClient,
+    auth_headers,
+    state,
+):
+    dispatched = asyncio.Event()
+    saw_reserved_job = False
+
+    async def dispatcher(_task_type: str, payload: dict[str, str]) -> None:
+        nonlocal saw_reserved_job
+        saw_reserved_job = any(
+            job.event_id == payload["event_id"]
+            for job in state.store.analysis_jobs.values()
+        )
+        dispatched.set()
+
+    state.queue.dispatcher = dispatcher
+    dog_id = await create_dog(client, auth_headers)
+    initialized = await client.post(
+        "/v1/behavior/captures/init",
+        json=_init_payload(dog_id, "crid-job-before-dispatch"),
+        headers=auth_headers,
+    )
+    completed = await client.post(
+        f"/v1/behavior/captures/{initialized.json()['capture_id']}/complete",
+        headers=auth_headers,
+    )
+    assert completed.status_code == 200, completed.text
+    await asyncio.wait_for(dispatched.wait(), timeout=1)
+    assert saw_reserved_job is True
 
 
 async def test_video_duration_limits(client: httpx.AsyncClient, auth_headers):

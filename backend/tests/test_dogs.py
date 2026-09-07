@@ -88,6 +88,7 @@ async def test_dog_patch_clears_nullable_fields_and_skips_noop_versions(
 async def test_dog_avatar_init_complete_persists_signed_url(
     client: httpx.AsyncClient,
     auth_headers: dict[str, str],
+    state,
 ) -> None:
     created = await client.post(
         "/v1/dogs",
@@ -127,9 +128,35 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     assert completed.json()["photo_url"].startswith(
         f"https://storage.mock.local/dog-avatars/read/{path}"
     )
+    versions_after_first_complete = len(state.store.dog_profile_versions)
+
+    duplicate = await client.post(
+        f"/v1/dogs/{dog_id}/avatar/complete",
+        headers=auth_headers,
+        json={"storage_path": path, "bytes": 2048},
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    assert len(state.store.dog_profile_versions) == versions_after_first_complete
+
+    state.storage.objects.add(("dog-avatars", path))
+    replacement_init = await client.post(
+        f"/v1/dogs/{dog_id}/avatar/init",
+        headers=auth_headers,
+        json={"content_type": "image/jpeg", "bytes": 1024},
+    )
+    replacement_path = replacement_init.json()["storage_path"]
+    state.storage.objects.add(("dog-avatars", replacement_path))
+    replacement = await client.post(
+        f"/v1/dogs/{dog_id}/avatar/complete",
+        headers=auth_headers,
+        json={"storage_path": replacement_path, "bytes": 1024},
+    )
+    assert replacement.status_code == 200, replacement.text
+    assert ("dog-avatars", path) not in state.storage.objects
+    assert ("dog-avatars", replacement_path) in state.storage.objects
 
     listed = await client.get("/v1/dogs", headers=auth_headers)
-    assert listed.json()["items"][0]["photo_path"] == path
+    assert listed.json()["items"][0]["photo_path"] == replacement_path
     assert listed.json()["items"][0]["photo_url"]
 
 

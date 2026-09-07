@@ -27,6 +27,86 @@ STUCK_BEHAVIOR_STATUSES = ("QUEUED", "OBSERVING", "INTERPRETING", "FAILED_RETRYA
 STUCK_DIGESTIVE_STATUSES = ("QUEUED", "OBSERVING", "INTERPRETING", "FAILED_RETRYABLE")
 
 
+async def _reserve_and_dispatch(
+    state: AppState,
+    *,
+    event_id: str,
+    domain: str,
+) -> bool:
+    task_type = f"{domain.lower()}_analysis"
+    job_type = f"{domain}_ANALYSIS"
+    async with state.engine.begin() as conn:
+        reserved = (
+            await conn.execute(
+                text(
+                    """
+                    insert into internal.analysis_jobs (
+                      job_type, domain, event_id, status
+                    ) values (
+                      :job_type, :domain, :event_id, 'PENDING'
+                    )
+                    on conflict (event_id) do update set
+                      status = 'PENDING',
+                      task_id = null,
+                      last_error_code = null,
+                      scheduled_at = now(),
+                      started_at = null,
+                      completed_at = null,
+                      updated_at = now()
+                    where internal.analysis_jobs.status in ('FAILED', 'COMPLETED')
+                       or (
+                         internal.analysis_jobs.status = 'PENDING'
+                         and internal.analysis_jobs.task_id is null
+                       )
+                    returning id
+                    """
+                ),
+                {
+                    "job_type": job_type,
+                    "domain": domain,
+                    "event_id": event_id,
+                },
+            )
+        ).first()
+    if not reserved:
+        return False
+
+    try:
+        task_id = await state.queue.enqueue(
+            task_type=task_type,
+            payload={"event_id": event_id},
+        )
+    except Exception:
+        async with state.engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    update internal.analysis_jobs
+                    set status = 'FAILED',
+                        last_error_code = 'QUEUE_DISPATCH_FAILED',
+                        completed_at = now(),
+                        updated_at = now()
+                    where event_id = :event_id and task_id is null
+                    """
+                ),
+                {"event_id": event_id},
+            )
+        raise
+
+    async with state.engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                update internal.analysis_jobs
+                set task_id = :task_id, updated_at = now()
+                where event_id = :event_id
+                """
+            ),
+            {"event_id": event_id, "task_id": task_id},
+        )
+    return True
+
+
 async def redispatch_stuck_events(state: AppState) -> dict[str, int]:
     """Rispedisce gli eventi bloccati e ritorna i conteggi per dominio."""
     counts = {"behavior": 0, "digestive": 0}
@@ -49,15 +129,19 @@ async def redispatch_stuck_events(state: AppState) -> dict[str, int]:
             {"statuses": list(STUCK_DIGESTIVE_STATUSES)},
         )
     for (event_id,) in behavior_rows.all():
-        await state.queue.enqueue(
-            task_type="behavior_analysis", payload={"event_id": event_id}
-        )
-        counts["behavior"] += 1
+        if await _reserve_and_dispatch(
+            state,
+            event_id=str(event_id),
+            domain="BEHAVIOR",
+        ):
+            counts["behavior"] += 1
     for (event_id,) in digestive_rows.all():
-        await state.queue.enqueue(
-            task_type="digestive_analysis", payload={"event_id": event_id}
-        )
-        counts["digestive"] += 1
+        if await _reserve_and_dispatch(
+            state,
+            event_id=str(event_id),
+            domain="DIGESTIVE",
+        ):
+            counts["digestive"] += 1
     logger.info("sweep completato: %s", counts)
     return counts
 

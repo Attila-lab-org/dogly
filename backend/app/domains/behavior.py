@@ -149,21 +149,30 @@ async def complete_capture(
 
     capture.upload_completed = True
     event.status = BehaviorEventStatus.QUEUED
-    # Task payload is IDs only; no media bytes, no secrets (sez. 22).
-    task_id = await queue.enqueue(
-        task_type="behavior_analysis",
-        payload={"event_id": event.id, "capture_id": capture.id, "user_id": user_id},
-    )
     job = AnalysisJobRec(
         id=new_id(),
         job_type="behavior_analysis",
         event_id=event.id,
         user_id=user_id,
-        task_id=task_id,
+        task_id=None,
         created_at=now_utc(),
         updated_at=now_utc(),
     )
     store.analysis_jobs[job.id] = job
+    # Task payload is IDs only; no media bytes, no secrets (sez. 22).
+    try:
+        job.task_id = await queue.enqueue(
+            task_type="behavior_analysis",
+            payload={"event_id": event.id, "capture_id": capture.id, "user_id": user_id},
+        )
+        job.updated_at = now_utc()
+    except Exception:
+        job.status = "failed"
+        job.last_error_code = "QUEUE_DISPATCH_FAILED"
+        job.updated_at = now_utc()
+        capture.upload_completed = False
+        event.status = BehaviorEventStatus.UPLOADING
+        raise
     return event
 
 

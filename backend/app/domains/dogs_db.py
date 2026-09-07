@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any
 from uuid import UUID
@@ -13,6 +14,8 @@ from app.contracts.api import DogCreate, DogUpdate
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains.billing import max_active_dogs
 from app.domains.models import DogRec
+
+logger = logging.getLogger(__name__)
 
 
 def _row_to_dog(row: Any) -> DogRec:
@@ -234,6 +237,7 @@ async def set_photo_path(
                     update public.dogs
                     set photo_path = :photo_path
                     where id = :dog_id and owner_id = :user_id
+                      and photo_path is distinct from :photo_path
                     returning id, owner_id, name, birth_date, age_stage, size, breed_label,
                               is_mix, sex, weight_kg, photo_path, created_at
                     """
@@ -242,7 +246,22 @@ async def set_photo_path(
             )
         ).mappings().first()
         if not row:
-            raise ApiError(ErrorCode.NOT_FOUND, "Dog not found")
+            current = (
+                await conn.execute(
+                    text(
+                        """
+                        select id, owner_id, name, birth_date, age_stage, size, breed_label,
+                               is_mix, sex, weight_kg, photo_path, created_at
+                        from public.dogs
+                        where id = :dog_id and owner_id = :user_id
+                        """
+                    ),
+                    {"dog_id": dog_id, "user_id": user_id},
+                )
+            ).mappings().first()
+            if not current:
+                raise ApiError(ErrorCode.NOT_FOUND, "Dog not found")
+            return _row_to_dog(current)
         dog = _row_to_dog(row)
         await conn.execute(
             text(
@@ -296,7 +315,7 @@ async def complete_avatar_upload(
 ) -> DogRec:
     from app.domains.dogs import AVATAR_BUCKET, avatar_storage_prefix
 
-    await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    current = await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
     prefix = avatar_storage_prefix(user_id, dog_id)
     if not storage_path.startswith(prefix):
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Avatar path is not valid for this dog.")
@@ -305,4 +324,22 @@ async def complete_avatar_upload(
     )
     if not exists:
         raise ApiError(ErrorCode.NOT_FOUND, "Avatar upload was not found.")
-    return await set_photo_path(engine, user_id=user_id, dog_id=dog_id, photo_path=storage_path)
+    previous_path = current.photo_path
+    updated = await set_photo_path(
+        engine,
+        user_id=user_id,
+        dog_id=dog_id,
+        photo_path=storage_path,
+    )
+    if previous_path and previous_path != storage_path:
+        try:
+            await storage.delete_object(
+                bucket=AVATAR_BUCKET,
+                path=previous_path,
+            )
+        except Exception:
+            logger.exception(
+                "Could not delete replaced avatar path for dog_id=%s",
+                dog_id,
+            )
+    return updated

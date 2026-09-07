@@ -100,6 +100,17 @@ async def _set_analysis_job_status(
     error_code: str | None = None,
 ) -> None:
     if state.engine is None:
+        for job in state.store.analysis_jobs.values():
+            if job.event_id != event_id or job.job_type not in {
+                "behavior_analysis",
+                "digestive_analysis",
+            }:
+                continue
+            job.status = status
+            job.last_error_code = error_code
+            job.updated_at = now_utc()
+            if status == "RUNNING":
+                job.attempt_count += 1
         return
     if status == "RUNNING":
         assignments = """

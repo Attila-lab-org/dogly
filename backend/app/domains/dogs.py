@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.config import Settings
 from app.contracts.api import DogAvatarInitRequest, DogCreate, DogUpdate, SignedUpload
 from app.contracts.errors import ApiError, ErrorCode
@@ -10,6 +12,8 @@ from app.domains.billing import max_active_dogs
 from app.domains.models import DogRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
 from app.providers.base import StorageProvider
+
+logger = logging.getLogger(__name__)
 
 AVATAR_BUCKET = "dog-avatars"
 _AVATAR_EXT = {
@@ -78,6 +82,8 @@ def set_photo_path(
     store: InMemoryStore, *, user_id: str, dog_id: str, photo_path: str
 ) -> DogRec:
     dog = get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    if dog.photo_path == photo_path:
+        return dog
     updated = dog.model_copy(update={"photo_path": photo_path})
     store.dogs[dog.id] = updated
     store.save_profile_version(dog_id, updated.model_dump(mode="json"), ["photo_path"])
@@ -114,7 +120,7 @@ async def complete_avatar_upload(
     storage_path: str,
     expected_bytes: int | None = None,
 ) -> DogRec:
-    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    current = get_owned_dog(store, user_id=user_id, dog_id=dog_id)
     prefix = avatar_storage_prefix(user_id, dog_id)
     if not storage_path.startswith(prefix):
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Avatar path is not valid for this dog.")
@@ -123,4 +129,21 @@ async def complete_avatar_upload(
     )
     if not exists:
         raise ApiError(ErrorCode.NOT_FOUND, "Avatar upload was not found.")
-    return set_photo_path(store, user_id=user_id, dog_id=dog_id, photo_path=storage_path)
+    updated = set_photo_path(
+        store,
+        user_id=user_id,
+        dog_id=dog_id,
+        photo_path=storage_path,
+    )
+    if current.photo_path and current.photo_path != storage_path:
+        try:
+            await storage.delete_object(
+                bucket=AVATAR_BUCKET,
+                path=current.photo_path,
+            )
+        except Exception:
+            logger.exception(
+                "Could not delete replaced avatar path for dog_id=%s",
+                dog_id,
+            )
+    return updated

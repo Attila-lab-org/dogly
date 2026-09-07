@@ -202,20 +202,29 @@ async def complete_fecal_event(
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Uploaded object failed validation.", retryable=True)
     event.upload_completed = True
     event.status = "QUEUED"
-    task_id = await queue.enqueue(
-        task_type="digestive_analysis",
-        payload={"event_id": event.id, "user_id": user_id},
-    )
     job = AnalysisJobRec(
         id=new_id(),
         job_type="digestive_analysis",
         event_id=event.id,
         user_id=user_id,
-        task_id=task_id,
+        task_id=None,
         created_at=now_utc(),
         updated_at=now_utc(),
     )
     store.analysis_jobs[job.id] = job
+    try:
+        job.task_id = await queue.enqueue(
+            task_type="digestive_analysis",
+            payload={"event_id": event.id, "user_id": user_id},
+        )
+        job.updated_at = now_utc()
+    except Exception:
+        job.status = "failed"
+        job.last_error_code = "QUEUE_DISPATCH_FAILED"
+        job.updated_at = now_utc()
+        event.upload_completed = False
+        event.status = "UPLOADING"
+        raise
     return event
 
 
