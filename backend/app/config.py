@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     job_queue_backend: str = "fake"  # "fake" | "vercel_workflows"
     workflow_base_url: str = ""
     worker_internal_token: str = ""
+    cron_secret: str = ""
 
     # --- Observability ---
     sentry_dsn: str = ""

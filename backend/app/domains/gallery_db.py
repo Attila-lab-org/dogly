@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from typing import Any
 
@@ -23,6 +24,8 @@ from app.domains import dogs_db
 from app.domains.models import DogPhotoRec
 from app.domains.repository import new_id
 from app.providers.base import StorageProvider
+
+logger = logging.getLogger(__name__)
 
 GALLERY_BUCKET = "dog-gallery"
 
@@ -287,7 +290,13 @@ async def update_photo(
     return _photo_out(row)
 
 
-async def soft_delete_photo(engine: AsyncEngine, *, user_id: str, photo_id: str) -> None:
+async def soft_delete_photo(
+    engine: AsyncEngine,
+    *,
+    storage: StorageProvider,
+    user_id: str,
+    photo_id: str,
+) -> None:
     async with engine.begin() as conn:
         row = (
             await conn.execute(
@@ -296,7 +305,7 @@ async def soft_delete_photo(engine: AsyncEngine, *, user_id: str, photo_id: str)
                     update public.dog_photos
                     set deleted_at = now()
                     where id = :id and owner_id = :user_id and deleted_at is null
-                    returning album_id
+                    returning album_id, storage_path
                     """
                 ),
                 {"id": photo_id, "user_id": user_id},
@@ -305,6 +314,7 @@ async def soft_delete_photo(engine: AsyncEngine, *, user_id: str, photo_id: str)
         if not row:
             raise ApiError(ErrorCode.NOT_FOUND, "Photo not found.")
         album_id = str(row["album_id"])
+        storage_path = str(row["storage_path"]) if row["storage_path"] else None
         await conn.execute(
             text(
                 """
@@ -321,6 +331,11 @@ async def soft_delete_photo(engine: AsyncEngine, *, user_id: str, photo_id: str)
             ),
             {"album_id": album_id, "photo_id": photo_id},
         )
+    if storage_path:
+        try:
+            await storage.delete_object(bucket=GALLERY_BUCKET, path=storage_path)
+        except Exception:
+            logger.exception("Could not delete gallery object for photo_id=%s", photo_id)
 
 
 async def get_visibility(

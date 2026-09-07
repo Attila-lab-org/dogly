@@ -7,5 +7,11 @@
     "DIGESTIVE_VISION_PROVIDER": "openai",
     "DIGESTIVE_VISION_MODEL": "gpt-5-mini",
     "OWNER_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe"
-  }
+  },
+  "crons": [
+    {
+      "path": "/tasks/cron/retention",
+      "schedule": "15 3 * * *"
+    }
+  ]
 }

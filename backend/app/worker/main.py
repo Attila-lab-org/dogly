@@ -42,6 +42,25 @@ class TaskEnvelope(BaseModel):
     event_id: str | None = None
 
 
+def _tokens_match(provided: str, expected: str) -> bool:
+    if not expected:
+        return False
+    provided_b = provided.encode("utf-8")
+    expected_b = expected.encode("utf-8")
+    if len(provided_b) != len(expected_b):
+        return False
+    return hmac.compare_digest(provided_b, expected_b)
+
+
+def _bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not value:
+        return None
+    return value.strip()
+
+
 def create_worker_app(state: AppState | None = None) -> FastAPI:
     app = FastAPI(title="Dogly Private Worker", version="1.0.0", docs_url=None, openapi_url=None)
     app.state.cbi = state or build_default_state()
@@ -49,12 +68,18 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
     async def internal_auth(
         request: Request,
         x_internal_token: Annotated[str | None, Header()] = None,
+        authorization: Annotated[str | None, Header()] = None,
     ) -> None:
         st: AppState = request.app.state.cbi
-        expected = st.settings.worker_internal_token
+        expected = [
+            token
+            for token in (st.settings.worker_internal_token, st.settings.cron_secret)
+            if token
+        ]
         if not expected:
             return  # local dev mode
-        if not x_internal_token or not hmac.compare_digest(x_internal_token, expected):
+        provided = x_internal_token or _bearer_token(authorization)
+        if not provided or not any(_tokens_match(provided, token) for token in expected):
             raise ApiError(ErrorCode.AUTH_REQUIRED, "Internal authentication required.")
 
     @app.exception_handler(ApiError)
@@ -84,6 +109,12 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
             # redelivery.
             return JSONResponse(status_code=503, content=exc.payload)
         return result
+
+    @app.get("/tasks/cron/retention", dependencies=[Depends(internal_auth)])
+    async def run_retention_cron(request: Request) -> dict:
+        """Vercel Cron GET ingress for expired raw media and storage orphans."""
+        st: AppState = request.app.state.cbi
+        return await handlers.process_media_retention_cleanup(st)
 
     return app
 

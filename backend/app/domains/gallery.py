@@ -6,6 +6,8 @@ AI raw media buckets and never receive behavior/digestive analysis assets.
 
 from __future__ import annotations
 
+import logging
+
 from app.config import Settings
 from app.contracts.api import (
     DogAlbumCreate,
@@ -21,6 +23,8 @@ from app.domains.dogs import get_owned_dog
 from app.domains.models import DogAlbumRec, DogPhotoRec, DogProfileVisibilityRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
 from app.providers.base import StorageProvider
+
+logger = logging.getLogger(__name__)
 
 GALLERY_BUCKET = "dog-gallery"
 
@@ -152,10 +156,17 @@ def update_photo(
     return _photo_out(photo)
 
 
-def soft_delete_photo(store: InMemoryStore, *, user_id: str, photo_id: str) -> None:
+async def soft_delete_photo(
+    store: InMemoryStore,
+    *,
+    storage: StorageProvider,
+    user_id: str,
+    photo_id: str,
+) -> None:
     photo = store.dog_photos.get(photo_id)
     if photo is None or photo.owner_id != user_id or photo.deleted_at is not None:
         raise ApiError(ErrorCode.NOT_FOUND, "Photo not found.")
+    storage_path = photo.storage_path
     photo.deleted_at = now_utc()
     album = store.dog_albums.get(photo.album_id)
     if album and album.cover_photo_id == photo.id:
@@ -168,6 +179,11 @@ def soft_delete_photo(store: InMemoryStore, *, user_id: str, photo_id: str) -> N
             None,
         )
         album.cover_photo_id = next_cover
+    if storage_path:
+        try:
+            await storage.delete_object(bucket=GALLERY_BUCKET, path=storage_path)
+        except Exception:
+            logger.exception("Could not delete gallery object for photo_id=%s", photo_id)
 
 
 def get_visibility(

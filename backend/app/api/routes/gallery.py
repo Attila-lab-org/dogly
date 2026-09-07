@@ -165,9 +165,19 @@ async def update_photo(
 @router.delete("/photos/{photo_id}", status_code=204)
 async def delete_photo(photo_id: str, state: StateDep, user_id: UserIdDep) -> None:
     if state.engine is not None:
-        await gallery_db.soft_delete_photo(state.engine, user_id=user_id, photo_id=photo_id)
+        await gallery_db.soft_delete_photo(
+            state.engine,
+            storage=state.storage,
+            user_id=user_id,
+            photo_id=photo_id,
+        )
         return
-    gallery_domain.soft_delete_photo(state.store, user_id=user_id, photo_id=photo_id)
+    await gallery_domain.soft_delete_photo(
+        state.store,
+        storage=state.storage,
+        user_id=user_id,
+        photo_id=photo_id,
+    )
 
 
 @router.get("/dogs/{dog_id}/visibility", response_model=DogProfileVisibilityOut)

@@ -64,3 +64,39 @@ async def test_album_photo_and_visibility_flow(
     photos = await client.get(f"/v1/albums/{album_id}/photos", headers=auth_headers)
     assert photos.status_code == 200
     assert photos.json()["items"] == []
+
+
+async def test_gallery_soft_delete_removes_storage_object(
+    client: httpx.AsyncClient,
+    auth_headers,
+    state,
+):
+    dog_id = await create_dog(client, auth_headers)
+    album = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Orfani", "default_visibility": "PRIVATE"},
+        headers=auth_headers,
+    )
+    album_id = album.json()["id"]
+    photo = await client.post(
+        f"/v1/albums/{album_id}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 8_192},
+        headers=auth_headers,
+    )
+    assert photo.status_code == 201, photo.text
+    photo_id = photo.json()["photo"]["id"]
+    path = photo.json()["photo"]["storage_path"]
+    kept = await client.post(
+        f"/v1/albums/{album_id}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 4_096, "caption": "resta"},
+        headers=auth_headers,
+    )
+    kept_path = kept.json()["photo"]["storage_path"]
+    state.storage.objects.add(("dog-gallery", path))
+    state.storage.objects.add(("dog-gallery", kept_path))
+
+    deleted = await client.delete(f"/v1/photos/{photo_id}", headers=auth_headers)
+    assert deleted.status_code == 204
+    assert ("dog-gallery", path) not in state.storage.objects
+    assert ("dog-gallery", kept_path) in state.storage.objects
+    assert state.store.dog_photos[photo_id].deleted_at is not None

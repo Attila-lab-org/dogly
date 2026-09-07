@@ -3,9 +3,8 @@
 TTL for temporary AI raw media starts at *terminal* analysis completion,
 never at upload init. Gallery album photos are out of scope here.
 
-Vercel cron is not declared in vercel.json because this project exposes
-retention through the internal token-protected POST /tasks/run workflow route,
-while Vercel cron invokes headerless GET requests.
+Vercel Cron invokes GET /tasks/cron/retention daily (vercel.json). Auth is
+WORKER_INTERNAL_TOKEN or CRON_SECRET via Authorization: Bearer.
 """
 
 from __future__ import annotations

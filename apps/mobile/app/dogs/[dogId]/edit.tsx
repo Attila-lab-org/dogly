@@ -193,17 +193,18 @@ export default function DogEditScreen() {
 
     try {
       if (dogId) {
-        await updateMutation.mutateAsync(
-          profileChangesToUpdateBody(dog, {
-            name: name.trim(),
-            ageLabel,
-            birthDate,
-            sizeLabel,
-            weightKg: parsedWeight,
-            breedLabel,
-            isMix: breedSelection.kind === 'mixed',
-          }),
-        );
+        const profilePatch = profileChangesToUpdateBody(dog, {
+          name: name.trim(),
+          ageLabel,
+          birthDate,
+          sizeLabel,
+          weightKg: parsedWeight,
+          breedLabel,
+          isMix: breedSelection.kind === 'mixed',
+        });
+        if (Object.keys(profilePatch).length > 0) {
+          await updateMutation.mutateAsync(profilePatch);
+        }
         try {
           await apiSetVisibility(
             dogId,

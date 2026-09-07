@@ -135,6 +135,29 @@ async def test_worker_rejects_missing_or_wrong_internal_token(worker_client: htt
     assert r2.status_code in (401, 403)
 
 
+async def test_retention_cron_accepts_bearer_and_cron_secret(
+    worker_client: httpx.AsyncClient,
+    state,
+):
+    denied = await worker_client.get("/tasks/cron/retention")
+    assert denied.status_code == 401
+
+    via_worker_token = await worker_client.get(
+        "/tasks/cron/retention",
+        headers={"Authorization": "Bearer test-internal-token"},
+    )
+    assert via_worker_token.status_code == 200, via_worker_token.text
+    assert via_worker_token.json()["status"] == "ok"
+
+    state.settings.cron_secret = "vercel-cron-secret"
+    via_cron_secret = await worker_client.get(
+        "/tasks/cron/retention",
+        headers={"Authorization": "Bearer vercel-cron-secret"},
+    )
+    assert via_cron_secret.status_code == 200, via_cron_secret.text
+    assert via_cron_secret.json()["status"] == "ok"
+
+
 async def test_worker_unknown_event_acknowledged(worker_client: httpx.AsyncClient):
     r = await worker_client.post(
         "/tasks/run",
