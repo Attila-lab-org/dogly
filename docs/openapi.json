@@ -2886,6 +2886,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
