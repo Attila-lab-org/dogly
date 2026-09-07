@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
 from app.providers.mock import InMemoryJobQueue
 from app.worker import handlers
 from app.worker.local import make_local_dispatcher

@@ -457,6 +457,7 @@ class BehaviorEventOut(BaseModel):
     id: str
     dog_id: str
     status: BehaviorEventStatus
+    schema_version: str
     primary_intent: IntentCode | None = None
     confidence_band: ConfidenceBand | None = None
     summary: str | None = None

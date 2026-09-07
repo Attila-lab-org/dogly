@@ -2,6 +2,10 @@
 
 **Data:** 2026-09-05 • **Tipo:** audit read-only pre-release (4 domini: Security/Privacy, Backend, Mobile/UX, Spec/Docs/Process) • **Esito build al momento dell'audit:** backend `uv run pytest` 42/42 ✅, mobile `tsc` ✅ + jest 69/69 ✅, OpenAPI zero drift (33 path).
 
+> **STORICO / SUPERATO (2026-09-07).** Valutazioni e conteggi sono riferiti allo
+> snapshot auditato il 2026-09-05. Per lo stato corrente usare
+> `PROJECT_STATE.md`.
+
 ## Giudizio complessivo: 6.6 / 10 — "Bel guscio, motore da collegare"
 
 | Dominio | Voto | Sintesi |

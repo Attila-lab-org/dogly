@@ -2,6 +2,11 @@
 
 **Data:** 2026-09-05 • **Metodo:** audit statico read-only di ogni elemento interattivo, dalla prima pagina (welcome) al login, onboarding, Home, storie, capture/analisi, diario, digestione, nutrizione, profilo, impostazioni, paywall, care, album, notifiche, patterns • **~280 elementi auditati**
 
+> **STORICO / SUPERATO (2026-09-07).** Questo documento fotografa il
+> 2026-09-05 e non rappresenta lo stato corrente. Cinque dei sei blocker
+> originali risultano chiusi nel codice; per stato e rischi aperti usare
+> `PROJECT_STATE.md` e `docs/CURSOR_BACKEND_TASKS.md`.
+
 Legenda: ✅ reale · 🟡 mock atteso (documentato) · 🟠 mock pericoloso (sembra vero, non lo è) · 🔴 rotto/vicolo cieco · ⚪ mancante vs spec
 
 ## Totale generale

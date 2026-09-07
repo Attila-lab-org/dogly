@@ -14,6 +14,10 @@ export default function TabsLayout() {
   const { dog } = useDogProfile();
   const { loading, sessionState, usingMockGate } = useSession();
 
+  if (loading) {
+    return null;
+  }
+
   if (!loading && !usingMockGate && sessionState === 'unauthenticated') {
     return <Redirect href="/(auth)/welcome" />;
   }

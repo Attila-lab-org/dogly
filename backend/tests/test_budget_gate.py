@@ -4,6 +4,7 @@ to a NON-retryable terminal failure (never RetryableTaskError)."""
 
 import httpx
 import pytest
+
 from app.config import Settings
 from app.providers import (
     gemini_observer,

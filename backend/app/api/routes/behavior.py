@@ -13,7 +13,7 @@ from app.contracts.api import (
     BehaviorFeedbackResponse,
     CaptureCompleteResponse,
 )
-from app.contracts.taxonomy import FeedbackValue
+from app.contracts.taxonomy import INTERPRETATION_SCHEMA_VERSION, FeedbackValue
 from app.domains import behavior as behavior_domain
 from app.domains import behavior_db, idempotency_db, lifestyle, lifestyle_db
 from app.domains.models import BehaviorEventRec
@@ -32,6 +32,7 @@ def event_out(
         id=event.id,
         dog_id=event.dog_id,
         status=event.status,
+        schema_version=interp.get("schema_version", INTERPRETATION_SCHEMA_VERSION),
         primary_intent=event.primary_intent,
         confidence_band=event.confidence_band,
         summary=event.summary,

@@ -3389,7 +3389,8 @@
             "type": "string",
             "enum": [
               "video/mp4",
-              "video/quicktime"
+              "video/quicktime",
+              "video/webm"
             ],
             "title": "Content Type",
             "default": "video/mp4"
@@ -3451,6 +3452,10 @@
           },
           "status": {
             "$ref": "#/components/schemas/BehaviorEventStatus"
+          },
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
           },
           "primary_intent": {
             "anyOf": [
@@ -3595,6 +3600,7 @@
           "id",
           "dog_id",
           "status",
+          "schema_version",
           "created_at"
         ],
         "title": "BehaviorEventOut"
@@ -4776,26 +4782,22 @@
           "routine": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/LifestyleRoutine"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Routine"
+            ]
           },
           "preferences": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/LifestylePreferences"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Preferences"
+            ]
           },
           "provenance": {
             "anyOf": [
@@ -5949,6 +5951,320 @@
         ],
         "title": "KnowledgeScoreOut"
       },
+      "LifestylePreferences": {
+        "properties": {
+          "walk_environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CITY",
+                  "COUNTRY",
+                  "MIXED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walk Environment"
+          },
+          "preferred_activities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Activities"
+          },
+          "toys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toys"
+          },
+          "dislikes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dislikes"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LifestylePreferences",
+        "description": "Typed owner-reported preferences (closed key set, extra=\"forbid\")."
+      },
+      "LifestyleRoutine": {
+        "properties": {
+          "activity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CALM",
+                  "MODERATE",
+                  "VERY_ACTIVE"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activity"
+          },
+          "sleep": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "REGULAR",
+                  "IRREGULAR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep"
+          },
+          "time_alone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "LITTLE",
+                  "SOME_HOURS",
+                  "MANY_HOURS"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Alone"
+          },
+          "social": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DOGS",
+                  "PEOPLE",
+                  "BOTH",
+                  "LITTLE"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Social"
+          },
+          "enrichment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "TOYS",
+                  "NEW_WALKS",
+                  "NOTHING_SPECIAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrichment"
+          },
+          "sleep_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 24.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Hours"
+          },
+          "walks_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walks Per Day"
+          },
+          "walk_minutes_average": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walk Minutes Average"
+          },
+          "activity_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "moderate",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activity Level"
+          },
+          "alone_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 24.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alone Hours"
+          },
+          "meal_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "usual_rest_periods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usual Rest Periods"
+          },
+          "social_contacts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Social Contacts"
+          },
+          "usual_triggers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usual Triggers"
+          },
+          "recent_changes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LifestyleRoutine",
+        "description": "Typed owner-reported daily routine.\n\nClosed key set with bounds (extra=\"forbid\"): the API is the enforcement\npoint, since the DB column stays jsonb. `null` clears a previously\nreported value. Keys match the mobile client's snake_case payload\n(activity, sleep, time_alone, social, enrichment) plus quantified fields."
+      },
       "MeResponse": {
         "properties": {
           "profile": {
@@ -5975,6 +6291,32 @@
           "usage"
         ],
         "title": "MeResponse"
+      },
+      "MealSchedule": {
+        "properties": {
+          "meals_per_day": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Meals Per Day"
+          },
+          "typical_times": {
+            "items": {
+              "type": "string",
+              "maxLength": 16
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "Typical Times"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "meals_per_day"
+        ],
+        "title": "MealSchedule",
+        "description": "Structured meal rhythm (quantified routine fields)."
       },
       "PatternListResponse": {
         "properties": {

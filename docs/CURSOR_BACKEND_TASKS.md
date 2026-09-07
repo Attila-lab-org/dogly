@@ -2,6 +2,9 @@
 
 **Data:** 2026-09-05 • **Fonte:** `docs/AUDIT_ENTERPRISE_2026-09-05.md` + `docs/AUDIT_GAP_FLUSSI_2026-09-05.md` • **Scope:** SOLO `backend/`, `supabase/`, `api/`, `.github/` — **non toccare `apps/mobile/`** (ci lavora Kimi in parallelo).
 
+> Backlog storico. Lo stato operativo corrente è in `PROJECT_STATE.md`.
+> Le voci 17 e 24 sono chiuse; la 15 resta aperta ed è tracciata esplicitamente.
+
 Regole: migrazioni forward-only (mai editare una migrazione applicata); nessun ENUM Postgres per tassonomie AI; RLS/grants nella stessa migrazione della tabella; ogni dominio con negative test; aggiornare `docs/openapi.json` (`uv run python ../scripts/export_openapi.py`) e i conteggi nei docs alla fine.
 
 ## P0 — blocca beta
@@ -26,9 +29,9 @@ Regole: migrazioni forward-only (mai editare una migrazione applicata); nessun E
 
 13. **Idempotenza DB su tutte le mutazioni** (oggi solo behavior fa dual-write su `internal.api_idempotency`): care, digestive, signals.
 14. **Doppia fonte TTL**: far leggere al backend `internal.retention_policies` (FOOD_LABEL 1h, EXPORT 7gg) invece dell'unico `raw_media_ttl_hours=24`.
-15. **`/tasks/run` esposto pubblicamente** sullo stesso ingresso Vercel (`api/index.py:49`): separare il deployment del worker o aggiungere protezione edge; correggere `docs/SECURITY.md:84` ("nessun ingress pubblico" — falso oggi).
+15. **APERTO — `/tasks/run` raggiungibile sullo stesso ingresso Vercel** (`api/index.py`): il token interno protegge l'handler applicativo, ma resta da separare il deployment del worker o aggiungere protezione edge.
 16. **`/care` grant diretto** ad `authenticated` via PostgREST (0014:97): valutare revoke di insert/update/delete una volta che il backend è il write path.
-17. **Riconciliazione docs**: G1 condizionato a B-2 finché i test SQL non girano su stack reale; PROJECT_STATE "Production path" vs B-4 (adapter Gemini/OpenAI esistono ma non integrati — decidere quale claim vale); conteggi non numerici (migrazioni 0018, OpenAPI 33 path, 45 test) per evitare drift ricorrente.
+17. **CHIUSO — Riconciliazione docs**: provider Gemini/OpenAI integrati nella factory/worker; architettura, stato progetto e decisione tab allineati al codice corrente.
 18. **Config fail-fast**: richiedere `REVENUECAT_WEBHOOK_SECRET` in staging/prod; allowlist algoritmi JWT (`api/auth.py:96-101`) invece dell'header del token.
 
 
@@ -43,7 +46,7 @@ Scoperti mentre il mobile veniva collegato agli endpoint reali:
 21. **Pattern review senza azione di conferma** — `POST /v1/patterns/{id}/review` ha enum `contest | archive | correct_context`: manca l'azione "Corretto/conferma" (la UI oggi lo dichiara onestamente all'utente).
 22. **`GalleryAlbumDto` senza `cover_url`** — ha solo `cover_photo_id`; la copertina album si risolve solo se le foto sono già in cache. Valutare `cover_url` (signed, TTL breve).
 23. **`DigestiveEventOut` incompleto** — mancano candidati (muco/sangue/melena/materiale estraneo), `image_quality`, `quality_warnings`, `active_food_name`, `baseline_comparison`: la UI digestiva reale è più povera del mock. Mancano anche stati espliciti `INSUFFICIENT_IMAGE` / `FAILED_*` nel dominio digestivo.
-24. **Nessun endpoint Knowledge Score** — il punteggio resta mock anche con API attiva.
+24. **CHIUSO — Knowledge Score**: endpoint owner-scoped disponibile e mobile collegato; il mock resta solo nel mock gate.
 25. **Notifica "risultato pronto"** — oggi locale con delay fisso 30s; se il backend esponesse ETA o push server-side, sostituire.
 
 

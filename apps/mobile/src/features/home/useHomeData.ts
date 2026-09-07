@@ -11,7 +11,12 @@ import { useSession } from '../auth/SessionProvider';
 import { queryKeys } from '../../lib/queryClient';
 import { homeDataMock } from '../../mocks/core';
 import type { LastInsight, UsageSummary } from '../core/types';
-import { deriveHomeState, fetchDiaryPage, fetchUsageSummary } from './api';
+import {
+  deriveHomeState,
+  fetchDiaryPage,
+  fetchHomeBehaviorPage,
+  fetchUsageSummary,
+} from './api';
 
 export interface HomeDataState {
   usage: UsageSummary | null;
@@ -27,7 +32,8 @@ export interface HomeDataState {
 
 export function useHomeData(dogId: string): HomeDataState {
   const { userId, usingMockGate } = useSession();
-  const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
+  const apiConfigured = isApiConfigured() && !usingMockGate;
+  const realEnabled = Boolean(userId) && Boolean(dogId) && apiConfigured;
 
   const usageQuery = useQuery({
     queryKey: [...queryKeys.user(userId ?? 'anon'), 'usage'],
@@ -35,13 +41,19 @@ export function useHomeData(dogId: string): HomeDataState {
     enabled: realEnabled,
   });
 
-  const diaryQuery = useQuery({
-    queryKey: queryKeys.diary(userId ?? 'anon', dogId),
-    queryFn: () => fetchDiaryPage({ dogId, limit: 20 }),
+  const behaviorQuery = useQuery({
+    queryKey: [...queryKeys.diary(userId ?? 'anon', dogId), 'home-behavior'],
+    queryFn: () => fetchHomeBehaviorPage(dogId),
     enabled: realEnabled,
   });
 
-  if (!realEnabled) {
+  const activityQuery = useQuery({
+    queryKey: [...queryKeys.diary(userId ?? 'anon', dogId), 'home-activity'],
+    queryFn: () => fetchDiaryPage({ dogId, limit: 1 }),
+    enabled: realEnabled,
+  });
+
+  if (!apiConfigured) {
     return {
       usage: homeDataMock.usage,
       lastInsight: homeDataMock.lastInsight,
@@ -54,21 +66,29 @@ export function useHomeData(dogId: string): HomeDataState {
     };
   }
 
-  const items = diaryQuery.data?.items;
-  const derived = items ? deriveHomeState(items) : null;
+  const behaviorItems = behaviorQuery.data?.items;
+  const derived = behaviorItems ? deriveHomeState(behaviorItems) : null;
+  const isNewUser =
+    activityQuery.data !== undefined && activityQuery.data.items.length === 0;
 
   return {
     usage: usageQuery.data ?? null,
     lastInsight: derived?.lastInsight ?? null,
     processingEventId: derived?.processingEventId ?? null,
-    // new user solo a prima pagina caricata e vuota: mai finto cold-start
-    isNewUser: derived?.isNewUser ?? false,
+    // Cold-start solo dopo una query account+dog esplicitamente scoped.
+    isNewUser,
     source: 'api',
-    loading: usageQuery.isLoading || diaryQuery.isLoading,
-    error: usageQuery.isError || diaryQuery.isError,
+    loading:
+      !realEnabled ||
+      usageQuery.isLoading ||
+      behaviorQuery.isLoading ||
+      activityQuery.isLoading,
+    error:
+      usageQuery.isError || behaviorQuery.isError || activityQuery.isError,
     refetch: () => {
       void usageQuery.refetch();
-      void diaryQuery.refetch();
+      void behaviorQuery.refetch();
+      void activityQuery.refetch();
     },
   };
 }

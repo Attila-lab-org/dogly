@@ -4,12 +4,12 @@ retry cap."""
 from __future__ import annotations
 
 import pytest
+
 from app.worker.handlers import (
     MAX_TASK_ATTEMPTS,
     RetryableTaskError,
     process_digestive_event,
 )
-
 from tests.conftest import create_dog
 
 

@@ -8,8 +8,9 @@ rejected at the API boundary with 422.
 
 import httpx
 import pytest
-from app.contracts.api import DogLifestylePatch
 from pydantic import ValidationError
+
+from app.contracts.api import DogLifestylePatch
 
 
 def test_routine_accepts_mobile_progressive_profiling_payload():

@@ -52,9 +52,10 @@ Quattro pezzi deployati separatamente, più servizi esterni:
   con la public API `/v1/*` con JWT Supabase; i media grandi bypassano l'API via
   signed URL diretti a Supabase Storage (Vercel non è proxy di banda, Spec sez. 12.1).
   Nessun segreto nel mobile: solo `EXPO_PUBLIC_*` pubblici.
-- **Backend** (`api/index.py` shim): una singola serverless function Vercel che monta
-  la public app (`backend/app/api/app.py`) e la worker app (`backend/app/worker/main.py`).
-  `vercel.json` riscrive `/*` → `/api/index`, `maxDuration: 60`.
+- **Backend** (`api/index.py`): applicazione FastAPI rilevata dal preset Vercel,
+  con public app (`backend/app/api/app.py`) e worker app
+  (`backend/app/worker/main.py`) sullo stesso deployment. `vercel.json` dichiara
+  `framework: fastapi`; non contiene rewrite manuali né `maxDuration`.
 - **Supabase**: Auth (JWT validato lato FastAPI), PostgreSQL (schema `public` + `internal`),
   Storage con bucket privati e object policy path-scoped.
 - **Async**: job durevoli via adapter `JobQueue` → Vercel Workflows (Amendment V1.1);
@@ -66,7 +67,7 @@ Quattro pezzi deployati separatamente, più servizi esterni:
 | --- | --- | --- | --- |
 | Public API | `/v1/*` | JWT Supabase (firma/JWKS, issuer, expiry, audience; `user_id` solo da `sub`) | Mobile |
 | Webhook billing | `POST /v1/webhooks/revenuecat` | Firma `REVENUECAT_WEBHOOK_SECRET`, nessun JWT, event ID idempotenti | RevenueCat |
-| Worker interno | `POST /tasks/run` | Header `x-internal-token` = `WORKER_INTERNAL_TOKEN`; nessun ingress pubblico logico | Solo dispatcher `VercelWorkflowsJobQueue` |
+| Worker interno | `POST /tasks/run` | URL sullo stesso ingress pubblico, ma richiesta autorizzata con `x-internal-token` = `WORKER_INTERNAL_TOKEN` | Solo dispatcher `VercelWorkflowsJobQueue` |
 | Admin (futuro) | `/v1/admin/*` | RBAC server-side (6 ruoli), read-model dedicato | Admin Control Center (ADR-011, V0 = mock tipizzati) |
 
 Separazione public/private concettualmente identica alla Spec V1 (Cloud Run); su
@@ -118,7 +119,7 @@ strutturati, observation, feedback e pattern sopravvivono alla cancellazione dei
 
 ### Fonte di verità dello schema
 
-Solo migrazioni SQL in `supabase/migrations/` (attualmente `0001`–`0022`),
+Solo migrazioni SQL in `supabase/migrations/` (attualmente `0001`–`0028`),
 **forward-only**: mai editare una migrazione applicata, mai schema ORM-generated,
 riproducibili da zero con `supabase db reset` (Spec sez. 11.1).
 
@@ -190,14 +191,14 @@ Fotografia onesta al 2026-09-06 (fonte `PROJECT_STATE.md`):
 
 | Area | Implementato oggi | Target V1/V2 |
 | --- | --- | --- |
-| Schema DB + RLS + quota atomica | ✅ Migrazioni `0001`–`0022`, RLS, reserve/commit/refund | — |
+| Schema DB + RLS + quota atomica | ✅ Migrazioni `0001`–`0028`, RLS, reserve/commit/refund | — |
 | Public API `/v1/*` | ✅ Route behavior/digestive/dogs/diary/patterns/care/privacy/webhooks… (OpenAPI snapshot in CI) | — |
 | Worker `/tasks/run` + JobQueue adapter | ✅ Vercel Workflows + fake locale; idempotenza; retry | — |
-| Persistenza SQL | 🔶 Parziale: Postgres per dogs/behavior/quota/idempotency/signals; resto in completamento | Tutte le tabelle su Postgres via pooler |
-| Provider AI | 🔶 Adapter Gemini/OpenAI scritti; mock fixture-backed in local/CI; provider reali non integrati (blocker B-4, gate G3) | Observer Gemini + reasoner OpenAI in produzione |
+| Persistenza SQL | 🔶 Quasi completa: repository DB per behavior, dogs, billing, care, consensi, devices, diario, digestione, gallery, knowledge, lifestyle, patterns, privacy, profili e signals; nutrition resta ibrido/in-memory | Completare nutrition su Postgres |
+| Provider AI | ✅ Factory e worker integrano Gemini observer e OpenAI reasoner/digestive vision; local/CI restano fixture-backed | Validazione operativa continua e fallback |
 | Coda mobile offline | 🔶 Capture/upload/poll reali wired; giro e2e mobile→upload→worker da chiudere (G2) | Coda SQLite locale + sync |
 | Admin Control Center | 🔶 V0: Next.js standalone, read-model mock tipizzato | Endpoint `/v1/admin/*` + RBAC 6 ruoli |
-| Evidence Retrieval Layer / KB scientifica | ⬜ Fonti registrate in `docs/kb/` (ADR-012); moduli `backend/app/knowledge/` non ancora implementati | Retrieval card tag-based + Advice Engine V2 (DogContextSnapshot, catalogo consigli) |
+| Evidence Retrieval Layer / KB scientifica | ✅ Registry, retrieval tag-based, safety e Advice Engine V2 implementati in `backend/app/knowledge/` | Evoluzione versionata di card e catalogo |
 | Dogly Signals | ⬜ POSTPONED (ADR-010): schema isolato, nessun ingresso visibile | Eventuale riattivazione con nuova decisione prodotto |
 | Billing RevenueCat | 🔶 Webhook + quota implementati; pagamenti reali out of scope per la beta | Sandbox IAP → store |
 
@@ -217,10 +218,10 @@ Registro completo in `docs/DECISIONS.md` (non duplicato qui):
 - **Cold start serverless**: la function Python Vercel carica l'intera app FastAPI
   (public + worker montate); il primo hit dopo idle paga l'import. Gli endpoint
   `/health` e `/ready` (con check DB) supportano smoke/monitoring.
-- **`maxDuration: 60` s** (`vercel.json`): l'analisi video NON può avvenire
-  sincronamente nella request pubblica — per questo il path è sempre asincrono
-  (complete → job → worker) e il client fa polling/notifica. Limite da rivedere se
-  il piano Vercel cambia; mai spostare inferenza AI nel request path pubblico.
+- **Durata request**: `vercel.json` non imposta oggi un `maxDuration` esplicito.
+  L'analisi video resta comunque fuori dalla request pubblica per vincolo
+  architetturale (complete → workflow → worker); il client usa polling/notifica.
+  Mai spostare inferenza AI nel request path pubblico.
 - **Pooler Supabase**: `DATABASE_URL` punta al connection pooler (transaction mode);
   sessioni lunghe e prepared statement vanno trattati di conseguenza.
 - **Guardrail di costo**: limiti di concorrenza/spending Vercel + budget provider AI

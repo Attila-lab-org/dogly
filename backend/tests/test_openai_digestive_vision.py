@@ -6,6 +6,7 @@ import json
 
 import httpx
 import pytest
+
 from app.config import Settings
 from app.contracts.digestive import FecalConsistency
 from app.providers import openai_digestive_vision

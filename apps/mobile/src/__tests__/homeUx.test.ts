@@ -10,6 +10,7 @@ import {
   deriveHomeState,
   formatInsightTimestamp,
   mapDiaryItemToEntry,
+  probabilisticInsightLabel,
   type ApiDiaryItem,
 } from '../features/home/api';
 import {
@@ -118,6 +119,15 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     );
     expect(derived.processingEventId).toBeNull();
     expect(derived.lastInsight).toBeNull();
+  });
+});
+
+describe('probabilisticInsightLabel', () => {
+  it('traduce il codice tassonomico e garantisce wording prudente', () => {
+    expect(probabilisticInsightLabel('RELAX_REST')).toMatch(/^Sembra /);
+    expect(probabilisticInsightLabel('Probabilmente vuole uscire')).toBe(
+      'Probabilmente vuole uscire',
+    );
   });
 });
 

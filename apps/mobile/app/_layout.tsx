@@ -3,11 +3,20 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
 import { SessionProvider } from '../src/features/auth/SessionProvider';
 import { queryClient } from '../src/lib/queryClient';
 import { configureCareNotifications } from '../src/features/care/notifications';
 import { registerNotificationResponseHandler } from '../src/features/home/notificationLinks';
 import { colors } from '../src/theme/tokens';
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    enableAutoSessionTracking: true,
+  });
+}
 
 /**
  * Root layout (Expo Router).
@@ -18,7 +27,7 @@ import { colors } from '../src/theme/tokens';
  *   In __DEV__/Expo Go entrambe sono no-op: mock gate invariato, niente
  *   scheduling in dev.
  */
-export default function RootLayout() {
+function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
@@ -48,3 +57,5 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

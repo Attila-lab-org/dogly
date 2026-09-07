@@ -4,12 +4,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
+
 from app.api.pagination import paginate_desc
 from app.api.routes.digestive import _public_digestive_status
 from app.contracts.api import BehaviorCaptureInitRequest, FecalInitRequest
 from app.domains.billing_db import _webhook_status_to_db
 from app.providers.billing import map_revenuecat_event
-from pydantic import ValidationError
 
 
 @dataclass

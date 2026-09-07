@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
+
 from app.api.deps import build_default_state
 from app.config import Settings
-from pydantic import ValidationError
 
 
 def test_local_allows_mocks() -> None:

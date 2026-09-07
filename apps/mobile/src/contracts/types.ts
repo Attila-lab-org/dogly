@@ -116,7 +116,14 @@ export const CONTEXT_BUCKETS = [
 export type ContextBucket = (typeof CONTEXT_BUCKETS)[number];
 
 /** Fonte tipizzata di un singolo elemento di evidenza (sez. 6.1). */
-export type EvidenceSource = 'OBSERVATION' | 'CONTEXT' | 'PERSONAL_PATTERN';
+export type EvidenceSource =
+  | 'OBSERVATION'
+  | 'CONTEXT'
+  | 'PERSONAL_PATTERN'
+  | 'SCIENTIFIC_KB'
+  | 'LIFE_STAGE'
+  | 'LIFESTYLE_BASELINE'
+  | 'UNKNOWN';
 
 export interface EvidenceItem {
   source: EvidenceSource;
@@ -151,6 +158,9 @@ export interface BehaviorEventResult {
   evidence: EvidenceItem[];
   alternatives: AlternativeHypothesis[];
   feedback: FeedbackValue | null;
+  safety_flags?: Array<{ code: string; severity: string }>;
+  needs_context?: boolean;
+  context_question?: string | null;
   /** Versioni obbligatorie per audit e replay (sez. 16.3) */
   schema_version: string;
   policy_version: string;

@@ -2,18 +2,15 @@
  * Behavior events / capture / feedback API (sez. 9).
  */
 import type {
-  BehaviorEventResult,
   BehaviorEventStatus,
-  BehaviorIntent,
   ConfidenceBand,
-  EvidenceItem,
-  EvidenceSource,
   FeedbackValue,
 } from '../../contracts/types';
-import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { api, ApiError } from '../../lib/apiClient';
 import type { ApiAdviceItem } from '../advice/map';
 import type { AdviceOutcomeValue } from '../advice/types';
+
+export { mapApiEventToResult } from './map';
 
 /**
  * Quota esaurita lato server (ErrorCode.QUOTA_EXHAUSTED, HTTP 402 — vedi
@@ -43,12 +40,13 @@ export type ApiBehaviorEvent = {
   id: string;
   dog_id: string;
   status: BehaviorEventStatus;
+  schema_version: string;
   primary_intent: string | null;
   confidence_band: ConfidenceBand | null;
   summary: string | null;
   alternatives: ApiAlternative[];
   evidence: ApiEvidenceItem[];
-  safety_flags: string[];
+  safety_flags: Array<{ code: string; severity: string }>;
   needs_context: boolean;
   context_question: string | null;
   policy_version: string | null;
@@ -83,55 +81,6 @@ export type FeedbackResponse = {
   value: FeedbackValue;
   recorded: boolean;
 };
-
-const SOURCE_MAP: Record<string, EvidenceSource> = {
-  observation: 'OBSERVATION',
-  OBSERVATION: 'OBSERVATION',
-  context: 'CONTEXT',
-  CONTEXT: 'CONTEXT',
-  personal_pattern: 'PERSONAL_PATTERN',
-  PERSONAL_PATTERN: 'PERSONAL_PATTERN',
-};
-
-function mapEvidence(items: ApiEvidenceItem[]): EvidenceItem[] {
-  return items.map((item) => ({
-    source: SOURCE_MAP[item.source] ?? 'OBSERVATION',
-    label: item.label ?? item.description ?? 'Segnale osservato',
-    ref: item.ref ?? undefined,
-  }));
-}
-
-function fallbackSummary(
-  intent: BehaviorIntent | null,
-  summary: string | null,
-): string {
-  if (summary) return summary;
-  if (!intent) return 'Non ci sono abbastanza segnali per una lettura affidabile.';
-  return BEHAVIOR_INTENT_LABELS[intent];
-}
-
-export function mapApiEventToResult(event: ApiBehaviorEvent): BehaviorEventResult {
-  const intent = (event.primary_intent as BehaviorIntent | null) ?? null;
-  return {
-    eventId: event.id,
-    dogId: event.dog_id,
-    status: event.status,
-    primary_intent: intent,
-    confidence_band: event.confidence_band ?? 'LOW',
-    consumer_summary: fallbackSummary(intent, event.summary),
-    evidence: mapEvidence(event.evidence ?? []),
-    alternatives: (event.alternatives ?? []).map((alt) => ({
-      intent: alt.intent as BehaviorIntent,
-      rationale: alt.rationale,
-    })),
-    feedback: event.feedback ?? null,
-    schema_version: 'behavior-result/1.0',
-    policy_version: event.policy_version ?? 'canine-interpretation/v0',
-    taxonomy_version: event.taxonomy_version ?? 'intent-taxonomy/v0',
-    created_at: event.created_at,
-    completed_at: event.completed_at,
-  };
-}
 
 export async function initBehaviorCapture(body: {
   dog_id: string;

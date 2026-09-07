@@ -39,9 +39,15 @@ export interface UsageSummary {
 
 /** "Quanto conosco {nome}" nel profilo: product-score, numero ammesso in UI. */
 export interface KnowledgeScore {
-  /** 0–100 */
+  /** 0–100 interno; la UI espone livelli qualitativi, non percentuali. */
   score: number;
   caption: string;
+}
+
+export function knowledgeLevelLabel(score: number): string {
+  if (score >= 70) return 'Ben definito';
+  if (score >= 30) return 'In crescita';
+  return 'Iniziale';
 }
 
 /** Ultima analisi mostrata in Home (mockup-home: "sembra rilassato"). */

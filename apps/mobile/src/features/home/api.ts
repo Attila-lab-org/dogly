@@ -10,6 +10,7 @@
  * specializzata (es. con confidence band), va aggiunta lato backend.
  */
 import type { BehaviorEventStatus } from '../../contracts/types';
+import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import type { DiaryDomain, DiaryEntry, LastInsight, UsageSummary } from '../core/types';
 
 export type ApiDiaryDomain = 'BEHAVIOR' | 'DIGESTIVE' | 'FOOD_LABEL';
@@ -48,6 +49,28 @@ export async function fetchDiaryPage(options: FetchDiaryOptions = {}): Promise<D
   if (options.dogId) params.push(`dog_id=${encodeURIComponent(options.dogId)}`);
   const query = params.length > 0 ? `?${params.join('&')}` : '';
   return api.get<DiaryPage>(`/v1/diary${query}`);
+}
+
+/**
+ * Carica pagine behavior finché trova l'ultima analisi completata.
+ * Eventi digestive/care non possono quindi spingere l'insight fuori pagina.
+ */
+export async function fetchHomeBehaviorPage(dogId: string): Promise<DiaryPage> {
+  let page = await fetchDiaryPage({ dogId, domain: 'BEHAVIOR', limit: 50 });
+  const items = [...page.items];
+  while (
+    page.next_cursor &&
+    !items.some((item) => item.status === 'COMPLETED')
+  ) {
+    page = await fetchDiaryPage({
+      dogId,
+      domain: 'BEHAVIOR',
+      cursor: page.next_cursor,
+      limit: 50,
+    });
+    items.push(...page.items);
+  }
+  return { items, next_cursor: page.next_cursor };
 }
 
 /** GET /v1/usage → UsageSummary del dominio core (sez. 21). */
@@ -113,6 +136,22 @@ export interface DerivedHomeState {
   isNewUser: boolean;
 }
 
+/** Garantisce che il titolo consumer della Home resti un'ipotesi, non un fatto. */
+export function probabilisticInsightLabel(title: string): string {
+  const normalized = title.trim();
+  if (/^(sembra|probabilmente|possibile)\b/i.test(normalized)) {
+    return normalized;
+  }
+  const taxonomyLabel =
+    BEHAVIOR_INTENT_LABELS[
+      normalized.toUpperCase() as keyof typeof BEHAVIOR_INTENT_LABELS
+    ] ?? normalized;
+  if (!taxonomyLabel || taxonomyLabel === 'Analisi comportamento') {
+    return 'Sembra un comportamento da approfondire';
+  }
+  return `Sembra ${taxonomyLabel.charAt(0).toLowerCase()}${taxonomyLabel.slice(1)}`;
+}
+
 /** "Oggi, 09:30" / "Ieri, 18:12" / data completa — puro per i test. */
 export function formatInsightTimestamp(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
@@ -151,7 +190,7 @@ export function deriveHomeState(
     lastInsight: lastCompleted
       ? {
           eventId: lastCompleted.id,
-          label: lastCompleted.title,
+          label: probabilisticInsightLabel(lastCompleted.title),
           timestampLabel: formatInsightTimestamp(lastCompleted.created_at, now),
         }
       : null,

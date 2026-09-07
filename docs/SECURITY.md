@@ -81,11 +81,13 @@ nessun segreto di produzione nei log CI.
   autorevole — il mirror server-side governa l'accesso.
 - **Auth interna worker (Amendment V1.1):** le route workflow `/tasks/run`
   (`backend/app/worker/main.py`) richiedono header `x-internal-token` uguale a
-  `WORKER_INTERNAL_TOKEN`. Nessun ingress pubblico logico: il dispatcher
-  `VercelWorkflowsJobQueue` è l'unico chiamante attestato; handler idempotenti alla
+  `WORKER_INTERNAL_TOKEN`. La route è oggi raggiungibile sullo stesso ingress
+  Vercel pubblico, ma rifiuta richieste prive del token; resta aperto
+  l'hardening edge/separazione deployment tracciato in
+  `docs/CURSOR_BACKEND_TASKS.md` #15. Gli handler sono idempotenti alla
   riconsegna (sez. 22); payload dei task = solo ID (niente media bytes, niente
-  segreti). In local dev il token di default (`local-internal-token`) non è un segreto
-  reale.
+  segreti). In local dev il token di default (`local-internal-token`) non è un
+  segreto reale.
 - **JWT utenti (sez. 24.2):** FastAPI valida il JWT Supabase (firma/JWKS via
   `SUPABASE_JWKS_URL`, issuer `SUPABASE_JWT_ISSUER`, expiry, audience) e deriva
   `user_id` esclusivamente da `sub`; nessun endpoint accetta `owner_id`/`user_id`

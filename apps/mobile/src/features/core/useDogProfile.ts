@@ -7,6 +7,8 @@ import { useMemo } from 'react';
 
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
+import { api } from '../../lib/apiClient';
+import { queryKeys } from '../../lib/queryClient';
 import {
   createDog,
   dogsQueryKey,
@@ -25,9 +27,29 @@ type DogProfileState = {
   knowledgeScore: KnowledgeScore;
 };
 
-/** Knowledge score resta mock finché non c’è endpoint dedicato. */
+type ApiKnowledgeScore = {
+  dog_id: string;
+  score: number | null;
+};
+
+/** Il mock resta disponibile esclusivamente nel mock gate. */
 let knowledgeScore: KnowledgeScore = { ...homeKnowledgeScoreMock };
 let lastDog: DogProfile = { ...dogMock };
+
+export function mapKnowledgeScore(
+  value: ApiKnowledgeScore | null | undefined,
+): KnowledgeScore {
+  const score = Math.round(Math.max(0, Math.min(1, value?.score ?? 0)) * 100);
+  return {
+    score,
+    caption:
+      score >= 70
+        ? 'Conoscenza personale solida'
+        : score >= 30
+          ? 'Sto imparando le sue abitudini'
+          : 'Sto iniziando a conoscerlo...',
+  };
+}
 
 function emptyDog(): DogProfile {
   return {
@@ -72,8 +94,20 @@ export function useDogProfile(): DogProfileState {
     return preferred ? mapApiDogToProfile(preferred) : emptyDog();
   }, [usingMockGate, query.data, primaryDogId]);
 
+  const knowledgeQuery = useQuery({
+    queryKey: queryKeys.knowledgeScore(userId ?? 'anon', dog.id),
+    queryFn: () =>
+      api.get<ApiKnowledgeScore>(`/v1/dogs/${dog.id}/knowledge-score`),
+    enabled: enabled && Boolean(dog.id),
+  });
+
+  const resolvedKnowledgeScore =
+    usingMockGate || !isApiConfigured()
+      ? knowledgeScore
+      : mapKnowledgeScore(knowledgeQuery.data);
+
   lastDog = dog;
-  return { dog, knowledgeScore };
+  return { dog, knowledgeScore: resolvedKnowledgeScore };
 }
 
 export function useCreateDogMutation() {

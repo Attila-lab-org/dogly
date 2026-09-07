@@ -10,7 +10,15 @@
  * mock gate dev.
  */
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,8 +56,16 @@ export default function HomeScreen() {
   const { dog } = useDogProfile();
   const stories = useStories();
   const birthdayToday = isBirthdayToday(dog.birthDate);
-  const { usage, lastInsight, processingEventId, isNewUser, source } =
-    useHomeData(dog.id);
+  const {
+    usage,
+    lastInsight,
+    processingEventId,
+    isNewUser,
+    source,
+    loading,
+    error,
+    refetch,
+  } = useHomeData(dog.id);
 
   // Stato offline (sez. 6 Home): network monitor reale (expo-network);
   // demoFlags.homeOffline resta solo per forzare la demo in dev.
@@ -70,6 +86,7 @@ export default function HomeScreen() {
     (!lifestyle.profile || !isLifestyleComplete(lifestyle.profile));
 
   const startCapture = () => {
+    if (!dog.id || loading) return;
     if (processingEventId) {
       router.push(`/behavior/processing/${processingEventId}`);
       return;
@@ -192,6 +209,32 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {loading && !offline ? (
+            <View style={styles.offlineBanner} accessibilityLiveRegion="polite">
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.offlineText}>
+                Sto caricando i dati di {dog.name}.
+              </Text>
+            </View>
+          ) : null}
+
+          {error && !offline ? (
+            <View style={styles.offlineBanner} accessibilityLiveRegion="assertive">
+              <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+              <Text style={styles.offlineText}>
+                Non sono riuscito a caricare quota e analisi.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Riprova a caricare i dati"
+                onPress={refetch}
+                hitSlop={8}
+              >
+                <Text style={styles.offlineRetry}>Riprova</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {/* Cold-start copy (sez. 7.1.3): valore immediato, migliora nel tempo */}
           {isNewUser && (
             <Card style={styles.coldStart}>
@@ -257,7 +300,7 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Capisci ${dog.name}: registra un video`}
             onPress={startCapture}
-            disabled={false}
+            disabled={!dog.id || loading}
           >
             <LinearGradient
               colors={[...gradients.cta]}

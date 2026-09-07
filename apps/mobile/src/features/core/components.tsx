@@ -19,7 +19,7 @@ import type {
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 import { CONFIDENCE_BAND_LABELS, intentHeadline } from './copy';
-import type { KnowledgeScore } from './types';
+import { knowledgeLevelLabel, type KnowledgeScore } from './types';
 
 export { SectionHeader };
 
@@ -86,7 +86,7 @@ export function KnowledgeScoreBlock({
             { color: tone === 'accent' ? colors.accent : colors.primary },
           ]}
         >
-          {knowledgeScore.score}%
+          {knowledgeLevelLabel(knowledgeScore.score)}
         </Text>
       </View>
       <ProgressBar progress={knowledgeScore.score / 100} tone={tone} />

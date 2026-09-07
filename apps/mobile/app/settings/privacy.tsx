@@ -81,16 +81,25 @@ export default function PrivacyScreen() {
   const [deleteStarted, setDeleteStarted] = useState(false);
 
   useEffect(() => {
-    void hydrateConsents();
-  }, []);
+    void hydrateConsents({ syncRemote: !usingMockGate }).then((synced) => {
+      if (!synced) {
+        Alert.alert(
+          'Consensi non sincronizzati',
+          'Mostro le ultime preferenze disponibili sul dispositivo. Controlla la connessione e riapri questa pagina.',
+        );
+      }
+    });
+  }, [usingMockGate]);
 
   const toggle = (key: keyof ConsentState) => {
     void (async () => {
-      const saved = await setConsent(key, !consents[key]);
+      const saved = await setConsent(key, !consents[key], {
+        syncRemote: !usingMockGate,
+      });
       if (!saved) {
         Alert.alert(
           'Preferenza non salvata',
-          'Non sono riuscito a salvare il consenso sul dispositivo. Riprova.',
+          'Non sono riuscito a sincronizzare il consenso. Riprova.',
         );
       }
     })();

@@ -7,14 +7,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { Card, ProgressBar, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { knowledgeLevelLabel } from '@/features/core/types';
 import { StackScreenHeader } from '@/features/secondary/components';
-
-const CATEGORIES = [
-  { key: 'home', title: 'Routine di casa', coverage: 0.9, status: 'Ottima copertura' },
-  { key: 'play', title: 'Gioco', coverage: 0.8, status: 'Buona copertura' },
-  { key: 'walk', title: 'Passeggiata', coverage: 0.45, status: 'Sto ancora imparando' },
-  { key: 'day', title: 'Momenti della giornata', coverage: 0.75, status: 'Buona copertura' },
-] as const;
 
 export default function KnowledgeDetailScreen() {
   const { dogId } = useLocalSearchParams<{ dogId: string }>();
@@ -26,7 +20,9 @@ export default function KnowledgeDetailScreen() {
       <Text style={styles.meta}>Profilo {dogId} · formula knowledge/v0</Text>
 
       <View style={styles.hero}>
-        <Text style={styles.score}>{knowledgeScore.score}%</Text>
+        <Text style={styles.score}>
+          {knowledgeLevelLabel(knowledgeScore.score)}
+        </Text>
         <Text style={styles.scoreCaption}>profilo personale</Text>
         <ProgressBar progress={knowledgeScore.score / 100} tone="primary" />
         <Text style={styles.summary}>
@@ -36,21 +32,13 @@ export default function KnowledgeDetailScreen() {
         </Text>
       </View>
 
-      {CATEGORIES.map((cat) => (
-        <Card key={cat.key} style={styles.card}>
-          <View style={styles.cardRow}>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{cat.title}</Text>
-              <Text style={styles.cardStatus}>{cat.status}</Text>
-            </View>
-            <ProgressBar
-              progress={cat.coverage}
-              tone="accent"
-              style={styles.miniBar}
-            />
-          </View>
-        </Card>
-      ))}
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Cosa fa crescere questo profilo</Text>
+        <Text style={styles.cardStatus}>
+          Analisi utilizzabili, contesti diversi e feedback coerenti. Non mostro
+          coperture per categoria finché il server non fornisce quel dettaglio.
+        </Text>
+      </Card>
 
       <View style={styles.banner}>
         <Text style={styles.bannerText}>
@@ -93,12 +81,6 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.sm,
   },
-  cardRow: {
-    gap: spacing.sm,
-  },
-  cardText: {
-    gap: 2,
-  },
   cardTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
@@ -107,9 +89,6 @@ const styles = StyleSheet.create({
   cardStatus: {
     fontSize: typography.size.xs,
     color: colors.textSecondary,
-  },
-  miniBar: {
-    marginTop: spacing.xs,
   },
   banner: {
     marginTop: spacing.lg,

@@ -20,6 +20,7 @@ import {
   processingStepsFor,
 } from '../features/core/copy';
 import { saveBehaviorFeedback } from '../features/core/feedback';
+import { knowledgeLevelLabel } from '../features/core/types';
 import { BEHAVIOR_EVENT_STATUSES } from '../contracts/types';
 import { behaviorResultsMock, diaryEntriesMock, homeDataMock } from '../mocks/core';
 
@@ -95,6 +96,14 @@ describe('captureMachine (sez. 13)', () => {
     expect(formatCaptureTimer(0)).toBe('0:00');
     expect(formatCaptureTimer(7)).toBe('0:07');
     expect(formatCaptureTimer(20)).toBe('0:20');
+  });
+});
+
+describe('Knowledge Score', () => {
+  it('espone livelli qualitativi invece di percentuali', () => {
+    expect(knowledgeLevelLabel(0)).toBe('Iniziale');
+    expect(knowledgeLevelLabel(45)).toBe('In crescita');
+    expect(knowledgeLevelLabel(80)).toBe('Ben definito');
   });
 });
 

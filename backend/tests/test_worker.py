@@ -4,12 +4,12 @@ commit/refund semantics; internal auth on workflow routes."""
 
 import httpx
 import pytest
+
 from app.worker.handlers import (
     MAX_TASK_ATTEMPTS,
     RetryableTaskError,
     process_behavior_event,
 )
-
 from tests.conftest import create_dog
 
 
