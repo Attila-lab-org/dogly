@@ -59,7 +59,12 @@ def get_owned_dog(store: InMemoryStore, *, user_id: str, dog_id: str) -> DogRec:
 
 def update_dog(store: InMemoryStore, *, user_id: str, dog_id: str, payload: DogUpdate) -> DogRec:
     dog = get_owned_dog(store, user_id=user_id, dog_id=dog_id)
-    changed = payload.model_dump(exclude_none=True)
+    requested = payload.model_dump(exclude_unset=True)
+    changed = {
+        key: value
+        for key, value in requested.items()
+        if getattr(dog, key) != value
+    }
     if changed:
         updated = dog.model_copy(update=changed)
         store.dogs[dog.id] = updated

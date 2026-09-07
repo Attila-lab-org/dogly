@@ -242,6 +242,10 @@ async def complete_capture(
     if not ok:
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Uploaded object failed validation.", retryable=True)
 
+    job_id = new_id()
+    if len(job_id) == 32:
+        job_id = f"{job_id[:8]}-{job_id[8:12]}-{job_id[12:16]}-{job_id[16:20]}-{job_id[20:]}"
+
     # Claim atomically before enqueue. Concurrent complete calls cannot start
     # two paid workflows for the same event.
     async with engine.begin() as conn:
@@ -276,6 +280,26 @@ async def complete_capture(
             ),
             {"id": capture_id},
         )
+        await conn.execute(
+            text(
+                """
+                insert into internal.analysis_jobs (
+                  id, job_type, domain, event_id, status
+                ) values (
+                  :id, 'BEHAVIOR_ANALYSIS', 'BEHAVIOR', :event_id, 'PENDING'
+                )
+                on conflict (event_id) do update set
+                  status = 'PENDING',
+                  task_id = null,
+                  last_error_code = null,
+                  scheduled_at = now(),
+                  started_at = null,
+                  completed_at = null,
+                  updated_at = now()
+                """
+            ),
+            {"id": job_id, "event_id": event.id},
+        )
     event = _event_from_row(claimed)
 
     try:
@@ -291,33 +315,35 @@ async def complete_capture(
                     update public.behavior_events
                     set status = 'UPLOADING'
                     where id = :id and status = 'QUEUED'
-                      and not exists (
-                        select 1 from internal.analysis_jobs where event_id = :id
-                      )
+                    """
+                ),
+                {"id": event.id},
+            )
+            await conn.execute(
+                text(
+                    """
+                    update internal.analysis_jobs
+                    set status = 'FAILED',
+                        last_error_code = 'QUEUE_DISPATCH_FAILED',
+                        completed_at = now(),
+                        updated_at = now()
+                    where event_id = :id and status = 'PENDING'
                     """
                 ),
                 {"id": event.id},
             )
         raise
-    job_id = new_id()
-    if len(job_id) == 32:
-        job_id = f"{job_id[:8]}-{job_id[8:12]}-{job_id[12:16]}-{job_id[16:20]}-{job_id[20:]}"
 
     async with engine.begin() as conn:
         await conn.execute(
             text(
                 """
-                insert into internal.analysis_jobs (
-                  id, job_type, domain, event_id, status, task_id
-                ) values (
-                  :id, 'BEHAVIOR_ANALYSIS', 'BEHAVIOR', :event_id, 'PENDING', :task_id
-                )
-                on conflict (event_id) do update set
-                  task_id = excluded.task_id,
-                  updated_at = now()
+                update internal.analysis_jobs
+                set task_id = :task_id, updated_at = now()
+                where event_id = :event_id
                 """
             ),
-            {"id": job_id, "event_id": event.id, "task_id": task_id},
+            {"event_id": event.id, "task_id": task_id},
         )
     return event
 

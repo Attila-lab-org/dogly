@@ -17,11 +17,11 @@ import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
-  profileToUpdateBody,
   updateDogProfile,
   useDogProfile,
   useUpdateDogMutation,
 } from '@/features/core/useDogProfile';
+import { profileChangesToUpdateBody } from '@/features/dogs/profilePatch';
 import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
 import { useSession } from '@/features/auth/SessionProvider';
 import { StackScreenHeader } from '@/features/secondary/components';
@@ -194,7 +194,7 @@ export default function DogEditScreen() {
     try {
       if (dogId) {
         await updateMutation.mutateAsync(
-          profileToUpdateBody({
+          profileChangesToUpdateBody(dog, {
             name: name.trim(),
             ageLabel,
             birthDate,

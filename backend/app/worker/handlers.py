@@ -17,6 +17,8 @@ import gzip
 import json
 import logging
 
+from sqlalchemy import text
+
 from app.api.deps import AppState
 from app.contracts.errors import ErrorCode
 from app.contracts.observation import ObservationContract
@@ -90,6 +92,55 @@ class RetryableTaskError(Exception):
         self.payload = payload
 
 
+async def _set_analysis_job_status(
+    state: AppState,
+    *,
+    event_id: str,
+    status: str,
+    error_code: str | None = None,
+) -> None:
+    if state.engine is None:
+        return
+    if status == "RUNNING":
+        assignments = """
+            status = 'RUNNING',
+            attempt_count = attempt_count + 1,
+            started_at = coalesce(started_at, now()),
+            completed_at = null,
+            last_error_code = null,
+            updated_at = now()
+        """
+    elif status == "RETRYING":
+        assignments = """
+            status = 'RETRYING',
+            last_error_code = :error_code,
+            completed_at = null,
+            updated_at = now()
+        """
+    else:
+        assignments = """
+            status = :status,
+            last_error_code = :error_code,
+            completed_at = now(),
+            updated_at = now()
+        """
+    async with state.engine.begin() as conn:
+        await conn.execute(
+            text(
+                f"""
+                update internal.analysis_jobs
+                set {assignments}
+                where event_id = :event_id
+                """
+            ),
+            {
+                "event_id": event_id,
+                "status": status,
+                "error_code": error_code,
+            },
+        )
+
+
 def transition(event: BehaviorEventRec, to: BehaviorEventStatus) -> None:
     """Enforce the behavior state machine (sez. 7.2 / Appendix A)."""
     allowed = BEHAVIOR_EVENT_TRANSITIONS.get(event.status, frozenset())
@@ -159,6 +210,12 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
         transition(event, BehaviorEventStatus.FAILED_RETRYABLE)
         if state.engine is not None:
             await behavior_db.save_event_state(state.engine, event)
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="RETRYING",
+            error_code=code.value,
+        )
         # The transient failure MUST propagate: only a raised error makes the
         # workflow step fail so the platform retries with backoff (sez. 22).
         raise RetryableTaskError(
@@ -176,6 +233,12 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
     await _arm_behavior_raw_ttl(state, event)
     if state.engine is not None:
         await behavior_db.save_event_state(state.engine, event)
+    await _set_analysis_job_status(
+        state,
+        event_id=event.id,
+        status="FAILED",
+        error_code=code.value,
+    )
     return {"event_id": event.id, "status": event.status.value, "error": code.value}
 
 
@@ -199,8 +262,23 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         capture = state.store.captures[event.capture_id]
 
     if event.status in TERMINAL_EVENT_STATUSES:
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status=(
+                "FAILED"
+                if event.status == BehaviorEventStatus.FAILED_TERMINAL
+                else "COMPLETED"
+            ),
+            error_code=event.last_error_code,
+        )
         return {"event_id": event.id, "status": event.status.value, "noop": True}
 
+    await _set_analysis_job_status(
+        state,
+        event_id=event.id,
+        status="RUNNING",
+    )
     event.attempt_count += 1
     quota = QuotaService(state.store, engine=state.engine)
 
@@ -272,6 +350,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         await _arm_behavior_raw_ttl(state, event)
         if state.engine is not None:
             await behavior_db.save_event_state(state.engine, event)
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="COMPLETED",
+        )
         return {"event_id": event.id, "status": event.status.value}
 
     # Persist the observer checkpoint before entering the paid reasoner step.
@@ -364,6 +447,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     await _arm_behavior_raw_ttl(state, event)
     if state.engine is not None:
         await behavior_db.save_event_state(state.engine, event)
+    await _set_analysis_job_status(
+        state,
+        event_id=event.id,
+        status="COMPLETED",
+    )
     try:
         await state.queue.enqueue(
             task_type="behavior_result_notification",
@@ -386,8 +474,19 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     if event is None:
         return {"event_id": event_id, "status": "ignored_unknown_event"}
     if event.status in ("COMPLETED", "REJECTED_QUALITY", "FAILED_TERMINAL"):
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="FAILED" if event.status == "FAILED_TERMINAL" else "COMPLETED",
+            error_code=event.last_error_code,
+        )
         return {"event_id": event.id, "status": event.status, "noop": True}
 
+    await _set_analysis_job_status(
+        state,
+        event_id=event.id,
+        status="RUNNING",
+    )
     quota = QuotaService(state.store, engine=state.engine)
     event.attempt_count += 1
     event.status = "OBSERVING"
@@ -411,6 +510,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             event.status = "FAILED_RETRYABLE"
             if state.engine is not None:
                 await digestive_db.save_fecal_state(state.engine, event)
+            await _set_analysis_job_status(
+                state,
+                event_id=event.id,
+                status="RETRYING",
+                error_code=ErrorCode.PROVIDER_TIMEOUT.value,
+            )
             # Transient failure must propagate so the workflow step fails and
             # the platform retries with backoff (sez. 22).
             raise RetryableTaskError(
@@ -433,6 +538,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         if state.engine is not None:
             await digestive_db.save_fecal_state(state.engine, event)
             await arm_fecal_expiry(state.engine, event.id)
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="FAILED",
+            error_code=ErrorCode.PROVIDER_TIMEOUT.value,
+        )
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_TIMEOUT.value}
     except BudgetExceededError:
         event.status = "FAILED_TERMINAL"
@@ -449,6 +560,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         if state.engine is not None:
             await digestive_db.save_fecal_state(state.engine, event)
             await arm_fecal_expiry(state.engine, event.id)
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="FAILED",
+            error_code=ErrorCode.AI_BUDGET_EXCEEDED.value,
+        )
         return {
             "event_id": event.id,
             "status": event.status,
@@ -466,6 +583,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         if state.engine is not None:
             await digestive_db.save_fecal_state(state.engine, event)
             await arm_fecal_expiry(state.engine, event.id)
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="FAILED",
+            error_code=ErrorCode.PROVIDER_SCHEMA_INVALID.value,
+        )
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_SCHEMA_INVALID.value}
     await state.cost_meter.record(
         usage=usage,
@@ -488,6 +611,11 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         if state.engine is not None:
             await digestive_db.save_fecal_state(state.engine, event)
             await arm_fecal_expiry(state.engine, event.id)
+        await _set_analysis_job_status(
+            state,
+            event_id=event.id,
+            status="COMPLETED",
+        )
         return {"event_id": event.id, "status": event.status}
 
     event.fecal_score_estimate = observation.fecal_score_estimate
@@ -519,6 +647,11 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             state.engine, dog_id=event.dog_id
         )
         await arm_fecal_expiry(state.engine, event.id)
+    await _set_analysis_job_status(
+        state,
+        event_id=event.id,
+        status="COMPLETED",
+    )
     try:
         await state.queue.enqueue(
             task_type="digestive_result_notification",

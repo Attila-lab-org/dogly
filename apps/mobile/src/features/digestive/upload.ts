@@ -65,10 +65,17 @@ async function deleteLocalIfExists(uri: string): Promise<void> {
  */
 export async function processPendingDigestiveUpload(
   id: string,
+  onInitialized?: (eventId: string) => void,
 ): Promise<string | null> {
   if (draining.has(id)) return null;
   draining.add(id);
   const queue = getUploadQueue();
+  let initializedNotified = false;
+  const notifyInitialized = (eventId: string) => {
+    if (initializedNotified) return;
+    initializedNotified = true;
+    onInitialized?.(eventId);
+  };
 
   try {
     let item = queue.get(id);
@@ -105,9 +112,11 @@ export async function processPendingDigestiveUpload(
         uploadUrl: init.upload.url,
         uploadUrlExpiresAt: init.upload.expires_at,
       });
+      notifyInitialized(init.event_id);
     }
 
     item = queue.get(id)!;
+    if (item.eventId) notifyInitialized(item.eventId);
 
     if (item.state === 'uploading' && item.uploadUrl) {
       const expired =
@@ -164,6 +173,7 @@ export type EnqueueDigestivePhotoInput = {
   userId: string;
   dogId: string;
   localUri: string;
+  onInitialized?: (eventId: string, uploadId: string) => void;
 };
 
 /** Enqueue + process. Ritorna eventId quando l'upload è verificato. */
@@ -178,7 +188,11 @@ export async function enqueueAndUploadDigestivePhoto(
     input.localUri,
   );
   if (existing) {
-    const eventId = await processPendingDigestiveUpload(existing.id);
+    const eventId = await processPendingDigestiveUpload(
+      existing.id,
+      (initializedEventId) =>
+        input.onInitialized?.(initializedEventId, existing.id),
+    );
     if (!eventId) throw new Error('Retry upload digestivo senza eventId');
     return { uploadId: existing.id, eventId };
   }
@@ -195,7 +209,11 @@ export async function enqueueAndUploadDigestivePhoto(
     clientRequestId,
   });
 
-  const eventId = await processPendingDigestiveUpload(uploadId);
+  const eventId = await processPendingDigestiveUpload(
+    uploadId,
+    (initializedEventId) =>
+      input.onInitialized?.(initializedEventId, uploadId),
+  );
   if (!eventId) {
     throw new Error('Upload completato senza eventId');
   }

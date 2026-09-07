@@ -68,7 +68,11 @@ export default function DigestiveProcessingScreen() {
 
   useEffect(() => {
     if (!useApi || !query.data) return;
-    if (query.data.status === 'COMPLETED' || query.data.status === 'INSUFFICIENT_IMAGE') {
+    if (
+      query.data.status === 'COMPLETED' ||
+      query.data.status === 'INSUFFICIENT_IMAGE' ||
+      query.data.status === 'REJECTED_QUALITY'
+    ) {
       markDigestiveUploadCompletedForEvent(query.data.id);
       router.replace(`/digestive/result/${query.data.id}`);
     }
@@ -135,6 +139,7 @@ export default function DigestiveProcessingScreen() {
   }
 
   const visibleStep = steps[Math.min(stepIndex, steps.length - 1)];
+  const isUploading = useApi && query.data?.status === 'UPLOADING';
 
   return (
     <ScreenContainer contentStyle={styles.screen}>
@@ -142,8 +147,14 @@ export default function DigestiveProcessingScreen() {
         <DogIllustration mood="thinking" size={210} />
       </View>
 
-      <Text style={styles.title}>Sto analizzando la foto di {dog.name}</Text>
-      <Text style={styles.currentStep}>{visibleStep}</Text>
+      <Text style={styles.title}>
+        {isUploading
+          ? 'Sto caricando la foto in modo sicuro'
+          : `Sto analizzando la foto di ${dog.name}`}
+      </Text>
+      <Text style={styles.currentStep}>
+        {isUploading ? 'La durata dipende dalla connessione' : visibleStep}
+      </Text>
 
       <View style={styles.stepList}>
         {steps.map((step, index) => (

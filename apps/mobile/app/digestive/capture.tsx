@@ -60,12 +60,21 @@ export default function DigestiveCaptureScreen() {
         setPhase('upload_failed');
         return;
       }
+      let movedToProcessing = false;
       const { eventId } = await enqueueAndUploadDigestivePhoto({
         userId,
         dogId: dog.id,
         localUri: photoUri,
+        onInitialized: (initializedEventId, uploadId) => {
+          movedToProcessing = true;
+          router.replace(
+            `/digestive/processing/${initializedEventId}?uploadId=${uploadId}`,
+          );
+        },
       });
-      router.replace(`/digestive/processing/${eventId}`);
+      if (!movedToProcessing) {
+        router.replace(`/digestive/processing/${eventId}`);
+      }
     } catch (err) {
       if (isQuotaExhaustedError(err)) {
         // Quota esaurita (402 QUOTA_EXHAUSTED): paywall, non errore generico.

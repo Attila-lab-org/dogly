@@ -173,17 +173,3 @@ export function profileToCreateBody(
     client_request_id: clientRequestId ?? null,
   };
 }
-
-export function profileToUpdateBody(
-  profile: Partial<DogProfile>,
-): DogUpdateBody {
-  return {
-    name: profile.name,
-    birth_date: profile.birthDate,
-    age_stage: profile.ageLabel,
-    size: profile.sizeLabel ? sizeToApi(profile.sizeLabel) : undefined,
-    weight_kg: profile.weightKg,
-    breed_label: profile.breedLabel,
-    is_mix: profile.isMix,
-  };
-}

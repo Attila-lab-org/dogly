@@ -146,6 +146,12 @@ class DogUpdate(BaseModel):
     sex: str | None = None
     weight_kg: float | None = Field(default=None, gt=0)
 
+    @model_validator(mode="after")
+    def required_name_cannot_be_cleared(self) -> DogUpdate:
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("name cannot be null")
+        return self
+
 
 class DogOut(BaseModel):
     id: str

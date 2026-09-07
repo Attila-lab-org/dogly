@@ -29,6 +29,62 @@ async def test_dog_profile_returns_birthday_and_mix(
     assert listed.json()["items"][0]["birth_date"] == "2022-05-18"
 
 
+async def test_dog_patch_clears_nullable_fields_and_skips_noop_versions(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+    state,
+) -> None:
+    created = await client.post(
+        "/v1/dogs",
+        headers=auth_headers,
+        json={
+            "name": "Luna",
+            "birth_date": "2022-05-18",
+            "breed_label": "Mix",
+            "weight_kg": 12.5,
+        },
+    )
+    assert created.status_code == 201, created.text
+    dog_id = created.json()["id"]
+    versions_before = len(state.store.dog_profile_versions)
+
+    noop = await client.patch(
+        f"/v1/dogs/{dog_id}",
+        headers=auth_headers,
+        json={
+            "name": "Luna",
+            "birth_date": "2022-05-18",
+            "breed_label": "Mix",
+            "weight_kg": 12.5,
+        },
+    )
+    assert noop.status_code == 200, noop.text
+    assert len(state.store.dog_profile_versions) == versions_before
+
+    cleared = await client.patch(
+        f"/v1/dogs/{dog_id}",
+        headers=auth_headers,
+        json={"birth_date": None, "breed_label": None, "weight_kg": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["birth_date"] is None
+    assert cleared.json()["breed_label"] is None
+    assert cleared.json()["weight_kg"] is None
+    assert len(state.store.dog_profile_versions) == versions_before + 1
+    assert state.store.dog_profile_versions[-1]["changed_fields"] == [
+        "birth_date",
+        "breed_label",
+        "weight_kg",
+    ]
+
+    invalid = await client.patch(
+        f"/v1/dogs/{dog_id}",
+        headers=auth_headers,
+        json={"name": None},
+    )
+    assert invalid.status_code == 422
+
+
 async def test_dog_avatar_init_complete_persists_signed_url(
     client: httpx.AsyncClient,
     auth_headers: dict[str, str],

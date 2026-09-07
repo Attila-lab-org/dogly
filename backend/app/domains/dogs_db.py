@@ -152,17 +152,46 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
 async def update_dog(
     engine: AsyncEngine, *, user_id: str, dog_id: str, payload: DogUpdate
 ) -> DogRec:
-    changed = payload.model_dump(exclude_none=True)
-    if not changed:
+    requested = payload.model_dump(exclude_unset=True)
+    if not requested:
         return await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
-    if "birth_date" in changed:
-        changed["birth_date"] = _parse_birth_date(changed["birth_date"])
-    if "size" in changed:
-        changed["size"] = _normalize_size(changed["size"])
+    if "birth_date" in requested:
+        requested["birth_date"] = _parse_birth_date(requested["birth_date"])
+    if "size" in requested:
+        requested["size"] = _normalize_size(requested["size"])
 
-    sets = ", ".join(f"{k} = :{k}" for k in changed)
-    params = {"dog_id": dog_id, "user_id": user_id, **changed}
     async with engine.begin() as conn:
+        current_row = (
+            await conn.execute(
+                text(
+                    """
+                    select id, owner_id, name, birth_date, age_stage, size, breed_label,
+                           is_mix, sex, weight_kg, photo_path, created_at
+                    from public.dogs
+                    where id = :dog_id and owner_id = :user_id
+                    for update
+                    """
+                ),
+                {"dog_id": dog_id, "user_id": user_id},
+            )
+        ).mappings().first()
+        if not current_row:
+            raise ApiError(ErrorCode.NOT_FOUND, "Dog not found")
+
+        changed = {
+            key: value
+            for key, value in requested.items()
+            if (
+                float(current_row[key])
+                if key == "weight_kg" and current_row[key] is not None
+                else current_row[key]
+            )
+            != value
+        }
+        if not changed:
+            return _row_to_dog(current_row)
+
+        sets = ", ".join(f"{key} = :{key}" for key in changed)
         row = (
             await conn.execute(
                 text(
@@ -174,11 +203,9 @@ async def update_dog(
                               is_mix, sex, weight_kg, photo_path, created_at
                     """
                 ),
-                params,
+                {"dog_id": dog_id, "user_id": user_id, **changed},
             )
-        ).mappings().first()
-        if not row:
-            raise ApiError(ErrorCode.NOT_FOUND, "Dog not found")
+        ).mappings().one()
         dog = _row_to_dog(row)
         await conn.execute(
             text(
