@@ -6,6 +6,10 @@ import {
 } from '../contracts/types';
 import type { ApiBehaviorEvent } from '../features/behavior/api';
 import { mapApiEventToResult } from '../features/behavior/map';
+import {
+  mapApiDigestiveEventToResult,
+  type ApiDigestiveEvent,
+} from '../features/digestive/map';
 
 describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
   it('contiene esattamente i 12 codici V0', () => {
@@ -89,5 +93,35 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
     expect(result.safety_flags).toEqual(event.safety_flags);
     expect(result.needs_context).toBe(true);
     expect(result.context_question).toBe('Cosa è successo prima?');
+  });
+});
+
+describe('digestive mapping — valori reali del backend, non mock', () => {
+  it('traduce SOFT/FORMED inglese in consistenza consumer', () => {
+    const event: ApiDigestiveEvent = {
+      id: 'evt-real',
+      dog_id: 'dog-real',
+      status: 'COMPLETED',
+      fecal_score_estimate: 4,
+      consistency: 'SOFT',
+      color: 'olive brown',
+      image_quality: 'sufficient',
+      quality_warnings: [],
+      mucus_candidate: 'possible',
+      fresh_blood_candidate: 'none_observed',
+      melena_candidate: 'none_observed',
+      foreign_material_candidate: 'none_observed',
+      confidence_band: 'MEDIUM',
+      safety_flags: [],
+      summary: null,
+      active_food_name: null,
+      baseline_comparison: 'NEAR_USUAL',
+      created_at: '2026-09-06T23:56:54Z',
+    };
+
+    const result = mapApiDigestiveEventToResult(event);
+    expect(result.consistency).toBe('morbida');
+    expect(result.color).toBe('olive brown');
+    expect(result.status).toBe('COMPLETED');
   });
 });

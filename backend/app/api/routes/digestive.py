@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.deps import IdempotencyDep, StateDep, UserIdDep
+from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
     DigestiveContextUpdateRequest,
     DigestiveEventOut,
@@ -17,8 +17,38 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, idempotency_db
 from app.domains.digestive_intelligence import build_digestive_intelligence
+from app.domains.models import FecalEventRec
 
 router = APIRouter()
+
+
+async def _ensure_digestive_intelligence(
+    event: FecalEventRec, state: AppState
+) -> FecalEventRec:
+    """Build consumer intelligence for completed events that predate V2."""
+    if (
+        event.status != "COMPLETED"
+        or event.intelligence_json
+        or not event.observation_json
+    ):
+        return event
+    if state.engine is not None:
+        context = await digestive_db.load_digestive_context(
+            state.engine, event=event
+        )
+    else:
+        context = digestive_domain.build_inmemory_digestive_context(
+            state.store, event=event
+        )
+    intelligence = build_digestive_intelligence(event.observation_json, context)
+    event.intelligence_json = intelligence.model_dump(mode="json")
+    event.summary = intelligence.consumer_summary
+    event.safety_flags = digestive_domain.contextual_safety_flags(
+        event.observation_json, context
+    )
+    if state.engine is not None:
+        await digestive_db.save_fecal_state(state.engine, event)
+    return event
 
 
 def _public_digestive_status(status: str) -> str:
@@ -131,6 +161,7 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         )
         active_food_name = food.name if food is not None else None
         baseline_comparison = None
+    e = await _ensure_digestive_intelligence(e, state)
     observation = e.observation_json or {}
     intelligence = e.intelligence_json or {}
     baseline_comparison = (

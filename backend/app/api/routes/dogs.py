@@ -31,7 +31,7 @@ async def to_out(dog: DogRec, state: AppState) -> DogOut:
                 photo_url = await create_read(
                     bucket=AVATAR_BUCKET,
                     path=dog.photo_path,
-                    ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 3600),
+                    ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
                 )
             except Exception:  # noqa: BLE001 -- avatar read URL is best-effort
                 photo_url = None

@@ -24,6 +24,9 @@ export function isApiConfigured(): boolean {
 
 /** True when real auth cannot run and __DEV__ mock gate is allowed. */
 export function shouldUseMockAuthGate(): boolean {
+  if (process.env.EXPO_PUBLIC_APP_ENV === 'production') {
+    return false;
+  }
   const forcedWebDemo =
     typeof __DEV__ !== 'undefined' &&
     __DEV__ &&

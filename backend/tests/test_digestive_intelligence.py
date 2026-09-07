@@ -168,3 +168,39 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert "non una causa accertata" in contextualized_body[
         "possible_associations"
     ][0]
+
+
+@pytest.mark.asyncio
+async def test_get_rebuilds_missing_intelligence_for_completed_events(
+    client, auth_headers, state
+):
+    dog_id = await create_dog(client, auth_headers)
+    init = await client.post(
+        "/v1/digestive/fecal/init",
+        headers={**auth_headers, "X-Idempotency-Key": "digestive-legacy-init"},
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "digestive-legacy-event",
+            "bytes": 1_000,
+            "content_type": "image/jpeg",
+        },
+    )
+    event_id = init.json()["event_id"]
+    path = init.json()["upload"]["storage_path"]
+    state.storage.objects.add(("digestive-raw", path))
+    await client.post(
+        f"/v1/digestive/fecal/{event_id}/complete",
+        headers={**auth_headers, "X-Idempotency-Key": "digestive-legacy-complete"},
+    )
+    await process_digestive_event(state, event_id=event_id)
+    state.store.fecal_events[event_id].intelligence_json = None
+
+    response = await client.get(
+        f"/v1/digestive/events/{event_id}", headers=auth_headers
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["consumer_headline"]
+    assert body["recommended_next_step"]
+    assert state.store.fecal_events[event_id].intelligence_json
