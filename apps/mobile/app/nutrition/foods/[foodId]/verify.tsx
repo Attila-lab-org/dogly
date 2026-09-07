@@ -9,9 +9,10 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ScreenContainer } from '@/components';
+import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { foodProductsMock } from '@/mocks/secondary';
+import { useSession } from '@/features/auth/SessionProvider';
 import {
   ConfidenceBandPill,
   StackScreenHeader,
@@ -54,6 +55,7 @@ function EditableField({
 export default function FoodVerifyScreen() {
   const { foodId } = useLocalSearchParams<{ foodId: string }>();
   const router = useRouter();
+  const { usingMockGate } = useSession();
   const food = foodProductsMock.find((f) => f.id === foodId);
 
   const [name, setName] = useState(food?.name ?? '');
@@ -73,6 +75,18 @@ export default function FoodVerifyScreen() {
   );
   const [calories, setCalories] = useState(food?.calories ?? '');
   const [confirmed, setConfirmed] = useState(false);
+
+  if (!usingMockGate) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Verifica etichetta" />
+        <ErrorState
+          title="Verifica non disponibile"
+          message="La verifica delle etichette non è ancora disponibile in questa versione. Nessun dato simulato verrà attivato."
+        />
+      </ScreenContainer>
+    );
+  }
 
   if (!food) {
     return (

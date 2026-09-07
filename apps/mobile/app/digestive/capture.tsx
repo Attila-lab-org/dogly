@@ -20,7 +20,6 @@ import {
   enqueueAndUploadDigestivePhoto,
 } from '@/features/digestive/upload';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
-import { isApiConfigured } from '@/features/auth/env';
 
 type Phase = 'ready' | 'preview' | 'uploading' | 'upload_failed';
 
@@ -50,7 +49,7 @@ export default function DigestiveCaptureScreen() {
     if (!photoUri) return;
     setPhase('uploading');
     try {
-      if (usingMockGate || !isApiConfigured()) {
+      if (usingMockGate) {
         // Mock gate dev: pipeline finta solo in demo.
         await new Promise((resolve) => setTimeout(resolve, 800));
         router.replace('/digestive/processing/fecal-ok-1');

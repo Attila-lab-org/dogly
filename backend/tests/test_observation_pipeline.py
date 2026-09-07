@@ -275,7 +275,7 @@ class _FakeGeminiClient:
         self._payload = payload
         self.captured = captured
 
-    async def get(self, url, params=None):
+    async def get(self, url, params=None, headers=None):
         if url == "https://example.test/clip.webm":
             return _FakeGeminiResponse({}, content=b"real-video-bytes")
         return _FakeGeminiResponse(
@@ -305,7 +305,7 @@ class _FakeGeminiClient:
         self.captured.append(json)
         return _FakeGeminiResponse(self._payload)
 
-    async def delete(self, url, params=None):
+    async def delete(self, url, params=None, headers=None):
         return _FakeGeminiResponse({})
 
 
@@ -390,7 +390,7 @@ async def test_gemini_failed_file_is_deleted_before_returning(monkeypatch):
                 content=content,
             )
 
-        async def delete(self, url, params=None):
+        async def delete(self, url, params=None, headers=None):
             deleted.append(url)
             return _FakeGeminiResponse({})
 

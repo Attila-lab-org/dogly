@@ -71,7 +71,7 @@ from app.knowledge.safety import (
 )
 from app.knowledge.safety import merge_safety_flags
 from app.providers import supabase_auth_admin
-from app.providers.base import EligiblePatternSummary
+from app.providers.base import EligiblePatternSummary, ProviderRateLimitError
 from app.providers.budget import BudgetExceededError
 from app.providers.expo_push import send_push
 
@@ -340,6 +340,15 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                 state,
                 event,
                 ErrorCode.AI_BUDGET_EXCEEDED,
+                retryable=False,
+            )
+        except ProviderRateLimitError:
+            # Provider quota/rate exhaustion is not helped by rapid workflow
+            # retries: stop after one call and refund the user's reservation.
+            return await _fail(
+                state,
+                event,
+                ErrorCode.RATE_LIMITED,
                 retryable=False,
             )
         except Exception:  # noqa: BLE001 -- provider failures become durable retries

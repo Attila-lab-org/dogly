@@ -22,12 +22,14 @@ import { demoFlags } from '@/mocks/demo';
 import { entitlementMock, paywallOfferingMock } from '@/mocks/entitlements';
 import type { PaywallPlan } from '@/mocks/entitlements';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { useSession } from '@/features/auth/SessionProvider';
 
 type PlanOption = PaywallPlan['code'];
 
 export default function PaywallScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
   const { plans, benefits, freeChoiceLabel } = paywallOfferingMock;
   const [selected, setSelected] = useState<PlanOption>('PREMIUM_ANNUAL');
   const explainStorePending = () => {
@@ -40,7 +42,9 @@ export default function PaywallScreen() {
   // Stati simulabili via flag demo (src/mocks/demo.ts) finché RevenueCat non
   // è collegato: "unavailable store" e "grace" (sez. 6 Paywall).
   const [storeUnavailable, setStoreUnavailable] = useState(
-    !paywallOfferingMock.storeAvailable || demoFlags.paywallStoreUnavailable,
+    !usingMockGate ||
+      !paywallOfferingMock.storeAvailable ||
+      demoFlags.paywallStoreUnavailable,
   );
   const gracePeriod = demoFlags.paywallGracePeriod
     ? true
@@ -65,7 +69,7 @@ export default function PaywallScreen() {
           title="Store non disponibile"
           message="Non riesco a caricare i piani dallo store in questo momento. Nessun addebito è stato fatto: riprova tra poco o ripristina un acquisto esistente."
           retryLabel="Riprova"
-          onRetry={() => setStoreUnavailable(false)}
+          onRetry={() => setStoreUnavailable(!usingMockGate)}
         />
         <Button
           title="Ripristina acquisto"

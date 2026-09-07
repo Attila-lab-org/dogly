@@ -18,6 +18,10 @@ from app.contracts.taxonomy import AnalysisDomain, ContextBucket
 from app.knowledge.models import DogContextSnapshot, KnowledgeContext
 
 
+class ProviderRateLimitError(RuntimeError):
+    """Provider quota/rate limit: retrying immediately would only waste calls."""
+
+
 class ProviderUsage(BaseModel):
     """Per-call telemetry persisted with the event (sez. 25.1)."""
 

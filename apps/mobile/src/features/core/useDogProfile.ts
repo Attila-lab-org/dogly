@@ -83,7 +83,7 @@ export function useDogProfile(): DogProfileState {
   });
 
   const dog = useMemo(() => {
-    if (usingMockGate || !isApiConfigured()) {
+    if (usingMockGate) {
       return { ...dogMock };
     }
     const items = query.data ?? [];
@@ -102,7 +102,7 @@ export function useDogProfile(): DogProfileState {
   });
 
   const resolvedKnowledgeScore =
-    usingMockGate || !isApiConfigured()
+    usingMockGate
       ? knowledgeScore
       : mapKnowledgeScore(knowledgeQuery.data);
 

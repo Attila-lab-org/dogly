@@ -11,9 +11,11 @@ miniature, EXIF server-side, retention cron) è in `docs/CURSOR_BACKEND_TASKS.md
    `access_token`/`refresh_token` a `setSession()` senza verificare host/percorso né uno `state`
    legato al login appena iniziato. Su Android qualunque app può iniettare token e far entrare il
    telefono dell'utente nell'account dell'attaccante.~~ Fix applicato: allowlist scheme+host+path in
-   `assertValidAuthCallbackUrl` + nonce `dogly_state` generato all'avvio del login, salvato in
-   SecureStore (sessionStorage su web), verificato e consumato prima di `setSession`
-   (`oauthCallback.ts`, `actions.ts`). Test: `authCallback.test.ts` (15 test).
+   `assertValidAuthCallbackUrl` + flusso esclusivo Authorization Code/PKCE. Il tentativo
+   intermedio con nonce custom `dogly_state` è stato rimosso: Supabase non preservava la
+   query nel callback e bloccava il login nell'app. I token implicit nei deep link non
+   vengono più accettati; il code verifier PKCE lega il callback al dispositivo
+   (`oauthCallback.ts`, `actions.ts`). Test: `authCallback.test.ts`.
 2. **MAJOR — Logout incompleto.** `src/features/auth/SessionProvider.tsx:190-203` svuota solo cache
    query e token: restano SQLite `cbi-pending-uploads.db` (openUploadQueueDatabase), file video/foto
    in attesa, AsyncStorage (consensi, check-in, notifiche). Fix: `signOut` deve svuotare queue+db,

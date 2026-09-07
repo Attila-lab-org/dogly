@@ -6,7 +6,6 @@
  * resta visibile (mai finto successo, mai dati inventati).
  */
 import { useQuery } from '@tanstack/react-query';
-import { isApiConfigured, shouldUseMockAuthGate } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
 import {
   getLifestyleProfileLocal,
@@ -44,7 +43,7 @@ type ApiLifestyleProfile = {
 
 export function useLifestyleMockGate(): boolean {
   const { usingMockGate } = useSession();
-  return usingMockGate || shouldUseMockAuthGate() || !isApiConfigured();
+  return usingMockGate;
 }
 
 function mapApiToProfile(raw: ApiLifestyleProfile): LifestyleProfile {

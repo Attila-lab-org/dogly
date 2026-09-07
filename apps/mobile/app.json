@@ -10,6 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.attilalab.dogly",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Dogly usa la fotocamera per registrare brevi video del tuo cane e aiutarti a capirlo.",
         "NSMicrophoneUsageDescription": "Dogly può usare il microfono durante i video comportamentali. È facoltativo."
@@ -29,6 +30,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       "expo-secure-store",
       "expo-sqlite",
       "expo-notifications",
@@ -52,8 +54,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": false,
-          "recordAudioAndroid": false,
+          "microphonePermission": "Dogly usa il microfono quando scegli di raccontare qualcosa a voce o di registrare un video con audio.",
+          "recordAudioAndroid": true,
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
         }

@@ -7,14 +7,28 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, Chip, ScreenContainer } from '@/components';
+import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { feedingPeriodsMock, foodProductsMock } from '@/mocks/secondary';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { useSession } from '@/features/auth/SessionProvider';
 
 export default function FoodsScreen() {
   const router = useRouter();
+  const { usingMockGate } = useSession();
   const activePeriod = feedingPeriodsMock.find((f) => f.endedAt === null);
+
+  if (!usingMockGate) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Alimentazione" />
+        <ErrorState
+          title="Alimentazione non disponibile"
+          message="La scansione delle etichette non è ancora disponibile in questa versione. Nessun dato simulato verrà salvato sul tuo profilo."
+        />
+      </ScreenContainer>
+    );
+  }
 
   return (
     <ScreenContainer scroll>

@@ -30,7 +30,7 @@ from app.contracts.observation import (
     normalize_observation_dict,
 )
 from app.domains.db import get_engine
-from app.providers.base import ProviderUsage
+from app.providers.base import ProviderRateLimitError, ProviderUsage
 from app.providers.budget import check_daily_budget
 
 _OBSERVER_SYSTEM = """You are a canine behavior video observer.
@@ -53,6 +53,12 @@ def _enum_values(enum: type[StrEnum]) -> list[str]:
 
 class ProviderDisabled(RuntimeError):
     pass
+
+
+def _raise_for_provider_status(response: httpx.Response) -> None:
+    if response.status_code == 429:
+        raise ProviderRateLimitError("Gemini quota or rate limit exceeded")
+    response.raise_for_status()
 
 
 class GeminiVideoObserver:
@@ -172,12 +178,12 @@ class GeminiVideoObserver:
         try:
             response = await self._client.post(
                 url,
-                params={"key": self._api_key},
+                headers={"x-goog-api-key": self._api_key},
                 json=body,
             )
             if response.status_code >= 500:
                 raise TimeoutError(f"Gemini upstream {response.status_code}")
-            response.raise_for_status()
+            _raise_for_provider_status(response)
             payload = response.json()
             text = _extract_text(payload)
             # Normalizzazione difensiva PRIMA della validazione: alias/sinonimi ->
@@ -235,8 +241,8 @@ class GeminiVideoObserver:
 
         start = await self._client.post(
             f"{_GEMINI_UPLOAD_ROOT}/files",
-            params={"key": self._api_key},
             headers={
+                "x-goog-api-key": self._api_key,
                 "X-Goog-Upload-Protocol": "resumable",
                 "X-Goog-Upload-Command": "start",
                 "X-Goog-Upload-Header-Content-Length": str(len(media)),
@@ -245,7 +251,7 @@ class GeminiVideoObserver:
             },
             json={"file": {"display_name": request_id}},
         )
-        start.raise_for_status()
+        _raise_for_provider_status(start)
         upload_url = start.headers.get("x-goog-upload-url")
         if not upload_url:
             raise RuntimeError("Gemini Files API did not return an upload URL")
@@ -260,7 +266,7 @@ class GeminiVideoObserver:
             },
             content=media,
         )
-        uploaded.raise_for_status()
+        _raise_for_provider_status(uploaded)
         file_data = uploaded.json().get("file") or {}
         name = str(file_data.get("name") or "")
         if not name:
@@ -281,9 +287,9 @@ class GeminiVideoObserver:
                 await asyncio.sleep(1)
                 status = await self._client.get(
                     f"{_GEMINI_API_ROOT}/{name}",
-                    params={"key": self._api_key},
+                    headers={"x-goog-api-key": self._api_key},
                 )
-                status.raise_for_status()
+                _raise_for_provider_status(status)
                 file_data = status.json()
 
             raise TimeoutError("Gemini video processing did not become ACTIVE")
@@ -296,7 +302,7 @@ class GeminiVideoObserver:
         try:
             await self._client.delete(
                 f"{_GEMINI_API_ROOT}/{name}",
-                params={"key": self._api_key},
+                headers={"x-goog-api-key": self._api_key},
             )
         except httpx.HTTPError:
             # Provider retention cleanup is best-effort and must never replace
@@ -325,8 +331,12 @@ class GeminiVideoObserver:
             ],
             "generationConfig": {"responseMimeType": "application/json", "temperature": 0},
         }
-        response = await self._client.post(url, params={"key": self._api_key}, json=body)
-        response.raise_for_status()
+        response = await self._client.post(
+            url,
+            headers={"x-goog-api-key": self._api_key},
+            json=body,
+        )
+        _raise_for_provider_status(response)
         fixed = json.loads(_extract_text(response.json()))
         fixed.setdefault("observer_meta", {})
         fixed["observer_meta"].update(

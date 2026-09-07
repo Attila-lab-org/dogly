@@ -8,7 +8,7 @@
  * Il consiglio arriva dal campo `advice` di GET behavior event; assente →
  * niente card.
  */
-import { isApiConfigured, shouldUseMockAuthGate } from '../auth/env';
+import { shouldUseMockAuthGate } from '../auth/env';
 import { saveAdviceOutcomeLocal } from './store';
 import type {
   AdviceOutcome,
@@ -26,11 +26,9 @@ type AdviceOutcomeResponse = {
   created_at: string;
 };
 
-/** Mock gate: stessa regola di feedback.ts (id demo o API non configurata). */
-function useMockGate(eventId: string): boolean {
-  return (
-    eventId.startsWith('evt-') || shouldUseMockAuthGate() || !isApiConfigured()
-  );
+/** I dati locali sono disponibili solo nel gate demo esplicito. */
+function useMockGate(): boolean {
+  return shouldUseMockAuthGate();
 }
 
 /**
@@ -42,7 +40,7 @@ export async function saveAdviceOutcome(
   adviceCode: string,
   outcome: AdviceOutcomeValue,
 ): Promise<AdviceOutcome> {
-  if (useMockGate(eventId)) {
+  if (useMockGate()) {
     return saveAdviceOutcomeLocal(eventId, adviceCode, outcome);
   }
   // require lazy: l'API client carica moduli nativi (SecureStore) che non

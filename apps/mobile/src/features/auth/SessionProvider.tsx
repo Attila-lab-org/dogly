@@ -38,7 +38,6 @@ import {
 } from '../../mocks/session';
 
 type DogListResponse = { items: Array<{ id: string; name: string }> };
-const SESSION_BOOT_TIMEOUT_MS = 8_000;
 type DogLookupResult = {
   reachable: boolean;
   hasDog: boolean;
@@ -79,7 +78,7 @@ async function syncTokensFromSession(session: Session | null): Promise<void> {
 
 async function fetchHasDog(): Promise<DogLookupResult> {
   if (!isApiConfigured()) {
-    return { reachable: true, hasDog: false, primaryDogId: null };
+    return { reachable: false, hasDog: false, primaryDogId: null };
   }
   try {
     const list = await api.get<DogListResponse>('/v1/dogs');
@@ -128,15 +127,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const applySession = useCallback(async (next: Session | null) => {
     await syncTokensFromSession(next);
-    setSession(next);
     if (!next?.user?.id) {
+      setSession(null);
       setHasDog(false);
       setPrimaryDogId(null);
       setDogStatusUnknown(false);
       return;
     }
     const dogs = await fetchHasDog();
+    setSession(next);
     if (!dogs.reachable) {
+      setHasDog(false);
+      setPrimaryDogId(null);
       setDogStatusUnknown(true);
       return;
     }
@@ -158,9 +160,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     let cancelled = false;
     const supabase = getSupabaseClient();
-    const bootTimeout = setTimeout(() => {
-      if (!cancelled) setLoading(false);
-    }, SESSION_BOOT_TIMEOUT_MS);
 
     (async () => {
       try {
@@ -175,21 +174,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           setDogStatusUnknown(false);
         }
       } finally {
-        clearTimeout(bootTimeout);
         if (!cancelled) setLoading(false);
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (!cancelled && event === 'SIGNED_IN') setLoading(true);
       void (async () => {
-        await applySession(next);
-        if (!cancelled) setLoading(false);
+        try {
+          await applySession(next);
+        } catch {
+          if (!cancelled) {
+            setSession(next);
+            setHasDog(false);
+            setPrimaryDogId(null);
+            setDogStatusUnknown(Boolean(next?.user));
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
       })();
     });
 
     return () => {
       cancelled = true;
-      clearTimeout(bootTimeout);
       sub.subscription.unsubscribe();
     };
   }, [authConfigured, usingMockGate, applySession]);

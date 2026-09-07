@@ -77,7 +77,7 @@ export default function DigestiveResultScreen() {
     ? query.data
       ? mapApiDigestiveEventToResult(query.data)
       : undefined
-    : eventId && (usingMockGate || !isApiConfigured())
+    : eventId && usingMockGate
       ? fecalEventsMock[eventId]
       : undefined;
 

@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from app.contracts.taxonomy import BehaviorEventStatus
+from app.providers.base import ProviderRateLimitError
 from app.worker.handlers import (
     MAX_TASK_ATTEMPTS,
     RetryableTaskError,
@@ -19,6 +20,12 @@ class TimeoutObserver:
     async def observe(self, *, video_ref, content_type, policy_version, duration_ms):
         del video_ref, content_type, policy_version, duration_ms
         raise TimeoutError
+
+
+class RateLimitedObserver:
+    async def observe(self, *, video_ref, content_type, policy_version, duration_ms):
+        del video_ref, content_type, policy_version, duration_ms
+        raise ProviderRateLimitError("provider quota exhausted")
 
 
 async def _queue_behavior_event(client, headers, crid: str) -> str:
@@ -203,6 +210,23 @@ async def test_behavior_timeout_raises_retryable_and_persists(client, auth_heade
     assert event.status.value == "FAILED_RETRYABLE"
     assert event.attempt_count == 1
     assert event.last_error_code == "PROVIDER_TIMEOUT"
+
+
+async def test_behavior_provider_rate_limit_stops_after_one_attempt_and_refunds(
+    client, auth_headers, state, user_id
+):
+    event_id = await _queue_behavior_event(client, auth_headers, "crid-rate-limit-0001")
+    state.observer = RateLimitedObserver()
+
+    result = await process_behavior_event(state, event_id=event_id)
+
+    assert result["status"] == "FAILED_TERMINAL"
+    assert result["error"] == "RATE_LIMITED"
+    event = state.store.behavior_events[event_id]
+    assert event.attempt_count == 1
+    assert event.quota_refunded is True
+    ledger = state.store.ensure_ledger(user_id)
+    assert ledger.behavior_reserved == 0 and ledger.behavior_used == 0
 
 
 async def test_behavior_retry_exhaustion_is_terminal_without_raise(

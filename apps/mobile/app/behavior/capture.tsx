@@ -40,7 +40,6 @@ import {
   startWebVideoRecording,
   type WebVideoRecording,
 } from '@/features/behavior/webRecord';
-import { isApiConfigured } from '@/features/auth/env';
 
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
@@ -296,7 +295,7 @@ export default function BehaviorCaptureScreen() {
     if (uploadStartedRef.current) return;
     const uri = pendingUriRef.current;
     if (!uri) return;
-    if (!usingMockGate && isApiConfigured() && sessionLoading) return;
+    if (!usingMockGate && sessionLoading) return;
 
     uploadStartedRef.current = true;
     setUploading(true);
@@ -304,7 +303,7 @@ export default function BehaviorCaptureScreen() {
 
     (async () => {
       try {
-        if (usingMockGate || !isApiConfigured()) {
+        if (usingMockGate) {
           router.replace('/behavior/processing/evt-processing');
           return;
         }
@@ -493,9 +492,26 @@ export default function BehaviorCaptureScreen() {
                 </Text>
               )}
               {state.phase === 'ready' && state.audioDegraded && (
-                <Text style={styles.audioNote}>
-                  Microfono non disponibile: analizzerò solo il video.
-                </Text>
+                <>
+                  <Text style={styles.audioNote}>
+                    Microfono non disponibile: analizzerò solo il video.
+                  </Text>
+                  <Button
+                    title="Abilita microfono"
+                    variant="outline"
+                    onPress={async () => {
+                      const permission = await requestMicPermission();
+                      if (permission.granted) {
+                        dispatch({
+                          type: 'PERMISSION_GRANTED',
+                          micGranted: true,
+                        });
+                      } else if (permission.canAskAgain === false) {
+                        await Linking.openSettings();
+                      }
+                    }}
+                  />
+                </>
               )}
               {state.phase === 'ready' ? (
                 <Pressable

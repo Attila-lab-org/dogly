@@ -8,9 +8,10 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ScreenContainer } from '@/components';
+import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { foodProductsMock } from '@/mocks/secondary';
+import { useSession } from '@/features/auth/SessionProvider';
 import {
   ConfidenceBandPill,
   StackScreenHeader,
@@ -32,6 +33,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 export default function FoodScanScreen() {
   const router = useRouter();
+  const { usingMockGate } = useSession();
   const [phase, setPhase] = useState<Phase>('ready');
   const draft = foodProductsMock.find((f) => f.verifiedAt === null);
 
@@ -42,6 +44,18 @@ export default function FoodScanScreen() {
   }, [phase]);
 
   const activeProduct = foodProductsMock.find((f) => f.verifiedAt !== null);
+
+  if (!usingMockGate) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Scansiona etichetta" />
+        <ErrorState
+          title="Scansione non disponibile"
+          message="La lettura delle etichette non è ancora disponibile in questa versione. Riprova dopo un aggiornamento dell’app."
+        />
+      </ScreenContainer>
+    );
+  }
 
   return (
     <ScreenContainer scroll>

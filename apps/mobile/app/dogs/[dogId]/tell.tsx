@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -28,7 +29,6 @@ import {
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
-import { isApiConfigured } from '@/features/auth/env';
 import {
   confirmOwnerStory,
   prepareOwnerStory,
@@ -52,7 +52,7 @@ export default function TellDogScreen() {
   const [facts, setFacts] = useState<OwnerFact[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const useMock = usingMockGate || !isApiConfigured();
+  const useMock = usingMockGate;
 
   const applyDraft = (draft: {
     draft_id: string;
@@ -127,7 +127,14 @@ export default function TellDogScreen() {
       }
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
-        setError('Per registrare serve il permesso del microfono.');
+        if (permission.canAskAgain === false) {
+          setError(
+            'Il microfono è disattivato per Dogly. Attivalo nelle impostazioni e riprova.',
+          );
+          await Linking.openSettings();
+        } else {
+          setError('Per registrare serve il permesso del microfono.');
+        }
         return;
       }
       await setAudioModeAsync({

@@ -45,7 +45,6 @@ import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
 import { useSession } from '@/features/auth/SessionProvider';
-import { isApiConfigured } from '@/features/auth/env';
 import {
   getDigestiveSummary,
   type DigestiveSummary,
@@ -64,7 +63,7 @@ export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
-  const useDemoData = usingMockGate || !isApiConfigured();
+  const useDemoData = usingMockGate;
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
   useCareEvents(dog.id);
   const { width } = useWindowDimensions();

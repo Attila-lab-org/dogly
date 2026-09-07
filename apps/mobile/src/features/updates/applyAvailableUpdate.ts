@@ -1,9 +1,9 @@
 let updateCheck: Promise<void> | null = null;
 
 /**
- * Standalone builds must not remain indefinitely on their embedded bundle.
- * EAS still performs its native launch check; this explicit check makes the
- * result deterministic when the app was installed or resumed during publish.
+ * Scarica in background un OTA disponibile. Non ricarica la sessione corrente:
+ * il bundle verrà applicato al successivo avvio nativo, senza interrompere
+ * login, upload o altre operazioni dell'utente.
  */
 export function applyAvailableUpdate(): Promise<void> {
   if (__DEV__) {
@@ -21,7 +21,6 @@ export function applyAvailableUpdate(): Promise<void> {
     if (!result.isAvailable) return;
 
     await Updates.fetchUpdateAsync();
-    await Updates.reloadAsync();
   })().finally(() => {
     updateCheck = null;
   });
