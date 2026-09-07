@@ -2,16 +2,14 @@ import React from 'react';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { tabBar } from '../../src/theme/tokens';
-import { useDogProfile } from '../../src/features/core/useDogProfile';
 import { useSession } from '../../src/features/auth/SessionProvider';
 
 /**
- * Tab V1: Home / Fotocamera (storie) / {Nome cane}.
- * Diario resta in stack, link dalla Home (max 3 tab).
+ * Tab V5.1: Home / Diario / Profilo.
+ * La Fotocamera Storie resta una route nascosta aperta dalla StoriesRail.
  * Protetto: senza sessione → welcome.
  */
 export default function TabsLayout() {
-  const { dog } = useDogProfile();
   const { loading, sessionState, usingMockGate } = useSession();
 
   if (loading) {
@@ -38,34 +36,46 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color as string} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="camera"
-        options={{
-          title: 'Fotocamera',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="camera" size={size} color={color as string} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="rocky"
-        options={{
-          title: dog.name,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="paw" size={size} color={color as string} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={size}
+              color={color as string}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="diary"
         options={{
-          href: null,
           title: 'Diario',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'book' : 'book-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="rocky"
+        options={{
+          title: 'Profilo',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="camera"
+        options={{
+          href: null,
+          title: 'Fotocamera',
         }}
       />
     </Tabs>

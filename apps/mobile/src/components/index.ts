@@ -22,3 +22,5 @@ export { DogMetaRow } from './DogMetaRow';
 export type { DogMetaRowProps } from './DogMetaRow';
 export { CuteIcon, CUTE_ICON_NAMES } from './CuteIcon';
 export type { CuteIconProps, CuteIconName } from './CuteIcon';
+export { DogIllustration } from './DogIllustration';
+export type { DogIllustrationProps } from './DogIllustration';

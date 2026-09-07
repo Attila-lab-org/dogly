@@ -32,13 +32,19 @@ export function ScreenContainer({
   const inner = scroll ? (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[padded && styles.padded, contentStyle]}
+      contentContainerStyle={[
+        styles.responsive,
+        padded && styles.padded,
+        contentStyle,
+      ]}
       keyboardShouldPersistTaps="handled"
     >
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.flex, padded && styles.padded, contentStyle]}>
+    <View
+      style={[styles.flex, styles.responsive, padded && styles.padded, contentStyle]}
+    >
       {children}
     </View>
   );
@@ -63,6 +69,11 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  responsive: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
   padded: {
     padding: spacing.lg,

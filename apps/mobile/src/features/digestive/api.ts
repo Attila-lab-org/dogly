@@ -8,6 +8,7 @@
 import type { ConfidenceBand } from '../../contracts/types';
 import {
   SAFETY_FLAG_CODES,
+  type CandidateLevel,
   type FecalEventResult,
   type SafetyFlagCode,
 } from '../secondary/types';
@@ -22,9 +23,33 @@ export type ApiDigestiveEvent = {
   fecal_score_estimate: number | null;
   consistency: string | null;
   color: string | null;
+  image_quality: string;
+  quality_warnings: string[];
+  mucus_candidate: string;
+  fresh_blood_candidate: string;
+  melena_candidate: string;
+  foreign_material_candidate: string;
   confidence_band: ConfidenceBand | null;
   safety_flags: Array<ApiSafetyFlag | string>;
   summary: string | null;
+  active_food_name: string | null;
+  baseline_comparison: string | null;
+  overall_state?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT' | null;
+  consumer_headline?: string | null;
+  consumer_summary?: string | null;
+  relevant_context?: string[];
+  possible_associations?: string[];
+  recommended_next_step?: string | null;
+  followup_key?:
+    | 'vomiting_today'
+    | 'reduced_activity_today'
+    | 'unusual_food_48h'
+    | null;
+  followup_question?: string | null;
+  what_to_watch?: string[];
+  observation_reliability?: string | null;
+  reasoning_version?: string | null;
+  baseline_version?: string | null;
   created_at: string;
 };
 
@@ -72,6 +97,21 @@ export async function getDigestiveEvent(
   return api.get<ApiDigestiveEvent>(`/v1/digestive/events/${eventId}`);
 }
 
+export async function updateDigestiveContext(
+  eventId: string,
+  body: Partial<
+    Record<
+      'vomiting_today' | 'reduced_activity_today' | 'unusual_food_48h',
+      boolean
+    >
+  >,
+): Promise<ApiDigestiveEvent> {
+  return api.patch<ApiDigestiveEvent>(
+    `/v1/digestive/events/${eventId}/context`,
+    body,
+  );
+}
+
 export const DIGESTIVE_IN_PROGRESS_STATUSES = [
   'DRAFT',
   'UPLOADING',
@@ -115,10 +155,36 @@ function mapSafetyFlags(
     );
 }
 
+const CANDIDATE_LEVELS: CandidateLevel[] = [
+  'none_observed',
+  'possible',
+  'clear_candidate',
+  'unknown',
+];
+
+function mapCandidate(value: string | null | undefined): CandidateLevel {
+  return CANDIDATE_LEVELS.includes(value as CandidateLevel)
+    ? (value as CandidateLevel)
+    : 'unknown';
+}
+
+function mapBaselineComparison(
+  value: string | null | undefined,
+): string {
+  switch (value) {
+    case 'ABOVE_USUAL':
+      return 'Più morbide rispetto alle osservazioni recenti.';
+    case 'BELOW_USUAL':
+      return 'Più compatte rispetto alle osservazioni recenti.';
+    case 'NEAR_USUAL':
+      return 'Simili alle osservazioni recenti.';
+    default:
+      return 'Non conosco ancora abbastanza il suo solito digestivo.';
+  }
+}
+
 /**
  * Mapping onesto: mostriamo solo ciò che il backend fornisce davvero.
- * I candidati (muco/sangue/melena/materiale estraneo) non sono esposti
- * dall'endpoint evento → restano 'unknown' e NON compaiono in UI.
  */
 export function mapApiDigestiveEventToResult(
   event: ApiDigestiveEvent,
@@ -132,21 +198,34 @@ export function mapApiDigestiveEventToResult(
       : event.status === 'COMPLETED'
         ? 'COMPLETED'
         : 'PROCESSING',
-    imageQuality: insufficient ? 'insufficient' : 'sufficient',
-    qualityWarnings: [],
+    imageQuality:
+      insufficient || event.image_quality === 'insufficient'
+        ? 'insufficient'
+        : 'sufficient',
+    qualityWarnings: event.quality_warnings ?? [],
     fecalScoreEstimate: event.fecal_score_estimate,
     consistency: mapConsistency(event.consistency),
     color: event.color ?? 'non determinato',
-    mucusCandidate: 'unknown',
-    bloodCandidate: 'unknown',
-    melenaCandidate: 'unknown',
-    foreignMaterialCandidate: 'unknown',
+    mucusCandidate: mapCandidate(event.mucus_candidate),
+    bloodCandidate: mapCandidate(event.fresh_blood_candidate),
+    melenaCandidate: mapCandidate(event.melena_candidate),
+    foreignMaterialCandidate: mapCandidate(event.foreign_material_candidate),
     confidenceBand: event.confidence_band ?? 'LOW',
     safetyFlags: mapSafetyFlags(event.safety_flags),
-    activeFoodName: null,
-    baselineComparison:
-      event.summary ??
-      'Osservazione registrata: non ho ancora abbastanza dati per confrontarla con il solito.',
+    activeFoodName: event.active_food_name,
+    baselineComparison: mapBaselineComparison(event.baseline_comparison),
+    overallState: event.overall_state ?? undefined,
+    consumerHeadline: event.consumer_headline,
+    consumerSummary: event.consumer_summary,
+    relevantContext: event.relevant_context ?? [],
+    possibleAssociations: event.possible_associations ?? [],
+    recommendedNextStep: event.recommended_next_step,
+    followupKey: event.followup_key,
+    followupQuestion: event.followup_question,
+    whatToWatch: event.what_to_watch ?? [],
+    observationReliability: event.observation_reliability,
+    reasoningVersion: event.reasoning_version,
+    baselineVersion: event.baseline_version,
     createdAt: event.created_at,
   };
 }

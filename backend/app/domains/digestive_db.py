@@ -21,6 +21,10 @@ from app.contracts.taxonomy import AnalysisDomain
 from app.domains import dogs_db
 from app.domains.billing import QuotaExceeded
 from app.domains.db import reserve_usage_sql
+from app.domains.digestive_intelligence import (
+    DIGESTIVE_BASELINE_VERSION,
+    DigestiveContext,
+)
 from app.domains.models import FecalEventRec, FeedingPeriodRec, FoodProductRec
 from app.domains.repository import new_id
 from app.providers.base import JobQueue, StorageProvider
@@ -50,6 +54,7 @@ def _fecal_from_row(row: Mapping[str, Any]) -> FecalEventRec:
         data["safety_flags"] = []
     if data.get("consistency") is not None:
         data["consistency"] = str(data["consistency"]).lower()
+    data["owner_context_json"] = data.get("owner_context_json") or {}
     return FecalEventRec.model_validate(data)
 
 
@@ -239,6 +244,38 @@ async def get_fecal_event(engine: AsyncEngine, *, user_id: str, event_id: str) -
     return _fecal_from_row(row)
 
 
+async def update_owner_context(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    event_id: str,
+    answers: dict[str, bool],
+) -> FecalEventRec:
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    update public.fecal_events
+                    set owner_context_json = owner_context_json || cast(:answers as jsonb)
+                    where id = cast(:event_id as uuid)
+                      and user_id = cast(:user_id as uuid)
+                      and status = 'COMPLETED'
+                    returning *
+                    """
+                ),
+                {
+                    "event_id": event_id,
+                    "user_id": user_id,
+                    "answers": json.dumps(answers),
+                },
+            )
+        ).mappings().first()
+    if not row:
+        raise ApiError(ErrorCode.NOT_FOUND, "Completed digestive event not found")
+    return _fecal_from_row(row)
+
+
 async def get_fecal_context(
     engine: AsyncEngine, *, user_id: str, event_id: str
 ) -> tuple[str | None, str | None]:
@@ -314,6 +351,8 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 update public.fecal_events set
                   status = :status,
                   observation_json = CAST(:observation_json AS jsonb),
+                  intelligence_json = CAST(:intelligence_json AS jsonb),
+                  owner_context_json = CAST(:owner_context_json AS jsonb),
                   fecal_score_estimate = :fecal_score_estimate,
                   consistency = :consistency,
                   color = :color,
@@ -334,6 +373,10 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 "user_id": event.user_id,
                 "status": event.status,
                 "observation_json": json.dumps(event.observation_json) if event.observation_json else None,
+                "intelligence_json": json.dumps(event.intelligence_json)
+                if event.intelligence_json
+                else None,
+                "owner_context_json": json.dumps(event.owner_context_json),
                 "fecal_score_estimate": event.fecal_score_estimate,
                 "consistency": event.consistency.upper() if event.consistency else None,
                 "color": event.color,
@@ -348,6 +391,142 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 "last_error_code": event.last_error_code,
                 "expires_at": event.expires_at,
                 "completed_at": event.completed_at,
+            },
+        )
+
+
+async def load_digestive_context(
+    engine: AsyncEngine, *, event: FecalEventRec
+) -> DigestiveContext:
+    """Load only persisted facts available at the event timestamp."""
+    async with engine.connect() as conn:
+        profile = (
+            await conn.execute(
+                text(
+                    """
+                    select d.name, d.age_stage, d.size, d.weight_kg,
+                           food.name as active_food_name,
+                           greatest(
+                             0,
+                             floor(extract(epoch from (event.created_at - period.start_at)) / 86400)
+                           )::integer as food_started_days_ago
+                    from public.fecal_events event
+                    join public.dogs d on d.id = event.dog_id
+                    left join lateral (
+                      select fp.food_product_id, fp.start_at
+                      from public.feeding_periods fp
+                      where fp.dog_id = event.dog_id
+                        and fp.start_at <= event.created_at
+                        and (fp.end_at is null or fp.end_at >= event.created_at)
+                      order by fp.start_at desc, fp.id desc
+                      limit 1
+                    ) period on true
+                    left join public.food_products food on food.id = period.food_product_id
+                    where event.id = cast(:event_id as uuid)
+                    """
+                ),
+                {"event_id": event.id},
+            )
+        ).mappings().one()
+        prior = (
+            await conn.execute(
+                text(
+                    """
+                    select fecal_score_estimate, consistency, created_at
+                    from public.fecal_events
+                    where dog_id = cast(:dog_id as uuid)
+                      and status = 'COMPLETED'
+                      and id <> cast(:event_id as uuid)
+                      and created_at < :created_at
+                    order by created_at desc, id desc
+                    limit 12
+                    """
+                ),
+                {
+                    "dog_id": event.dog_id,
+                    "event_id": event.id,
+                    "created_at": event.created_at,
+                },
+            )
+        ).mappings().all()
+    ordered = list(reversed(prior))
+    answers = event.owner_context_json
+    return DigestiveContext(
+        dog_name=profile["name"],
+        age_stage=profile["age_stage"],
+        size=profile["size"],
+        weight_kg=profile["weight_kg"],
+        active_food_name=profile["active_food_name"],
+        food_started_days_ago=profile["food_started_days_ago"],
+        prior_scores=[
+            int(row["fecal_score_estimate"])
+            for row in ordered
+            if row["fecal_score_estimate"] is not None
+        ],
+        prior_consistencies=[
+            str(row["consistency"]).lower()
+            for row in ordered
+            if row["consistency"] is not None
+        ],
+        recent_episode_count_24h=sum(
+            (event.created_at - row["created_at"]).total_seconds() <= 86_400
+            for row in prior
+        ),
+        vomiting_today=answers.get("vomiting_today"),
+        reduced_activity_today=answers.get("reduced_activity_today"),
+        unusual_food_48h=answers.get("unusual_food_48h"),
+    )
+
+
+async def refresh_digestive_baseline(
+    engine: AsyncEngine, *, dog_id: str
+) -> None:
+    """Persist an immutable baseline snapshot after a completed observation."""
+    async with engine.begin() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    """
+                    select fecal_score_estimate
+                    from public.fecal_events
+                    where dog_id = cast(:dog_id as uuid)
+                      and status = 'COMPLETED'
+                      and fecal_score_estimate is not null
+                    order by created_at desc, id desc
+                    limit 12
+                    """
+                ),
+                {"dog_id": dog_id},
+            )
+        ).scalars().all()
+        if not rows:
+            return
+        scores = [int(value) for value in rows]
+        rolling = sum(scores) / len(scores)
+        variability = max(scores) - min(scores) if len(scores) > 1 else 0
+        sufficiency = (
+            "SUFFICIENT" if len(scores) >= 5 else "PARTIAL" if len(scores) >= 3 else "INSUFFICIENT"
+        )
+        await conn.execute(
+            text(
+                """
+                insert into public.digestive_baselines (
+                  dog_id, rolling_score, frequency_stats, variability,
+                  data_sufficiency, version
+                ) values (
+                  cast(:dog_id as uuid), :rolling_score,
+                  cast(:frequency_stats as jsonb), :variability,
+                  :data_sufficiency, :version
+                )
+                """
+            ),
+            {
+                "dog_id": dog_id,
+                "rolling_score": round(rolling, 2),
+                "frequency_stats": json.dumps({"sample_count": len(scores)}),
+                "variability": variability,
+                "data_sufficiency": sufficiency,
+                "version": DIGESTIVE_BASELINE_VERSION,
             },
         )
 

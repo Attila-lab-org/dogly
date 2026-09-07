@@ -177,8 +177,20 @@ export const fecalEventNormalMock: FecalEventResult = {
   confidenceBand: 'HIGH',
   safetyFlags: [],
   activeFoodName: 'Natural Trainer Adult Medium Salmone e Riso',
-  baselineComparison:
-    'In linea con la baseline di Rocky (media ~3,4 su 12 osservazioni).',
+  baselineComparison: 'È simile alle osservazioni recenti di Rocky.',
+  overallState: 'ROUTINE',
+  consumerHeadline: 'Oggi sono simili al solito di Rocky',
+  consumerSummary:
+    'Forma, consistenza e colore apparente sono vicini alle sue osservazioni recenti.',
+  relevantContext: [
+    'Alimento registrato: Natural Trainer Adult Medium Salmone e Riso.',
+  ],
+  possibleAssociations: [],
+  recommendedNextStep: 'Continua a osservare normalmente.',
+  observationReliability:
+    'La foto permette di valutare forma, consistenza e colore apparente.',
+  reasoningVersion: 'digestive-reasoning/v1',
+  baselineVersion: 'digestive-baseline/v1',
   createdAt: '2026-09-03T08:05:00Z',
 };
 
@@ -199,8 +211,23 @@ export const fecalEventFlaggedMock: FecalEventResult = {
   confidenceBand: 'MEDIUM',
   safetyFlags: ['BLOOD_CANDIDATE'],
   activeFoodName: 'Natural Trainer Adult Medium Salmone e Riso',
-  baselineComparison:
-    'Sembra più morbida del solito rispetto alla baseline di Rocky (media ~3,4).',
+  baselineComparison: 'È più morbida rispetto alle osservazioni recenti di Rocky.',
+  overallState: 'ATTENTION',
+  consumerHeadline: 'C’è qualcosa da tenere d’occhio',
+  consumerSummary:
+    'Questa osservazione merita più attenzione del solito.',
+  relevantContext: [
+    'Alimento registrato: Natural Trainer Adult Medium Salmone e Riso.',
+  ],
+  possibleAssociations: [],
+  recommendedNextStep:
+    'Controlla come sta Rocky e registra la prossima evacuazione.',
+  followupKey: 'reduced_activity_today',
+  followupQuestion: 'Rocky appare meno attivo del solito?',
+  observationReliability:
+    'La foto permette una lettura utile di consistenza e colore apparente.',
+  reasoningVersion: 'digestive-reasoning/v1',
+  baselineVersion: 'digestive-baseline/v1',
   createdAt: '2026-09-04T07:48:00Z',
 };
 

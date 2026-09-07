@@ -42,7 +42,11 @@ from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
-from app.domains.digestive import deterministic_safety_flags
+from app.domains.digestive import (
+    build_inmemory_digestive_context,
+    contextual_safety_flags,
+)
+from app.domains.digestive_intelligence import build_digestive_intelligence
 from app.domains.dog_context import build_dog_context
 from app.domains.models import BehaviorEventRec
 from app.domains.repository import now_utc
@@ -471,13 +475,19 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     event.consistency = observation.consistency.value
     event.color = observation.color
     event.confidence_band = observation.confidence_band
-    # Deterministic safety routing (sez. 19.3): flags come from rules, not
-    # from free-form generated text.
-    event.safety_flags = deterministic_safety_flags(obs_json)
-    event.summary = (
-        f"Osservazione fecale: consistenza {observation.consistency.value}, "
-        f"punteggio stimato {observation.fecal_score_estimate}/7."
-    )
+    if state.engine is not None:
+        digestive_context = await digestive_db.load_digestive_context(
+            state.engine, event=event
+        )
+    else:
+        digestive_context = build_inmemory_digestive_context(
+            state.store, event=event
+        )
+    # Includes owner-confirmed context; generated text cannot add or downgrade.
+    event.safety_flags = contextual_safety_flags(obs_json, digestive_context)
+    intelligence = build_digestive_intelligence(obs_json, digestive_context)
+    event.intelligence_json = intelligence.model_dump(mode="json")
+    event.summary = intelligence.consumer_summary
     event.status = "COMPLETED"
     event.completed_at = now_utc()
     if not event.quota_committed and not event.quota_refunded:
@@ -486,6 +496,9 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     schedule_digestive_raw_expiry(event, state.settings)
     if state.engine is not None:
         await digestive_db.save_fecal_state(state.engine, event)
+        await digestive_db.refresh_digestive_baseline(
+            state.engine, dog_id=event.dog_id
+        )
         await arm_fecal_expiry(state.engine, event.id)
     try:
         await state.queue.enqueue(
@@ -641,6 +654,11 @@ def _purge_memory_account(state: AppState, user_id: str) -> dict[str, int]:
         "fecal_events": sum(1 for rec in state.store.fecal_events.values() if rec.user_id == user_id),
         "food_products": sum(1 for rec in state.store.food_products.values() if rec.owner_id == user_id),
         "feeding_periods": sum(1 for rec in state.store.feeding_periods.values() if rec.dog_id in dog_ids),
+        "owner_reported_observations": sum(
+            1
+            for rec in state.store.owner_reported_observations.values()
+            if rec["user_id"] == user_id
+        ),
     }
     state.store.profiles.pop(user_id, None)
     for collection, predicate in (
@@ -650,6 +668,10 @@ def _purge_memory_account(state: AppState, user_id: str) -> dict[str, int]:
         (state.store.fecal_events, lambda rec: rec.user_id == user_id),
         (state.store.food_products, lambda rec: rec.owner_id == user_id),
         (state.store.feeding_periods, lambda rec: rec.dog_id in dog_ids),
+        (
+            state.store.owner_reported_observations,
+            lambda rec: rec["user_id"] == user_id,
+        ),
         (state.store.subscriptions, lambda rec: rec.user_id == user_id),
         (state.store.devices, lambda rec: rec.user_id == user_id),
     ):

@@ -37,25 +37,33 @@ import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
-import { lifestyleCompletionLabel } from '@/features/lifestyle/types';
+import { useSession } from '@/features/auth/SessionProvider';
+import { isApiConfigured } from '@/features/auth/env';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
+  const useDemoData = usingMockGate || !isApiConfigured();
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
   useCareEvents(dog.id);
   const { width } = useWindowDimensions();
+  const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor(
-    (width - spacing.lg * 2 - spacing.sm * 2) / 3,
+    (contentWidth - spacing.lg * 2 - spacing.sm * 2) / 3,
   );
 
-  const activePeriod = feedingPeriodsMock.find((period) => period.endedAt === null);
+  const activePeriod = useDemoData
+    ? feedingPeriodsMock.find((period) => period.endedAt === null)
+    : undefined;
   const activeFood = activePeriod
     ? foodProductsMock.find((food) => food.id === activePeriod.foodProductId)
     : undefined;
-  const previewPhotos = photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3);
+  const previewPhotos = useDemoData
+    ? photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3)
+    : [];
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
 
@@ -143,40 +151,38 @@ export default function DogProfileTabScreen() {
             label="Album"
             onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
           />
-          <View style={styles.actionDivider} />
-          <QuickAction
-            icon="calendar-outline"
-            label="Diario"
-            onPress={() => router.push('/(tabs)/diary')}
-          />
         </Card>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>I suoi momenti</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Vedi tutti gli album"
-            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-            hitSlop={8}
-          >
-            <Text style={styles.seeAll}>Vedi tutti</Text>
-          </Pressable>
-        </View>
+        {previewPhotos.length > 0 ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>I suoi momenti</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Vedi tutti gli album"
+                onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+                hitSlop={8}
+              >
+                <Text style={styles.seeAll}>Vedi tutti</Text>
+              </Pressable>
+            </View>
 
-        <View style={styles.photoRow}>
-          {previewPhotos.map((photo) => (
-            <PhotoThumbnail
-              key={photo.id}
-              photo={photo}
-              size={photoSize}
-              onPress={() =>
-                router.push(
-                  `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
-                )
-              }
-            />
-          ))}
-        </View>
+            <View style={styles.photoRow}>
+              {previewPhotos.map((photo) => (
+                <PhotoThumbnail
+                  key={photo.id}
+                  photo={photo}
+                  size={photoSize}
+                  onPress={() =>
+                    router.push(
+                      `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
+                    )
+                  }
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
 
         <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
           Benessere
@@ -188,9 +194,11 @@ export default function DogProfileTabScreen() {
             iconBackground={colors.accentSoft}
             label="Digestione"
             value={
-              digestiveBaselineMock.variability === 'bassa'
+              useDemoData && digestiveBaselineMock.variability === 'bassa'
                 ? 'Stabile'
-                : 'Da osservare'
+                : useDemoData
+                  ? 'Da osservare'
+                  : 'Vedi andamento'
             }
             onPress={() => router.push('/digestive/capture')}
           />
@@ -229,7 +237,7 @@ export default function DogProfileTabScreen() {
             <Text style={styles.detailsTitle}>Routine e abitudini</Text>
             <Text style={styles.detailsSubtitle}>
               {lifestyle.profile
-                ? lifestyleCompletionLabel(lifestyle.profile)
+                ? 'Le sue abitudini quotidiane'
                 : 'Aiutami a conoscerlo meglio'}
             </Text>
           </View>
@@ -337,6 +345,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroSafe: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
   },
   decorLarge: {
@@ -437,6 +448,9 @@ const styles = StyleSheet.create({
     marginTop: -spacing.xxl,
   },
   content: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
   },

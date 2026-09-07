@@ -60,7 +60,8 @@ Closed Android beta path wired: fail-fast staging/production config, Postgres do
 - Fase 2 Knowledge + Advice V2: implementata; registry scientifico 2.0 validato, contesto cane/lifestyle, retrieval bounded, Advice Engine deterministico max 1, API owner-scoped, audit DB e outcome append-only. Migrazioni remote applicate e RLS/write boundary verificati.
 - Fase 3 billing/integrità: implementata nel codice (billing DB-backed, webhook HTTP autenticato/idempotente, retry behavior e digestive persistiti, consensi e diario). Il consenso retention resta da collegare a un'eventuale eccezione prodotto esplicita.
 - Fase 4: copertina album, Knowledge Score read API collegata al mobile e push result/care dispatch implementati. Restano operative la schedulazione periodica care e la separazione edge del worker.
-- Verifica locale: backend `73 passed`, Ruff verde, OpenAPI 40 path senza drift. Reset SQL locale non eseguito su questa macchina perché Docker Desktop non è installato; schema, migrazioni e RLS verificati sul progetto Supabase remoto.
+- Verifica locale storica della fase: backend `73 passed`, Ruff verde. Per lo
+  stato corrente vedere “Enterprise UX V5.1” sotto.
 
 ## Mobile UX completion (2026-09-06)
 
@@ -91,4 +92,23 @@ Fix da audit esterno verificati su codice reale e implementati; backend `131 pas
 - **Video web coerente**: il MIME reale prodotto da `MediaRecorder` viene propagato fino a storage e Gemini; WebM non viene più caricato dichiarandolo falsamente MP4.
 - **Digestive vision reale**: le foto digestive private vengono passate a OpenAI tramite URL Supabase firmato a breve durata; output validato come `StoolObservationContract`, un solo tentativo di repair, budget/kill switch dedicati e regole di sicurezza deterministiche separate dal modello.
 
-Verifica locale: backend `134 passed`; mobile TypeScript verde, Jest `118 passed` in 20 suite.
+Verifica locale della fase: backend `134 passed`; mobile TypeScript verde,
+Jest `118 passed` in 20 suite.
+
+## Enterprise UX V5.1 + Digestive Intelligence V2 (2026-09-07)
+
+- Navigazione consumer consolidata in Home / Diario / Profilo; Fotocamera
+  Storie resta una route secondaria.
+- Home, Diario, Profilo, Routine, processing e risultati riallineati alle
+  reference V5.1 con layout responsive, immagini del cane e dettagli
+  progressivi.
+- Digestive Intelligence V2 separa osservazione OpenAI, contesto verificato,
+  baseline personale versionata, retrieval veterinario bounded, triage
+  deterministico e risposta consumer.
+- “Raccontami di {nome}” supporta testo e registrazione vocale breve,
+  trascrizione OpenAI, revisione/modifica dei fatti e conferma esplicita con
+  provenienza `OWNER_REPORTED`; l’audio raw non viene persistito.
+- Migrazioni `0029–0036` applicate a Supabase production; includono
+  riconciliazione RLS, indici FK, metering voce e scadenza dei draft.
+- Verifica corrente: backend `145 passed`, Ruff verde; mobile TypeScript
+  verde, Jest `118 passed` in 20 suite; OpenAPI esportato con 44 path.

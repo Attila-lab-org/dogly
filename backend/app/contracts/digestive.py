@@ -51,11 +51,18 @@ class StoolObservationContract(BaseModel):
     fecal_score_estimate: int | None = Field(default=None, ge=1, le=7)
     consistency: FecalConsistency = FecalConsistency.UNKNOWN
     shape: str = "unknown"
+    apparent_moisture: Literal["low", "normal", "high", "unknown"] = "unknown"
+    segmentation: Literal["present", "reduced", "absent", "unknown"] = "unknown"
     color: str = "unknown"
     color_uncertainty: str = "unknown"
+    color_uniformity: Literal["uniform", "non_uniform", "unknown"] = "unknown"
     mucus_candidate: CandidateLevel = CandidateLevel.UNKNOWN
     fresh_blood_candidate: CandidateLevel = CandidateLevel.UNKNOWN
     melena_candidate: CandidateLevel = CandidateLevel.UNKNOWN
     foreign_material_candidate: CandidateLevel = CandidateLevel.UNKNOWN
+    undigested_food_candidate: CandidateLevel = CandidateLevel.UNKNOWN
+    apparent_volume: Literal["low", "normal", "high", "not_assessable"] = (
+        "not_assessable"
+    )
     confidence_band: ConfidenceBand = ConfidenceBand.LOW
     meta: StoolObservationMeta

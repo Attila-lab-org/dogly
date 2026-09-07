@@ -2,21 +2,25 @@
  * Risultato digestivo: lettura immediata, dettagli utili e safety deterministica.
  * Le anomalie non osservate non vengono elencate per evitare falsa rassicurazione.
  */
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
-import { Button, Card, ErrorState, ScreenContainer } from '@/components';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Button,
+  Card,
+  DogIllustration,
+  ErrorState,
+  ScreenContainer,
+} from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { fecalEventsMock } from '@/mocks/secondary';
 import {
   candidateText,
-  ConfidenceBandPill,
   StackScreenHeader,
 } from '@/features/secondary/components';
 import {
-  ABSENCE_NOT_PROOF_NOTE,
   DIGESTIVE_DISCLAIMER,
   SAFETY_COPY,
 } from '@/features/secondary/safetyCopy';
@@ -24,8 +28,10 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   getDigestiveEvent,
   mapApiDigestiveEventToResult,
+  updateDigestiveContext,
 } from '@/features/digestive/api';
 import { isApiConfigured } from '@/features/auth/env';
+import { useSession } from '@/features/auth/SessionProvider';
 import type {
   CandidateLevel,
   SafetyFlagCode,
@@ -43,22 +49,35 @@ export default function DigestiveResultScreen() {
     ? params.eventId[0] ?? ''
     : params.eventId ?? '';
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { dog } = useDogProfile();
-  // Mock gate dev: gli id fecal-* leggono i mock; gli id reali fanno GET.
-  const useApi =
-    isApiConfigured() && Boolean(eventId) && !eventId.startsWith('fecal-');
+  const { usingMockGate } = useSession();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
   const query = useQuery({
     queryKey: ['digestive-event', eventId],
     queryFn: () => getDigestiveEvent(eventId),
     enabled: useApi,
   });
+  const contextMutation = useMutation({
+    mutationFn: ({
+      key,
+      value,
+    }: {
+      key: 'vomiting_today' | 'reduced_activity_today' | 'unusual_food_48h';
+      value: boolean;
+    }) => updateDigestiveContext(eventId, { [key]: value }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['digestive-event', eventId], updated);
+    },
+  });
 
   const event = useApi
     ? query.data
       ? mapApiDigestiveEventToResult(query.data)
       : undefined
-    : eventId
+    : eventId && (usingMockGate || !isApiConfigured())
       ? fecalEventsMock[eventId]
       : undefined;
 
@@ -169,6 +188,16 @@ export default function DigestiveResultScreen() {
       (level === 'possible' || level === 'clear_candidate') &&
       (!coveredBy || !event.safetyFlags.includes(coveredBy)),
   );
+  const needsAttention =
+    hasSafetyFlags ||
+    event.overallState === 'ATTENTION' ||
+    event.overallState === 'VET_CONTACT';
+  const headline =
+    event.consumerHeadline ??
+    digestiveHeadline(event.baselineComparison, dog.name, hasSafetyFlags);
+  const summary =
+    event.consumerSummary ??
+    event.baselineComparison.replace(/Rocky/g, dog.name);
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
@@ -177,32 +206,35 @@ export default function DigestiveResultScreen() {
       <View
         style={[
           styles.resultHero,
-          hasSafetyFlags ? styles.resultHeroAttention : styles.resultHeroRegular,
+          needsAttention ? styles.resultHeroAttention : styles.resultHeroRegular,
         ]}
       >
+        <DogIllustration
+          mood={needsAttention ? 'thinking' : 'welcome'}
+          size={180}
+        />
         <View
           style={[
             styles.resultIcon,
-            hasSafetyFlags
+            needsAttention
               ? styles.resultIconAttention
               : styles.resultIconRegular,
           ]}
         >
           <Ionicons
-            name={hasSafetyFlags ? 'alert-outline' : 'checkmark'}
+            name={
+              needsAttention
+                ? 'alert-outline'
+                : event.overallState === 'MONITOR'
+                  ? 'eye-outline'
+                  : 'checkmark'
+            }
             size={30}
-            color={hasSafetyFlags ? colors.danger : colors.accent}
+            color={needsAttention ? colors.danger : colors.accent}
           />
         </View>
-        <Text style={styles.resultTitle}>
-          {hasSafetyFlags
-            ? 'C’è qualcosa da controllare'
-            : 'Sembra tutto regolare'}
-        </Text>
-        <Text style={styles.resultSummary}>
-          {event.baselineComparison.replace(/Rocky/g, dog.name)}
-        </Text>
-        <ConfidenceBandPill band={event.confidenceBand} style={styles.pill} />
+        <Text style={styles.resultTitle}>{headline}</Text>
+        <Text style={styles.resultSummary}>{summary}</Text>
       </View>
 
       {event.safetyFlags.map((flag) => {
@@ -233,46 +265,162 @@ export default function DigestiveResultScreen() {
         />
       </View>
 
-      <Card style={styles.scoreCard}>
-        <View style={styles.scoreBadge}>
-          <Text style={styles.scoreNumber}>{event.fecalScoreEstimate ?? '—'}</Text>
-          <Text style={styles.scoreTotal}>/7</Text>
-        </View>
-        <View style={styles.scoreCopy}>
-          <Text style={styles.scoreTitle}>Stima visiva</Text>
-          <Text style={styles.scoreSubtitle}>
-            Basata sulla forma osservata nella foto.
-          </Text>
-        </View>
+      <Text style={styles.sectionTitle}>Rispetto a {dog.name}</Text>
+      <Card style={styles.comparisonCard}>
+        <Ionicons name="git-compare-outline" size={22} color={colors.primary} />
+        <Text style={styles.comparisonText}>
+          {event.baselineComparison.replace(/Rocky/g, dog.name)}
+        </Text>
       </Card>
 
-      {notableCandidates.length > 0 ? (
-        <Card style={styles.notableCard}>
-          <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
-          {notableCandidates.map((candidate) => (
-            <View key={candidate.label} style={styles.notableRow}>
-              <View style={styles.notableDot} />
-              <Text style={styles.notableLabel}>{candidate.label}</Text>
-              <Text style={styles.notableValue}>
-                {candidateText(candidate.level)}
+      {(event.possibleAssociations?.length ?? 0) > 0 ? (
+        <>
+          <Text style={styles.sectionTitle}>Un elemento da considerare</Text>
+          <Card style={styles.contextCard}>
+            {event.possibleAssociations?.map((item) => (
+              <Text key={item} style={styles.contextText}>
+                {item}
               </Text>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      <Text style={styles.sectionTitle}>Cosa fare</Text>
+      <View
+        style={[
+          styles.monitorCard,
+          event.overallState === 'ROUTINE' && styles.routineCard,
+        ]}
+      >
+        <Ionicons
+          name={
+            needsAttention
+              ? 'medkit-outline'
+              : event.overallState === 'ROUTINE'
+                ? 'checkmark-circle-outline'
+                : 'eye-outline'
+          }
+          size={22}
+          color={
+            needsAttention
+              ? colors.danger
+              : event.overallState === 'ROUTINE'
+                ? colors.accent
+                : colors.warning
+          }
+        />
+        <View style={styles.monitorCopy}>
+          <Text style={styles.monitorTitle}>
+            {event.recommendedNextStep ?? 'Controlla la prossima volta'}
+          </Text>
+          {!needsAttention ? (
+            <Text style={styles.monitorText}>
+              {event.overallState === 'ROUTINE'
+                ? 'Continuerò a confrontare le prossime osservazioni con il suo solito.'
+                : 'Se il cambiamento continua, registra la prossima evacuazione.'}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      {useApi && event.followupQuestion && event.followupKey ? (
+        <Card style={styles.questionCard}>
+          <View style={styles.questionHeading}>
+            <View style={styles.questionIcon}>
+              <Ionicons name="sparkles" size={18} color={colors.primary} />
             </View>
-          ))}
+            <Text style={styles.questionEyebrow}>Un dettaglio utile</Text>
+          </View>
+          <Text style={styles.questionText}>{event.followupQuestion}</Text>
+          <View style={styles.answerRow}>
+            {[
+              { label: 'Sì', value: true },
+              { label: 'No', value: false },
+            ].map((answer) => (
+              <Pressable
+                key={answer.label}
+                accessibilityRole="button"
+                disabled={contextMutation.isPending}
+                onPress={() =>
+                  contextMutation.mutate({
+                    key: event.followupKey!,
+                    value: answer.value,
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.answerButton,
+                  pressed && styles.answerButtonPressed,
+                ]}
+              >
+                <Text style={styles.answerButtonText}>{answer.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {contextMutation.isError ? (
+            <Text style={styles.questionError}>
+              Non sono riuscito a salvare la risposta. Riprova.
+            </Text>
+          ) : null}
         </Card>
       ) : null}
 
-      {event.activeFoodName ? (
-        <View style={styles.foodRow}>
-          <View style={styles.foodIcon}>
-            <Ionicons name="nutrition-outline" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.foodCopy}>
-            <Text style={styles.foodLabel}>Cibo attuale</Text>
-            <Text style={styles.foodValue} numberOfLines={2}>
-              {event.activeFoodName}
-            </Text>
-          </View>
-        </View>
+      {notableCandidates.length > 0 ||
+      event.activeFoodName ||
+      event.observationReliability ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: detailsOpen }}
+            onPress={() => setDetailsOpen((open) => !open)}
+            style={styles.detailsToggle}
+          >
+            <Text style={styles.detailsToggleText}>Approfondisci</Text>
+            <Ionicons
+              name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+
+          {detailsOpen ? (
+            <>
+              {notableCandidates.length > 0 ? (
+                <Card style={styles.notableCard}>
+                  <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
+                  {notableCandidates.map((candidate) => (
+                    <View key={candidate.label} style={styles.notableRow}>
+                      <View style={styles.notableDot} />
+                      <Text style={styles.notableLabel}>{candidate.label}</Text>
+                      <Text style={styles.notableValue}>
+                        {candidateText(candidate.level)}
+                      </Text>
+                    </View>
+                  ))}
+                </Card>
+              ) : null}
+
+              {event.activeFoodName ? (
+                <View style={styles.foodRow}>
+                  <View style={styles.foodIcon}>
+                    <Ionicons
+                      name="nutrition-outline"
+                      size={20}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <View style={styles.foodCopy}>
+                    <Text style={styles.foodLabel}>Alimento registrato</Text>
+                    <Text style={styles.foodValue} numberOfLines={2}>
+                      {event.activeFoodName}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+            </>
+          ) : null}
+        </>
       ) : null}
 
       <View style={styles.disclaimer}>
@@ -283,19 +431,12 @@ export default function DigestiveResultScreen() {
         />
         <View style={styles.disclaimerCopy}>
           <Text style={styles.disclaimerText}>{DIGESTIVE_DISCLAIMER}</Text>
-          <Text style={styles.disclaimerText}>{ABSENCE_NOT_PROOF_NOTE}</Text>
         </View>
       </View>
 
       <Button
         title="Fatto"
         onPress={() => router.replace('/(tabs)/rocky')}
-      />
-      <Button
-        title="Apri il Diario"
-        variant="outline"
-        onPress={() => router.replace('/(tabs)/diary')}
-        style={styles.secondaryAction}
       />
     </ScreenContainer>
   );
@@ -327,8 +468,29 @@ function capitalize(value: string): string {
   return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
 
+function digestiveHeadline(
+  comparison: string,
+  dogName: string,
+  hasSafetyFlags: boolean,
+): string {
+  if (hasSafetyFlags) return 'C’è qualcosa da tenere d’occhio';
+  if (comparison.startsWith('Più morbide')) {
+    return `Oggi sembrano più morbide del solito di ${dogName}`;
+  }
+  if (comparison.startsWith('Più compatte')) {
+    return `Oggi sembrano più compatte del solito di ${dogName}`;
+  }
+  if (comparison.startsWith('Simili')) {
+    return `Oggi sembrano simili al solito di ${dogName}`;
+  }
+  return `Ecco cosa noto oggi per ${dogName}`;
+}
+
 const styles = StyleSheet.create({
   content: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     paddingBottom: spacing.xxxl,
   },
   resultHero: {
@@ -369,9 +531,6 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     textAlign: 'center',
-  },
-  pill: {
-    marginTop: spacing.md,
   },
   safetyCard: {
     padding: spacing.lg,
@@ -414,6 +573,127 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.md,
   },
+  comparisonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  comparisonText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  contextCard: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.primarySoft,
+  },
+  contextText: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  monitorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.warningSoft,
+    marginBottom: spacing.lg,
+  },
+  routineCard: {
+    backgroundColor: colors.accentSoft,
+  },
+  monitorCopy: {
+    flex: 1,
+  },
+  monitorTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  monitorText: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  questionCard: {
+    marginBottom: spacing.lg,
+  },
+  questionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  questionIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: colors.primarySoft,
+  },
+  questionEyebrow: {
+    color: colors.primary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  questionText: {
+    marginTop: spacing.md,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.size.md * typography.lineHeight.normal,
+  },
+  answerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  answerButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.accent,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  answerButtonPressed: {
+    backgroundColor: colors.accentSoft,
+  },
+  answerButtonText: {
+    color: colors.accent,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  questionError: {
+    marginTop: spacing.sm,
+    color: colors.danger,
+    fontSize: typography.size.xs,
+  },
+  detailsToggle: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.lg,
+  },
+  detailsToggleText: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+  },
   metricCard: {
     flex: 1,
     minHeight: 132,
@@ -439,45 +719,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
-  },
-  scoreCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  scoreBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    paddingTop: spacing.md,
-    backgroundColor: colors.primarySoft,
-  },
-  scoreNumber: {
-    color: colors.primary,
-    fontSize: typography.size.xxl,
-    fontWeight: typography.weight.bold,
-  },
-  scoreTotal: {
-    color: colors.primary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-  },
-  scoreCopy: {
-    flex: 1,
-  },
-  scoreTitle: {
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-  },
-  scoreSubtitle: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
   },
   notableCard: {
     marginBottom: spacing.lg,

@@ -1,5 +1,5 @@
 import type { BehaviorEventResult } from '../../contracts/types';
-import { CONFIDENCE_BAND_LABELS, intentHeadline } from '../core/copy';
+import { intentHeadline } from '../core/copy';
 
 export type BehaviorShareCard = {
   title: string;
@@ -11,10 +11,7 @@ export function buildBehaviorShareCard(
   dogName: string,
 ): BehaviorShareCard {
   const personalize = (copy: string) => copy.replace(/Rocky/g, dogName);
-  const lines = [
-    intentHeadline(dogName, result.primary_intent),
-    CONFIDENCE_BAND_LABELS[result.confidence_band],
-  ];
+  const lines = [intentHeadline(dogName, result.primary_intent)];
   if (result.evidence.length > 0) {
     lines.push('', 'Segnali osservati:');
     for (const item of result.evidence) {

@@ -6,14 +6,17 @@ from fastapi import APIRouter
 
 from app.api.deps import IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
+    DigestiveContextUpdateRequest,
     DigestiveEventOut,
     DigestiveSummaryOut,
     FecalCompleteResponse,
     FecalInitRequest,
     FecalInitResponse,
 )
+from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, idempotency_db
+from app.domains.digestive_intelligence import build_digestive_intelligence
 
 router = APIRouter()
 
@@ -129,6 +132,10 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         active_food_name = food.name if food is not None else None
         baseline_comparison = None
     observation = e.observation_json or {}
+    intelligence = e.intelligence_json or {}
+    baseline_comparison = (
+        intelligence.get("baseline_comparison") or baseline_comparison
+    )
     return DigestiveEventOut(
         id=e.id,
         dog_id=e.dog_id,
@@ -149,8 +156,72 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         summary=e.summary,
         active_food_name=active_food_name,
         baseline_comparison=baseline_comparison,
+        intelligence_schema_version=intelligence.get("schema_version"),
+        overall_state=intelligence.get("overall_state"),
+        consumer_headline=intelligence.get("consumer_headline"),
+        consumer_summary=intelligence.get("consumer_summary"),
+        relevant_context=intelligence.get("relevant_context", []),
+        possible_associations=intelligence.get("possible_associations", []),
+        safety_state=intelligence.get("safety_state"),
+        recommended_next_step=intelligence.get("recommended_next_step"),
+        followup_key=intelligence.get("followup_key"),
+        followup_question=intelligence.get("followup_question"),
+        what_to_watch=intelligence.get("what_to_watch", []),
+        observation_reliability=intelligence.get("observation_reliability"),
+        knowledge_references=intelligence.get("knowledge_references", []),
+        reasoning_version=intelligence.get("reasoning_version"),
+        baseline_version=intelligence.get("baseline_version"),
         created_at=e.created_at,
     )
+
+
+@router.patch(
+    "/digestive/events/{event_id}/context",
+    response_model=DigestiveEventOut,
+)
+async def update_digestive_context(
+    event_id: str,
+    payload: DigestiveContextUpdateRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> DigestiveEventOut:
+    """Save one sparse owner answer and deterministically refresh the result."""
+    answers = payload.model_dump(exclude_none=True)
+    if state.engine is not None:
+        event = await digestive_db.update_owner_context(
+            state.engine,
+            user_id=user_id,
+            event_id=event_id,
+            answers=answers,
+        )
+        context = await digestive_db.load_digestive_context(
+            state.engine, event=event
+        )
+    else:
+        event = digestive_domain.get_fecal_event(
+            state.store, user_id=user_id, event_id=event_id
+        )
+        if event.status != "COMPLETED":
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Digestive context can only be added to a completed event.",
+            )
+        event.owner_context_json.update(answers)
+        context = digestive_domain.build_inmemory_digestive_context(
+            state.store, event=event
+        )
+
+    intelligence = build_digestive_intelligence(
+        event.observation_json or {}, context
+    )
+    event.safety_flags = digestive_domain.contextual_safety_flags(
+        event.observation_json or {}, context
+    )
+    event.intelligence_json = intelligence.model_dump(mode="json")
+    event.summary = intelligence.consumer_summary
+    if state.engine is not None:
+        await digestive_db.save_fecal_state(state.engine, event)
+    return await get_digestive_event(event_id, state, user_id)
 
 
 @router.get("/dogs/{dog_id}/digestive-summary", response_model=DigestiveSummaryOut)

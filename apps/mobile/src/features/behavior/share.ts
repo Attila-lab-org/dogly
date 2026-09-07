@@ -1,13 +1,13 @@
 /**
  * Condivisione risultato behavior: card testuale sanitizzata (UX_REFERENCE).
- * MAI raw video, path o URL firmati: solo headline, band di confidenza in
- * parole (mai %, O-07) ed evidence già mostrate all'utente.
+ * MAI raw video, path o URL firmati: solo headline ed evidence già mostrate
+ * all'utente.
  */
 import { Share } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import type { BehaviorEventResult } from '../../contracts/types';
-import { CONFIDENCE_BAND_LABELS, intentHeadline } from '../core/copy';
+import { intentHeadline } from '../core/copy';
 import { buildBehaviorShareCard } from './shareCopy';
 export { buildBehaviorShareCard } from './shareCopy';
 export type { BehaviorShareCard } from './shareCopy';
@@ -119,9 +119,8 @@ ${portrait}
 <text x="540" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="4" fill="#168F83">DOGLY HA OSSERVATO</text>
 ${headlineSvg}
 <rect x="120" y="780" width="840" height="230" rx="36" fill="#FFFFFF" opacity=".94"/>
-<text x="170" y="850" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#168F83">Una lettura prudente</text>
-<text x="170" y="905" font-family="Arial, sans-serif" font-size="30" fill="#44516A">${escapeXml(CONFIDENCE_BAND_LABELS[result.confidence_band])}</text>
-<text x="170" y="960" font-family="Arial, sans-serif" font-size="25" fill="#667085">Un&apos;osservazione, non una diagnosi.</text>
+<text x="170" y="870" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#168F83">Una lettura prudente</text>
+<text x="170" y="940" font-family="Arial, sans-serif" font-size="25" fill="#667085">Un&apos;osservazione, non una diagnosi.</text>
 <text x="540" y="1170" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#14213D">Guarda cosa ha capito Dogly</text>
 <text x="540" y="1220" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#667085">del mio cane ${escapeXml(dogName)} 🐾</text>
 </svg>`;

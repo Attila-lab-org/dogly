@@ -24,5 +24,14 @@ export function isApiConfigured(): boolean {
 
 /** True when real auth cannot run and __DEV__ mock gate is allowed. */
 export function shouldUseMockAuthGate(): boolean {
-  return typeof __DEV__ !== 'undefined' && __DEV__ && !isSupabaseConfigured();
+  const forcedWebDemo =
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).get('demo') === '1' ||
+      window.location.hash === '#demo');
+  return (
+    forcedWebDemo ||
+    (typeof __DEV__ !== 'undefined' && __DEV__ && !isSupabaseConfigured())
+  );
 }

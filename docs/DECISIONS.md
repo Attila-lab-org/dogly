@@ -94,7 +94,7 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
 
 ### ADR-007 — Accesso alle storie dalla Home
 
-- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** LOCKED (demo V1)
+- **Data:** 2026-09-05 • **Autorità:** Product Owner • **Stato:** SUPERSEDED da ADR-014
 - **Decisione:**
   - Non mostrare il Knowledge Score nelle superfici principali Home/Profilo.
   - Tab primarie: Home / Fotocamera / {nome cane}; Diario raggiungibile dalla Home.
@@ -231,6 +231,58 @@ razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzi
 - **Rationale:** il target sono proprietari di cani non tecnici (tutte le età);
   la semplicità calda e l'onestà sono il livello di servizio e il
   differenziale di brand.
+
+### ADR-014 — Enterprise UX V5.1 e navigazione consumer
+
+- **Data:** 2026-09-07 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Decisione:**
+  - Tab primarie: Home / Diario / Profilo.
+  - Fotocamera Storie raggiungibile dalla `StoriesRail`; capture behavior dalla
+    CTA “Capisci {nome}”.
+  - Palette esclusivamente dai token Dogly correnti.
+  - Foto reali del cane nelle superfici personali; illustrazioni Dogly per
+    onboarding, istruzioni, attese ed empty state.
+  - Reference V5 fedele per gerarchia e proporzioni, non per duplicazioni,
+    pulsanti privi di funzione o dati non disponibili.
+  - Risultati e flussi ridotti al minimo senza rimuovere safety, error handling,
+    retry, offline, quota o accessibilità.
+- **Rationale:** rendere il valore di Dogly immediato e personale, mantenendo
+  complessità e dettagli tecnici fuori dalla superficie consumer.
+- **Riferimento:** `docs/ux/DOGLY_UX_V5_1_DECISIONS.md`.
+
+### ADR-015 — Digestive Intelligence V2
+
+- **Data:** 2026-09-07 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Decisione:**
+  - La foto è una fonte; il risultato combina osservazione, contesto,
+    alimentazione, baseline personale, andamento e triage.
+  - Observer, normalizzazione, context builder, baseline, knowledge retrieval,
+    safety/triage, reasoner e consumer composer restano separati.
+  - Triage interno deterministico: `ROUTINE`, `MONITOR`, `ATTENTION`,
+    `VET_CONTACT`; l'AI generativa non può scegliere o attenuare escalation.
+  - Il consumer vede cosa cambia, poche osservazioni, confronto personale e una
+    sola azione. Score, confidence e audit restano interni.
+  - Nessuna diagnosi, prova di assenza o causalità da semplice correlazione.
+- **Rationale:** trasformare la funzione da classificazione fotografica a
+  memoria digestiva personale, prudente e utilizzabile.
+- **Riferimento:** `docs/ux/DOGLY_UX_V5_1_DECISIONS.md`.
+
+### ADR-016 — “Raccontami” e provenienza owner-reported
+
+- **Data:** 2026-09-07 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Decisione:**
+  - L’ingresso vive in Home con priorità secondaria forte, dopo l’ultima
+    analisi e prima degli strumenti.
+  - Il proprietario può parlare o scrivere; l’audio breve viene trascritto e
+    non viene persistito.
+  - I fatti estratti sono modificabili ed eliminabili e diventano durevoli
+    solo dopo conferma esplicita.
+  - Ogni fatto conserva provenienza `OWNER_REPORTED`, non sovrascrive dati
+    verificati e non diventa automaticamente un pattern personale.
+- **Rationale:** raccogliere conoscenza utile sul cane senza confondere una
+  dichiarazione del proprietario con un’osservazione AI o una verità
+  scientifica.
+- **Riferimento:** `docs/ux/DOGLY_UX_V5_1_DECISIONS.md`.
 
 ## Decisioni aperte (Spec V1 sez. 32) — NON inventare risoluzioni
 

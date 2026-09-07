@@ -2532,6 +2532,75 @@
         }
       }
     },
+    "/v1/digestive/events/{event_id}/context": {
+      "patch": {
+        "tags": [
+          "digestive"
+        ],
+        "summary": "Update Digestive Context",
+        "description": "Save one sparse owner answer and deterministically refresh the result.",
+        "operationId": "update_digestive_context_v1_digestive_events__event_id__context_patch",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DigestiveContextUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigestiveEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/dogs/{dog_id}/digestive-summary": {
       "get": {
         "tags": [
@@ -2573,6 +2642,219 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DigestiveSummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/owner-stories/prepare": {
+      "post": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Prepare Owner Story",
+        "operationId": "prepare_owner_story_v1_dogs__dog_id__owner_stories_prepare_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerStoryPrepareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/owner-stories/prepare-audio": {
+      "post": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Prepare Owner Story Audio",
+        "operationId": "prepare_owner_story_audio_v1_dogs__dog_id__owner_stories_prepare_audio_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerStoryAudioPrepareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/owner-stories/{draft_id}/confirm": {
+      "post": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Confirm Owner Story",
+        "operationId": "confirm_owner_story_v1_dogs__dog_id__owner_stories__draft_id__confirm_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerStoryConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryConfirmedOut"
                 }
               }
             }
@@ -3353,7 +3635,8 @@
         "enum": [
           "BEHAVIOR",
           "DIGESTIVE",
-          "FOOD_LABEL"
+          "FOOD_LABEL",
+          "OWNER_STORY"
         ],
         "title": "AnalysisDomain"
       },
@@ -4216,6 +4499,46 @@
         ],
         "title": "DiaryPage"
       },
+      "DigestiveContextUpdateRequest": {
+        "properties": {
+          "vomiting_today": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vomiting Today"
+          },
+          "reduced_activity_today": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reduced Activity Today"
+          },
+          "unusual_food_48h": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unusual Food 48H"
+          }
+        },
+        "type": "object",
+        "title": "DigestiveContextUpdateRequest",
+        "description": "Sparse owner-confirmed context; omitted answers remain unknown."
+      },
       "DigestiveEventOut": {
         "properties": {
           "id": {
@@ -4344,6 +4667,7 @@
               {
                 "type": "string",
                 "enum": [
+                  "INSUFFICIENT",
                   "BELOW_USUAL",
                   "NEAR_USUAL",
                   "ABOVE_USUAL"
@@ -4354,6 +4678,175 @@
               }
             ],
             "title": "Baseline Comparison"
+          },
+          "intelligence_schema_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intelligence Schema Version"
+          },
+          "overall_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ROUTINE",
+                  "MONITOR",
+                  "ATTENTION",
+                  "VET_CONTACT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall State"
+          },
+          "consumer_headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Headline"
+          },
+          "consumer_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Summary"
+          },
+          "relevant_context": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Relevant Context"
+          },
+          "possible_associations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Possible Associations"
+          },
+          "safety_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ROUTINE",
+                  "MONITOR",
+                  "ATTENTION",
+                  "VET_CONTACT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety State"
+          },
+          "recommended_next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Next Step"
+          },
+          "followup_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "vomiting_today",
+                  "reduced_activity_today",
+                  "unusual_food_48h"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followup Key"
+          },
+          "followup_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followup Question"
+          },
+          "what_to_watch": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "What To Watch"
+          },
+          "observation_reliability": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Reliability"
+          },
+          "knowledge_references": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Knowledge References"
+          },
+          "reasoning_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Version"
+          },
+          "baseline_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Version"
           },
           "created_at": {
             "type": "string",
@@ -6317,6 +6810,167 @@
         ],
         "title": "MealSchedule",
         "description": "Structured meal rhythm (quantified routine fields)."
+      },
+      "OwnerReportedFact": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ROUTINE",
+              "PREFERENCE",
+              "DIET",
+              "HEALTH",
+              "GENERAL"
+            ],
+            "title": "Category"
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 280,
+            "minLength": 2,
+            "title": "Statement"
+          },
+          "provenance": {
+            "type": "string",
+            "const": "OWNER_REPORTED",
+            "title": "Provenance",
+            "default": "OWNER_REPORTED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "statement"
+        ],
+        "title": "OwnerReportedFact"
+      },
+      "OwnerStoryAudioPrepareRequest": {
+        "properties": {
+          "audio_base64": {
+            "type": "string",
+            "maxLength": 4000000,
+            "minLength": 16,
+            "title": "Audio Base64"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "audio/m4a",
+              "audio/mp4",
+              "audio/webm",
+              "audio/wav",
+              "audio/mpeg"
+            ],
+            "title": "Content Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "audio_base64",
+          "content_type"
+        ],
+        "title": "OwnerStoryAudioPrepareRequest"
+      },
+      "OwnerStoryConfirmRequest": {
+        "properties": {
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Facts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facts"
+        ],
+        "title": "OwnerStoryConfirmRequest"
+      },
+      "OwnerStoryConfirmedOut": {
+        "properties": {
+          "observation_id": {
+            "type": "string",
+            "title": "Observation Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "status": {
+            "type": "string",
+            "const": "CONFIRMED",
+            "title": "Status",
+            "default": "CONFIRMED"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "title": "Facts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "observation_id",
+          "dog_id",
+          "facts"
+        ],
+        "title": "OwnerStoryConfirmedOut"
+      },
+      "OwnerStoryDraftOut": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "title": "Draft Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "title": "Facts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_id",
+          "dog_id",
+          "transcript",
+          "facts"
+        ],
+        "title": "OwnerStoryDraftOut"
+      },
+      "OwnerStoryPrepareRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "OwnerStoryPrepareRequest"
       },
       "PatternListResponse": {
         "properties": {

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ScreenContainer } from '@/components';
+import { Button, Card, DogIllustration, ScreenContainer } from '@/components';
 import {
   colors,
   radius,
@@ -27,7 +27,7 @@ type Phase = 'ready' | 'preview' | 'uploading' | 'upload_failed';
 export default function DigestiveCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { loading: sessionLoading, userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const params = useLocalSearchParams<{ from?: string }>();
   const fromCheckIn =
@@ -50,10 +50,14 @@ export default function DigestiveCaptureScreen() {
     if (!photoUri) return;
     setPhase('uploading');
     try {
-      if (usingMockGate || !isApiConfigured() || !userId || !dog.id) {
+      if (usingMockGate || !isApiConfigured()) {
         // Mock gate dev: pipeline finta solo in demo.
         await new Promise((resolve) => setTimeout(resolve, 800));
         router.replace('/digestive/processing/fecal-ok-1');
+        return;
+      }
+      if (sessionLoading || !userId || !dog.id) {
+        setPhase('upload_failed');
         return;
       }
       const { eventId } = await enqueueAndUploadDigestivePhoto({
@@ -80,42 +84,38 @@ export default function DigestiveCaptureScreen() {
         <Text style={styles.careBanner}>{analysisContext.note}</Text>
       ) : null}
 
-      <View style={styles.heading}>
-        <Text style={styles.title}>
-          {photoUri ? 'Va bene questa foto?' : 'Scatta una foto'}
-        </Text>
-        {!photoUri ? (
-          <Text style={styles.subtitle}>
-            La confronterò con le osservazioni precedenti di {dog.name}.
-          </Text>
-        ) : null}
-      </View>
-
-      <Card noPadding style={styles.photoCard}>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={styles.preview} />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Scatta una foto"
-            onPress={takePhoto}
-            style={styles.cameraArea}
-          >
-            <View style={styles.cameraIcon}>
-              <Ionicons name="camera" size={34} color={colors.accent} />
-            </View>
-            <Text style={styles.cameraLabel}>Tocca per scattare</Text>
-          </Pressable>
-        )}
-      </Card>
-
       {!photoUri ? (
-        <View style={styles.tips}>
-          <PhotoTip icon="sunny-outline" label="Buona luce" />
-          <PhotoTip icon="scan-outline" label="Da vicino" />
-          <PhotoTip icon="arrow-down-outline" label="Dall’alto" />
-        </View>
-      ) : null}
+        <>
+          <View style={styles.hero}>
+            <DogIllustration mood="welcome" size={210} />
+            <Text style={styles.title}>Analizza la digestione di {dog.name}</Text>
+            <Text style={styles.subtitle}>
+              Una foto chiara mi aiuta a confrontare questa osservazione con il
+              suo solito.
+            </Text>
+          </View>
+
+          <Card style={styles.tipsCard}>
+            <Text style={styles.tipsTitle}>Per una foto migliore</Text>
+            <PhotoTip icon="sunny-outline" label="Usa una buona luce naturale" />
+            <PhotoTip icon="scan-outline" label="Inquadra solo le feci" />
+            <PhotoTip icon="arrow-down-outline" label="Scatta dall’alto e da vicino" />
+            <PhotoTip icon="flash-off-outline" label="Evita ombre e riflessi forti" />
+          </Card>
+        </>
+      ) : (
+        <>
+          <View style={styles.heading}>
+            <Text style={styles.title}>Va bene questa foto?</Text>
+          <Text style={styles.subtitle}>
+              Controlla che l’immagine sia nitida e ben illuminata.
+          </Text>
+          </View>
+          <Card noPadding style={styles.photoCard}>
+          <Image source={{ uri: photoUri }} style={styles.preview} />
+          </Card>
+        </>
+      )}
 
       {phase === 'upload_failed' ? (
         <View style={styles.error}>
@@ -182,7 +182,9 @@ export default function DigestiveCaptureScreen() {
 function PhotoTip({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
   return (
     <View style={styles.tip}>
-      <Ionicons name={icon} size={17} color={colors.accent} />
+      <View style={styles.tipIcon}>
+        <Ionicons name={icon} size={16} color={colors.accent} />
+      </View>
       <Text style={styles.tipLabel}>{label}</Text>
     </View>
   );
@@ -190,6 +192,9 @@ function PhotoTip({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label
 
 const styles = StyleSheet.create({
   content: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     paddingBottom: spacing.xxxl,
   },
   careBanner: {
@@ -202,6 +207,10 @@ const styles = StyleSheet.create({
   heading: {
     alignItems: 'center',
     marginBottom: spacing.xl,
+  },
+  hero: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   title: {
     color: colors.text,
@@ -219,49 +228,39 @@ const styles = StyleSheet.create({
   photoCard: {
     overflow: 'hidden',
   },
-  cameraArea: {
-    minHeight: 300,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  cameraIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
-  },
-  cameraLabel: {
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-  },
   preview: {
     width: '100%',
     aspectRatio: 4 / 3,
     backgroundColor: colors.surfaceMuted,
   },
-  tips: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  tipsCard: {
     gap: spacing.sm,
-    marginTop: spacing.lg,
+    backgroundColor: colors.primarySoft,
+  },
+  tipsTitle: {
+    marginBottom: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
   },
   tip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+    gap: spacing.sm,
+    minHeight: 30,
+  },
+  tipIcon: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
     backgroundColor: colors.surface,
   },
   tipLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
   error: {

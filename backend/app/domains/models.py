@@ -177,6 +177,8 @@ class FecalEventRec(BaseModel):
     status: str = "DRAFT"
     upload_completed: bool = False
     observation_json: dict[str, Any] | None = None
+    intelligence_json: dict[str, Any] | None = None
+    owner_context_json: dict[str, Any] = Field(default_factory=dict)
     fecal_score_estimate: int | None = None
     consistency: str | None = None
     color: str | None = None

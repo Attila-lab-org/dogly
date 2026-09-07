@@ -43,7 +43,9 @@ export type CandidateLevel = 'none_observed' | 'possible' | 'clear_candidate' | 
 export const SAFETY_FLAG_CODES = [
   'BLOOD_CANDIDATE',
   'MELENA_CANDIDATE',
+  'FOREIGN_MATERIAL_CANDIDATE',
   'REPEATED_WATERY',
+  'DIGESTIVE_SYMPTOMS',
   'RAPID_WORSENING',
 ] as const;
 export type SafetyFlagCode = (typeof SAFETY_FLAG_CODES)[number];
@@ -71,6 +73,19 @@ export interface FecalEventResult {
   activeFoodName: string | null;
   /** Confronto Rocky-vs-Rocky con la baseline */
   baselineComparison: string;
+  /** Digestive Intelligence V2; opzionali per eventi storici pre-v2. */
+  overallState?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT';
+  consumerHeadline?: string | null;
+  consumerSummary?: string | null;
+  relevantContext?: string[];
+  possibleAssociations?: string[];
+  recommendedNextStep?: string | null;
+  followupKey?: 'vomiting_today' | 'reduced_activity_today' | 'unusual_food_48h' | null;
+  followupQuestion?: string | null;
+  whatToWatch?: string[];
+  observationReliability?: string | null;
+  reasoningVersion?: string | null;
+  baselineVersion?: string | null;
   createdAt: string;
 }
 

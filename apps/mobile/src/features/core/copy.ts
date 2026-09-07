@@ -42,24 +42,23 @@ export interface ProcessingStep {
   description: string;
 }
 
-/** Stepper processing (sez. 7.2): coda → osservazione → interpretazione. */
+/** Copy consumer: gli stati tecnici restano nel motore. */
 export function processingStepsFor(dogName: string): ProcessingStep[] {
   return [
     {
       status: 'QUEUED',
-      title: 'In coda',
-      description: 'Il video è al sicuro: inizio appena possibile.',
+      title: 'Guardo il video',
+      description: `Sto iniziando a guardare ${dogName}.`,
     },
     {
       status: 'OBSERVING',
-      title: 'Osservo il video',
-      description:
-        'Rilevo i fatti oggettivi: postura, movimento, vocalizzazioni.',
+      title: 'Riconosco i segnali principali',
+      description: `Cerco ciò che può aiutarmi a capire ${dogName}.`,
     },
     {
       status: 'INTERPRETING',
-      title: 'Interpreto i segnali',
-      description: `Metto insieme osservazioni, contesto e ciò che so di ${dogName}.`,
+      title: 'Preparo la mia risposta',
+      description: 'Manca poco.',
     },
   ];
 }

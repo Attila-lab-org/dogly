@@ -29,11 +29,23 @@ export const SAFETY_COPY: Record<SafetyFlagCode, SafetyCopy> = {
       "Il colore osservato sembra compatibile con feci molto scure. Può avere cause diverse: merita attenzione.",
     action: 'Contatta il veterinario',
   },
+  FOREIGN_MATERIAL_CANDIDATE: {
+    title: 'Possibile materiale insolito',
+    message:
+      'Nella foto sembra esserci qualcosa di insolito. Osserva come sta il tuo cane e non provare a rimuoverlo.',
+    action: 'Se hai dubbi, contatta il veterinario',
+  },
   REPEATED_WATERY: {
     title: 'Episodi liquidi ripetuti',
     message:
       'Negli ultimi giorni sembrano esserci episodi liquidi ripetuti. Monitora il tuo cane e tieni traccia dei pasti.',
     action: 'Se continua, contatta il veterinario',
+  },
+  DIGESTIVE_SYMPTOMS: {
+    title: 'Più segnali insieme',
+    message:
+      'Hai segnalato vomito insieme a episodi liquidi recenti. È meglio chiedere un parere professionale.',
+    action: 'Contatta il veterinario',
   },
   RAPID_WORSENING: {
     title: 'Peggioramento rapido rispetto al solito',

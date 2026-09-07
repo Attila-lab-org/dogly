@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     reasoning_model: str = "mock-reasoner-v0"
     digestive_vision_provider: str = "mock"
     digestive_vision_model: str = "mock-digestive-vision-v0"
+    owner_transcription_model: str = "gpt-4o-mini-transcribe"
 
     gemini_api_key: str = ""
     openai_api_key: str = ""
@@ -56,9 +57,11 @@ class Settings(BaseSettings):
     observer_kill_switch: bool = False
     reasoner_kill_switch: bool = False
     digestive_vision_kill_switch: bool = False
+    owner_transcription_kill_switch: bool = False
     observer_budget_usd_per_day: float = 50.0
     reasoner_budget_usd_per_day: float = 50.0
     digestive_vision_budget_usd_per_day: float = 25.0
+    owner_transcription_budget_usd_per_day: float = 5.0
 
     # --- Storage ---
     storage_provider: str = "mock"
@@ -117,6 +120,7 @@ class Settings(BaseSettings):
             (
                 self.reasoning_provider == "openai"
                 or self.digestive_vision_provider == "openai"
+                or not self.owner_transcription_kill_switch
             )
             and not self.openai_api_key
         ):

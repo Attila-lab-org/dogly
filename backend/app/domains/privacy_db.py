@@ -266,6 +266,7 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
                    consistency, shape, color, mucus_candidate, blood_candidate,
                    melena_candidate, foreign_material_candidate, confidence_band, status,
                    feeding_period_id, attempt_count, last_error_code,
+                   observation_json, intelligence_json, owner_context_json,
                    created_at, completed_at, retention_state, expires_at
             from public.fecal_events
             where user_id = :uid
@@ -293,6 +294,12 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
         """,
         "advice_outcomes": """
             select * from public.advice_outcomes
+            where user_id = :uid order by created_at, id
+        """,
+        "owner_reported_observations": """
+            select id, dog_id, transcript, facts_json, status,
+                   confirmed_at, created_at
+            from public.owner_reported_observations
             where user_id = :uid order by created_at, id
         """,
         "subscriptions": "select * from public.subscriptions where user_id = :uid",
@@ -348,6 +355,7 @@ async def count_user_rows(engine: AsyncEngine, user_id: str) -> dict[str, int]:
         (select count(*) from public.user_consents where user_id = :uid)::int as consents,
         (select count(*) from public.dog_lifestyle_profiles where user_id = :uid)::int as lifestyle_profiles,
         (select count(*) from public.advice_outcomes where user_id = :uid)::int as advice_outcomes,
+        (select count(*) from public.owner_reported_observations where user_id = :uid)::int as owner_reported_observations,
         (select count(*) from public.subscriptions where user_id = :uid)::int as subscriptions,
         (select count(*) from public.device_installations where user_id = :uid)::int as devices
     """

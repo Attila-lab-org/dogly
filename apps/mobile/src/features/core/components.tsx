@@ -275,6 +275,8 @@ export function BehaviorResultView({
   onFeedback,
   careNote,
   feedbackError,
+  photoUri,
+  primaryAdvice,
 }: {
   result: BehaviorEventResult;
   dogName: string;
@@ -283,7 +285,10 @@ export function BehaviorResultView({
   careNote?: string | null;
   /** Stato errore del salvataggio feedback (mai finto "Salvato"). */
   feedbackError?: string | null;
+  photoUri?: string | null;
+  primaryAdvice?: React.ReactNode;
 }) {
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
   const isAmbiguous = result.primary_intent === 'AMBIGUOUS';
@@ -296,25 +301,31 @@ export function BehaviorResultView({
           (isInsufficient || isAmbiguous) && styles.resultHeroUncertain,
         ]}
       >
-        <View style={styles.resultIcon}>
-          <CuteIcon
-            name={
-              isInsufficient || !result.primary_intent
-                ? 'search'
-                : INTENT_HERO_ICONS[result.primary_intent]
-            }
-            size={32}
-            color={
-              isInsufficient || isAmbiguous ? colors.warning : colors.accent
-            }
+        {photoUri ? (
+          <Image
+            source={{ uri: photoUri }}
+            style={styles.resultPhoto}
+            resizeMode="cover"
+            accessibilityLabel={`Foto di ${dogName}`}
           />
-        </View>
+        ) : (
+          <View style={styles.resultIcon}>
+            <CuteIcon
+              name={
+                isInsufficient || !result.primary_intent
+                  ? 'search'
+                  : INTENT_HERO_ICONS[result.primary_intent]
+              }
+              size={32}
+              color={
+                isInsufficient || isAmbiguous ? colors.warning : colors.accent
+              }
+            />
+          </View>
+        )}
         <Text style={styles.headline}>
           {intentHeadline(dogName, result.primary_intent)}
         </Text>
-        <View style={styles.pillWrap}>
-          <ConfidencePill band={result.confidence_band} />
-        </View>
         <Text style={styles.summary}>
           {personalizeCopy(result.consumer_summary, dogName)}
         </Text>
@@ -327,41 +338,73 @@ export function BehaviorResultView({
         </View>
       ) : null}
 
-      {result.evidence.length > 0 && (
-        <View style={styles.evidenceSection}>
-          <Text style={styles.evidenceTitle}>Segnali osservati</Text>
-          {result.evidence.map((item, index) => (
-            <EvidenceRow
-              key={`${item.label}-${index}`}
-              item={{
-                ...item,
-                label: personalizeCopy(item.label, dogName),
-              }}
-            />
-          ))}
-        </View>
-      )}
+      {primaryAdvice}
 
-      {result.alternatives.length > 0 && (
-        <Card style={styles.alternativeCard}>
-          <SectionHeader
-            title={isAmbiguous ? 'Ipotesi possibili' : 'In alternativa'}
-            icon={
-              <Ionicons name="git-branch-outline" size={16} color={colors.accent} />
-            }
-          />
-          {result.alternatives.map((alt) => (
-            <View key={alt.intent} style={styles.alternativeRow}>
-              <Text style={styles.alternativeLabel}>
-                {BEHAVIOR_INTENT_LABELS[alt.intent]}
-              </Text>
-              <Text style={styles.alternativeRationale}>
-                {personalizeCopy(alt.rationale, dogName)}
-              </Text>
-            </View>
-          ))}
-        </Card>
-      )}
+      {result.evidence.length > 0 || result.alternatives.length > 0 ? (
+        <View style={styles.detailsBlock}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: detailsOpen }}
+            onPress={() => setDetailsOpen((open) => !open)}
+            style={styles.detailsToggle}
+          >
+            <Text style={styles.detailsToggleText}>Approfondisci</Text>
+            <Ionicons
+              name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+
+          {detailsOpen ? (
+            <>
+              {result.evidence.length > 0 ? (
+                <View style={styles.evidenceSection}>
+                  <Text style={styles.evidenceTitle}>Perché lo penso</Text>
+                  {result.evidence.map((item, index) => (
+                    <EvidenceRow
+                      key={`${item.label}-${index}`}
+                      item={{
+                        ...item,
+                        label: personalizeCopy(item.label, dogName),
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {result.alternatives.length > 0 ? (
+                <Card style={styles.alternativeCard}>
+                  <SectionHeader
+                    title={
+                      isAmbiguous
+                        ? 'Altre letture possibili'
+                        : 'Potrebbero esserci altre spiegazioni'
+                    }
+                    icon={
+                      <Ionicons
+                        name="git-branch-outline"
+                        size={16}
+                        color={colors.accent}
+                      />
+                    }
+                  />
+                  {result.alternatives.map((alt) => (
+                    <View key={alt.intent} style={styles.alternativeRow}>
+                      <Text style={styles.alternativeLabel}>
+                        {BEHAVIOR_INTENT_LABELS[alt.intent]}
+                      </Text>
+                      <Text style={styles.alternativeRationale}>
+                        {personalizeCopy(alt.rationale, dogName)}
+                      </Text>
+                    </View>
+                  ))}
+                </Card>
+              ) : null}
+            </>
+          ) : null}
+        </View>
+      ) : null}
 
       <FeedbackButtons
         value={feedback}
@@ -528,16 +571,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
+  resultPhoto: {
+    width: '100%',
+    height: 210,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+  },
   headline: {
     fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
     color: colors.text,
     textAlign: 'center',
     lineHeight: typography.size.xxl * typography.lineHeight.tight,
-  },
-  pillWrap: {
-    alignItems: 'center',
-    marginTop: spacing.md,
   },
   summary: {
     marginTop: spacing.md,
@@ -560,6 +605,23 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.text,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  detailsBlock: {
+    marginTop: spacing.lg,
+  },
+  detailsToggle: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  detailsToggleText: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
   },
   evidenceSection: {
     marginTop: spacing.xl,

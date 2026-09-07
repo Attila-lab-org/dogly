@@ -90,12 +90,17 @@ class OpenAIDigestiveVision:
             "fecal_score_estimate": "integer 1-7 or null",
             "consistency": [value.value for value in FecalConsistency],
             "shape": "short visible descriptor or unknown",
+            "apparent_moisture": ["low", "normal", "high", "unknown"],
+            "segmentation": ["present", "reduced", "absent", "unknown"],
             "color": "short visible descriptor or unknown",
             "color_uncertainty": "low, medium, high, or unknown",
+            "color_uniformity": ["uniform", "non_uniform", "unknown"],
             "mucus_candidate": [value.value for value in CandidateLevel],
             "fresh_blood_candidate": [value.value for value in CandidateLevel],
             "melena_candidate": [value.value for value in CandidateLevel],
             "foreign_material_candidate": [value.value for value in CandidateLevel],
+            "undigested_food_candidate": [value.value for value in CandidateLevel],
+            "apparent_volume": ["low", "normal", "high", "not_assessable"],
             "confidence_band": [value.value for value in ConfidenceBand],
         }
         response = await self._client.post(

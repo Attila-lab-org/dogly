@@ -20,10 +20,7 @@ import {
   mapApiEventToResult,
 } from '@/features/behavior/api';
 import { isApiConfigured } from '@/features/auth/env';
-import {
-  AdviceCard,
-  AdviceOutcomePrompt,
-} from '@/features/advice/AdviceCard';
+import { AdviceCard } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
 import { selectAdvice } from '@/features/advice/logic';
 
@@ -151,18 +148,11 @@ export default function BehaviorResultScreen() {
           careNote={
             analysisContext?.concern === 'off' ? analysisContext.note : null
           }
+          photoUri={dog.photoUri}
+          primaryAdvice={
+            advice ? <AdviceCard advice={advice} dogName={dog.name} /> : null
+          }
         />
-
-        {advice ? (
-          <>
-            <AdviceCard advice={advice} dogName={dog.name} />
-            <AdviceOutcomePrompt
-              eventId={result.eventId}
-              adviceCode={advice.code}
-              existingOutcome={query.data?.advice_outcome}
-            />
-          </>
-        ) : null}
 
         {(result.primary_intent === 'FEAR_INSECURITY' ||
           result.primary_intent === 'DISCOMFORT_AVOIDANCE') && (
@@ -183,14 +173,6 @@ export default function BehaviorResultScreen() {
           testID="share-result"
         />
 
-        <Button
-          title="Torna al Diario"
-          variant="outline"
-          icon={<Ionicons name="book-outline" size={18} color={colors.accent} />}
-          onPress={() => router.replace('/(tabs)/diary')}
-          style={styles.diaryButton}
-          testID="back-to-diary"
-        />
       </ScrollView>
     </ScreenContainer>
   );
@@ -225,8 +207,5 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: spacing.xl,
-  },
-  diaryButton: {
-    marginTop: spacing.sm,
   },
 });

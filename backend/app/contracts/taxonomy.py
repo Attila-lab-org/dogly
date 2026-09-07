@@ -157,6 +157,7 @@ class AnalysisDomain(StrEnum):
     BEHAVIOR = "BEHAVIOR"
     DIGESTIVE = "DIGESTIVE"
     FOOD_LABEL = "FOOD_LABEL"
+    OWNER_STORY = "OWNER_STORY"
 
 
 class ContextBucket(StrEnum):

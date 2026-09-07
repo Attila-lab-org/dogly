@@ -17,6 +17,7 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains.billing import QuotaService
+from app.domains.digestive_intelligence import DigestiveContext
 from app.domains.dogs import get_owned_dog
 from app.domains.models import (
     AnalysisJobRec,
@@ -35,6 +36,7 @@ FOOD_BUCKET = "food-labels"
 SAFETY_FLAG_RULES: dict[str, str] = {
     "fresh_blood_candidate": "BLOOD_CANDIDATE",
     "melena_candidate": "MELENA_CANDIDATE",
+    "foreign_material_candidate": "FOREIGN_MATERIAL_CANDIDATE",
 }
 
 
@@ -46,8 +48,85 @@ def deterministic_safety_flags(observation: dict) -> list[dict]:
         elif observation.get(field) == "possible":
             flags.append({"code": code, "severity": "medium"})
     if observation.get("consistency") == "watery":
-        flags.append({"code": "REPEATED_WATERY_CHECK", "severity": "medium"})
+        flags.append({"code": "REPEATED_WATERY", "severity": "medium"})
     return flags
+
+
+def contextual_safety_flags(
+    observation: dict, context: DigestiveContext
+) -> list[dict]:
+    """Add owner-confirmed escalation without allowing generated text to decide."""
+    flags = deterministic_safety_flags(observation)
+    if (
+        observation.get("consistency") == "watery"
+        and context.recent_episode_count_24h >= 2
+        and context.vomiting_today is True
+    ):
+        flags.append({"code": "DIGESTIVE_SYMPTOMS", "severity": "high"})
+    return flags
+
+
+def build_inmemory_digestive_context(
+    store: InMemoryStore, *, event: FecalEventRec
+) -> DigestiveContext:
+    dog = store.dogs[event.dog_id]
+    prior_events = sorted(
+        (
+            item
+            for item in store.fecal_events.values()
+            if item.dog_id == event.dog_id
+            and item.id != event.id
+            and item.status == "COMPLETED"
+            and item.created_at < event.created_at
+        ),
+        key=lambda item: item.created_at,
+    )[-12:]
+    active_periods = [
+        item
+        for item in store.feeding_periods.values()
+        if item.dog_id == event.dog_id
+        and item.start_at <= event.created_at
+        and (item.end_at is None or item.end_at >= event.created_at)
+    ]
+    active_period = (
+        max(active_periods, key=lambda item: item.start_at)
+        if active_periods
+        else None
+    )
+    active_food = (
+        store.food_products.get(active_period.food_product_id)
+        if active_period
+        else None
+    )
+    return DigestiveContext(
+        dog_name=dog.name,
+        age_stage=dog.age_stage,
+        size=dog.size,
+        weight_kg=dog.weight_kg,
+        active_food_name=active_food.name if active_food else None,
+        food_started_days_ago=(
+            max(0, (event.created_at - active_period.start_at).days)
+            if active_period
+            else None
+        ),
+        prior_scores=[
+            item.fecal_score_estimate
+            for item in prior_events
+            if item.fecal_score_estimate is not None
+        ],
+        prior_consistencies=[
+            item.consistency for item in prior_events if item.consistency
+        ],
+        recent_episode_count_24h=sum(
+            (event.created_at - item.created_at).total_seconds() <= 86_400
+            for item in prior_events
+        ),
+        vomiting_today=event.owner_context_json.get("vomiting_today"),
+        reduced_activity_today=event.owner_context_json.get(
+            "reduced_activity_today"
+        ),
+        unusual_food_48h=event.owner_context_json.get("unusual_food_48h"),
+    )
 
 
 async def init_fecal_event(

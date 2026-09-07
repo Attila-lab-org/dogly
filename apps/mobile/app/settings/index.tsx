@@ -63,12 +63,6 @@ export default function SettingsScreen() {
       subtitle: subscriptionSubtitle,
       href: '/settings/subscription',
     },
-    {
-      icon: 'bulb-outline',
-      title: 'Come funziona il punteggio di conoscenza',
-      subtitle: 'Cosa misura e come cresce nel tempo',
-      href: `/dogs/${dogId}/knowledge`,
-    },
   ];
 
   return (

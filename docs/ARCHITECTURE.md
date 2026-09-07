@@ -119,7 +119,7 @@ strutturati, observation, feedback e pattern sopravvivono alla cancellazione dei
 
 ### Fonte di verità dello schema
 
-Solo migrazioni SQL in `supabase/migrations/` (attualmente `0001`–`0028`),
+Solo migrazioni SQL in `supabase/migrations/` (attualmente `0001`–`0036`),
 **forward-only**: mai editare una migrazione applicata, mai schema ORM-generated,
 riproducibili da zero con `supabase db reset` (Spec sez. 11.1).
 
@@ -158,10 +158,18 @@ Stesso skeleton (init → upload signed → complete → job → worker), con di
 
 ```
 Worker: DigestiveVision.observe_stool(foto) → StoolObservationContract
-      → safety/rule layer DETERMINISTICO (domains/digestive.py, flag non downgradabili)
-      → confronto con baseline personale (digestive_baselines: "Rocky vs Rocky")
-      → insight + candidate flag (mai prova di assenza) → evento COMPLETED
+      → DogDigestiveContext (profilo, alimento verificato, storico, risposte owner)
+      → confronto con baseline personale versionata ("Rocky vs Rocky")
+      → retrieval veterinario bounded e auditabile
+      → safety/triage DETERMINISTICO (flag non downgradabili)
+      → DigestiveIntelligenceResult consumer + prossimo passo → evento COMPLETED
 ```
+
+“Raccontami di {nome}” usa un flusso separato in due tempi: testo o audio
+temporaneo → trascrizione → fatti modificabili → conferma esplicita. Solo i
+fatti confermati vengono salvati con provenienza `OWNER_REPORTED`; non
+sovrascrivono dati nutrizionali verificati e non diventano automaticamente
+pattern personali.
 
 ### 4.3 Export / delete account
 
@@ -191,7 +199,7 @@ Fotografia onesta al 2026-09-06 (fonte `PROJECT_STATE.md`):
 
 | Area | Implementato oggi | Target V1/V2 |
 | --- | --- | --- |
-| Schema DB + RLS + quota atomica | ✅ Migrazioni `0001`–`0028`, RLS, reserve/commit/refund | — |
+| Schema DB + RLS + quota atomica | ✅ Migrazioni `0001`–`0036`, RLS, reserve/commit/refund | — |
 | Public API `/v1/*` | ✅ Route behavior/digestive/dogs/diary/patterns/care/privacy/webhooks… (OpenAPI snapshot in CI) | — |
 | Worker `/tasks/run` + JobQueue adapter | ✅ Vercel Workflows + fake locale; idempotenza; retry | — |
 | Persistenza SQL | 🔶 Quasi completa: repository DB per behavior, dogs, billing, care, consensi, devices, diario, digestione, gallery, knowledge, lifestyle, patterns, privacy, profili e signals; nutrition resta ibrido/in-memory | Completare nutrition su Postgres |

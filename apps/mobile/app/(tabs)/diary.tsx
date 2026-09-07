@@ -9,7 +9,14 @@
  * Il design language segue UX_REFERENCE (card bianche, icone teal).
  */
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -20,7 +27,7 @@ import {
   LoadingState,
   ScreenContainer,
 } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -108,6 +115,7 @@ export default function DiaryScreen() {
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
   const [filter, setFilter] = useState<DiaryFilter>('ALL');
+  const [search, setSearch] = useState('');
 
   const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
 
@@ -127,16 +135,22 @@ export default function DiaryScreen() {
   });
 
   const entries = useMemo<DiaryEntry[]>(() => {
-    if (!realEnabled) {
-      return diaryEntriesMock.filter(
+    const source = !realEnabled
+      ? diaryEntriesMock.filter(
         (entry) => filter === 'ALL' || entry.domain === filter,
-      );
-    }
-    return (query.data?.pages ?? [])
-      .flatMap((page) => page.items)
-      .map(mapDiaryItemToEntry)
-      .filter((entry): entry is DiaryEntry => entry !== null);
-  }, [realEnabled, filter, query.data]);
+      )
+      : (query.data?.pages ?? [])
+          .flatMap((page) => page.items)
+          .map(mapDiaryItemToEntry)
+          .filter((entry): entry is DiaryEntry => entry !== null);
+    const term = search.trim().toLocaleLowerCase('it-IT');
+    if (!term) return source;
+    return source.filter((entry) =>
+      `${entry.title} ${entry.subtitle ?? ''}`
+        .toLocaleLowerCase('it-IT')
+        .includes(term),
+    );
+  }, [realEnabled, filter, query.data, search]);
 
   // Raggruppamento per giorno (timeline cursor, sez. 5.1)
   const groups = useMemo(() => {
@@ -156,6 +170,29 @@ export default function DiaryScreen() {
       <Text style={styles.subtitle}>
         Tutto quello che ho capito di {dog.name}, giorno per giorno.
       </Text>
+
+      <View style={styles.search}>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
+        <TextInput
+          accessibilityLabel="Cerca nelle analisi"
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Cerca nelle analisi…"
+          placeholderTextColor={colors.textMuted}
+          style={styles.searchInput}
+          returnKeyType="search"
+        />
+        {search ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancella ricerca"
+            onPress={() => setSearch('')}
+            hitSlop={8}
+          >
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* Filtri (sez. 5.1: All / Behavior / Digestive) */}
       <View style={styles.filters}>
@@ -238,28 +275,30 @@ export default function DiaryScreen() {
           ))}
           {/* Paginazione cursore vera: il chip carica la pagina successiva
               solo se next_cursor esiste; altrimenti testo onesto. */}
-          {realEnabled && query.hasNextPage ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Mostra eventi precedenti"
-              onPress={() => void query.fetchNextPage()}
-              disabled={query.isFetchingNextPage}
-              style={styles.moreChip}
-            >
-              <Chip
-                label={
-                  query.isFetchingNextPage
-                    ? 'Caricamento…'
-                    : 'Mostra eventi precedenti'
-                }
-                tone="neutral"
-              />
-            </Pressable>
-          ) : (
-            <Text style={styles.endNote}>
-              Stai vedendo gli eventi più recenti.
-            </Text>
-          )}
+          {realEnabled ? (
+            query.hasNextPage ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Mostra eventi precedenti"
+                onPress={() => void query.fetchNextPage()}
+                disabled={query.isFetchingNextPage}
+                style={styles.moreChip}
+              >
+                <Chip
+                  label={
+                    query.isFetchingNextPage
+                      ? 'Caricamento…'
+                      : 'Mostra eventi precedenti'
+                  }
+                  tone="neutral"
+                />
+              </Pressable>
+            ) : (
+              <Text style={styles.endNote}>
+                Stai vedendo gli eventi più recenti.
+              </Text>
+            )
+          ) : null}
         </ScrollView>
       )}
     </ScreenContainer>
@@ -282,6 +321,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.lg,
+  },
+  search: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.size.sm,
   },
   filterPill: {
     borderRadius: radius.full,
@@ -320,8 +374,11 @@ const styles = StyleSheet.create({
   },
   groupCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
+    ...shadows.card,
   },
   row: {
     flexDirection: 'row',

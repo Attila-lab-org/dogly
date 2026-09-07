@@ -3,7 +3,12 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, ErrorState, ScreenContainer } from '@/components';
+import {
+  Button,
+  DogIllustration,
+  ErrorState,
+  ScreenContainer,
+} from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
@@ -12,6 +17,7 @@ import {
   isTerminalDigestiveStatus,
 } from '@/features/digestive/api';
 import { isApiConfigured } from '@/features/auth/env';
+import { useSession } from '@/features/auth/SessionProvider';
 
 const STEP_DURATION_MS = 1100;
 
@@ -22,10 +28,9 @@ export default function DigestiveProcessingScreen() {
     : params.eventId ?? 'fecal-ok-1';
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
   const [stepIndex, setStepIndex] = useState(0);
-  // Mock gate dev: gli id fecal-* seguono lo stepper finto; gli id reali
-  // fanno polling su GET /v1/digestive/events/{id}.
-  const useApi = isApiConfigured() && !eventId.startsWith('fecal-');
+  const useApi = isApiConfigured() && !usingMockGate;
 
   const query = useQuery({
     queryKey: ['digestive-event', eventId],
@@ -48,9 +53,8 @@ export default function DigestiveProcessingScreen() {
   );
 
   useEffect(() => {
-    if (useApi) return undefined;
     if (stepIndex >= steps.length) {
-      router.replace(`/digestive/result/${eventId}`);
+      if (!useApi) router.replace(`/digestive/result/${eventId}`);
       return undefined;
     }
     const timer = setTimeout(
@@ -117,34 +121,57 @@ export default function DigestiveProcessingScreen() {
   return (
     <ScreenContainer contentStyle={styles.screen}>
       <View style={styles.visual}>
-        <View style={styles.orbit}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="leaf" size={38} color={colors.accent} />
-          </View>
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-            style={styles.loader}
-          />
-        </View>
+        <DogIllustration mood="thinking" size={210} />
       </View>
 
-      <Text style={styles.title}>Controllo in corso</Text>
+      <Text style={styles.title}>Sto analizzando la foto di {dog.name}</Text>
       <Text style={styles.currentStep}>{visibleStep}</Text>
 
-      <View style={styles.progress}>
+      <View style={styles.stepList}>
         {steps.map((step, index) => (
           <View
             key={step}
-            style={[
-              styles.progressSegment,
-              index <= stepIndex && styles.progressSegmentActive,
-            ]}
-          />
+            style={styles.stepRow}
+          >
+            <View
+              style={[
+                styles.stepIcon,
+                index <= stepIndex && styles.stepIconActive,
+              ]}
+            >
+              {index < stepIndex ? (
+                <Ionicons
+                  name="checkmark"
+                  size={15}
+                  color={colors.textOnPrimary}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.stepDot,
+                    index === stepIndex && styles.stepDotActive,
+                  ]}
+                />
+              )}
+            </View>
+            <Text
+              style={[
+                styles.stepText,
+                index <= stepIndex && styles.stepTextActive,
+              ]}
+            >
+              {step}
+            </Text>
+          </View>
         ))}
       </View>
 
-      <Text style={styles.wait}>Ci vorranno solo pochi secondi.</Text>
+      <View style={styles.waitCard}>
+        <ActivityIndicator size="small" color={colors.accent} />
+        <Text style={styles.wait}>
+          Puoi anche chiudere: ti avviso quando è pronta.
+        </Text>
+      </View>
     </ScreenContainer>
   );
 }
@@ -157,25 +184,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   visual: {
-    marginBottom: spacing.xxl,
-  },
-  orbit: {
-    width: 128,
-    height: 128,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircle: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
-  },
-  loader: {
-    position: 'absolute',
-    transform: [{ scale: 1.5 }],
+    marginBottom: spacing.lg,
   },
   title: {
     color: colors.text,
@@ -190,24 +199,63 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     textAlign: 'center',
   },
-  progress: {
-    width: '72%',
-    flexDirection: 'row',
-    gap: spacing.sm,
+  stepList: {
+    width: '100%',
+    maxWidth: 360,
+    gap: spacing.md,
     marginTop: spacing.xl,
   },
-  progressSegment: {
-    flex: 1,
-    height: 6,
+  stepRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  stepIcon: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  stepIconActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  stepDot: {
+    width: 7,
+    height: 7,
     borderRadius: radius.full,
     backgroundColor: colors.border,
   },
-  progressSegmentActive: {
-    backgroundColor: colors.accent,
+  stepDotActive: {
+    backgroundColor: colors.textOnPrimary,
+  },
+  stepText: {
+    color: colors.textMuted,
+    fontSize: typography.size.sm,
+  },
+  stepTextActive: {
+    color: colors.text,
+    fontWeight: typography.weight.semibold,
+  },
+  waitCard: {
+    width: '100%',
+    maxWidth: 360,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
   },
   wait: {
-    marginTop: spacing.xl,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: typography.size.xs,
   },
   failedPage: {

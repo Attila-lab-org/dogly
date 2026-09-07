@@ -9,7 +9,7 @@ export interface CardProps extends ViewProps {
   children?: React.ReactNode;
 }
 
-/** Card bianca: radius grande + ombra morbida (design language vincolante) */
+/** Superficie standard: bordo sottile, raggio coerente e ombra appena visibile. */
 export function Card({ noPadding, style, children, ...rest }: CardProps) {
   return (
     <View
@@ -24,7 +24,9 @@ export function Card({ noPadding, style, children, ...rest }: CardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     ...shadows.card,
   },
   padding: {

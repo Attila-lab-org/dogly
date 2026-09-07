@@ -21,6 +21,7 @@ from app.api.routes import (
     gallery,
     me,
     nutrition,
+    owner_stories,
     patterns,
     privacy,
     signals,
@@ -88,6 +89,9 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.include_router(patterns.router, prefix="/v1", tags=["patterns"])
     app.include_router(signals.router, prefix="/v1", tags=["dogly-signals"])
     app.include_router(digestive.router, prefix="/v1", tags=["digestive"])
+    app.include_router(
+        owner_stories.router, prefix="/v1", tags=["owner-stories"]
+    )
     app.include_router(nutrition.router, prefix="/v1", tags=["nutrition"])
     app.include_router(subscription.router, prefix="/v1", tags=["subscription", "usage"])
     app.include_router(devices.router, prefix="/v1", tags=["devices"])

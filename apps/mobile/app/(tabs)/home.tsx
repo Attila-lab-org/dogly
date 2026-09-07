@@ -13,6 +13,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Image,
+  ImageBackground,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,7 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, DogMetaRow } from '@/components';
+import { Card, CuteIcon } from '@/components';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { diaryEntriesMock } from '@/mocks/core';
 import { demoFlags } from '@/mocks/demo';
@@ -42,12 +43,6 @@ import {
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
-import { useLifestyle } from '@/features/lifestyle/api';
-import {
-  dismissLifestyleHomeCard,
-  isLifestyleHomeCardDismissed,
-} from '@/features/lifestyle/store';
-import { isLifestyleComplete } from '@/features/lifestyle/types';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
@@ -60,7 +55,6 @@ export default function HomeScreen() {
     usage,
     lastInsight,
     processingEventId,
-    isNewUser,
     source,
     loading,
     error,
@@ -80,10 +74,12 @@ export default function HomeScreen() {
   // useCareEvents idrata lo store e rende reattiva la card.
   useCareEvents(dog.id);
   const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id);
-  const showLifestyleCard =
-    !isLifestyleHomeCardDismissed(dog.id) &&
-    (!lifestyle.profile || !isLifestyleComplete(lifestyle.profile));
+  const dogMeta = [
+    currentAgeLabel(dog.birthDate, dog.ageLabel),
+    dog.breedLabel,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const startCapture = () => {
     if (!dog.id || loading) return;
@@ -129,27 +125,30 @@ export default function HomeScreen() {
                   ? `Buon compleanno, ${dog.name}! 🎉`
                   : 'Ciao!'}
               </Text>
-              <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
+              <Text style={styles.tagline}>Sempre al fianco di {dog.name}</Text>
             </View>
             <View style={styles.headerActions}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Apri diario"
-                onPress={() => router.push('/(tabs)/diary')}
-                hitSlop={12}
-                style={styles.headerIcon}
-              >
-                <Ionicons name="calendar-outline" size={23} color={colors.text} />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Notifiche, non lette"
+                accessibilityLabel={
+                  nextCare
+                    ? 'Notifiche, hai un promemoria in agenda'
+                    : 'Notifiche'
+                }
                 onPress={() => router.push('/notifications')}
                 hitSlop={12}
                 style={styles.headerIcon}
               >
                 <Ionicons name="notifications-outline" size={24} color={colors.text} />
                 {nextCare ? <View style={styles.badge} /> : null}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Apri il profilo di ${dog.name}`}
+                onPress={() => router.push('/(tabs)/rocky')}
+                hitSlop={8}
+              >
+                <DogAvatar size={38} photoUri={dog.photoUri} dogName={dog.name} />
               </Pressable>
             </View>
           </View>
@@ -160,24 +159,34 @@ export default function HomeScreen() {
             onOpen={(story) => router.push(`/stories/${story.id}` as never)}
           />
 
-          {/* Dog card: foto circolare, nome, cuore, meta con icone teal */}
-          <Card style={styles.dogCard}>
-            <View style={styles.dogRow}>
-              <DogAvatar size={104} photoUri={dog.photoUri} dogName={dog.name} />
-              <View style={styles.dogInfo}>
-                <View style={styles.dogNameRow}>
-                  <Text style={styles.dogName}>{dog.name}</Text>
-                  <Ionicons name="heart-outline" size={22} color={colors.danger} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Apri il profilo di ${dog.name}`}
+            onPress={() => router.push('/(tabs)/rocky')}
+            style={styles.dogHero}
+          >
+            {dog.photoUri ? (
+              <ImageBackground
+                source={{ uri: dog.photoUri }}
+                style={styles.dogHeroImage}
+                imageStyle={styles.dogHeroImageRadius}
+                resizeMode="cover"
+              >
+                <View style={styles.dogHeroOverlay}>
+                  <Text style={styles.dogHeroName}>{dog.name}</Text>
+                  <Text style={styles.dogHeroMeta}>{dogMeta}</Text>
                 </View>
-                <DogMetaRow
-                  ageLabel={currentAgeLabel(dog.birthDate, dog.ageLabel)}
-                  sizeLabel={dog.sizeLabel}
-                  breedLabel={dog.breedLabel}
-                />
+              </ImageBackground>
+            ) : (
+              <View style={styles.dogHeroFallback}>
+                <DogAvatar size={104} photoUri={null} dogName={dog.name} />
+                <View style={styles.dogHeroFallbackText}>
+                  <Text style={styles.dogName}>{dog.name}</Text>
+                  <Text style={styles.fallbackMeta}>{dogMeta}</Text>
+                </View>
               </View>
-            </View>
-
-          </Card>
+            )}
+          </Pressable>
 
           {/* Stato offline (sez. 6 Home): banner con retry, pattern come
               digestive/capture ("upload failure") — icona cloud-offline */}
@@ -235,66 +244,6 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* Cold-start copy (sez. 7.1.3): valore immediato, migliora nel tempo */}
-          {isNewUser && (
-            <Card style={styles.coldStart}>
-              <Text style={styles.coldStartText}>
-                So già interpretare i segnali più comuni di {dog.name} e ti
-                conoscerò sempre meglio, analisi dopo analisi.
-              </Text>
-            </Card>
-          )}
-
-          {showLifestyleCard ? (
-            <Card style={styles.lifestyleCard}>
-              <View style={styles.lifestyleHeading}>
-                <View style={styles.lifestyleIcon}>
-                  <Ionicons name="sparkles-outline" size={20} color={colors.accent} />
-                </View>
-                <View style={styles.lifestyleText}>
-                  <Text style={styles.lifestyleTitle}>
-                    Aiutami a conoscere meglio {dog.name}
-                  </Text>
-                  <Text style={styles.lifestyleSubtitle}>
-                    Bastano poche risposte, quando vuoi.
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Nascondi questo suggerimento"
-                  onPress={() => dismissLifestyleHomeCard(dog.id)}
-                  hitSlop={10}
-                >
-                  <Ionicons name="close" size={20} color={colors.textMuted} />
-                </Pressable>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Aggiungi routine e abitudini di ${dog.name}`}
-                onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
-                style={styles.lifestyleAction}
-              >
-                <Text style={styles.lifestyleActionText}>Iniziamo</Text>
-                <Ionicons name="arrow-forward" size={17} color={colors.accent} />
-              </Pressable>
-            </Card>
-          ) : null}
-
-          {/* Evento in lavorazione (sez. 6: "processing existing event") */}
-          {processingEventId && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push(`/behavior/processing/${processingEventId}`)}
-              style={styles.processingBanner}
-            >
-              <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
-              <Text style={styles.processingText}>
-                Un'analisi è in corso: ti avviso quando è pronta
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-            </Pressable>
-          )}
-
           {/* CTA dominante: card gradiente blu "CAPISCI ROCKY" */}
           <Pressable
             accessibilityRole="button"
@@ -308,46 +257,107 @@ export default function HomeScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.cta}
             >
-              <Text style={styles.ctaTitle}>CAPISCI {dog.name.toUpperCase()}</Text>
-              <Text style={styles.ctaSubtitle}>
-                Registra un breve video
-              </Text>
-              <View style={styles.ctaCircle}>
-                <Ionicons name="videocam" size={30} color={colors.accent} />
+              <View style={styles.ctaIcon}>
+                <Ionicons name="videocam" size={26} color={colors.textOnPrimary} />
               </View>
+              <View style={styles.ctaCopy}>
+                <Text style={styles.ctaTitle}>
+                  CAPISCI {dog.name.toUpperCase()}
+                </Text>
+                <Text style={styles.ctaSubtitle}>
+                  Mostrami cosa sta facendo
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={21}
+                color={colors.textOnPrimary}
+              />
             </LinearGradient>
           </Pressable>
 
-          {/* Quota residua sottile (sez. 21) o CTA paywall se esaurita.
-              Con API attiva ma quota non caricata: niente numeri inventati. */}
-          {behaviorRemaining === null ? null : quotaExhausted ? (
+          {lastInsight && (
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push('/paywall')}
+              accessibilityLabel={`Apri l'ultima analisi: ${lastInsight.label}`}
+              onPress={() => {
+                if (source === 'api') {
+                  router.push(`/behavior/result/${lastInsight.eventId}`);
+                  return;
+                }
+                const entry = diaryEntriesMock.find(
+                  (item) => item.refId === lastInsight.eventId,
+                );
+                if (entry) router.push(`/diary/event/${entry.id}`);
+              }}
             >
-              <Text style={styles.quotaExhausted}>
-                Analisi comportamentali esaurite per questo mese. Scopri il piano
-                per continuare.
-              </Text>
+              <Card style={styles.lastInsight}>
+                <View style={styles.lastInsightIcon}>
+                  <Ionicons name="happy-outline" size={22} color={colors.accent} />
+                </View>
+                <View style={styles.lastInsightText}>
+                  <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
+                  <Text style={styles.lastInsightValue}>{lastInsight.label}</Text>
+                  <Text style={styles.lastInsightTime}>
+                    {lastInsight.timestampLabel}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              </Card>
             </Pressable>
-          ) : (
-            <Text style={styles.quota}>
-              {behaviorRemaining}{' '}
-              {behaviorRemaining === 1
-                ? 'analisi comportamentale rimasta'
-                : 'analisi comportamentali rimaste'}{' '}
-              questo mese
-            </Text>
           )}
+
+          {processingEventId && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Apri l'analisi in corso di ${dog.name}`}
+              onPress={() => router.push(`/behavior/processing/${processingEventId}`)}
+              style={styles.processingBanner}
+            >
+              <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
+              <Text style={styles.processingText}>
+                Un'analisi è in corso: ti avviso quando è pronta
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </Pressable>
+          )}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Raccontami qualcosa di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+            style={({ pressed }) => [
+              styles.tellCard,
+              pressed && styles.tellCardPressed,
+            ]}
+          >
+            <View style={styles.tellIcon}>
+              <CuteIcon name="voice" size={25} color={colors.primary} />
+            </View>
+            <View style={styles.tellCopy}>
+              <Text style={styles.tellEyebrow}>UNA COSA IMPORTANTE</Text>
+              <Text style={styles.tellTitle}>Raccontami di {dog.name}</Text>
+              <Text style={styles.tellHint}>Parla oppure scrivi</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={19} color={colors.primary} />
+          </Pressable>
 
           {/* Capacità secondaria: digestione (UX LOCK: non una tab) */}
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`Controlla la digestione di ${dog.name}`}
             onPress={() => router.push('/digestive/capture')}
             style={styles.digestiveCta}
           >
-            <Ionicons name="leaf-outline" size={18} color={colors.accent} />
-            <Text style={styles.digestiveCtaText}>Controlla digestione</Text>
+            <View style={styles.secondaryIcon}>
+              <Ionicons name="leaf-outline" size={22} color={colors.accent} />
+            </View>
+            <View style={styles.secondaryCopy}>
+              <Text style={styles.digestiveCtaText}>Controlla la digestione</Text>
+              <Text style={styles.digestiveCtaHint}>
+                Osserva una nuova evacuazione
+              </Text>
+            </View>
             <Ionicons name="chevron-forward" size={16} color={colors.accent} />
           </Pressable>
 
@@ -385,41 +395,28 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          {/* Ultima analisi (mockup: smiley teal + chevron) */}
-          {lastInsight && (
+          {behaviorRemaining === null ||
+          (!quotaExhausted && behaviorRemaining > 2) ? null : quotaExhausted ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => {
-                if (source === 'api') {
-                  // Dati reali: dettaglio evento dal backend
-                  router.push(`/behavior/result/${lastInsight.eventId}`);
-                  return;
-                }
-                // Mock gate: lastInsight.eventId → episodio del Diario
-                // che referenzia quell'evento (niente id hardcoded).
-                const entry = diaryEntriesMock.find(
-                  (e) => e.refId === lastInsight.eventId,
-                );
-                if (entry) {
-                  router.push(`/diary/event/${entry.id}`);
-                }
-              }}
+              accessibilityLabel="Scopri il piano per continuare le analisi"
+              onPress={() => router.push('/paywall')}
             >
-              <Card style={styles.lastInsight}>
-                <View style={styles.lastInsightIcon}>
-                  <Ionicons name="happy-outline" size={22} color={colors.accent} />
-                </View>
-                <View style={styles.lastInsightText}>
-                  <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
-                  <Text style={styles.lastInsightValue}>{lastInsight.label}</Text>
-                  <Text style={styles.lastInsightTime}>
-                    {lastInsight.timestampLabel}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-              </Card>
+              <Text style={styles.quotaExhausted}>
+                Analisi comportamentali esaurite per questo mese. Scopri il piano
+                per continuare.
+              </Text>
             </Pressable>
+          ) : (
+            <Text style={styles.quota}>
+              {behaviorRemaining}{' '}
+              {behaviorRemaining === 1
+                ? 'analisi comportamentale rimasta'
+                : 'analisi comportamentali rimaste'}{' '}
+              questo mese
+            </Text>
           )}
+
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -435,6 +432,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
@@ -492,28 +492,57 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.danger,
   },
-  dogCard: {
-    marginBottom: spacing.lg,
-  },
-  dogRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  dogInfo: {
-    flex: 1,
-    gap: spacing.xs + 2,
-  },
-  dogNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  dogHero: {
+    minHeight: 220,
+    overflow: 'hidden',
+    borderRadius: radius.lg,
     marginBottom: spacing.xs,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  dogHeroImage: {
+    height: 220,
+    justifyContent: 'flex-end',
+  },
+  dogHeroImageRadius: {
+    borderRadius: radius.lg,
+  },
+  dogHeroOverlay: {
+    padding: spacing.lg,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    backgroundColor: colors.overlayDark,
+  },
+  dogHeroName: {
+    color: colors.textOnPrimary,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.bold,
+  },
+  dogHeroMeta: {
+    marginTop: spacing.xs,
+    color: colors.textOnPrimary,
+    fontSize: typography.size.sm,
+  },
+  dogHeroFallback: {
+    minHeight: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    padding: spacing.xl,
+  },
+  dogHeroFallbackText: {
+    flex: 1,
   },
   dogName: {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     color: colors.text,
+  },
+  fallbackMeta: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
   },
   offlineBanner: {
     flexDirection: 'row',
@@ -535,57 +564,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
     color: colors.primary,
   },
-  coldStart: {
-    marginBottom: spacing.lg,
-    backgroundColor: colors.accentSoft,
-  },
-  coldStartText: {
-    fontSize: typography.size.sm,
-    color: colors.text,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-  },
-  lifestyleCard: {
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.accentSoft,
-  },
-  lifestyleHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  lifestyleIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
-  },
-  lifestyleText: { flex: 1 },
-  lifestyleTitle: {
-    color: colors.text,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.bold,
-  },
-  lifestyleSubtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-  },
-  lifestyleAction: {
-    minHeight: 44,
-    marginTop: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.xs,
-  },
-  lifestyleActionText: {
-    color: colors.accent,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-  },
   processingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,31 +580,37 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
   },
   cta: {
+    minHeight: 88,
+    flexDirection: 'row',
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     alignItems: 'center',
+    gap: spacing.md,
     ...shadows.raised,
   },
+  ctaIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.overlayLight,
+  },
+  ctaCopy: {
+    flex: 1,
+  },
   ctaTitle: {
-    fontSize: typography.size.xl,
+    fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
     color: colors.textOnPrimary,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   ctaSubtitle: {
     marginTop: spacing.xs,
     fontSize: typography.size.sm,
     color: colors.textOnPrimary,
     opacity: 0.9,
-  },
-  ctaCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.xl,
   },
   quota: {
     marginTop: spacing.md,
@@ -641,18 +625,83 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
     textAlign: 'center',
   },
-  digestiveCta: {
+  tellCard: {
+    minHeight: 84,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+  },
+  tellCardPressed: {
+    opacity: 0.78,
+  },
+  tellIcon: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  tellCopy: {
+    flex: 1,
+  },
+  tellEyebrow: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.8,
+  },
+  tellTitle: {
+    marginTop: 2,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  tellHint: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+  },
+  digestiveCta: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     marginTop: spacing.md,
     marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  secondaryIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.accentSoft,
+  },
+  secondaryCopy: {
+    flex: 1,
   },
   digestiveCtaText: {
-    fontSize: typography.size.sm,
+    fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-    color: colors.accent,
+    color: colors.text,
+  },
+  digestiveCtaHint: {
+    marginTop: 2,
+    fontSize: typography.size.xs,
+    color: colors.textSecondary,
   },
   careCard: {
     flexDirection: 'row',
@@ -699,6 +748,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    marginTop: spacing.lg,
   },
   lastInsightIcon: {
     width: 44,

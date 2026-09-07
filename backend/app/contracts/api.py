@@ -566,6 +566,50 @@ class FecalCompleteResponse(BaseModel):
     status: str
 
 
+class DigestiveContextUpdateRequest(BaseModel):
+    """Sparse owner-confirmed context; omitted answers remain unknown."""
+
+    vomiting_today: bool | None = None
+    reduced_activity_today: bool | None = None
+    unusual_food_48h: bool | None = None
+
+
+class OwnerReportedFact(BaseModel):
+    id: str
+    category: Literal["ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL"]
+    statement: str = Field(min_length=2, max_length=280)
+    provenance: Literal["OWNER_REPORTED"] = "OWNER_REPORTED"
+
+
+class OwnerStoryPrepareRequest(BaseModel):
+    text: str = Field(min_length=3, max_length=2_000)
+
+
+class OwnerStoryAudioPrepareRequest(BaseModel):
+    audio_base64: str = Field(min_length=16, max_length=4_000_000)
+    content_type: Literal[
+        "audio/m4a", "audio/mp4", "audio/webm", "audio/wav", "audio/mpeg"
+    ]
+
+
+class OwnerStoryDraftOut(BaseModel):
+    draft_id: str
+    dog_id: str
+    transcript: str
+    facts: list[OwnerReportedFact]
+
+
+class OwnerStoryConfirmRequest(BaseModel):
+    facts: list[OwnerReportedFact] = Field(min_length=1, max_length=8)
+
+
+class OwnerStoryConfirmedOut(BaseModel):
+    observation_id: str
+    dog_id: str
+    status: Literal["CONFIRMED"] = "CONFIRMED"
+    facts: list[OwnerReportedFact]
+
+
 class DigestiveEventOut(BaseModel):
     id: str
     dog_id: str
@@ -583,7 +627,26 @@ class DigestiveEventOut(BaseModel):
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
     summary: str | None = None
     active_food_name: str | None = None
-    baseline_comparison: Literal["BELOW_USUAL", "NEAR_USUAL", "ABOVE_USUAL"] | None = None
+    baseline_comparison: Literal[
+        "INSUFFICIENT", "BELOW_USUAL", "NEAR_USUAL", "ABOVE_USUAL"
+    ] | None = None
+    intelligence_schema_version: str | None = None
+    overall_state: Literal["ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"] | None = None
+    consumer_headline: str | None = None
+    consumer_summary: str | None = None
+    relevant_context: list[str] = Field(default_factory=list)
+    possible_associations: list[str] = Field(default_factory=list)
+    safety_state: Literal["ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"] | None = None
+    recommended_next_step: str | None = None
+    followup_key: Literal[
+        "vomiting_today", "reduced_activity_today", "unusual_food_48h"
+    ] | None = None
+    followup_question: str | None = None
+    what_to_watch: list[str] = Field(default_factory=list)
+    observation_reliability: str | None = None
+    knowledge_references: list[dict[str, str]] = Field(default_factory=list)
+    reasoning_version: str | None = None
+    baseline_version: str | None = None
     created_at: datetime
 
 

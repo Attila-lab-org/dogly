@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, ErrorState, ScreenContainer } from '@/components';
+import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
 import { PROCESSING_STEP_ORDER, processingStepsFor } from '@/features/core/copy';
@@ -221,7 +221,7 @@ export default function BehaviorProcessingScreen() {
         >
           <Ionicons name="close" size={26} color={colors.text} />
         </Pressable>
-        <Text style={styles.topTitle}>Analisi in corso</Text>
+        <Text style={styles.topTitle}>Sto guardando {dog.name}</Text>
         <View style={styles.topSpacer} />
       </View>
 
@@ -245,7 +245,7 @@ export default function BehaviorProcessingScreen() {
         </View>
       )}
 
-      <Card style={styles.stepper}>
+      <View style={styles.stepper}>
         {steps.map((step, index) => {
           const stepOrder = PROCESSING_STEP_ORDER[step.status];
           const done = !isRetrying && stepOrder < currentOrder;
@@ -262,14 +262,7 @@ export default function BehaviorProcessingScreen() {
                 {done ? (
                   <Ionicons name="checkmark" size={14} color={colors.textOnPrimary} />
                 ) : (
-                  <Text
-                    style={[
-                      styles.stepNumber,
-                      active && styles.stepNumberActive,
-                    ]}
-                  >
-                    {index + 1}
-                  </Text>
+                  <View style={[styles.stepInnerDot, active && styles.stepInnerDotActive]} />
                 )}
               </View>
               {index < steps.length - 1 && (
@@ -281,18 +274,11 @@ export default function BehaviorProcessingScreen() {
                 >
                   {step.title}
                 </Text>
-                {(active || isRetrying) && (
-                  <Text style={styles.stepDescription}>{step.description}</Text>
-                )}
               </View>
             </View>
           );
         })}
-      </Card>
-
-      <Text style={styles.quotaNote}>
-        Se il video non fosse utilizzabile, l'analisi non verrà conteggiata.
-      </Text>
+      </View>
     </ScreenContainer>
   );
 }
@@ -358,13 +344,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary,
   },
-  stepNumber: {
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-    color: colors.textMuted,
+  stepInnerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.border,
   },
-  stepNumberActive: {
-    color: colors.primary,
+  stepInnerDotActive: {
+    backgroundColor: colors.primary,
   },
   stepLine: {
     position: 'absolute',
@@ -387,17 +374,6 @@ const styles = StyleSheet.create({
   },
   stepTitleActive: {
     color: colors.text,
-  },
-  stepDescription: {
-    marginTop: spacing.xs,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.normal,
-  },
-  quotaNote: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    textAlign: 'center',
   },
   statePage: {
     flex: 1,

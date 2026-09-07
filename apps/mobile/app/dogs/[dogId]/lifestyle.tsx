@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Button, Card, ErrorState, ScreenContainer } from '@/components';
+import {
+  Button,
+  Card,
+  DogIllustration,
+  ErrorState,
+  ScreenContainer,
+} from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import {
   saveLifestyleProfile,
@@ -16,14 +22,17 @@ import {
   LIFESTYLE_SOCIAL_LABELS,
   LIFESTYLE_TIME_ALONE_LABELS,
 } from '@/features/lifestyle/types';
+import { useDogProfile } from '@/features/core/useDogProfile';
 
 export default function LifestyleScreen() {
   const router = useRouter();
   const { dogId } = useLocalSearchParams<{ dogId: string }>();
+  const { dog } = useDogProfile();
   const lifestyle = useLifestyle(dogId);
   const [draft, setDraft] = useState<LifestylePatch>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<string | null>(null);
 
   useEffect(() => {
     if (!lifestyle.profile) return;
@@ -74,24 +83,46 @@ export default function LifestyleScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Aiutami a conoscerlo meglio</Text>
+        <View style={styles.intro}>
+          <DogIllustration mood="welcome" size={170} />
+          <Text style={styles.title}>Conosciamo meglio {dog.name}</Text>
         <Text style={styles.subtitle}>
-          Scegli solo quello che sai. Puoi cambiare queste risposte quando vuoi.
+            Scegli solo ciò che ti va di condividere. Puoi modificare tutto
+            quando vuoi.
         </Text>
+        </View>
 
         <ChoiceCard
+          sectionKey="activity"
+          icon="walk-outline"
+          open={openSection === 'activity'}
+          onToggle={() =>
+            setOpenSection((current) => (current === 'activity' ? null : 'activity'))
+          }
           title="Com’è di solito la sua giornata?"
           value={draft.activity}
           options={LIFESTYLE_ACTIVITY_LABELS}
           onChange={(activity) => setDraft((current) => ({ ...current, activity }))}
         />
         <ChoiceCard
+          sectionKey="sleep"
+          icon="moon-outline"
+          open={openSection === 'sleep'}
+          onToggle={() =>
+            setOpenSection((current) => (current === 'sleep' ? null : 'sleep'))
+          }
           title="Come dorme di solito?"
           value={draft.sleep}
           options={LIFESTYLE_SLEEP_LABELS}
           onChange={(sleep) => setDraft((current) => ({ ...current, sleep }))}
         />
         <ChoiceCard
+          sectionKey="alone"
+          icon="time-outline"
+          open={openSection === 'alone'}
+          onToggle={() =>
+            setOpenSection((current) => (current === 'alone' ? null : 'alone'))
+          }
           title="Quanto tempo resta da solo?"
           value={draft.timeAlone}
           options={LIFESTYLE_TIME_ALONE_LABELS}
@@ -100,12 +131,26 @@ export default function LifestyleScreen() {
           }
         />
         <ChoiceCard
+          sectionKey="social"
+          icon="people-outline"
+          open={openSection === 'social'}
+          onToggle={() =>
+            setOpenSection((current) => (current === 'social' ? null : 'social'))
+          }
           title="Con chi ama stare?"
           value={draft.social}
           options={LIFESTYLE_SOCIAL_LABELS}
           onChange={(social) => setDraft((current) => ({ ...current, social }))}
         />
         <ChoiceCard
+          sectionKey="enrichment"
+          icon="tennisball-outline"
+          open={openSection === 'enrichment'}
+          onToggle={() =>
+            setOpenSection((current) =>
+              current === 'enrichment' ? null : 'enrichment',
+            )
+          }
           title="Cosa lo coinvolge di più?"
           value={draft.enrichment}
           options={LIFESTYLE_ENRICHMENT_LABELS}
@@ -119,27 +164,54 @@ export default function LifestyleScreen() {
             {error ?? 'Non riesco a caricare le abitudini. Puoi riprovare.'}
           </Text>
         ) : null}
-        <Button title="Salva" loading={saving} onPress={() => void save()} />
+        <Button title="Continua" loading={saving} onPress={() => void save()} />
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 function ChoiceCard<T extends string>({
+  icon,
+  open,
+  onToggle,
   title,
   value,
   options,
   onChange,
 }: {
+  sectionKey: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  open: boolean;
+  onToggle: () => void;
   title: string;
   value: T | null | undefined;
   options: Record<T, string>;
   onChange: (value: T | null) => void;
 }) {
+  const selectedLabel =
+    value == null ? 'Opzionale' : (options[value] ?? 'Selezionato');
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <View style={styles.options}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        style={styles.cardHeading}
+      >
+        <View style={styles.cardIcon}>
+          <Ionicons name={icon} size={20} color={colors.accent} />
+        </View>
+        <View style={styles.cardCopy}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.cardValue}>{selectedLabel}</Text>
+        </View>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-forward'}
+          size={19}
+          color={colors.textMuted}
+        />
+      </Pressable>
+      {open ? <View style={styles.options}>
         {(Object.entries(options) as [T, string][]).map(([option, label]) => {
           const selected = value === option;
           return (
@@ -166,7 +238,7 @@ function ChoiceCard<T extends string>({
             Non so
           </Text>
         </Pressable>
-      </View>
+      </View> : null}
     </Card>
   );
 }
@@ -186,26 +258,57 @@ const styles = StyleSheet.create({
   },
   topSpacer: { width: 26 },
   content: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
     gap: spacing.md,
+  },
+  intro: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   title: {
     color: colors.text,
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
+    textAlign: 'center',
   },
   subtitle: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   card: { gap: spacing.md },
+  cardHeading: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  cardIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.accentSoft,
+  },
+  cardCopy: {
+    flex: 1,
+  },
   cardTitle: {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
+  },
+  cardValue: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
   },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   option: {
