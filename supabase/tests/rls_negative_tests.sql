@@ -32,6 +32,16 @@ end $$;
 -- A. Internal schema is inaccessible to client roles (privilege-level fence)
 -- =========================================================================
 select pg_temp.assert(
+  (
+    select count(*) > 0 and bool_and(c.relrowsecurity)
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'internal'
+      and c.relkind = 'r'
+      and c.relrowsecurity
+  ),
+  'all internal tables have RLS defense in depth enabled');
+select pg_temp.assert(
   not has_table_privilege('authenticated', 'internal.audit_log', 'SELECT'),
   'authenticated has no SELECT on internal.audit_log');
 select pg_temp.assert(

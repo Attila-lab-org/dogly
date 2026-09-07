@@ -2,19 +2,22 @@
 
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Response
 
-from app.api.deps import StateDep, UserIdDep
+from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.api import (
     OwnerStoryAudioPrepareRequest,
     OwnerStoryConfirmedOut,
     OwnerStoryConfirmRequest,
     OwnerStoryDraftOut,
+    OwnerStoryListOut,
+    OwnerStoryObservationOut,
     OwnerStoryPrepareRequest,
+    OwnerStoryUpdateRequest,
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
-from app.domains import owner_stories_db
+from app.domains import dogs_db, idempotency_db, owner_stories_db
 from app.domains.dogs import get_owned_dog
 from app.domains.owner_stories import extract_owner_reported_facts
 from app.domains.repository import new_id, now_utc
@@ -22,6 +25,46 @@ from app.providers.base import ProviderUsage
 from app.providers.openai_transcription import transcribe_owner_audio
 
 router = APIRouter()
+
+
+@router.get(
+    "/dogs/{dog_id}/owner-stories",
+    response_model=OwnerStoryListOut,
+)
+async def list_owner_stories(
+    dog_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> OwnerStoryListOut:
+    if state.engine is not None:
+        rows = await owner_stories_db.list_confirmed(
+            state.engine, user_id=user_id, dog_id=dog_id
+        )
+    else:
+        get_owned_dog(state.store, user_id=user_id, dog_id=dog_id)
+        rows = sorted(
+            (
+                observation
+                for observation in state.store.owner_reported_observations.values()
+                if observation["dog_id"] == dog_id
+                and observation["user_id"] == user_id
+                and observation["status"] == "CONFIRMED"
+            ),
+            key=lambda observation: observation["confirmed_at"],
+            reverse=True,
+        )
+        rows = [
+            {
+                "id": observation["id"],
+                "dog_id": observation["dog_id"],
+                "facts": observation["facts"],
+                "confirmed_at": observation["confirmed_at"],
+            }
+            for observation in rows
+        ]
+    return OwnerStoryListOut(
+        items=[OwnerStoryObservationOut.model_validate(row) for row in rows]
+    )
 
 
 @router.post(
@@ -72,7 +115,18 @@ async def prepare_owner_story_audio(
     payload: OwnerStoryAudioPrepareRequest,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
+    _limiter: None = Depends(rate_limit("owner_story.audio", limit=5)),
 ) -> OwnerStoryDraftOut:
+    if cached := guard.lookup():
+        return OwnerStoryDraftOut.model_validate(cached)
+    if state.engine is not None:
+        await dogs_db.get_owned_dog(
+            state.engine, user_id=user_id, dog_id=dog_id
+        )
+    else:
+        get_owned_dog(state.store, user_id=user_id, dog_id=dog_id)
+
     started = time.perf_counter()
     transcript = await transcribe_owner_audio(
         state.settings,
@@ -85,21 +139,35 @@ async def prepare_owner_story_audio(
             model=state.settings.owner_transcription_model,
             media_bytes=(len(payload.audio_base64) * 3) // 4,
             latency_ms=int((time.perf_counter() - started) * 1_000),
-            # The mobile recorder caps clips at one minute; use the one-minute
-            # ceiling so the daily gate remains conservative.
-            cost_usd=0.003,
+            # Recorder caps clips at one minute; charge the ceiling plus the
+            # same conservative margin used by token-priced providers.
+            cost_usd=round(
+                state.settings.owner_transcription_usd_per_minute
+                * state.settings.ai_cost_safety_margin,
+                6,
+            ),
         ),
         operation="owner_story.transcribe",
         domain=AnalysisDomain.OWNER_STORY,
         event_id=new_id(),
         user_id=user_id,
     )
-    return await prepare_owner_story(
+    result = await prepare_owner_story(
         dog_id,
         OwnerStoryPrepareRequest(text=transcript),
         state,
         user_id,
     )
+    body = result.model_dump(mode="json")
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=guard._payload_hash,
+        )
+    return result
 
 
 @router.post(
@@ -133,6 +201,7 @@ async def confirm_owner_story(
         draft["facts"] = [
             fact.model_dump(mode="json") for fact in payload.facts
         ]
+        draft["transcript"] = None
         draft["status"] = "CONFIRMED"
         draft["confirmed_at"] = now_utc()
     return OwnerStoryConfirmedOut(
@@ -140,3 +209,76 @@ async def confirm_owner_story(
         dog_id=dog_id,
         facts=payload.facts,
     )
+
+
+@router.patch(
+    "/dogs/{dog_id}/owner-stories/{observation_id}",
+    response_model=OwnerStoryObservationOut,
+)
+async def update_owner_story(
+    dog_id: str,
+    observation_id: str,
+    payload: OwnerStoryUpdateRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> OwnerStoryObservationOut:
+    if state.engine is not None:
+        row = await owner_stories_db.update_confirmed(
+            state.engine,
+            user_id=user_id,
+            dog_id=dog_id,
+            observation_id=observation_id,
+            facts=payload.facts,
+        )
+    else:
+        observation = state.store.owner_reported_observations.get(
+            observation_id
+        )
+        if (
+            observation is None
+            or observation["dog_id"] != dog_id
+            or observation["user_id"] != user_id
+            or observation["status"] != "CONFIRMED"
+        ):
+            raise ApiError(ErrorCode.NOT_FOUND, "Owner story not found")
+        observation["facts"] = [
+            fact.model_dump(mode="json") for fact in payload.facts
+        ]
+        row = {
+            "id": observation["id"],
+            "dog_id": observation["dog_id"],
+            "facts": observation["facts"],
+            "confirmed_at": observation["confirmed_at"],
+        }
+    return OwnerStoryObservationOut.model_validate(row)
+
+
+@router.delete(
+    "/dogs/{dog_id}/owner-stories/{observation_id}",
+    status_code=204,
+)
+async def delete_owner_story(
+    dog_id: str,
+    observation_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> Response:
+    if state.engine is not None:
+        await owner_stories_db.delete_observation(
+            state.engine,
+            user_id=user_id,
+            dog_id=dog_id,
+            observation_id=observation_id,
+        )
+    else:
+        observation = state.store.owner_reported_observations.get(
+            observation_id
+        )
+        if (
+            observation is None
+            or observation["dog_id"] != dog_id
+            or observation["user_id"] != user_id
+        ):
+            raise ApiError(ErrorCode.NOT_FOUND, "Owner story not found")
+        del state.store.owner_reported_observations[observation_id]
+    return Response(status_code=204)

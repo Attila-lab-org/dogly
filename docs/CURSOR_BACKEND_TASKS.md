@@ -66,3 +66,90 @@ Scoperti mentre il mobile veniva collegato agli endpoint reali:
 8. Test di accettazione: elenco alla sez. 15 del brief.
 
 **Parte mobile (Kimi, dopo il backend):** profiling progressivo "Routine e abitudini" nel profilo, micro-card Home "Aiutami a conoscerlo meglio", card risultato "Cosa puoi fare adesso", outcome "Ti è sembrato utile?" (Sì/No/Non so).
+
+
+---
+
+## Task sicurezza + performance media (audit 2026-09-07)
+
+Fonte: audit indipendente (Kimi) su sicurezza backend e pipeline immagini. I problemi 1–4 sono quelli che un founder non tecnico non saprebbe di cercare; la parte mobile della stessa audit è in `docs/MOBILE_TASKS.md` (vietata a Cursor per regola d'oro).
+
+### P0 — sicurezza/GDPR
+
+1. **BLOCKER — Cron retention media mai schedulato.** Il handler `media_retention_cleanup` esiste (`backend/app/worker/main.py:29`) ma nessuno lo invoca: `vercel.json` non dichiara alcun cron e nessun codice di produzione fa enqueue di quel task (verificato via grep). La privacy policy promette cancellazione media grezze a 24h (`internal.retention_policies`) che in realtà non avviene mai → violazione GDPR su dati sensibili. Fix: dichiarare `crons` in `vercel.json` (o progetto Vercel Cron) che chiama `/tasks/run` con il task e `x-internal-token`; verificare esecuzione via log. Rif: `backend/app/domains/retention.py:5-9` (il commento ammette il gap).
+2. **MAJOR — Export GDPR Art. 20 incompleto.** `collect_export_payload` (`backend/app/domains/privacy_db.py:245-299`) omette: `care_events`, `device_installations`, `dog_albums`, `dog_photos`, `dog_profile_visibility` (consensi pubblicazione!), `usage_ledgers`, `owner_reported_observations`, `knowledge_scores`, `digestive_insights`, `digestive_baselines`. Fix: aggiungere le tabelle mancanti al payload export + test.
+3. **CHIUSO 2026-09-07 — Nessun rate limiting.** ~~Non esiste alcun limite per-utente su nessuna API autenticata.~~ Fix applicato: dependency factory `rate_limit(bucket, limit)` in `backend/app/api/deps.py` — finestra fissa per-utente su Postgres (`internal.rate_limits`, migrazione `20260907113000`, grant solo a service_role) con fallback in-memory per dev/test; limite superato → `429 RATE_LIMITED` (retryable). Applicato a: `POST /v1/behavior/captures/init` (30/min), `POST /v1/behavior/events/{id}/feedback` (60/min), `POST /v1/digestive/fecal/init` (30/min), `POST /v1/devices/push-token` (10/min). Test: `backend/tests/test_rate_limit.py` (3 test: limite, per-user isolation). Per estendere ad altri endpoint: aggiungere il parametro `_limiter` con `Depends(rate_limit(...))`.
+4. **MAJOR — Webhook RevenueCat anti-replay parziale.** Idempotenza = scarto solo se `last_webhook_event_id == event_id` (`backend/app/domains/billing_db.py:137-151`): eventi più vecchi rispediti (consegna at-least-once, ordine non garantito) vengono riapplicati e sovrascrivono lo stato. Fix: tabella `webhook_events` con insert-if-absent atomico come guard; gestione out-of-order (ignorare eventi con `event_timestamp` antecedente allo stato corrente).
+
+### P1 — robustezza upload
+
+5. **MAJOR — Contenuto upload mai validato.** La signed URL Supabase è creata senza vincolo MIME (`backend/app/providers/supabase_storage.py:37-67`, body vuoto); il `content_type` dichiarato dal client decide solo l'estensione (`behavior_db.py:32-36`) e a complete si verifica solo esistenza+dimensione dichiarata dal client stesso (`behavior_db.py:239-243`, `dogs_db.py:270-274`). Chiunque può caricare file arbitrari mascherati da video. Fix: firma con `contentType` vincolante, sniffing magic-bytes lato worker su `complete`, blocco su mismatch; antivirus/scan opzionale in P2. NOTA: il task 10 (MIME allowlist DTO) è solo il lato dichiarativo — questo è il lato enforcement.
+6. **MAJOR — EXIF/GPS nelle foto non rimosso server-side.** Il mobile non stripna i metadati (vedi MOBILE_TASKS); il server deve farlo a valle dell'upload (worker su complete: rieseguire encode immagine o chiamata Supabase Image Transformation) prima che la foto sia servita o esportata.
+7. **MINOR — `/ready` pubblico senza auth** (`api/index.py:36-44`): esegue `select 1` sul DB di produzione per chiunque. Fix: proteggere con token interno o IP allowlist Vercel.
+
+### P1 — performance immagini (il mobile non può risolvere da solo)
+
+8. **URL media effimeri → niente cache possibile.** Ogni lettura foto/avatar restituisce signed URL con TTL `min(600s default, 3600)` (`config.py:65`, `gallery.py:29-57`, `dogs.py:28-36`): a ogni refetch dati gli URL cambiano e ogni client riscarica tutto. Fix (scelta architetturale, discutere con PO prima): (a) endpoint `GET /v1/media/{photo_id}` autenticato che streama il file (cache lato client per id), oppure (b) bucket pubblico per media `PUBLISHED` + signed solo per `PRIVATE`. L'opzione (a) mantiene RLS-by-construction.
+9. **Miniature assenti.** `thumbnailUri == uri` full-res ovunque (`mapPhoto` in gallery): le griglie scaricano la foto intera. Fix: generare thumbnail a upload-complete (worker, larghezza ~400px, stesso bucket) o servire via Supabase Image Transformations (`/render/image` con resize) se il piano lo consente; esporre `thumbnail_url` nel DTO.
+10. **TTL signed read incoerente col ciclo di vita client.** Con staleTime 30s del mobile, i refetch generano URL nuovi ogni 30s+: se si resta su (8), alzare `storage_signed_url_ttl_seconds` a 3600 come mitigazione immediata (1 riga in config/env Vercel), non come fix definitivo.
+
+
+---
+
+## Bug logici flussi core (audit 2026-09-07)
+
+Fonte: percorrenza end-to-end mobile+backend dei flussi quota/paywall, capture→result, billing, care, digestive, timezone, concorrenza. La fondazione quota è solida (`reserve_usage` con `FOR UPDATE` + reservation idempotenti); questi bug sono nel ciclo di vita.
+
+### P0 — bloccano o bruciano soldi in produzione
+
+33. **Evento behavior bloccato per sempre in OBSERVING/INTERPRETING.** `backend/app/worker/handlers.py:207` + `backend/app/contracts/taxonomy.py:44-72`: se il worker muore a metà analisi, ogni redispatch chiama `process_behavior_event` → `transition(event, OBSERVING)` → `InvalidTransition` non catturato → retry esauriti → evento perso per sempre (utente fermo allo spinner, quota riservata). Auto-confermato da `sweep.py:26` che rispedisce proprio quegli stati. Fix: ammettere `OBSERVING/INTERPRETING → OBSERVING` come re-entry idempotente + test sulla transizione.
+34. **Quota orfana su init non transazionale.** `backend/app/domains/behavior_db.py:129-139` (idem `digestive_db.py:124-134`): `reserve_usage_sql` committa in una connessione separata; se l'insert dell'evento fallisce dopo, la reservation resta `RESERVED` per sempre (nessuno sweep rilascia — zero uso di `RELEASED` nel codice). Fix: stessa transazione, oppure `refund_usage_sql` nel `except`.
+35. **Upload abbandonato = quota bloccata fino al reset.** Stesso punto: evento fermo in `UPLOADING` + reservation `RESERVED`; con 3 abbandoni l'utente free è bloccato senza mai aver avuto risultati. Fix: job sweep che refunda reservation con evento in `UPLOADING/DRAFT` da > N ore (task 1 retention cron può farlo insieme).
+36. **Free user esaurito in loop silenzioso senza paywall.** `apps/mobile/src/features/behavior/upload.ts:173-186`: 402 QUOTA_EXHAUSTED nel drain → `markRecoverable` → retry all'infinito a ogni resume, paywall mai mostrato. Fix: nel catch, se quota esaurita → stato terminale + evento che apre il paywall.
+
+### P1 — prima del go-live billing e qualità
+
+37. **Doppio complete → analisi eseguita due volte (costo AI doppio).** `behavior_db.py:217-275`: guard non atomico su `status`, `internal.analysis_jobs` senza unique su `event_id` (`0007_jobs_cost_audit.sql:31` solo indice non unico). Fix: `UPDATE ... SET status='QUEUED' WHERE id=:id AND status IN ('UPLOADING','DRAFT') RETURNING` come guard atomico, + unique constraint `analysis_jobs(event_id)`.
+38. **Webhook fuori ordine declassa premium.** `backend/app/domains/billing_db.py:150-151`: dedup solo se identico all'ultimo evento; `EXPIRATION` tardiva dopo `RENEWAL` sovrascrive. Fix: applicare update solo se `period_end` in arrivo ≥ corrente (dup parziale del task 4 della sez. sicurezza — unificare).
+39. **Evento RevenueCat `TRANSFER` ignorato.** `backend/app/providers/billing.py:52-53` → il piano resta sul vecchio account dopo cambio telefono/login. Fix: mappare transfer dell'entitlement sul nuovo `app_user_id`. (Oggi invisibile: store non collegato; letale al go-live.)
+40. **Doppio promemoria agenda (locale + push server).** `apps/mobile/src/features/care/store.ts:168` + `backend/app/worker/handlers.py:561-595`: utente con push token riceve due notifiche per lo stesso appuntamento. Fix: una fonte sola.
+41. **Notifiche agenda orfane dopo restart.** `apps/mobile/src/features/care/store.ts:233-251`: `notificationId` mai persistito → cancellazione evento dopo restart non cancella la notifica già schedulata. Fix: persistere id o chiave derivata dall'evento.
+42. **Errore rete spacciato per "analisi non trovata".** `apps/mobile/app/behavior/processing/[eventId].tsx:123-133`: fix = distinguere 404 da errore rete + pulsante Riprova (collegato al task 31 della sez. precedente).
+43. **Conteggio episodi digestivi gonfiato da raffiche di foto.** `backend/app/domains/digestive_db.py:481-531`: 5 foto in 5 minuti = "5 episodi in 24h". Fix (scelta prodotto da confermare): deduplica per finestra 6-12h nel conteggio `recent_episode_count_24h`.
+
+### Nota di stato
+
+Acquisto e restore purchase sono **stub** (`apps/mobile/app/paywall.tsx:154-162`): il gap funzionale maggiore non è un bug ma l'assenza del billing collegato. Timezone/date verificati sani (dayDistance, DST assorbito da Math.round, parse date validato).
+
+
+---
+
+## Gap AI — spec V2 engine→consumer (audit 2026-09-07)
+
+Fonte: audit pipeline AI vs `docs/SPEC_BEHAVIOR_INTELLIGENCE_V2.md`. Il motore interno
+(observer→reasoner→safety→advice, metering, fail-fast) è solido e testato; questi gap
+sono tutti nella superficie consumer V2 e nella validazione empirica.
+
+### P0 — bloccano la beta AI
+
+44. **CHIUSO 2026-09-07 — Consumer composer V2 behavior.** `domains/behavior_intelligence.py` produce headline, `baseline_note` ("Per Rocky"), next step e what-to-watch post-reasoner; `BehaviorEventOut` espone i campi consumer + `personal_memory_used`. Test: `test_behavior_intelligence.py`, `test_worker.py`.
+45. **CHIUSO 2026-09-07 — Safety governa wording e azione.** Copy deterministico per `SAFE_ESCALATION_001` / distress / pain: l'utente riceve "Aumenta la distanza e non forzare il contatto", mai il codice tecnico. Safety urgent resta senza advice catalog ma con azione consumer.
+46. **Gate eval G3 mai eseguito.** `docs/EVALS.md:6,78`: nessun dataset, nessuno script
+   eval in `scripts/`, registro vuoto. La spec dice "No model enters closed beta without
+   this table filled". Fix: dataset 200-300 video reali etichettati blind, split
+   dog-disjoint, script eval (schema validity ≥98%, safety 0 regressioni, P95 ≤25s,
+   costo mediano) — richiede raccolta dati reale (task anche di prodotto, non solo codice).
+47. **CHIUSO 2026-09-07 — `context_bucket` risolto server-side.** Se il client manda UNKNOWN, il worker deriva PLAY/DOOR_EXIT/FEEDING/… dall'osservazione, altrimenti orario/pasti, altrimenti HOME. Log `behavior.context_bucket.unknown_from_client`. Test: `test_context_bucket.py`.
+48. **CHIUSO 2026-09-07 — risposta `context_question` behavior.**
+   `POST /v1/behavior/events/{id}/context` salva il bucket confermato e rilancia
+   reasoner + composer senza riosservare il video né consumare un'altra analisi.
+49. **CHIUSO 2026-09-07 — costi AI configurabili da listino.** Tariffe verificate
+   per Gemini 3.8 Flash e GPT-5 mini sono in `config.py`, sovrascrivibili via env,
+   con margine prudenziale 15%; i thinking token Gemini sono inclusi.
+
+### P1 — prima della produzione
+
+50. **CHIUSO 2026-09-07 — provider/modelli versionati.** Observer Gemini 3.8 Flash
+    e reasoner OpenAI GPT-5 mini sono dichiarati in `vercel.json`, non solo in dashboard.
+51. **CHIUSO 2026-09-07 — `personal_memory_used` esposto** in `BehaviorEventOut` e usato dal composer "Per Rocky".
+52. **CHIUSO 2026-09-07 — Test composer/safety/context.** Restano i test per l'endpoint `context_question` behavior (task 48).

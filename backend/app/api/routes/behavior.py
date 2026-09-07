@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.api.deps import IdempotencyDep, StateDep, UserIdDep
+from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.api import (
     BehaviorCaptureInitRequest,
     BehaviorCaptureInitResponse,
+    BehaviorContextUpdateRequest,
     BehaviorEventOut,
     BehaviorFeedbackRequest,
     BehaviorFeedbackResponse,
@@ -16,6 +17,7 @@ from app.contracts.api import (
 from app.contracts.taxonomy import INTERPRETATION_SCHEMA_VERSION, FeedbackValue
 from app.domains import behavior as behavior_domain
 from app.domains import behavior_db, idempotency_db, lifestyle, lifestyle_db
+from app.domains.context_bucket import resolve_context_bucket
 from app.domains.models import BehaviorEventRec
 from app.knowledge.models import AdviceOutcomeValue
 
@@ -28,6 +30,7 @@ def event_out(
     advice_outcome: AdviceOutcomeValue | None = None,
 ) -> BehaviorEventOut:
     interp = event.interpretation_json or {}
+    consumer = interp.get("consumer") or {}
     return BehaviorEventOut(
         id=event.id,
         dog_id=event.dog_id,
@@ -46,6 +49,16 @@ def event_out(
         feedback=feedback,
         advice=event.advice_json or interp.get("advice"),
         advice_outcome=advice_outcome,
+        consumer_headline=consumer.get("consumer_headline"),
+        baseline_comparison=consumer.get("baseline_comparison"),
+        baseline_note=consumer.get("baseline_note"),
+        recommended_next_step=consumer.get("recommended_next_step"),
+        what_to_watch=consumer.get("what_to_watch"),
+        safety=consumer.get("safety"),
+        personal_memory_used=consumer.get("personal_memory_used")
+        or interp.get("personal_memory_used")
+        or [],
+        context_bucket=interp.get("context_bucket"),
         created_at=event.created_at,
         completed_at=event.completed_at,
     )
@@ -68,9 +81,23 @@ async def init_capture(
     state: StateDep,
     user_id: UserIdDep,
     guard: IdempotencyDep,
+    _limiter: None = Depends(rate_limit("behavior.init", limit=30)),
 ) -> BehaviorCaptureInitResponse:
     if cached := guard.lookup():
         return BehaviorCaptureInitResponse.model_validate(cached)
+    if state.engine is not None:
+        lifestyle_out = await lifestyle_db.get_lifestyle(
+            state.engine, user_id, payload.dog_id
+        )
+    else:
+        lifestyle_out = lifestyle.get_lifestyle(
+            state.store, user_id, payload.dog_id
+        )
+    resolved_bucket = resolve_context_bucket(
+        payload.context_bucket, lifestyle=lifestyle_out.model_dump()
+    )
+    if resolved_bucket != payload.context_bucket:
+        payload = payload.model_copy(update={"context_bucket": resolved_bucket})
     if state.engine is not None:
         capture, event, url, expires, reserved = await behavior_db.init_capture(
             state.engine,
@@ -150,6 +177,38 @@ async def get_behavior_event(event_id: str, state: StateDep, user_id: UserIdDep)
     return event_out(event, feedback, advice_outcome)
 
 
+@router.post(
+    "/behavior/events/{event_id}/context",
+    response_model=BehaviorEventOut,
+)
+async def update_behavior_context(
+    event_id: str,
+    payload: BehaviorContextUpdateRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    _limiter: None = Depends(rate_limit("behavior.context", limit=20)),
+) -> BehaviorEventOut:
+    """Save one owner answer and refine without observing the video again."""
+    if state.engine is not None:
+        event = await behavior_db.get_event(
+            state.engine, user_id=user_id, event_id=event_id
+        )
+    else:
+        event = behavior_domain.get_event(
+            state.store, user_id=user_id, event_id=event_id
+        )
+
+    # Local import keeps the public route independent from worker startup.
+    from app.worker.handlers import refine_behavior_event_context
+
+    event = await refine_behavior_event_context(
+        state,
+        event=event,
+        context_bucket=payload.context_bucket,
+    )
+    return event_out(event)
+
+
 @router.post("/behavior/events/{event_id}/feedback", response_model=BehaviorFeedbackResponse)
 async def post_feedback(
     event_id: str,
@@ -157,6 +216,7 @@ async def post_feedback(
     state: StateDep,
     user_id: UserIdDep,
     guard: IdempotencyDep,
+    _limiter: None = Depends(rate_limit("behavior.feedback", limit=60)),
 ) -> BehaviorFeedbackResponse:
     if cached := guard.lookup():
         return BehaviorFeedbackResponse.model_validate(cached)

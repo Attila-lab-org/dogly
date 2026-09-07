@@ -3,9 +3,9 @@ fingerprinting, sez. 10.1)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.api.deps import IdempotencyDep, StateDep, UserIdDep
+from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.api import PushTokenRequest, PushTokenResponse
 from app.domains import devices_db, idempotency_db
 from app.domains.models import DeviceInstallationRec
@@ -31,6 +31,7 @@ async def register_push_token(
     state: StateDep,
     user_id: UserIdDep,
     guard: IdempotencyDep,
+    _limiter: None = Depends(rate_limit("devices.push_token", limit=10)),
 ) -> PushTokenResponse:
     if cached := guard.lookup():
         return PushTokenResponse.model_validate(cached)

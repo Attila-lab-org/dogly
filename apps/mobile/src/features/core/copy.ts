@@ -30,13 +30,14 @@ export function intentHeadline(
   intent: BehaviorIntent | null,
 ): string {
   if (intent === null || intent === 'INSUFFICIENT') {
-    return `Non riesco ancora a capire ${dogName}`;
+    return 'Non ho abbastanza elementi per capirlo bene';
   }
   const label = BEHAVIOR_INTENT_LABELS[intent];
   return `${dogName} ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 }
 
 export interface ProcessingStep {
+  id: 'analyze' | 'signals' | 'personal' | 'answer';
   status: BehaviorEventStatus;
   title: string;
   description: string;
@@ -46,17 +47,26 @@ export interface ProcessingStep {
 export function processingStepsFor(dogName: string): ProcessingStep[] {
   return [
     {
+      id: 'analyze',
       status: 'QUEUED',
-      title: 'Guardo il video',
-      description: `Sto iniziando a guardare ${dogName}.`,
+      title: 'Analizzo il video',
+      description: `Sto guardando ${dogName}.`,
     },
     {
+      id: 'signals',
       status: 'OBSERVING',
       title: 'Riconosco i segnali principali',
       description: `Cerco ciò che può aiutarmi a capire ${dogName}.`,
     },
     {
+      id: 'personal',
       status: 'INTERPRETING',
+      title: `Li confronto con quello che so di ${dogName}`,
+      description: 'Considero il suo contesto e ciò che hai già confermato.',
+    },
+    {
+      id: 'answer',
+      status: 'COMPLETED',
       title: 'Preparo la mia risposta',
       description: 'Manca poco.',
     },

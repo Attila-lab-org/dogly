@@ -1808,6 +1808,75 @@
         }
       }
     },
+    "/v1/behavior/events/{event_id}/context": {
+      "post": {
+        "tags": [
+          "behavior"
+        ],
+        "summary": "Update Behavior Context",
+        "description": "Save one owner answer and refine without observing the video again.",
+        "operationId": "update_behavior_context_v1_behavior_events__event_id__context_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BehaviorContextUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehaviorEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/behavior/events/{event_id}/feedback": {
       "post": {
         "tags": [
@@ -2659,6 +2728,64 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/owner-stories": {
+      "get": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "List Owner Stories",
+        "operationId": "list_owner_stories_v1_dogs__dog_id__owner_stories_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/dogs/{dog_id}/owner-stories/prepare": {
       "post": {
         "tags": [
@@ -2858,6 +2985,141 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/dogs/{dog_id}/owner-stories/{observation_id}": {
+      "patch": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Update Owner Story",
+        "operationId": "update_owner_story_v1_dogs__dog_id__owner_stories__observation_id__patch",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerStoryUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryObservationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Delete Owner Story",
+        "operationId": "delete_owner_story_v1_dogs__dog_id__owner_stories__observation_id__delete",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -3723,6 +3985,19 @@
         ],
         "title": "BehaviorCaptureInitResponse"
       },
+      "BehaviorContextUpdateRequest": {
+        "properties": {
+          "context_bucket": {
+            "$ref": "#/components/schemas/ContextBucket"
+          }
+        },
+        "type": "object",
+        "required": [
+          "context_bucket"
+        ],
+        "title": "BehaviorContextUpdateRequest",
+        "description": "One owner answer that can materially refine a behavior result."
+      },
       "BehaviorEventOut": {
         "properties": {
           "id": {
@@ -3854,6 +4129,91 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/AdviceOutcomeValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consumer_headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Headline"
+          },
+          "baseline_comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Comparison"
+          },
+          "baseline_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Note"
+          },
+          "recommended_next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Next Step"
+          },
+          "what_to_watch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What To Watch"
+          },
+          "safety": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety"
+          },
+          "personal_memory_used": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Personal Memory Used"
+          },
+          "context_bucket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextBucket"
               },
               {
                 "type": "null"
@@ -6751,6 +7111,16 @@
               }
             ],
             "title": "Recent Changes"
+          },
+          "today_vs_usual": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TodayVsUsual"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -6957,6 +7327,54 @@
         ],
         "title": "OwnerStoryDraftOut"
       },
+      "OwnerStoryListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerStoryObservationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "OwnerStoryListOut"
+      },
+      "OwnerStoryObservationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Confirmed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dog_id",
+          "facts",
+          "confirmed_at"
+        ],
+        "title": "OwnerStoryObservationOut"
+      },
       "OwnerStoryPrepareRequest": {
         "properties": {
           "text": {
@@ -6971,6 +7389,24 @@
           "text"
         ],
         "title": "OwnerStoryPrepareRequest"
+      },
+      "OwnerStoryUpdateRequest": {
+        "properties": {
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Facts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facts"
+        ],
+        "title": "OwnerStoryUpdateRequest"
       },
       "PatternListResponse": {
         "properties": {
@@ -7671,6 +8107,49 @@
           "limits"
         ],
         "title": "SubscriptionStatusResponse"
+      },
+      "TodayVsUsual": {
+        "properties": {
+          "concern": {
+            "type": "string",
+            "enum": [
+              "soft",
+              "off"
+            ],
+            "title": "Concern"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "concern"
+        ],
+        "title": "TodayVsUsual",
+        "description": "Owner-reported daily check-in: today compared with this dog's usual.\n\n`off` is a high-value OWNER-REPORTED CHANGE for the reasoner. `soft`\nclears a previous off-day so yesterday's concern does not linger."
       },
       "UsageDomain": {
         "properties": {

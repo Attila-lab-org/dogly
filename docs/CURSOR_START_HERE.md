@@ -21,6 +21,11 @@ Esegui integralmente **`docs/kb/CURSOR_IMPLEMENTATION_BRIEF_Dogly_AI_Knowledge_A
 
 ### FASE 4 — Igiene (task 10-18, 21-25 dello stesso documento)
 
+### FASE 5 — Sicurezza + performance media (audit 2026-09-07, sez. finale di `docs/CURSOR_BACKEND_TASKS.md`)
+Task 1-10 della sezione "Task sicurezza + performance media": P0 = cron retention GDPR (task 1) e export completo (task 2); P1 = rate limiting, webhook anti-replay, enforcement upload, EXIF server-side, URL media stabili + miniature (task 8-9 sono scelta architetturale: **fermarsi e discutere col PO prima di implementare**).
+
+**Nota di coordinamento:** i task sull'app mobile derivati dalla stessa audit (callback OAuth, logout completo, expo-image, gestione scadenza URL) sono in `docs/MOBILE_TASKS.md` e appartengono a Kimi — non toccarli.
+
 ## Regole non negoziabili (Spec V1)
 - Migrazioni forward-only, RLS/grants nella stessa migrazione, negative test per ogni dominio.
 - Mai segreti nel codice; chiamate AI pagate mockate in CI; OpenAPI export aggiornato (`scripts/export_openapi.py`) dopo ogni cambio route.

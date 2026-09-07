@@ -167,4 +167,17 @@ export interface BehaviorEventResult {
   taxonomy_version: string;
   created_at: string;
   completed_at: string | null;
+  /** Composer V2: headline già personalizzata, o fallback locale. */
+  consumer_headline?: string | null;
+  baseline_note?: string | null;
+  baseline_comparison?: string | null;
+  recommended_next_step?: string | null;
+  what_to_watch?: string | null;
+  safety?: {
+    code: string;
+    severity: string;
+    title: string;
+    message: string;
+    action: string;
+  } | null;
 }

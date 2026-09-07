@@ -7,7 +7,14 @@ import { Platform } from 'react-native';
 
 import { getSupabaseClient } from '../../lib/supabase';
 import { isSupabaseConfigured } from './env';
-import { oauthRedirectTo, parseOAuthCallbackUrl } from './oauthCallback';
+import {
+  assertValidAuthCallbackUrl,
+  createOAuthState,
+  oauthRedirectTo,
+  parseOAuthCallbackUrl,
+  saveOAuthState,
+  verifyOAuthState,
+} from './oauthCallback';
 
 if (Platform.OS !== 'web') {
   WebBrowser.maybeCompleteAuthSession();
@@ -79,6 +86,10 @@ const oauthCompletions = new Map<string, Promise<void>>();
 
 async function runOAuthCallback(callbackUrl: string): Promise<void> {
   const supabase = getSupabaseClient();
+  // Prima forma (scheme/host/path) e stato: nessun token viene accettato da
+  // un URL non richiesto da questo flusso di login (anti token injection).
+  const url = assertValidAuthCallbackUrl(callbackUrl);
+  await verifyOAuthState(url);
   const callback = parseOAuthCallbackUrl(callbackUrl);
 
   if (callback.error) {
@@ -120,9 +131,14 @@ export async function signInWithGoogle(): Promise<void> {
   }
   const supabase = getSupabaseClient();
   const web = Platform.OS === 'web';
-  const redirectTo = web
+  const state = createOAuthState();
+  await saveOAuthState(state);
+  const redirectBase = web
     ? oauthRedirectTo('web', globalThis.location.origin)
     : Linking.createURL('auth/callback');
+  // Il provider preserva la query del redirect_uri: il callback riporterà lo
+  // stesso dogly_state, che verifichiamo prima di toccare la sessione.
+  const redirectTo = `${redirectBase}?dogly_state=${encodeURIComponent(state)}`;
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {

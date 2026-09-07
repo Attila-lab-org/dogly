@@ -49,6 +49,18 @@ class Settings(BaseSettings):
     digestive_vision_model: str = "mock-digestive-vision-v0"
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
 
+    # Public list prices in USD per 1M tokens (verified 2026-09-07).
+    # Environment-overridable because provider pricing changes independently
+    # from application releases. The margin keeps budget gates conservative.
+    observer_input_usd_per_million: float = 0.75
+    observer_output_usd_per_million: float = 3.75
+    reasoner_input_usd_per_million: float = 0.25
+    reasoner_output_usd_per_million: float = 2.0
+    digestive_input_usd_per_million: float = 0.25
+    digestive_output_usd_per_million: float = 2.0
+    owner_transcription_usd_per_minute: float = 0.003
+    ai_cost_safety_margin: float = 1.15
+
     gemini_api_key: str = ""
     openai_api_key: str = ""
 

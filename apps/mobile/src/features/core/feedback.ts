@@ -24,6 +24,7 @@ export async function saveBehaviorFeedback(
   eventId: string,
   value: FeedbackValue,
   mockGate = false,
+  extras?: { correction_label?: string | null },
 ): Promise<FeedbackValue> {
   if (mockGate) {
     patchLocalMocks(eventId, value);
@@ -33,6 +34,6 @@ export async function saveBehaviorFeedback(
   // devono essere caricati in contesti senza runtime nativo (es. Jest).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { postBehaviorFeedback } = require('../behavior/api') as typeof import('../behavior/api');
-  const res = await postBehaviorFeedback(eventId, value);
+  const res = await postBehaviorFeedback(eventId, value, extras);
   return res.value;
 }

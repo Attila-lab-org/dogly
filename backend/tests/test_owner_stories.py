@@ -4,6 +4,7 @@ import base64
 
 import pytest
 
+from app.api.routes import owner_stories
 from app.config import Settings
 from app.contracts.errors import ApiError, ErrorCode
 from app.providers import openai_transcription
@@ -46,6 +47,109 @@ async def test_owner_story_requires_review_before_confirmation(
     assert confirmed.json()["facts"] == edited
     assert draft["status"] == "CONFIRMED"
     assert draft["facts"] == edited
+    assert draft["transcript"] is None
+
+    listed = await client.get(
+        f"/v1/dogs/{dog_id}/owner-stories",
+        headers=auth_headers,
+    )
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["facts"] == edited
+
+    edited[0]["statement"] = "Rocky preferisce uscire piano al mattino."
+    updated = await client.patch(
+        f"/v1/dogs/{dog_id}/owner-stories/{body['draft_id']}",
+        headers=auth_headers,
+        json={"facts": edited},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["facts"] == edited
+
+    deleted = await client.delete(
+        f"/v1/dogs/{dog_id}/owner-stories/{body['draft_id']}",
+        headers=auth_headers,
+    )
+    assert deleted.status_code == 204
+    listed_after_delete = await client.get(
+        f"/v1/dogs/{dog_id}/owner-stories",
+        headers=auth_headers,
+    )
+    assert listed_after_delete.json()["items"] == []
+
+
+async def test_owner_story_draft_can_be_discarded(client, auth_headers, state):
+    dog_id = await create_dog(client, auth_headers)
+    prepared = await client.post(
+        f"/v1/dogs/{dog_id}/owner-stories/prepare",
+        headers=auth_headers,
+        json={"text": "Rocky preferisce passeggiare al mattino."},
+    )
+    draft_id = prepared.json()["draft_id"]
+
+    discarded = await client.delete(
+        f"/v1/dogs/{dog_id}/owner-stories/{draft_id}",
+        headers=auth_headers,
+    )
+
+    assert discarded.status_code == 204
+    assert draft_id not in state.store.owner_reported_observations
+
+
+async def test_owner_audio_checks_ownership_before_transcription(
+    client, auth_headers, monkeypatch
+):
+    called = False
+
+    async def fake_transcribe(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return "Non deve essere chiamato"
+
+    monkeypatch.setattr(owner_stories, "transcribe_owner_audio", fake_transcribe)
+    response = await client.post(
+        "/v1/dogs/00000000-0000-0000-0000-000000000099/owner-stories/prepare-audio",
+        headers=auth_headers,
+        json={
+            "audio_base64": base64.b64encode(b"audio bytes").decode(),
+            "content_type": "audio/webm",
+        },
+    )
+
+    assert response.status_code == 404
+    assert called is False
+
+
+async def test_owner_audio_is_idempotent(client, auth_headers, monkeypatch):
+    dog_id = await create_dog(client, auth_headers)
+    calls = 0
+
+    async def fake_transcribe(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return "Rocky ama passeggiare al mattino."
+
+    monkeypatch.setattr(owner_stories, "transcribe_owner_audio", fake_transcribe)
+    payload = {
+        "audio_base64": base64.b64encode(b"same audio bytes").decode(),
+        "content_type": "audio/webm",
+    }
+    headers = {**auth_headers, "X-Idempotency-Key": "owner-audio-same-0001"}
+
+    first = await client.post(
+        f"/v1/dogs/{dog_id}/owner-stories/prepare-audio",
+        headers=headers,
+        json=payload,
+    )
+    second = await client.post(
+        f"/v1/dogs/{dog_id}/owner-stories/prepare-audio",
+        headers=headers,
+        json=payload,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == first.json()
+    assert calls == 1
 
 
 class _TranscriptionResponse:

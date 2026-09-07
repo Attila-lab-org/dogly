@@ -55,10 +55,16 @@ export function AdviceCard({
         <View style={styles.iconWrap}>
           <CuteIcon name={CATEGORY_ICONS[advice.category]} size={22} />
         </View>
-        <Text style={styles.title}>Cosa puoi fare adesso</Text>
+        <Text style={styles.title}>Prova così</Text>
       </View>
 
       <Text style={styles.action}>{actionText}</Text>
+
+      {advice.followUp ? (
+        <Text style={styles.followUp} testID="advice-follow-up">
+          Da osservare: {advice.followUp.replace(/Rocky/g, dogName)}
+        </Text>
+      ) : null}
 
       <Pressable
         accessibilityRole="button"
@@ -77,11 +83,6 @@ export function AdviceCard({
       </Pressable>
 
       {whyOpen ? <Text style={styles.whyText}>{whyText}</Text> : null}
-      {whyOpen && advice.followUp ? (
-        <Text style={styles.followUp}>
-          Poi osserva: {advice.followUp.replace(/Rocky/g, dogName)}
-        </Text>
-      ) : null}
     </Card>
   );
 }

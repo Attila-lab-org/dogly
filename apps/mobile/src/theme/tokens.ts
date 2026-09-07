@@ -19,7 +19,9 @@ export const colors = {
 
   text: '#0E2A47',
   textSecondary: '#64748B',
-  textMuted: '#94A3B8',
+  // Minimum readable muted text on white/light surfaces (WCAG AA).
+  textMuted: '#64748B',
+  iconMuted: '#94A3B8',
   textOnPrimary: '#FFFFFF',
 
   danger: '#EF4444',

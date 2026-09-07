@@ -52,7 +52,10 @@ export default function BehaviorProcessingScreen() {
     refetchInterval: (q) => {
       const status = q.state.data?.status;
       if (!status || isTerminalBehaviorStatus(status)) return false;
-      return 2000;
+      const updates = q.state.dataUpdateCount;
+      if (updates < 5) return 2_000;
+      if (updates < 12) return 4_000;
+      return 8_000;
     },
   });
 
@@ -127,8 +130,9 @@ export default function BehaviorProcessingScreen() {
     return (
       <ScreenContainer>
         <ErrorState
-          title="Analisi non trovata"
-          message="Non riesco a trovare questa analisi. Torna alla Home e riprova."
+          title="Non riesco ad aggiornare l’analisi"
+          message="La connessione può essere momentaneamente instabile. L’analisi continua in sicurezza."
+          onRetry={() => void query.refetch()}
         />
         <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
       </ScreenContainer>
@@ -254,7 +258,7 @@ export default function BehaviorProcessingScreen() {
           const done = !isRetrying && stepOrder < currentOrder;
           const active = !isRetrying && stepOrder === currentOrder;
           return (
-            <View key={step.status} style={styles.stepRow}>
+            <View key={step.id} style={styles.stepRow}>
               <View
                 style={[
                   styles.stepDot,
@@ -277,6 +281,9 @@ export default function BehaviorProcessingScreen() {
                 >
                   {step.title}
                 </Text>
+                {(active || done) && (
+                  <Text style={styles.stepDescription}>{step.description}</Text>
+                )}
               </View>
             </View>
           );
@@ -377,6 +384,12 @@ const styles = StyleSheet.create({
   },
   stepTitleActive: {
     color: colors.text,
+  },
+  stepDescription: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   statePage: {
     flex: 1,

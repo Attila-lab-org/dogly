@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep
+from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.api import (
     DigestiveContextUpdateRequest,
     DigestiveEventOut,
@@ -78,6 +78,7 @@ async def init_fecal(
     state: StateDep,
     user_id: UserIdDep,
     guard: IdempotencyDep,
+    _limiter: None = Depends(rate_limit("digestive.init", limit=30)),
 ) -> FecalInitResponse:
     if cached := guard.lookup():
         return FecalInitResponse.model_validate(cached)

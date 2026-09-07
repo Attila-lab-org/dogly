@@ -2,12 +2,14 @@
  * Profilo cane: spazio personale, visivo e orientato alle azioni.
  * Le spiegazioni tecniche e le policy restano fuori da questa schermata.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -44,6 +46,17 @@ import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isApiConfigured } from '@/features/auth/env';
+import {
+  getDigestiveSummary,
+  type DigestiveSummary,
+} from '@/features/digestive/api';
+import {
+  deleteOwnerStory,
+  fetchOwnerStories,
+  updateOwnerStory,
+  type OwnerFact,
+  type OwnerStoryObservation,
+} from '@/features/ownerStory/api';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -77,11 +90,65 @@ export default function DogProfileTabScreen() {
     queryFn: () => fetchAlbumPhotos(firstAlbumId!),
     enabled: !useDemoData && Boolean(firstAlbumId),
   });
+  const digestiveSummaryQuery = useQuery({
+    queryKey: ['digestive-summary', dog.id],
+    queryFn: () => getDigestiveSummary(dog.id),
+    enabled: !useDemoData && Boolean(dog.id),
+  });
   const previewPhotos = useDemoData
     ? photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3)
     : (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
+  const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
+  const [storyDraft, setStoryDraft] = useState<OwnerFact[]>([]);
+  const [savingStory, setSavingStory] = useState(false);
+  const [storyError, setStoryError] = useState<string | null>(null);
+  const storiesQuery = useQuery({
+    queryKey: ['owner-stories', dog.id],
+    queryFn: () => fetchOwnerStories(dog.id),
+    enabled: !useDemoData && Boolean(dog.id),
+  });
+
+  const beginStoryEdit = (story: OwnerStoryObservation) => {
+    setEditingStoryId(story.id);
+    setStoryDraft(story.facts.map((fact) => ({ ...fact })));
+    setStoryError(null);
+  };
+  const saveStory = async () => {
+    if (!editingStoryId || storyDraft.some((fact) => fact.statement.trim().length < 2)) {
+      return;
+    }
+    setSavingStory(true);
+    setStoryError(null);
+    try {
+      await updateOwnerStory(dog.id, editingStoryId, storyDraft);
+      await storiesQuery.refetch();
+      setEditingStoryId(null);
+    } catch {
+      setStoryError('Non sono riuscito a salvare la nota.');
+    } finally {
+      setSavingStory(false);
+    }
+  };
+  const confirmStoryDelete = (storyId: string) => {
+    Alert.alert(
+      'Eliminare questa nota?',
+      'Dogly non la userà più per conoscere il tuo cane.',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Elimina',
+          style: 'destructive',
+          onPress: () => {
+            void deleteOwnerStory(dog.id, storyId)
+              .then(() => storiesQuery.refetch())
+              .catch(() => setStoryError('Non sono riuscito a eliminare la nota.'));
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={styles.root}>
@@ -157,9 +224,9 @@ export default function DogProfileTabScreen() {
       >
         <Card style={styles.quickActions}>
           <QuickAction
-            icon="camera-outline"
-            label="Storia"
-            onPress={() => router.push('/(tabs)/camera')}
+            icon="chatbubble-ellipses-outline"
+            label="Racconta"
+            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
           />
           <View style={styles.actionDivider} />
           <QuickAction
@@ -214,7 +281,7 @@ export default function DogProfileTabScreen() {
                 ? 'Stabile'
                 : useDemoData
                   ? 'Da osservare'
-                  : 'Vedi andamento'
+                  : digestiveSummaryLabel(digestiveSummaryQuery.data)
             }
             onPress={() => router.push('/digestive/capture')}
           />
@@ -223,7 +290,11 @@ export default function DogProfileTabScreen() {
             iconColor={colors.primary}
             iconBackground={colors.primarySoft}
             label="Alimentazione"
-            value={activeFood?.brand ?? 'Aggiungi cibo'}
+            value={
+              activeFood?.brand ??
+              lifestyle.profile?.feedingLabel ??
+              'Aggiungi cibo'
+            }
             onPress={() => router.push('/nutrition/foods')}
           />
           <WellnessCard
@@ -260,6 +331,89 @@ export default function DogProfileTabScreen() {
           <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
         </Pressable>
 
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Note personali</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+            hitSlop={8}
+          >
+            <Text style={styles.seeAll}>Racconta</Text>
+          </Pressable>
+        </View>
+        {!useDemoData && (storiesQuery.data?.length ?? 0) === 0 ? (
+          <Text style={styles.notesEmpty}>
+            Qui ritroverai solo le cose che hai confermato.
+          </Text>
+        ) : null}
+        {(storiesQuery.data ?? []).map((story) => (
+          <Card key={story.id} style={styles.noteCard}>
+            {editingStoryId === story.id ? (
+              <>
+                {storyDraft.map((fact, index) => (
+                  <TextInput
+                    key={fact.id}
+                    value={fact.statement}
+                    multiline
+                    maxLength={280}
+                    onChangeText={(statement) =>
+                      setStoryDraft((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, statement } : item,
+                        ),
+                      )
+                    }
+                    style={styles.noteInput}
+                  />
+                ))}
+                <View style={styles.noteActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setEditingStoryId(null)}
+                  >
+                    <Text style={styles.noteActionSecondary}>Annulla</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={savingStory}
+                    onPress={() => void saveStory()}
+                  >
+                    <Text style={styles.noteActionPrimary}>
+                      {savingStory ? 'Salvo…' : 'Salva'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                {story.facts.map((fact) => (
+                  <Text key={fact.id} style={styles.noteText}>
+                    {fact.statement}
+                  </Text>
+                ))}
+                <View style={styles.noteActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Elimina nota"
+                    onPress={() => confirmStoryDelete(story.id)}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Modifica nota"
+                    onPress={() => beginStoryEdit(story)}
+                  >
+                    <Text style={styles.noteActionPrimary}>Modifica</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </Card>
+        ))}
+        {storyError ? <Text style={styles.noteError}>{storyError}</Text> : null}
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Modifica i dettagli di ${dog.name}`}
@@ -275,6 +429,20 @@ export default function DogProfileTabScreen() {
       </ScrollView>
     </View>
   );
+}
+
+function digestiveSummaryLabel(summary?: DigestiveSummary): string {
+  if (!summary || summary.data_sufficiency === 'insufficient') {
+    return 'Aggiungi osservazione';
+  }
+  if (summary.safety_flags.length > 0 || summary.recent_trend === 'worsening') {
+    return 'Da osservare';
+  }
+  if (summary.recent_trend === 'improving') return 'In miglioramento';
+  if (summary.recent_trend === 'stable' || (summary.variability ?? 99) <= 1) {
+    return 'Stabile';
+  }
+  return 'Vedi andamento';
 }
 
 function MetaPill({ icon, label }: { icon: IconName; label: string }) {
@@ -599,6 +767,50 @@ const styles = StyleSheet.create({
   },
   lifestyleRow: {
     marginBottom: spacing.md,
+  },
+  notesEmpty: {
+    marginBottom: spacing.lg,
+    color: colors.textMuted,
+    fontSize: typography.size.sm,
+  },
+  noteCard: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  noteText: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  noteInput: {
+    minHeight: 64,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    textAlignVertical: 'top',
+  },
+  noteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.lg,
+    marginTop: spacing.xs,
+  },
+  noteActionPrimary: {
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  noteActionSecondary: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+  },
+  noteError: {
+    marginBottom: spacing.md,
+    color: colors.danger,
+    fontSize: typography.size.sm,
   },
   pressed: {
     opacity: 0.7,

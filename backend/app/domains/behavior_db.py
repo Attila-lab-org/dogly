@@ -363,6 +363,36 @@ async def get_event(engine: AsyncEngine, *, user_id: str, event_id: str) -> Beha
     return _event_from_row(row)
 
 
+async def update_capture_context(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    event_id: str,
+    context_bucket: str,
+) -> None:
+    """Persist an owner-confirmed context on the event's capture."""
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text(
+                """
+                update public.behavior_captures as c
+                set context_bucket = :context_bucket
+                from public.behavior_events as e
+                where e.id = cast(:event_id as uuid)
+                  and e.user_id = cast(:user_id as uuid)
+                  and e.capture_id = c.id
+                """
+            ),
+            {
+                "event_id": event_id,
+                "user_id": user_id,
+                "context_bucket": context_bucket,
+            },
+        )
+    if result.rowcount != 1:
+        raise ApiError(ErrorCode.NOT_FOUND, "Event not found")
+
+
 async def record_feedback(
     engine: AsyncEngine, *, user_id: str, event_id: str, payload: BehaviorFeedbackRequest
 ) -> BehaviorFeedbackRec:
@@ -372,14 +402,25 @@ async def record_feedback(
             text(
                 """
                 insert into public.behavior_feedback (
-                  event_id, user_id, value, correction_label, corrected_context, created_at, updated_at
+                  event_id, user_id, value, correction_label, corrected_context,
+                  research_eligible, created_at, updated_at
                 ) values (
-                  :event_id, :user_id, :value, :correction_label, :corrected_context, now(), now()
+                  :event_id, :user_id, :value, :correction_label, :corrected_context,
+                  case when :correction_label is not null then coalesce((
+                    select granted
+                    from public.user_consents
+                    where user_id = cast(:user_id as uuid)
+                      and consent_type = 'RESEARCH_TRAINING'
+                    order by created_at desc, id desc
+                    limit 1
+                  ), false) else false end,
+                  now(), now()
                 )
                 on conflict (event_id, user_id) do update set
                   value = excluded.value,
                   correction_label = excluded.correction_label,
                   corrected_context = excluded.corrected_context,
+                  research_eligible = excluded.research_eligible,
                   updated_at = now()
                 """
             ),

@@ -108,7 +108,8 @@ Jest `118 passed` in 20 suite.
 - “Raccontami di {nome}” supporta testo e registrazione vocale breve,
   trascrizione OpenAI, revisione/modifica dei fatti e conferma esplicita con
   provenienza `OWNER_REPORTED`; l’audio raw non viene persistito.
-- Migrazioni `0029–0036` applicate a Supabase production; includono
-  riconciliazione RLS, indici FK, metering voce e scadenza dei draft.
-- Verifica corrente: backend `145 passed`, Ruff verde; mobile TypeScript
-  verde, Jest `118 passed` in 20 suite; OpenAPI esportato con 44 path.
+- Migrazioni production aggiornate fino a `nullable_deleted_media_paths`;
+  includono riconciliazione RLS, indici FK, metering voce, rate limit,
+  scadenza draft, consenso ricerca e hardening degli upload raw/retention.
+- Verifica corrente: backend `182 passed`, Ruff verde; mobile TypeScript
+  verde, Jest `143 passed` in 23 suite; OpenAPI esportato con 47 path.

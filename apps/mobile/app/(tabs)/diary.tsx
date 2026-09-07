@@ -10,8 +10,8 @@
  */
 import React, { useMemo, useState } from 'react';
 import {
+  FlatList,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,7 +21,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import {
-  Chip,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -37,11 +36,26 @@ import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 
 type DiaryFilter = 'ALL' | DiaryDomain;
+type TimelineItem =
+  | {
+      kind: 'header';
+      key: string;
+      day: string;
+      current: string;
+      startsMonth: boolean;
+    }
+  | {
+      kind: 'entry';
+      key: string;
+      entry: DiaryEntry;
+      first: boolean;
+      last: boolean;
+    };
 
 const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'ALL', label: 'Tutti' },
   { key: 'BEHAVIOR', label: 'Comportamento' },
-  { key: 'DIGESTIVE', label: 'Digestione' },
+  { key: 'DIGESTIVE', label: 'Salute' },
 ];
 
 const DOMAIN_ICONS: Record<DiaryDomain, keyof typeof Ionicons.glyphMap> = {
@@ -71,6 +85,14 @@ function timeLabel(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function monthLabel(iso: string): string {
+  const value = new Date(iso).toLocaleDateString('it-IT', {
+    month: 'long',
+    year: 'numeric',
+  });
+  return value.charAt(0).toLocaleUpperCase('it-IT') + value.slice(1);
 }
 
 function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
@@ -164,9 +186,34 @@ export default function DiaryScreen() {
     return [...map.entries()];
   }, [entries]);
 
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = [];
+    groups.forEach(([day, dayEntries], groupIndex) => {
+      const previous = groups[groupIndex - 1]?.[1][0]?.occurredAt;
+      const current = dayEntries[0].occurredAt;
+      items.push({
+        kind: 'header',
+        key: `header-${day}`,
+        day,
+        current,
+        startsMonth: !previous || previous.slice(0, 7) !== current.slice(0, 7),
+      });
+      dayEntries.forEach((entry, index) => {
+        items.push({
+          kind: 'entry',
+          key: entry.id,
+          entry,
+          first: index === 0,
+          last: index === dayEntries.length - 1,
+        });
+      });
+    });
+    return items;
+  }, [groups]);
+
   return (
     <ScreenContainer>
-      <Text style={styles.title}>Diario</Text>
+      <Text style={styles.title}>Le analisi di {dog.name}</Text>
       <Text style={styles.subtitle}>
         Tutto quello che ho capito di {dog.name}, giorno per giorno.
       </Text>
@@ -238,68 +285,81 @@ export default function DiaryScreen() {
           onAction={() => router.push('/behavior/capture')}
         />
       ) : (
-        <ScrollView
+        <FlatList
           style={styles.timeline}
           contentContainerStyle={styles.timelineContent}
           showsVerticalScrollIndicator={false}
-        >
-          {groups.map(([day, dayEntries]) => (
-            <View key={day} style={styles.group}>
-              <Text style={styles.groupLabel}>{dayLabel(dayEntries[0].occurredAt)}</Text>
-              <View style={styles.groupCard}>
-                {dayEntries.map((entry, index) => (
-                  <View key={entry.id}>
-                    <DiaryRow
-                      entry={entry}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/diary/event/[eventId]',
-                          params: {
-                            eventId: entry.id,
-                            domain: entry.domain,
-                            occurredAt: entry.occurredAt,
-                            deleted: entry.mediaDeleted ? '1' : '0',
-                            title: entry.title,
-                            subtitle: entry.subtitle ?? '',
-                          },
-                        } as never)
-                      }
-                    />
-                    {index < dayEntries.length - 1 && (
-                      <View style={styles.rowDivider} />
-                    )}
-                  </View>
-                ))}
-              </View>
-            </View>
-          ))}
-          {/* Paginazione cursore vera: il chip carica la pagina successiva
-              solo se next_cursor esiste; altrimenti testo onesto. */}
-          {realEnabled ? (
-            query.hasNextPage ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Mostra eventi precedenti"
-                onPress={() => void query.fetchNextPage()}
-                disabled={query.isFetchingNextPage}
-                style={styles.moreChip}
+          data={timelineItems}
+          keyExtractor={(item) => item.key}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (
+              realEnabled &&
+              query.hasNextPage &&
+              !query.isFetchingNextPage
+            ) {
+              void query.fetchNextPage();
+            }
+          }}
+          renderItem={({ item }) => {
+            if (item.kind === 'header') {
+              return (
+                <View style={styles.groupHeader}>
+                  {item.startsMonth ? (
+                    <Text style={styles.monthLabel}>
+                      {monthLabel(item.current)}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.groupLabel}>
+                    {dayLabel(item.current)}
+                  </Text>
+                </View>
+              );
+            }
+            const { entry } = item;
+            return (
+              <View
+                style={[
+                  styles.entryCard,
+                  item.first && styles.entryCardFirst,
+                  item.last && styles.entryCardLast,
+                ]}
               >
-                <Chip
-                  label={
-                    query.isFetchingNextPage
-                      ? 'Caricamento…'
-                      : 'Mostra eventi precedenti'
+                <DiaryRow
+                  entry={entry}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/diary/event/[eventId]',
+                      params: {
+                        eventId: entry.id,
+                        domain: entry.domain,
+                        occurredAt: entry.occurredAt,
+                        deleted: entry.mediaDeleted ? '1' : '0',
+                        title: entry.title,
+                        subtitle: entry.subtitle ?? '',
+                      },
+                    } as never)
                   }
-                  tone="neutral"
                 />
-              </Pressable>
-            ) : (
+                {!item.last ? <View style={styles.rowDivider} /> : null}
+              </View>
+            );
+          }}
+          ListFooterComponent={
+            realEnabled ? (
+              query.isFetchingNextPage ? (
+                <Text style={styles.endNote}>Carico altri eventi…</Text>
+              ) : !query.hasNextPage ? (
               <Text style={styles.endNote}>
                 Stai vedendo gli eventi più recenti.
               </Text>
-            )
-          ) : null}
-        </ScrollView>
+              ) : null
+            ) : null
+          }
+        />
       )}
     </ScreenContainer>
   );
@@ -316,6 +376,12 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.textSecondary,
     marginBottom: spacing.lg,
+  },
+  monthLabel: {
+    marginBottom: spacing.sm,
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
   },
   filters: {
     flexDirection: 'row',
@@ -362,8 +428,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
-  group: {
-    marginBottom: spacing.lg,
+  groupHeader: {
+    marginTop: spacing.lg,
   },
   groupLabel: {
     fontSize: typography.size.sm,
@@ -372,13 +438,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     textTransform: 'capitalize',
   },
-  groupCard: {
+  entryCard: {
     backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
+  },
+  entryCardFirst: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: radius.md,
+    borderTopRightRadius: radius.md,
     ...shadows.card,
+  },
+  entryCardLast: {
+    marginBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomLeftRadius: radius.md,
+    borderBottomRightRadius: radius.md,
   },
   row: {
     flexDirection: 'row',
@@ -427,10 +504,6 @@ const styles = StyleSheet.create({
   rowDivider: {
     height: 1,
     backgroundColor: colors.border,
-  },
-  moreChip: {
-    alignSelf: 'center',
-    marginTop: spacing.sm,
   },
   endNote: {
     alignSelf: 'center',

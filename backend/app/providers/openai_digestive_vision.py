@@ -154,7 +154,12 @@ class OpenAIDigestiveVision:
             output_tokens=int(usage_raw.get("completion_tokens") or 0),
             media_bytes=0,
             latency_ms=int((time.perf_counter() - started) * 1000),
-            cost_usd=_estimate_cost(usage_raw),
+            cost_usd=_estimate_cost(
+                usage_raw,
+                input_usd_per_million=self._settings.digestive_input_usd_per_million,
+                output_usd_per_million=self._settings.digestive_output_usd_per_million,
+                safety_margin=self._settings.ai_cost_safety_margin,
+            ),
             request_id=request_id,
         )
         return contract, usage
@@ -200,7 +205,17 @@ class OpenAIDigestiveVision:
         }
 
 
-def _estimate_cost(usage_raw: dict[str, Any]) -> float:
+def _estimate_cost(
+    usage_raw: dict[str, Any],
+    *,
+    input_usd_per_million: float,
+    output_usd_per_million: float,
+    safety_margin: float,
+) -> float:
     input_tokens = int(usage_raw.get("prompt_tokens") or 0)
     output_tokens = int(usage_raw.get("completion_tokens") or 0)
-    return round((input_tokens * 0.00000025) + (output_tokens * 0.000002), 6)
+    listed_cost = (
+        input_tokens * input_usd_per_million
+        + output_tokens * output_usd_per_million
+    ) / 1_000_000
+    return round(listed_cost * safety_margin, 6)

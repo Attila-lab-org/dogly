@@ -20,7 +20,7 @@ import logging
 from sqlalchemy import text
 
 from app.api.deps import AppState
-from app.contracts.errors import ErrorCode
+from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import (
     BEHAVIOR_EVENT_TRANSITIONS,
@@ -30,6 +30,7 @@ from app.contracts.taxonomy import (
     AnalysisDomain,
     BehaviorEventStatus,
     ConfidenceBand,
+    ContextBucket,
 )
 from app.domains import (
     behavior_db,
@@ -43,8 +44,10 @@ from app.domains import (
 )
 from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
+from app.domains.behavior_intelligence import build_behavior_consumer
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
+from app.domains.context_bucket import resolve_context_bucket
 from app.domains.digestive import (
     build_inmemory_digestive_context,
     contextual_safety_flags,
@@ -190,7 +193,8 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
         lifestyle = lifestyle_domain.get_lifestyle(
             state.store, event.user_id, event.dog_id
         )
-    return build_dog_context(dog, lifestyle.model_dump())
+    dump = lifestyle.model_dump()
+    return dog, build_dog_context(dog, dump), dump
 
 
 async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
@@ -374,9 +378,16 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         if state.engine is not None:
             await behavior_db.save_event_state(state.engine, event)
     try:
-        dog_context = await _dog_context(state, event)
+        dog, dog_context, lifestyle_dump = await _dog_context(state, event)
+        context_bucket = resolve_context_bucket(
+            capture.context_bucket,
+            observation=observation,
+            lifestyle=lifestyle_dump,
+            dog_context=dog_context,
+        )
+        capture.context_bucket = context_bucket
         knowledge_context = retrieve_evidence(
-            observation, capture.context_bucket, dog_context
+            observation, context_bucket, dog_context
         )
         # Sicurezza deterministica PRIMA dell'LLM (stesse regole SAFE_*_001 del
         # retrieval, fonte unica in knowledge.safety): il reasoner le riceve
@@ -385,7 +396,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         det_flags = behavior_safety_flags(observation, dog_context)
         interpretation, rea_usage = await state.reasoner.interpret(
             observation=observation,
-            context_bucket=capture.context_bucket,
+            context_bucket=context_bucket,
             policy_version=INTERPRETATION_POLICY_VERSION,
             eligible_memory=await _eligible_memory(state, event.dog_id),
             knowledge_context=knowledge_context,
@@ -439,6 +450,18 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
+    consumer = build_behavior_consumer(
+        interpretation,
+        dog_name=dog.name,
+        dog_context=dog_context,
+        advice=advice,
+    )
+    interpretation_json["consumer"] = consumer.model_dump(mode="json")
+    interpretation_json["context_bucket"] = (
+        capture.context_bucket.value
+        if hasattr(capture.context_bucket, "value")
+        else capture.context_bucket
+    )
     event.interpretation_json = interpretation_json
     event.primary_intent = interpretation.primary_intent
     event.confidence_band = interpretation.confidence_band
@@ -471,6 +494,140 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     except Exception:
         logger.exception("Could not enqueue behavior result notification")
     return {"event_id": event.id, "status": event.status.value}
+
+
+async def refine_behavior_event_context(
+    state: AppState,
+    *,
+    event: BehaviorEventRec,
+    context_bucket: ContextBucket,
+) -> BehaviorEventRec:
+    """Re-run only the reasoning/composer stage after one owner context answer.
+
+    The video observation is reused, so Gemini and the user's analysis quota
+    are not charged again. The reasoner call remains budget-metered.
+    """
+    if event.status != BehaviorEventStatus.COMPLETED or not event.observation_json:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Context can only refine a completed behavior event.",
+        )
+    if context_bucket == ContextBucket.UNKNOWN:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "A concrete context answer is required.",
+        )
+
+    if state.engine is not None:
+        capture = await behavior_db.load_capture(
+            state.engine, capture_id=event.capture_id
+        )
+    else:
+        capture = state.store.captures.get(event.capture_id)
+    if capture is None or capture.user_id != event.user_id:
+        raise ApiError(ErrorCode.NOT_FOUND, "Capture not found")
+
+    observation = ObservationContract.model_validate(event.observation_json)
+    dog, dog_context, _lifestyle_dump = await _dog_context(state, event)
+    knowledge_context = retrieve_evidence(
+        observation, context_bucket, dog_context
+    )
+    deterministic_flags = behavior_safety_flags(observation, dog_context)
+
+    try:
+        interpretation, usage = await state.reasoner.interpret(
+            observation=observation,
+            context_bucket=context_bucket,
+            policy_version=INTERPRETATION_POLICY_VERSION,
+            eligible_memory=await _eligible_memory(state, event.dog_id),
+            knowledge_context=knowledge_context,
+            dog_context=dog_context,
+            deterministic_safety_flags=deterministic_flags,
+        )
+    except TimeoutError as exc:
+        raise ApiError(
+            ErrorCode.PROVIDER_TIMEOUT,
+            "The context refinement timed out.",
+            retryable=True,
+        ) from exc
+    except BudgetExceededError as exc:
+        raise ApiError(
+            ErrorCode.AI_BUDGET_EXCEEDED,
+            "Context refinement is temporarily unavailable.",
+        ) from exc
+
+    interpretation = interpretation.model_copy(
+        update={
+            "safety_flags": merge_safety_flags(
+                interpretation.safety_flags, deterministic_flags
+            ),
+            "context_bucket": context_bucket,
+        }
+    )
+    if (
+        knowledge_context.coverage == "LOW"
+        and interpretation.confidence_band != ConfidenceBand.LOW
+    ):
+        interpretation = interpretation.model_copy(
+            update={"confidence_band": ConfidenceBand.LOW}
+        )
+
+    await state.cost_meter.record(
+        usage=usage,
+        operation="reasoner.refine_context",
+        domain=AnalysisDomain.BEHAVIOR,
+        event_id=event.id,
+        user_id=event.user_id,
+    )
+    try:
+        advice = build_advice(interpretation, dog_context, knowledge_context)
+    except Exception:  # noqa: BLE001 -- advice cannot discard a valid refinement
+        advice = None
+    consumer = build_behavior_consumer(
+        interpretation,
+        dog_name=dog.name,
+        dog_context=dog_context,
+        advice=advice,
+    )
+    interpretation_json = interpretation.model_dump(mode="json")
+    interpretation_json["knowledge_audit"] = {
+        "registry_version": knowledge_context.registry_version,
+        "coverage": knowledge_context.coverage,
+        "card_ids": [card.card_id for card in knowledge_context.cards],
+    }
+    interpretation_json["advice"] = (
+        advice.model_dump(mode="json") if advice is not None else None
+    )
+    interpretation_json["consumer"] = consumer.model_dump(mode="json")
+
+    capture.context_bucket = context_bucket
+    event.interpretation_json = interpretation_json
+    event.primary_intent = interpretation.primary_intent
+    event.confidence_band = interpretation.confidence_band
+    event.summary = interpretation.consumer_summary
+    event.policy_version = interpretation.policy_version
+    event.taxonomy_version = interpretation.taxonomy_version
+    event.knowledge_version = knowledge_context.registry_version
+    event.knowledge_card_ids = [
+        card.card_id for card in knowledge_context.cards
+    ]
+    event.advice_code = advice.code if advice is not None else None
+    event.advice_json = (
+        advice.model_dump(mode="json") if advice is not None else None
+    )
+
+    if state.engine is not None:
+        await behavior_db.update_capture_context(
+            state.engine,
+            user_id=event.user_id,
+            event_id=event.id,
+            context_bucket=context_bucket.value,
+        )
+        await behavior_db.save_event_state(state.engine, event)
+    else:
+        state.store.captures[capture.id] = capture
+        state.store.behavior_events[event.id] = event
+    return event
 
 
 async def process_digestive_event(state: AppState, *, event_id: str) -> dict:

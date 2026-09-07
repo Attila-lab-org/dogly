@@ -66,5 +66,11 @@ export function mapApiEventToResult(
     taxonomy_version: event.taxonomy_version ?? 'intent-taxonomy/v0',
     created_at: event.created_at,
     completed_at: event.completed_at,
+    consumer_headline: event.consumer_headline ?? null,
+    baseline_note: event.baseline_note ?? null,
+    baseline_comparison: event.baseline_comparison ?? null,
+    recommended_next_step: event.recommended_next_step ?? null,
+    what_to_watch: event.what_to_watch ?? null,
+    safety: event.safety ?? null,
   };
 }

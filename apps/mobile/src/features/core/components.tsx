@@ -19,7 +19,9 @@ import type {
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 import { CONFIDENCE_BAND_LABELS, intentHeadline } from './copy';
+import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
+import { getConsents } from '../privacy/consents';
 
 export { SectionHeader };
 
@@ -172,26 +174,46 @@ export function FeedbackButtons({
   value,
   onFeedback,
   error,
+  dogName = 'lui',
+  primaryIntent = null,
+  alternatives = [],
 }: {
   value: FeedbackValue | null;
-  onFeedback: (value: FeedbackValue) => void;
+  onFeedback: (
+    value: FeedbackValue,
+    extras?: { correction_label?: BehaviorIntent | null },
+  ) => void;
   /** Messaggio onesto quando il salvataggio è fallito: il badge "Salvato" resta spento. */
   error?: string | null;
+  dogName?: string;
+  primaryIntent?: BehaviorIntent | null;
+  alternatives?: Array<{ intent: BehaviorIntent }>;
 }) {
+  const [awaitingCorrection, setAwaitingCorrection] = React.useState(false);
+  const researchOptIn = getConsents().researchTraining;
   const options: Array<{
     value: FeedbackValue;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
   }> = [
     { value: 'YES', label: 'Sì, è così', icon: 'checkmark' },
-    { value: 'NO', label: 'Non credo', icon: 'close' },
+    { value: 'NO', label: 'Non proprio', icon: 'close' },
     { value: 'UNKNOWN', label: 'Non lo so', icon: 'help' },
   ];
+  const chips = correctionOptions(primaryIntent, alternatives);
+
+  const submit = (
+    next: FeedbackValue,
+    extras?: { correction_label?: BehaviorIntent | null },
+  ) => {
+    setAwaitingCorrection(false);
+    onFeedback(next, extras);
+  };
 
   return (
     <View style={styles.feedbackCard}>
       <View style={styles.feedbackHeading}>
-        <Text style={styles.feedbackTitle}>Ti torna?</Text>
+        <Text style={styles.feedbackTitle}>Ti sembra proprio {dogName}?</Text>
         {error ? (
           <View style={styles.savedBadge}>
             <Ionicons name="alert-circle" size={13} color={colors.danger} />
@@ -212,7 +234,13 @@ export function FeedbackButtons({
               key={option.value}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              onPress={() => onFeedback(option.value)}
+              onPress={() => {
+                if (option.value === 'NO' && !value) {
+                  setAwaitingCorrection(true);
+                  return;
+                }
+                submit(option.value);
+              }}
               style={({ pressed }) => [
                 styles.feedbackOption,
                 selected && styles.feedbackOptionSelected,
@@ -244,6 +272,39 @@ export function FeedbackButtons({
           );
         })}
       </View>
+      {awaitingCorrection ? (
+        <View style={styles.correctionBlock} testID="feedback-correction">
+          <Text style={styles.correctionTitle}>Cosa stava davvero facendo?</Text>
+          <View style={styles.correctionChips}>
+            {chips.map((intent) => (
+              <Pressable
+                key={intent}
+                onPress={() =>
+                  submit('NO', { correction_label: intent })
+                }
+                style={styles.correctionChip}
+                testID={`correction-${intent}`}
+              >
+                <Text style={styles.correctionChipLabel}>
+                  {BEHAVIOR_INTENT_LABELS[intent]}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable
+              onPress={() => submit('NO', { correction_label: null })}
+              style={styles.correctionChip}
+              testID="correction-other"
+            >
+              <Text style={styles.correctionChipLabel}>Altro</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.researchNote}>
+            {researchOptIn
+              ? `Questa correzione aiuta Dogly a capire ${dogName} e, con il tuo consenso, anche la ricerca.`
+              : `Questa correzione resta sul profilo di ${dogName}. Per usarla anche in ricerca, attiva il consenso in Privacy.`}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -276,22 +337,32 @@ export function BehaviorResultView({
   careNote,
   feedbackError,
   photoUri,
+  contextPrompt,
   primaryAdvice,
 }: {
   result: BehaviorEventResult;
   dogName: string;
   feedback: FeedbackValue | null;
-  onFeedback: (value: FeedbackValue) => void;
+  onFeedback: (
+    value: FeedbackValue,
+    extras?: { correction_label?: BehaviorIntent | null },
+  ) => void;
   careNote?: string | null;
   /** Stato errore del salvataggio feedback (mai finto "Salvato"). */
   feedbackError?: string | null;
   photoUri?: string | null;
+  contextPrompt?: React.ReactNode;
   primaryAdvice?: React.ReactNode;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
   const isAmbiguous = result.primary_intent === 'AMBIGUOUS';
+  const headline = personalizeCopy(
+    result.consumer_headline || intentHeadline(dogName, result.primary_intent),
+    dogName,
+  );
+  const safety = result.safety;
 
   return (
     <View>
@@ -299,6 +370,7 @@ export function BehaviorResultView({
         style={[
           styles.resultHero,
           (isInsufficient || isAmbiguous) && styles.resultHeroUncertain,
+          safety ? styles.resultHeroSafety : null,
         ]}
       >
         {photoUri ? (
@@ -318,18 +390,27 @@ export function BehaviorResultView({
               }
               size={32}
               color={
-                isInsufficient || isAmbiguous ? colors.warning : colors.accent
+                safety || isInsufficient || isAmbiguous
+                  ? colors.warning
+                  : colors.accent
               }
             />
           </View>
         )}
-        <Text style={styles.headline}>
-          {intentHeadline(dogName, result.primary_intent)}
-        </Text>
+        <Text style={styles.headline}>{headline}</Text>
         <Text style={styles.summary}>
           {personalizeCopy(result.consumer_summary, dogName)}
         </Text>
       </View>
+
+      {result.baseline_note ? (
+        <View style={styles.baselineCard} testID="per-rocky">
+          <Text style={styles.baselineKicker}>Per {dogName}</Text>
+          <Text style={styles.baselineNote}>
+            {personalizeCopy(result.baseline_note, dogName)}
+          </Text>
+        </View>
+      ) : null}
 
       {careNote ? (
         <View style={styles.careCard}>
@@ -338,7 +419,35 @@ export function BehaviorResultView({
         </View>
       ) : null}
 
+      {contextPrompt}
+
+      {safety ? (
+        <View style={styles.safetyCard} testID="behavior-safety">
+          <View style={styles.safetyHeading}>
+            <Ionicons name="alert-circle" size={20} color={colors.danger} />
+            <Text style={styles.safetyTitle}>{safety.title}</Text>
+          </View>
+          <Text style={styles.safetyMessage}>{safety.message}</Text>
+          <Text style={styles.safetyAction}>{safety.action}</Text>
+        </View>
+      ) : null}
+
       {primaryAdvice}
+
+      {result.recommended_next_step && !primaryAdvice && !safety ? (
+        <View style={styles.nextStepCard} testID="recommended-next-step">
+          <Text style={styles.nextStepTitle}>Prova così</Text>
+          <Text style={styles.nextStepText}>
+            {personalizeCopy(result.recommended_next_step, dogName)}
+          </Text>
+        </View>
+      ) : null}
+
+      {result.what_to_watch && !primaryAdvice ? (
+        <Text style={styles.watchLine} testID="what-to-watch">
+          Da osservare: {personalizeCopy(result.what_to_watch, dogName)}
+        </Text>
+      ) : null}
 
       {result.evidence.length > 0 || result.alternatives.length > 0 ? (
         <View style={styles.detailsBlock}>
@@ -410,6 +519,9 @@ export function BehaviorResultView({
         value={feedback}
         onFeedback={onFeedback}
         error={feedbackError}
+        dogName={dogName}
+        primaryIntent={result.primary_intent}
+        alternatives={result.alternatives}
       />
     </View>
   );
@@ -562,6 +674,9 @@ const styles = StyleSheet.create({
   resultHeroUncertain: {
     backgroundColor: colors.warningSoft,
   },
+  resultHeroSafety: {
+    backgroundColor: colors.dangerSoft,
+  },
   resultIcon: {
     width: 64,
     height: 64,
@@ -648,5 +763,110 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.textSecondary,
     lineHeight: typography.size.sm * typography.lineHeight.normal,
+  },
+  baselineCard: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  baselineKicker: {
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    color: colors.accent,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: spacing.xs,
+  },
+  baselineNote: {
+    fontSize: typography.size.sm,
+    color: colors.text,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  safetyCard: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.dangerSoft,
+  },
+  safetyHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  safetyTitle: {
+    flex: 1,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
+  },
+  safetyMessage: {
+    fontSize: typography.size.sm,
+    color: colors.text,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  safetyAction: {
+    marginTop: spacing.sm,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    color: colors.danger,
+  },
+  watchLine: {
+    marginTop: spacing.md,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  nextStepCard: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentSoft,
+  },
+  nextStepTitle: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    textTransform: 'uppercase',
+  },
+  nextStepText: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  correctionBlock: {
+    marginTop: spacing.md,
+  },
+  correctionTitle: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  correctionChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  correctionChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  correctionChipLabel: {
+    fontSize: typography.size.xs,
+    color: colors.text,
+    fontWeight: typography.weight.medium,
+  },
+  researchNote: {
+    marginTop: spacing.sm,
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
 });

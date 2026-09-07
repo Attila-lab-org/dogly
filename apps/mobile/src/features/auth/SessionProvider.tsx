@@ -12,6 +12,7 @@ import React, {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AppState, type AppStateStatus } from 'react-native';
+import { addNetworkStateListener } from 'expo-network';
 
 import { api } from '../../lib/apiClient';
 import {
@@ -38,6 +39,11 @@ import {
 
 type DogListResponse = { items: Array<{ id: string; name: string }> };
 const SESSION_BOOT_TIMEOUT_MS = 8_000;
+type DogLookupResult = {
+  reachable: boolean;
+  hasDog: boolean;
+  primaryDogId: string | null;
+};
 
 export type SessionContextValue = {
   /** Bootstrapping auth + dogs */
@@ -71,19 +77,20 @@ async function syncTokensFromSession(session: Session | null): Promise<void> {
   });
 }
 
-async function fetchHasDog(): Promise<{ hasDog: boolean; primaryDogId: string | null }> {
+async function fetchHasDog(): Promise<DogLookupResult> {
   if (!isApiConfigured()) {
-    return { hasDog: false, primaryDogId: null };
+    return { reachable: true, hasDog: false, primaryDogId: null };
   }
   try {
     const list = await api.get<DogListResponse>('/v1/dogs');
     const first = list.items[0];
     return {
+      reachable: true,
       hasDog: list.items.length > 0,
       primaryDogId: first?.id ?? null,
     };
   } catch {
-    return { hasDog: false, primaryDogId: null };
+    return { reachable: false, hasDog: false, primaryDogId: null };
   }
 }
 
@@ -95,14 +102,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [hasDog, setHasDog] = useState(false);
   const [primaryDogId, setPrimaryDogId] = useState<string | null>(null);
+  const [dogStatusUnknown, setDogStatusUnknown] = useState(false);
 
   const refreshDogs = useCallback(async () => {
     if (!session?.user?.id) {
       setHasDog(false);
       setPrimaryDogId(null);
+      setDogStatusUnknown(false);
       return;
     }
     const result = await fetchHasDog();
+    if (!result.reachable) {
+      setDogStatusUnknown(true);
+      return;
+    }
+    setDogStatusUnknown(false);
     setHasDog(result.hasDog);
     setPrimaryDogId(result.primaryDogId);
     if (result.hasDog && session.user.id) {
@@ -118,9 +132,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!next?.user?.id) {
       setHasDog(false);
       setPrimaryDogId(null);
+      setDogStatusUnknown(false);
       return;
     }
     const dogs = await fetchHasDog();
+    if (!dogs.reachable) {
+      setDogStatusUnknown(true);
+      return;
+    }
+    setDogStatusUnknown(false);
     setHasDog(dogs.hasDog);
     setPrimaryDogId(dogs.primaryDogId);
     void recoverAndDrainUploads(next.user.id).catch(() => undefined);
@@ -152,6 +172,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           setSession(null);
           setHasDog(false);
           setPrimaryDogId(null);
+          setDogStatusUnknown(false);
         }
       } finally {
         clearTimeout(bootTimeout);
@@ -183,8 +204,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         void recoverAndDrainUploads(userId);
       }
     };
-    const sub = AppState.addEventListener('change', onChange);
-    return () => sub.remove();
+    const appStateSub = AppState.addEventListener('change', onChange);
+    const networkSub = addNetworkStateListener((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) {
+        void recoverAndDrainUploads(userId);
+      }
+    });
+    return () => {
+      appStateSub.remove();
+      networkSub.remove();
+    };
   }, [session?.user?.id]);
 
   const signOut = useCallback(async () => {
@@ -192,6 +221,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await clearSession();
     setHasDog(false);
     setPrimaryDogId(null);
+    setDogStatusUnknown(false);
     setSession(null);
     if (authConfigured) {
       try {
@@ -205,14 +235,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const markDogCreated = useCallback((dogId: string) => {
     setHasDog(true);
     setPrimaryDogId(dogId);
+    setDogStatusUnknown(false);
   }, []);
 
   const sessionState: SessionState = useMemo(() => {
     if (usingMockGate) return sessionMock;
     if (!session?.user) return 'unauthenticated';
+    if (dogStatusUnknown) return 'authenticated-dog-status-unknown';
     if (!hasDog) return 'authenticated-no-dog';
     return 'authenticated-with-dog';
-  }, [usingMockGate, session?.user, hasDog]);
+  }, [usingMockGate, session?.user, dogStatusUnknown, hasDog]);
 
   const value = useMemo<SessionContextValue>(
     () => ({

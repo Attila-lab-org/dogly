@@ -4,6 +4,7 @@
 import type {
   BehaviorEventStatus,
   ConfidenceBand,
+  ContextBucket,
   FeedbackValue,
 } from '../../contracts/types';
 import { api, ApiError } from '../../lib/apiClient';
@@ -54,6 +55,24 @@ export type ApiBehaviorEvent = {
   feedback?: FeedbackValue | null;
   advice?: ApiAdviceItem | null;
   advice_outcome?: AdviceOutcomeValue | null;
+  consumer_headline?: string | null;
+  baseline_comparison?: string | null;
+  baseline_note?: string | null;
+  recommended_next_step?: string | null;
+  what_to_watch?: string | null;
+  safety?: {
+    code: string;
+    severity: string;
+    title: string;
+    message: string;
+    action: string;
+  } | null;
+  personal_memory_used?: Array<{
+    pattern_id: string;
+    state: string;
+    support_summary: string;
+  }>;
+  context_bucket?: string | null;
   created_at: string;
   completed_at: string | null;
 };
@@ -111,15 +130,36 @@ export async function getBehaviorEvent(eventId: string): Promise<ApiBehaviorEven
   return api.get<ApiBehaviorEvent>(`/v1/behavior/events/${eventId}`);
 }
 
+export async function postBehaviorContext(
+  eventId: string,
+  contextBucket: ContextBucket,
+): Promise<ApiBehaviorEvent> {
+  return api.post<ApiBehaviorEvent>(
+    `/v1/behavior/events/${eventId}/context`,
+    { context_bucket: contextBucket },
+  );
+}
+
 export async function postBehaviorFeedback(
   eventId: string,
   value: FeedbackValue,
-  clientRequestId?: string,
+  extras?: {
+    correction_label?: string | null;
+    clientRequestId?: string;
+  },
 ): Promise<FeedbackResponse> {
-  const key = clientRequestId ?? `fb-${eventId}-${value}-${Date.now()}`;
+  const key =
+    extras?.clientRequestId ?? `fb-${eventId}-${value}-${Date.now()}`;
+  const body: Record<string, unknown> = {
+    value,
+    client_request_id: key,
+  };
+  if (extras?.correction_label) {
+    body.correction_label = extras.correction_label;
+  }
   return api.post<FeedbackResponse>(
     `/v1/behavior/events/${eventId}/feedback`,
-    { value, client_request_id: key },
+    body,
     { headers: { 'X-Idempotency-Key': key } },
   );
 }

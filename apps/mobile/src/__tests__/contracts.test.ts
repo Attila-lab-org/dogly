@@ -93,6 +93,43 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
     expect(result.safety_flags).toEqual(event.safety_flags);
     expect(result.needs_context).toBe(true);
     expect(result.context_question).toBe('Cosa è successo prima?');
+    expect(result.baseline_note).toBeNull();
+  });
+
+  it('mappa il blocco Per Rocky e la safety consumer', () => {
+    const event: ApiBehaviorEvent = {
+      id: 'evt-2',
+      dog_id: 'dog-1',
+      status: 'COMPLETED',
+      schema_version: 'interpretation.v0',
+      primary_intent: 'RESOURCE_TENSION',
+      confidence_band: 'MEDIUM',
+      summary: 'Corpo più rigido vicino alla ciotola.',
+      alternatives: [],
+      evidence: [],
+      safety_flags: [{ code: 'SAFE_ESCALATION_001', severity: 'urgent' }],
+      needs_context: false,
+      context_question: null,
+      policy_version: 'policy.v1',
+      taxonomy_version: 'intent-taxonomy/v0',
+      consumer_headline: 'Rocky sembra chiedere più spazio',
+      baseline_note: 'Questa volta il comportamento è diverso dal solito di Rocky.',
+      baseline_comparison: 'VARIATION',
+      safety: {
+        code: 'SAFE_ESCALATION_001',
+        severity: 'urgent',
+        title: 'Chiede più spazio',
+        message: 'Il corpo appare teso.',
+        action: 'Aumenta la distanza e non forzare il contatto.',
+      },
+      created_at: '2026-09-07T00:00:00Z',
+      completed_at: '2026-09-07T00:00:10Z',
+    };
+    const result = mapApiEventToResult(event);
+    expect(result.consumer_headline).toContain('più spazio');
+    expect(result.baseline_note).toContain('diverso dal solito');
+    expect(result.safety?.action).toContain('distanza');
+    expect(result.safety?.action).not.toContain('SAFE_');
   });
 });
 

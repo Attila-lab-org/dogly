@@ -146,11 +146,18 @@ describe('result contract sui mock (sez. 6.1)', () => {
     expect(intentHeadline('Rocky', 'PLAY_INTERACTION')).toBe(
       'Rocky sembra voler giocare',
     );
-    expect(intentHeadline('Rocky', null)).toBe('Non riesco ancora a capire Rocky');
+    expect(intentHeadline('Rocky', null)).toBe(
+      'Non ho abbastanza elementi per capirlo bene',
+    );
   });
 
   it('gli step di processing usano solo stati canonici (sez. 33.1)', () => {
-    for (const step of processingStepsFor('Rocky')) {
+    const steps = processingStepsFor('Rocky');
+    expect(steps).toHaveLength(4);
+    expect(steps[2].title).toBe(
+      'Li confronto con quello che so di Rocky',
+    );
+    for (const step of steps) {
       expect(BEHAVIOR_EVENT_STATUSES).toContain(step.status);
     }
   });

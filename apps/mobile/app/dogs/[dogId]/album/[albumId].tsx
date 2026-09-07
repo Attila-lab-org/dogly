@@ -57,45 +57,54 @@ export default function AlbumDetailScreen() {
   }
 
   return (
-    <ScreenContainer scroll>
-      <StackScreenHeader title={album.title} />
-      <PrivacyNoticeBanner text={PHOTO_COPY.privateDefault} />
+    <ScreenContainer>
       <PhotoGrid
         photos={photos}
+        header={
+          <>
+            <StackScreenHeader title={album.title} />
+            <PrivacyNoticeBanner text={PHOTO_COPY.privateDefault} />
+          </>
+        }
         onPressPhoto={(photo) =>
           router.push(
             `/dogs/${dogId}/album/photo/${photo.id}?albumId=${albumId}` as never,
           )
         }
-      />
-      <Button
-        title="Aggiungi foto"
-        loading={uploading}
-        style={styles.cta}
-        onPress={async () => {
-          const uri = await pickAlbumPhoto();
-          if (!uri) return;
-          setUploading(true);
-          try {
-            await uploadAlbumPhoto(albumId, uri);
-            await Promise.all([
-              queryClient.invalidateQueries({
-                queryKey: ['gallery-photos', albumId],
-              }),
-              queryClient.invalidateQueries({
-                queryKey: ['gallery-albums', dogId],
-              }),
-            ]);
-            Alert.alert('Foto aggiunta', 'Salvata in modo privato nel tuo album.');
-          } catch {
-            Alert.alert(
-              'Foto non salvata',
-              'Il caricamento non è riuscito. Riprova tra poco.',
-            );
-          } finally {
-            setUploading(false);
-          }
-        }}
+        footer={
+          <Button
+            title="Aggiungi foto"
+            loading={uploading}
+            style={styles.cta}
+            onPress={async () => {
+              const uri = await pickAlbumPhoto();
+              if (!uri) return;
+              setUploading(true);
+              try {
+                await uploadAlbumPhoto(albumId, uri);
+                await Promise.all([
+                  queryClient.invalidateQueries({
+                    queryKey: ['gallery-photos', albumId],
+                  }),
+                  queryClient.invalidateQueries({
+                    queryKey: ['gallery-albums', dogId],
+                  }),
+                ]);
+                Alert.alert(
+                  'Foto aggiunta',
+                  'Salvata in modo privato nel tuo album.',
+                );
+              } catch {
+                Alert.alert(
+                  'Foto non salvata',
+                  'Il caricamento non è riuscito. Riprova tra poco.',
+                );
+              } finally {
+                setUploading(false);
+              }
+            }}
+          />
+        }
       />
     </ScreenContainer>
   );
@@ -104,5 +113,6 @@ export default function AlbumDetailScreen() {
 const styles = StyleSheet.create({
   cta: {
     marginTop: spacing.xl,
+    marginBottom: spacing.xxxl,
   },
 });

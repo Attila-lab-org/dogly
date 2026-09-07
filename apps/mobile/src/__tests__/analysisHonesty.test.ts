@@ -85,7 +85,7 @@ describe('fix 1 — feedback a 3 vie onesto (mai finto "Salvato")', () => {
       recorded: true,
     });
     await expect(saveBehaviorFeedback('real-event-1', 'NO')).resolves.toBe('NO');
-    expect(postFeedbackMock).toHaveBeenCalledWith('real-event-1', 'NO');
+    expect(postFeedbackMock).toHaveBeenCalledWith('real-event-1', 'NO', undefined);
   });
 
   it('POST fallita (offline/errore API) → rigetta, nessun finto salvataggio', async () => {

@@ -22,6 +22,13 @@ export default function TabsLayout() {
   if (!loading && !usingMockGate && sessionState === 'authenticated-no-dog') {
     return <Redirect href="/onboarding/dog" />;
   }
+  if (
+    !loading &&
+    !usingMockGate &&
+    sessionState === 'authenticated-dog-status-unknown'
+  ) {
+    return <Redirect href="/connection-error" />;
+  }
 
   return (
     <Tabs

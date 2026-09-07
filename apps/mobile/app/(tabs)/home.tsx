@@ -1,7 +1,7 @@
 /**
  * Tab Home — accesso rapido a storie, analisi e diario.
  * Contenuti: header, storie, dog card,
- * CTA dominante gradiente "SCOPRI I SEGNALI DI ROCKY",
+ * CTA dominante gradiente "CAPISCI ROCKY",
  * "Controlla digestione" secondario, ultima analisi, quota residua sottile.
  * Stati obbligatori (sez. 6): new user (cold-start), quota exhausted,
  * offline (banner con retry su network monitor reale; demoFlags.homeOffline
@@ -43,12 +43,15 @@ import {
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
+import { CheckInModal } from '@/features/checkin/CheckInModal';
+import { useSession } from '@/features/auth/SessionProvider';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { usingMockGate } = useSession();
   const stories = useStories(dog.id, dog.name);
   const birthdayToday = isBirthdayToday(dog.birthDate);
   const {
@@ -262,10 +265,10 @@ export default function HomeScreen() {
               </View>
               <View style={styles.ctaCopy}>
                 <Text style={styles.ctaTitle}>
-                  SCOPRI I SEGNALI DI {dog.name.toUpperCase()}
+                  CAPISCI {dog.name.toUpperCase()}
                 </Text>
                 <Text style={styles.ctaSubtitle}>
-                  Registra un momento
+                  Mostrami cosa sta facendo
                 </Text>
               </View>
               <Ionicons
@@ -324,7 +327,7 @@ export default function HomeScreen() {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Dimmi qualcosa di ${dog.name}`}
+            accessibilityLabel={`Raccontami di ${dog.name}`}
             onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
             style={({ pressed }) => [
               styles.tellCard,
@@ -336,7 +339,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.tellCopy}>
               <Text style={styles.tellEyebrow}>UNA COSA IMPORTANTE</Text>
-              <Text style={styles.tellTitle}>Dimmi qualcosa di {dog.name}</Text>
+              <Text style={styles.tellTitle}>Raccontami di {dog.name}</Text>
               <Text style={styles.tellHint}>Parla oppure scrivi</Text>
             </View>
             <Ionicons name="chevron-forward" size={19} color={colors.primary} />
@@ -419,6 +422,11 @@ export default function HomeScreen() {
 
         </ScrollView>
       </SafeAreaView>
+      <CheckInModal
+        dogId={dog.id}
+        dogName={dog.name}
+        mockGate={usingMockGate}
+      />
     </View>
   );
 }

@@ -148,6 +148,7 @@ class BehaviorFeedbackRec(BaseModel):
     value: FeedbackValue
     correction_label: IntentCode | None = None
     corrected_context: ContextBucket | None = None
+    research_eligible: bool = False
     created_at: datetime
     updated_at: datetime
 

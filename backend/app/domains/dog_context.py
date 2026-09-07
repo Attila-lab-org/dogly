@@ -92,6 +92,29 @@ def _fact_values(raw: Any) -> dict[str, Any]:
     return {}
 
 
+def _active_today_vs_usual(
+    raw: Any, today: date | None = None
+) -> dict[str, Any]:
+    """Keep only today's owner-reported 'not as usual'. Stale or serene
+    check-ins must not look like a current routine disruption."""
+    values = _fact_values(raw)
+    if not values:
+        return {}
+    current = today or datetime.now(UTC).date()
+    day = values.get("day")
+    if day:
+        try:
+            reported = date.fromisoformat(str(day)[:10])
+        except ValueError:
+            return {}
+        if abs((reported - current).days) > 1:
+            return {}
+    concern = str(values.get("concern") or "").lower()
+    if concern and concern != "off":
+        return {}
+    return values
+
+
 def build_dog_context(dog: DogRec, lifestyle: dict[str, Any] | None = None) -> DogContextSnapshot:
     lifestyle = lifestyle or {}
     routine_raw = dict(lifestyle.get("routine") or {})
@@ -101,7 +124,7 @@ def build_dog_context(dog: DogRec, lifestyle: dict[str, Any] | None = None) -> D
     if isinstance(confirmed, str):
         confirmed = datetime.fromisoformat(confirmed)
 
-    today_vs_usual = _fact_values(routine_raw.pop("today_vs_usual", None))
+    today_vs_usual = _active_today_vs_usual(routine_raw.pop("today_vs_usual", None))
     recent_changes = _fact_values(routine_raw.pop("recent_changes", None))
     health_context = _fact_values(routine_raw.pop("health_context", None))
     routine = {

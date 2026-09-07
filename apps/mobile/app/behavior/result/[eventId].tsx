@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, ErrorState, ScreenContainer } from '@/components';
+import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import type { FeedbackValue } from '@/contracts/types';
 import { BehaviorResultView } from '@/features/core/components';
@@ -18,7 +18,9 @@ import { useCheckIn } from '@/features/checkin/store';
 import {
   getBehaviorEvent,
   mapApiEventToResult,
+  postBehaviorContext,
 } from '@/features/behavior/api';
+import { contextAnswersForQuestion } from '@/features/behavior/contextQuestion';
 import { isApiConfigured } from '@/features/auth/env';
 import { AdviceCard } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
@@ -58,6 +60,8 @@ export default function BehaviorResultScreen() {
   );
   const [savingFeedback, setSavingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [refiningContext, setRefiningContext] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
 
   useEffect(() => {
     if (result?.feedback) setFeedback(result.feedback);
@@ -104,7 +108,10 @@ export default function BehaviorResultScreen() {
     );
   }
 
-  const handleFeedback = async (value: FeedbackValue) => {
+  const handleFeedback = async (
+    value: FeedbackValue,
+    extras?: { correction_label?: string | null },
+  ) => {
     setSavingFeedback(true);
     setFeedbackError(null);
     try {
@@ -112,6 +119,7 @@ export default function BehaviorResultScreen() {
         result.eventId,
         value,
         usingMockGate,
+        extras,
       );
       setFeedback(saved);
     } catch {
@@ -120,6 +128,23 @@ export default function BehaviorResultScreen() {
       setFeedbackError('Non salvato — riprova');
     } finally {
       setSavingFeedback(false);
+    }
+  };
+  const contextAnswers = contextAnswersForQuestion(result.context_question);
+
+  const handleContext = async (
+    contextBucket: Parameters<typeof postBehaviorContext>[1],
+  ) => {
+    if (!useApi || refiningContext) return;
+    setRefiningContext(true);
+    setContextError(null);
+    try {
+      await postBehaviorContext(result.eventId, contextBucket);
+      await query.refetch();
+    } catch {
+      setContextError('Non sono riuscito ad aggiornare la lettura. Riprova.');
+    } finally {
+      setRefiningContext(false);
     }
   };
 
@@ -147,25 +172,54 @@ export default function BehaviorResultScreen() {
           dogName={dog.name}
           feedback={feedback}
           feedbackError={feedbackError}
-          onFeedback={(v) => {
-            if (!savingFeedback) void handleFeedback(v);
+          onFeedback={(v, extras) => {
+            if (!savingFeedback) void handleFeedback(v, extras);
           }}
           careNote={
-            analysisContext?.concern === 'off' ? analysisContext.note : null
+            !result.baseline_note && analysisContext?.concern === 'off'
+              ? analysisContext.note
+              : null
           }
           photoUri={dog.photoUri}
+          contextPrompt={
+            result.needs_context &&
+            result.context_question &&
+            contextAnswers.length > 0 ? (
+              <Card style={styles.contextCard} testID="behavior-context-question">
+                <Text style={styles.contextKicker}>Una cosa può aiutarmi</Text>
+                <Text style={styles.contextQuestion}>
+                  {result.context_question}
+                </Text>
+                <View style={styles.contextAnswers}>
+                  {contextAnswers.map((answer) => (
+                    <Button
+                      key={answer.contextBucket}
+                      title={answer.label}
+                      variant={
+                        answer.contextBucket === 'HOME'
+                          ? 'outline'
+                          : 'secondary'
+                      }
+                      disabled={refiningContext}
+                      loading={
+                        refiningContext &&
+                        answer.contextBucket !== 'HOME'
+                      }
+                      onPress={() => void handleContext(answer.contextBucket)}
+                      style={styles.contextAnswer}
+                    />
+                  ))}
+                </View>
+                {contextError ? (
+                  <Text style={styles.contextError}>{contextError}</Text>
+                ) : null}
+              </Card>
+            ) : null
+          }
           primaryAdvice={
             advice ? <AdviceCard advice={advice} dogName={dog.name} /> : null
           }
         />
-
-        {(result.primary_intent === 'FEAR_INSECURITY' ||
-          result.primary_intent === 'DISCOMFORT_AVOIDANCE') && (
-          <Text style={styles.safetyNote}>
-            Se questi segnali si ripetono o ti preoccupano, considera di
-            parlarne con il tuo veterinario o con un educatore cinofilo.
-          </Text>
-        )}
 
         <Button
           title="Condividi"
@@ -203,14 +257,35 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
-  safetyNote: {
-    marginTop: spacing.lg,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-  },
   saveButton: {
     marginTop: spacing.xl,
+  },
+  contextCard: {
+    marginTop: spacing.md,
+  },
+  contextKicker: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    textTransform: 'uppercase',
+  },
+  contextQuestion: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+  },
+  contextAnswers: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  contextAnswer: {
+    flex: 1,
+  },
+  contextError: {
+    marginTop: spacing.sm,
+    color: colors.danger,
+    fontSize: typography.size.xs,
   },
 });

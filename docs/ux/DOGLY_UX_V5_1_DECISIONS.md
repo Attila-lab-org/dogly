@@ -183,3 +183,31 @@ Disclaimer minimo:
 - Nessun mock in real mode.
 - Regole di triage e copy sanitario revisionati prima del rilascio clinico
   definitivo.
+
+## Vincoli strutturali (addendum audit 2026-09-07)
+
+Aggiunti dopo audit indipendente: vincoli "sotto la superficie" che il redesign
+non deve cancellare. Hanno la stessa forza dei vincoli UX.
+
+1. **Diario con lista virtualizzata.** Le timeline del Diario e la griglia
+   album/storico DEVONO usare FlatList/SectionList/FlashList (windowing), mai
+   ScrollView che monta tutti gli elementi: il Diario cresce ogni giorno e con
+   100+ card visive V5 una ScrollView rende scroll e apertura a scatti. Criterio
+   di accettazione: scrolling fluido con 300+ elementi caricati.
+2. **Contrasto WCAG AA sui token.** "Contrasto basato sui token correnti" vale
+   solo se il token supera 4,5:1 per il testo. `textMuted` (#94A3B8, ~2,9:1) NON
+   è conforme: va alzato (es. #64748B, già `textSecondary`) per tutto il testo;
+   il grigio chiaro resta solo per icone decorative. Da fare nello stesso lavoro,
+   non dopo.
+3. **Robustezza come definition of done.** Oltre a test e screenshot:
+   (a) nessuna schermata resta in caricamento infinito per errore di rete —
+   timeout esplicito (10–15s) e stato di errore con retry sulle chiamate API;
+   (b) un errore di rendering in una schermata non deve chiudere l'app — Error
+   Boundary con schermata di recupero; (c) il drain della coda upload riprende da
+   solo al ritorno della rete (senza chiudere/riaprire l'app).
+
+Note di coordinamento: i vincoli 1-3 sono già tracciati come task in
+`docs/MOBILE_TASKS.md` (sez. fluidità/rete/stabilità); questo addendum li porta
+dentro il perimetro del lavoro V5 così si chiudono insieme al redesign invece
+che dopo. Le attività di sicurezza/GDPR (callback OAuth, retention cron, rate
+limiting) restano in `docs/CURSOR_BACKEND_TASKS.md` e NON sono in scope UX.

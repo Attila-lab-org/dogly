@@ -142,12 +142,16 @@ export default function DiaryEventScreen() {
           })
         : null);
 
-  const handleFeedback = (value: FeedbackValue) => {
+  const handleFeedback = (
+    value: FeedbackValue,
+    extras?: { correction_label?: string | null },
+  ) => {
     if (!behaviorResult) return;
     void saveBehaviorFeedback(
       behaviorResult.eventId,
       value,
       usingMockGate,
+      extras,
     ).then(setFeedback);
   };
 

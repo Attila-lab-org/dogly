@@ -1,8 +1,12 @@
 import React, { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  addNetworkStateListener,
+  getNetworkStateAsync,
+} from 'expo-network';
 import * as Sentry from '@sentry/react-native';
 import { SessionProvider } from '../src/features/auth/SessionProvider';
 import { queryClient } from '../src/lib/queryClient';
@@ -10,6 +14,7 @@ import { configureCareNotifications } from '../src/features/care/notifications';
 import { registerNotificationResponseHandler } from '../src/features/home/notificationLinks';
 import { applyAvailableUpdate } from '../src/features/updates/applyAvailableUpdate';
 import { colors } from '../src/theme/tokens';
+import { AppErrorBoundary } from '../src/components/AppErrorBoundary';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 if (sentryDsn) {
@@ -32,6 +37,20 @@ function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    const setOnline = (state: {
+      isConnected?: boolean | null;
+      isInternetReachable?: boolean | null;
+    }) => {
+      onlineManager.setOnline(
+        state.isConnected !== false && state.isInternetReachable !== false,
+      );
+    };
+    void getNetworkStateAsync().then(setOnline).catch(() => undefined);
+    const subscription = addNetworkStateListener(setOnline);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     void applyAvailableUpdate().catch((error) => {
       Sentry.captureException(error, {
         tags: { subsystem: 'eas-update' },
@@ -47,23 +66,26 @@ function RootLayout() {
   }, [router]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <SessionProvider>
-          <StatusBar style="dark" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.background },
-            }}
-          >
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="auth/callback" />
-            <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
-          </Stack>
-        </SessionProvider>
-      </SafeAreaProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <SessionProvider>
+            <StatusBar style="dark" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.background },
+              }}
+            >
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth/callback" />
+              <Stack.Screen name="connection-error" />
+              <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+            </Stack>
+          </SessionProvider>
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 

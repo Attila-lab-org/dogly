@@ -62,25 +62,40 @@ def _bearer_token(authorization: str | None) -> str | None:
 
 
 def create_worker_app(state: AppState | None = None) -> FastAPI:
+    explicit_local_app = state is not None
     app = FastAPI(title="Dogly Private Worker", version="1.0.0", docs_url=None, openapi_url=None)
     app.state.cbi = state or build_default_state()
 
-    async def internal_auth(
+    def require_token(st: AppState, provided: str | None, expected: str) -> None:
+        if (
+            not expected
+            and explicit_local_app
+            and st.settings.app_env == "local"
+            and not st.settings.worker_internal_token
+            and not st.settings.cron_secret
+        ):
+            return
+        if not provided or not _tokens_match(provided, expected):
+            raise ApiError(
+                ErrorCode.AUTH_REQUIRED,
+                "Internal authentication required.",
+            )
+
+    async def worker_auth(
         request: Request,
         x_internal_token: Annotated[str | None, Header()] = None,
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
         st: AppState = request.app.state.cbi
-        expected = [
-            token
-            for token in (st.settings.worker_internal_token, st.settings.cron_secret)
-            if token
-        ]
-        if not expected:
-            return  # local dev mode
         provided = x_internal_token or _bearer_token(authorization)
-        if not provided or not any(_tokens_match(provided, token) for token in expected):
-            raise ApiError(ErrorCode.AUTH_REQUIRED, "Internal authentication required.")
+        require_token(st, provided, st.settings.worker_internal_token)
+
+    async def cron_auth(
+        request: Request,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> None:
+        st: AppState = request.app.state.cbi
+        require_token(st, _bearer_token(authorization), st.settings.cron_secret)
 
     @app.exception_handler(ApiError)
     async def api_error_handler(_: Request, exc: ApiError):
@@ -88,7 +103,7 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
 
         return JSONResponse(status_code=exc.http_status, content=exc.to_body().model_dump(mode="json"))
 
-    @app.post("/tasks/run", dependencies=[Depends(internal_auth)])
+    @app.post("/tasks/run", dependencies=[Depends(worker_auth)])
     async def run_task(envelope: TaskEnvelope, request: Request) -> dict:
         st: AppState = request.app.state.cbi
         handler = TASK_HANDLERS.get(envelope.task_type)
@@ -110,7 +125,7 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
             return JSONResponse(status_code=503, content=exc.payload)
         return result
 
-    @app.get("/tasks/cron/retention", dependencies=[Depends(internal_auth)])
+    @app.get("/tasks/cron/retention", dependencies=[Depends(cron_auth)])
     async def run_retention_cron(request: Request) -> dict:
         """Vercel Cron GET ingress for expired raw media and storage orphans."""
         st: AppState = request.app.state.cbi

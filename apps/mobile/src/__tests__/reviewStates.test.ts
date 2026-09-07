@@ -19,6 +19,9 @@ describe('auth gate (sez. 7.1)', () => {
     expect(resolveEntryRoute('unauthenticated')).toBe('/(auth)/welcome');
     expect(resolveEntryRoute('authenticated-no-dog')).toBe('/onboarding/dog');
     expect(resolveEntryRoute('authenticated-with-dog')).toBe('/(tabs)/home');
+    expect(resolveEntryRoute('authenticated-dog-status-unknown')).toBe(
+      '/connection-error',
+    );
   });
 
   it('default mock: welcome/auth iniziale (logo Dogly)', () => {

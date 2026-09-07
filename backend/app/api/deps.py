@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Annotated, Any
 
@@ -194,3 +195,38 @@ async def idempotency_guard(
 
 
 IdempotencyDep = Annotated[IdempotencyGuard, Depends(idempotency_guard)]
+
+
+def _rate_limit_window(window_seconds: int) -> int:
+    return int(time.time() // window_seconds)
+
+
+def rate_limit(bucket: str, *, limit: int, window_seconds: int = 60):
+    """Dependency factory: finestra fissa per-utente su POST costose.
+
+    Engine presente → Postgres (internal.rate_limits); altrimenti contatore
+    in-memory sullo store (dev/test). Superato il limite → 429 RATE_LIMITED.
+    """
+
+    async def _check(state: StateDep, user_id: UserIdDep) -> None:
+        if state.engine is not None:
+            from app.domains import rate_limit_db
+
+            await rate_limit_db.hit(
+                state.engine,
+                user_id=user_id,
+                bucket=bucket,
+                limit=limit,
+                window_seconds=window_seconds,
+            )
+            return
+        window = _rate_limit_window(window_seconds)
+        key = (user_id, bucket, window)
+        state.store.rate_limits[key] = state.store.rate_limits.get(key, 0) + 1
+        if state.store.rate_limits[key] > limit:
+            raise ApiError(
+                ErrorCode.RATE_LIMITED,
+                "Troppe richieste in poco tempo. Riprova tra un minuto.",
+            )
+
+    return _check

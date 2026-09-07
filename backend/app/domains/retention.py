@@ -81,6 +81,104 @@ async def cleanup_expired_raw_media_db(
     limit: int = 100,
 ) -> dict:
     """Delete DB-tracked expired raw/export media and mark source rows purged."""
+    async with engine.begin() as conn:
+        stale_reservations = (
+            await conn.execute(
+                text(
+                    """
+                    select r.reference_id, r.domain
+                    from internal.usage_reservations r
+                    where r.state = 'RESERVED'
+                      and r.created_at < now() - interval '2 hours'
+                      and (
+                        (
+                          r.domain = 'BEHAVIOR'
+                          and exists (
+                            select 1
+                            from public.behavior_events e
+                            where e.id::text = r.reference_id
+                              and e.status = 'UPLOADING'
+                          )
+                        )
+                        or
+                        (
+                          r.domain = 'DIGESTIVE'
+                          and exists (
+                            select 1
+                            from public.fecal_events f
+                            where f.id::text = r.reference_id
+                              and f.status = 'UPLOADING'
+                          )
+                        )
+                      )
+                    limit :limit
+                    """
+                ),
+                {"limit": limit},
+            )
+        ).mappings().all()
+
+        for reservation in stale_reservations:
+            reference_id = str(reservation["reference_id"])
+            await conn.execute(
+                text(
+                    "select public.refund_usage(:reference_id, 'UPLOAD_ABANDONED')"
+                ),
+                {"reference_id": reference_id},
+            )
+            if reservation["domain"] == "BEHAVIOR":
+                await conn.execute(
+                    text(
+                        """
+                        update public.behavior_events
+                        set status = 'FAILED_TERMINAL',
+                            last_error_code = 'UPLOAD_ABANDONED',
+                            completed_at = coalesce(completed_at, now())
+                        where id::text = :reference_id
+                          and status = 'UPLOADING'
+                        """
+                    ),
+                    {"reference_id": reference_id},
+                )
+                await conn.execute(
+                    text(
+                        """
+                        update public.behavior_captures c
+                        set expires_at = now()
+                        from public.behavior_events e
+                        where e.id::text = :reference_id
+                          and c.id = e.capture_id
+                          and c.retention_state = 'TEMPORARY'
+                        """
+                    ),
+                    {"reference_id": reference_id},
+                )
+            else:
+                await conn.execute(
+                    text(
+                        """
+                        update public.fecal_events
+                        set status = 'FAILED_TERMINAL',
+                            last_error_code = 'UPLOAD_ABANDONED',
+                            completed_at = coalesce(completed_at, now()),
+                            expires_at = now()
+                        where id::text = :reference_id
+                          and status = 'UPLOADING'
+                        """
+                    ),
+                    {"reference_id": reference_id},
+                )
+
+        purged_drafts = await conn.execute(
+            text(
+                """
+                delete from public.owner_reported_observations
+                where status = 'DRAFT'
+                  and draft_expires_at <= now()
+                """
+            )
+        )
+
     async with engine.connect() as conn:
         rows = (
             await conn.execute(
@@ -107,6 +205,8 @@ async def cleanup_expired_raw_media_db(
         "deleted_food_labels": 0,
         "deleted_exports": 0,
         "deleted_orphans": 0,
+        "refunded_abandoned": len(stale_reservations),
+        "purged_owner_story_drafts": max(purged_drafts.rowcount or 0, 0),
         "status": "ok",
     }
     for row in rows:
@@ -127,7 +227,16 @@ async def cleanup_expired_raw_media_db(
             counts["deleted_exports"] += 1
         elif row["source_table"] == "orphan_object":
             counts["deleted_orphans"] += 1
-    counts["deleted_total"] = sum(v for v in counts.values() if isinstance(v, int))
+    counts["deleted_total"] = sum(
+        counts[key]
+        for key in (
+            "deleted_behavior",
+            "deleted_digestive",
+            "deleted_food_labels",
+            "deleted_exports",
+            "deleted_orphans",
+        )
+    )
     return counts
 
 

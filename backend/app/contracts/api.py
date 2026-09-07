@@ -199,6 +199,20 @@ class MealSchedule(BaseModel):
     )
 
 
+class TodayVsUsual(BaseModel):
+    """Owner-reported daily check-in: today compared with this dog's usual.
+
+    `off` is a high-value OWNER-REPORTED CHANGE for the reasoner. `soft`
+    clears a previous off-day so yesterday's concern does not linger.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    concern: Literal["soft", "off"]
+    note: _LongNote | None = None
+    day: Annotated[str, Field(max_length=16)] | None = None
+
+
 class LifestyleRoutine(BaseModel):
     """Typed owner-reported daily routine.
 
@@ -227,6 +241,7 @@ class LifestyleRoutine(BaseModel):
     social_contacts: list[_ShortNote] | None = Field(default=None, max_length=20)
     usual_triggers: list[_ShortNote] | None = Field(default=None, max_length=20)
     recent_changes: list[_LongNote] | None = Field(default=None, max_length=10)
+    today_vs_usual: TodayVsUsual | None = None
 
 
 class LifestylePreferences(BaseModel):
@@ -477,6 +492,14 @@ class BehaviorEventOut(BaseModel):
     feedback: FeedbackValue | None = None
     advice: AdviceItem | None = None
     advice_outcome: AdviceOutcomeValue | None = None
+    consumer_headline: str | None = None
+    baseline_comparison: str | None = None
+    baseline_note: str | None = None
+    recommended_next_step: str | None = None
+    what_to_watch: str | None = None
+    safety: dict[str, Any] | None = None
+    personal_memory_used: list[dict[str, Any]] = Field(default_factory=list)
+    context_bucket: ContextBucket | None = None
     created_at: datetime
     completed_at: datetime | None = None
 
@@ -492,6 +515,12 @@ class BehaviorFeedbackResponse(BaseModel):
     event_id: str
     value: FeedbackValue
     recorded: bool = True
+
+
+class BehaviorContextUpdateRequest(BaseModel):
+    """One owner answer that can materially refine a behavior result."""
+
+    context_bucket: ContextBucket
 
 
 # ---------------------------------------------------------------------------
@@ -614,6 +643,21 @@ class OwnerStoryConfirmedOut(BaseModel):
     dog_id: str
     status: Literal["CONFIRMED"] = "CONFIRMED"
     facts: list[OwnerReportedFact]
+
+
+class OwnerStoryObservationOut(BaseModel):
+    id: str
+    dog_id: str
+    facts: list[OwnerReportedFact]
+    confirmed_at: datetime
+
+
+class OwnerStoryListOut(BaseModel):
+    items: list[OwnerStoryObservationOut]
+
+
+class OwnerStoryUpdateRequest(BaseModel):
+    facts: list[OwnerReportedFact] = Field(min_length=1, max_length=8)
 
 
 class DigestiveEventOut(BaseModel):

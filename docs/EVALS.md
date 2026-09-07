@@ -1,9 +1,11 @@
 # EVALS — Strategia di valutazione AI
 
 Fonte: Spec V1 sez. 26 (testing/evaluation), 30 (gate G3/G6), 14 (provider routing).
-Questo file descrive il **piano** di valutazione. **Nessuna valutazione reale è stata
-ancora eseguita**: i provider AI attuali sono mock fixture-backed (gate G1); lo spike
-con provider reali è il gate G3. Nessun dato di questa pagina è misurato finora.
+Questo file descrive il **piano** di valutazione. **Nessuna valutazione reale su
+dataset etichettato è stata ancora eseguita**. Gli adapter production usano Gemini
+per i video e OpenAI per reasoning/foto/voce; test e CI restano fixture-backed per
+non consumare provider a pagamento. La presenza degli adapter reali non chiude G3:
+nessun dato di qualità, latenza o costo di questa pagina è ancora misurato.
 
 Principio vincolante (sez. 26.2 release gate): nessun modello specialista, algoritmo
 di pattern discovery o upgrade di modello va in produzione perché "suona più avanzato"
@@ -75,7 +77,7 @@ morfologia/contesto e decisione finale motivata.
 
 | Data | Valutazione | Dataset (provenienza/licenza) | Modello/versione | Risultati | Decisione |
 | --- | --- | --- | --- | --- | --- |
-| — | Nessuna valutazione eseguita finora | — | provider mock (fixture) | — | — |
+| — | Nessuna valutazione etichettata eseguita finora | — | adapter reali disponibili; CI fixture | — | — |
 
 Ogni riga futura deve includere provenienza e licenza del dataset, versione esatta del
 modello (config, non codice), metriche della sez. 1/2 e la decisione presa con link al

@@ -1,0 +1,332 @@
+/* Design tokens — brand Dogly (da apps/mobile/src/theme/tokens.ts, UX_REFERENCE V1) */
+:root {
+  --background: #f4f7fb;
+  --surface: #ffffff;
+  --primary: #2563eb;
+  --primary-pressed: #1d4ed8;
+  --primary-soft: #dbeafe;
+  --accent: #14b8a6;
+  --accent-soft: #ccfbf1;
+  --text: #0e2a47;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  line-height: 1.6;
+}
+
+h1,
+h2 {
+  line-height: 1.15;
+  margin: 0 0 16px;
+}
+
+h1 {
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+  letter-spacing: -0.01em;
+}
+
+main {
+  overflow: hidden;
+}
+
+.brand {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: -0.02em;
+}
+
+/* Header */
+.site-header {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.site-header .store-buttons {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .site-header .store-buttons {
+    display: flex;
+  }
+}
+
+/* Store buttons */
+.store-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.store-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--surface);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.1;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.store-button small {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.store-button:hover {
+  background: var(--primary-pressed);
+  transform: translateY(-1px);
+}
+
+.store-button:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Hero */
+.hero {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+  align-items: center;
+}
+
+@media (min-width: 880px) {
+  .hero {
+    grid-template-columns: 1.1fr 0.9fr;
+    padding-top: 56px;
+  }
+}
+
+.hero-sub {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  max-width: 34em;
+  margin: 0 0 28px;
+}
+
+/* Feature sections alternate */
+.feature {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 64px 24px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+  align-items: center;
+}
+
+@media (min-width: 880px) {
+  .feature {
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+  }
+
+  .feature--reversed .feature-text {
+    order: 2;
+  }
+}
+
+.eyebrow {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-pressed);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.feature--reversed .eyebrow {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.feature-description {
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  margin: 0 0 16px;
+}
+
+.feature ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature li {
+  position: relative;
+  padding: 6px 0 6px 28px;
+  color: var(--text);
+}
+
+.feature li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: inset 0 0 0 5px var(--accent-soft);
+}
+
+/* Phone frame */
+.phone-shot {
+  display: flex;
+  justify-content: center;
+}
+
+.phone-frame {
+  width: min(280px, 78vw);
+  padding: 12px;
+  border-radius: 36px;
+  background: var(--text);
+  box-shadow:
+    0 24px 48px rgba(14, 42, 71, 0.18),
+    0 4px 12px rgba(14, 42, 71, 0.12);
+}
+
+.phone-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 26px;
+}
+
+/* Trust band — fondamento veterinario/esperti */
+.trust-band {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 48px 32px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(14, 42, 71, 0.06);
+}
+
+.trust-band h2 {
+  max-width: 22em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.trust-band > p {
+  max-width: 44em;
+  margin: 0 auto 16px;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+}
+
+.trust-band .trust-note {
+  margin-bottom: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+@media (min-width: 720px) {
+  .trust-band {
+    margin-left: 24px;
+    margin-right: 24px;
+  }
+}
+
+/* Final CTA */
+.final-cta {
+  margin: 64px auto;
+  max-width: 1080px;
+  padding: 64px 24px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-pressed) 100%);
+  color: var(--surface);
+}
+
+.final-cta p {
+  margin: 0 0 28px;
+  opacity: 0.9;
+}
+
+.final-cta .store-button {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.final-cta .store-button:hover {
+  background: var(--primary-soft);
+}
+
+@media (min-width: 720px) {
+  .final-cta {
+    border-radius: var(--radius);
+    margin-left: 24px;
+    margin-right: 24px;
+  }
+}
+
+/* Footer */
+.site-footer {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 24px 56px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.site-footer p {
+  margin: 8px 0 0;
+}
+
+.footer-note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  max-width: 40em;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}

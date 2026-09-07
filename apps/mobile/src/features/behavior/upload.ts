@@ -9,26 +9,24 @@ import {
   completeBehaviorCapture,
   initBehaviorCapture,
 } from './api';
+import { deriveContextBucketHint } from './contextBucket';
 import { processPendingDigestiveUpload } from '../digestive/upload';
+import { persistTodayVsUsual } from '../checkin/sync';
+import { getCheckInSnapshot } from '../checkin/store';
 import { putSignedUpload } from '../../lib/signedUpload';
 import {
   activeUploadForUri,
   discardUploadsForUri,
   getUploadQueue,
   markUploadsCompletedForEvent,
+  recordUploadFailure,
+  uploadRetryDelayMs,
 } from '../../lib/uploadQueue';
 
 const draining = new Set<string>();
 let recoverStarted = false;
 
 type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm';
-type UploadMeta = {
-  durationMs: number;
-  hasAudio: boolean;
-  contentType: VideoContentType;
-  captureId?: string;
-};
-const uploadMeta = new Map<string, UploadMeta>();
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -95,12 +93,15 @@ export async function processPendingUpload(id: string): Promise<string | null> {
     }
 
     item = queue.get(id)!;
-    const meta = uploadMeta.get(id) ?? {
-      durationMs: 8000,
-      hasAudio: true,
-      contentType: 'video/mp4',
-    };
-    const contentType = meta.contentType;
+    const durationMs = item.durationMs ?? 8_000;
+    const hasAudio = item.hasAudio ?? true;
+    const contentType = (item.contentType ?? 'video/mp4') as VideoContentType;
+    const checkIn = getCheckInSnapshot().analysisContext;
+    if (checkIn?.dogId === item.dogId) {
+      await persistTodayVsUsual(item.dogId, checkIn, false).catch(() => {
+        // Offline: the local banner remains; the next upload retries.
+      });
+    }
 
     if (
       item.state === 'upload_initializing' ||
@@ -113,17 +114,17 @@ export async function processPendingUpload(id: string): Promise<string | null> {
       const init = await initBehaviorCapture({
         dog_id: item.dogId,
         client_request_id: item.clientRequestId,
-        duration_ms: Math.max(1000, meta.durationMs),
-        has_audio: meta.hasAudio,
+        duration_ms: Math.max(1000, durationMs),
+        has_audio: hasAudio,
         bytes,
         content_type: contentType,
-        context_bucket: 'UNKNOWN',
+        context_bucket: deriveContextBucketHint(),
       });
-      uploadMeta.set(id, { ...meta, captureId: init.capture_id });
       item = queue.transitionTo(id, 'uploading', {
         eventId: init.event_id,
         uploadUrl: init.upload.url,
         uploadUrlExpiresAt: init.upload.expires_at,
+        captureId: init.capture_id,
       });
     }
 
@@ -134,9 +135,7 @@ export async function processPendingUpload(id: string): Promise<string | null> {
         item.uploadUrlExpiresAt &&
         Date.parse(item.uploadUrlExpiresAt) < Date.now();
       if (expired) {
-        queue.markRecoverable(id, 'URL upload scaduto');
-        draining.delete(id);
-        return processPendingUpload(id);
+        throw new Error('URL upload scaduto');
       }
       await putSignedUpload(item.uploadUrl, item.localUri, contentType);
       item = queue.transitionTo(id, 'uploaded');
@@ -145,23 +144,23 @@ export async function processPendingUpload(id: string): Promise<string | null> {
     item = queue.get(id)!;
 
     if (item.state === 'uploaded') {
-      let captureId = uploadMeta.get(id)?.captureId;
+      let captureId = item.captureId;
       if (!captureId) {
         const bytes = await fileBytes(item.localUri);
         const init = await initBehaviorCapture({
           dog_id: item.dogId,
           client_request_id: item.clientRequestId,
-          duration_ms: Math.max(1000, meta.durationMs),
-          has_audio: meta.hasAudio,
+          duration_ms: Math.max(1000, durationMs),
+          has_audio: hasAudio,
           bytes,
           content_type: contentType,
-          context_bucket: 'UNKNOWN',
+          context_bucket: deriveContextBucketHint(),
         });
         captureId = init.capture_id;
-        uploadMeta.set(id, { ...meta, captureId });
-        if (init.event_id) {
-          queue.transitionTo(id, 'uploaded', { eventId: init.event_id });
-        }
+        queue.transitionTo(id, 'uploaded', {
+          eventId: init.event_id,
+          captureId,
+        });
       }
       const complete = await completeBehaviorCapture(
         captureId,
@@ -178,7 +177,7 @@ export async function processPendingUpload(id: string): Promise<string | null> {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload fallito';
     try {
-      getUploadQueue().markRecoverable(id, message);
+      recordUploadFailure(getUploadQueue(), id, message);
     } catch {
       try {
         getUploadQueue().transitionTo(id, 'terminal_error', {
@@ -224,12 +223,6 @@ export async function enqueueAndUploadBehaviorClip(
   const uploadId = newId('upl');
   const clientRequestId = newId('crid');
   const contentType = await detectVideoContentType(input.localUri);
-  uploadMeta.set(uploadId, {
-    durationMs: input.durationMs,
-    hasAudio: input.hasAudio,
-    contentType,
-  });
-
   queue.enqueue({
     id: uploadId,
     userId: input.userId,
@@ -237,6 +230,9 @@ export async function enqueueAndUploadBehaviorClip(
     domain: 'BEHAVIOR',
     localUri: input.localUri,
     clientRequestId,
+    durationMs: input.durationMs,
+    hasAudio: input.hasAudio,
+    contentType,
   });
 
   const eventId = await processPendingUpload(uploadId);
@@ -264,6 +260,13 @@ export async function recoverAndDrainUploads(userId: string): Promise<void> {
       item.state === 'uploaded'
     ) {
       try {
+        const delayMs = uploadRetryDelayMs(item.retryCount);
+        const elapsedMs = Date.now() - Date.parse(item.updatedAt);
+        if (delayMs > elapsedMs) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, delayMs - elapsedMs),
+          );
+        }
         if (item.domain === 'DIGESTIVE') {
           await processPendingDigestiveUpload(item.id);
         } else {
@@ -291,6 +294,5 @@ export async function discardPendingBehaviorClip(
   localUri: string,
 ): Promise<void> {
   const removed = discardUploadsForUri(getUploadQueue(), userId, localUri);
-  for (const id of removed) uploadMeta.delete(id);
   if (removed.length > 0) await deleteLocalIfExists(localUri);
 }

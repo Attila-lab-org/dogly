@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { type ReactElement } from 'react';
 import {
+  FlatList,
   Image,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   ViewStyle,
 } from 'react-native';
@@ -57,21 +59,42 @@ export function PhotoGrid({
   photos,
   onPressPhoto,
   style,
+  header,
+  footer,
 }: {
   photos: AlbumPhoto[];
   onPressPhoto: (photo: AlbumPhoto) => void;
   style?: ViewStyle;
+  header?: ReactElement;
+  footer?: ReactElement;
 }) {
+  const { width } = useWindowDimensions();
+  const size = Math.max(
+    88,
+    Math.floor((width - spacing.lg * 2 - spacing.sm * 2) / 3),
+  );
   return (
-    <View style={[styles.grid, style]}>
-      {photos.map((photo) => (
+    <FlatList
+      data={photos}
+      keyExtractor={(photo) => photo.id}
+      numColumns={3}
+      initialNumToRender={12}
+      maxToRenderPerBatch={12}
+      windowSize={7}
+      showsVerticalScrollIndicator={false}
+      style={styles.gridList}
+      contentContainerStyle={style}
+      columnWrapperStyle={styles.gridRow}
+      ListHeaderComponent={header}
+      ListFooterComponent={footer}
+      renderItem={({ item: photo }) => (
         <PhotoThumbnail
-          key={photo.id}
           photo={photo}
           onPress={() => onPressPhoto(photo)}
+          size={size}
         />
-      ))}
-    </View>
+      )}
+    />
   );
 }
 
@@ -134,10 +157,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     padding: 4,
   },
-  grid: {
+  gridList: {
+    flex: 1,
+  },
+  gridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   albumCard: {
     flexDirection: 'row',

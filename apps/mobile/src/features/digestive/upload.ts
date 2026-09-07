@@ -13,6 +13,7 @@ import {
   discardUploadsForUri,
   getUploadQueue,
   markUploadsCompletedForEvent,
+  recordUploadFailure,
 } from '../../lib/uploadQueue';
 import { contentTypeFromUri } from '../dogs/photoUri';
 
@@ -123,9 +124,7 @@ export async function processPendingDigestiveUpload(
         item.uploadUrlExpiresAt &&
         Date.parse(item.uploadUrlExpiresAt) < Date.now();
       if (expired) {
-        queue.markRecoverable(id, 'URL upload scaduto');
-        draining.delete(id);
-        return processPendingDigestiveUpload(id);
+        throw new Error('URL upload scaduto');
       }
       await putSignedUpload(item.uploadUrl, item.localUri, contentType);
       item = queue.transitionTo(id, 'uploaded');
@@ -153,7 +152,7 @@ export async function processPendingDigestiveUpload(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload fallito';
     try {
-      getUploadQueue().markRecoverable(id, message);
+      recordUploadFailure(getUploadQueue(), id, message);
     } catch {
       try {
         getUploadQueue().transitionTo(id, 'terminal_error', {

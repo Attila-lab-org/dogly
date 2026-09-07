@@ -11,6 +11,7 @@ from app.worker.handlers import (
     RetryableTaskError,
     process_behavior_event,
 )
+from app.worker.main import create_worker_app
 from tests.conftest import create_dog
 
 
@@ -61,6 +62,14 @@ async def test_behavior_event_completes_end_to_end(
     assert body["confidence_band"] in ("LOW", "MEDIUM", "HIGH")
     assert body["summary"]
     assert 1 <= len(body["evidence"]) <= 5
+    assert body["consumer_headline"]
+    assert body["baseline_note"]
+    assert body["baseline_comparison"] in (
+        "RECOGNIZED",
+        "VARIATION",
+        "LEARNING",
+        "CONTESTED",
+    )
 
     # Quota committed exactly once.
     ledger = state.store.ensure_ledger(user_id)
@@ -135,7 +144,20 @@ async def test_worker_rejects_missing_or_wrong_internal_token(worker_client: htt
     assert r2.status_code in (401, 403)
 
 
-async def test_retention_cron_accepts_bearer_and_cron_secret(
+async def test_worker_fails_closed_when_production_secret_is_missing(state):
+    state.settings.app_env = "production"
+    state.settings.worker_internal_token = ""
+    app = create_worker_app(state)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/tasks/run",
+            json={"task_type": "behavior_analysis", "event_id": "x"},
+        )
+    assert response.status_code == 401
+
+
+async def test_retention_cron_requires_distinct_cron_secret(
     worker_client: httpx.AsyncClient,
     state,
 ):
@@ -146,8 +168,7 @@ async def test_retention_cron_accepts_bearer_and_cron_secret(
         "/tasks/cron/retention",
         headers={"Authorization": "Bearer test-internal-token"},
     )
-    assert via_worker_token.status_code == 200, via_worker_token.text
-    assert via_worker_token.json()["status"] == "ok"
+    assert via_worker_token.status_code == 401
 
     state.settings.cron_secret = "vercel-cron-secret"
     via_cron_secret = await worker_client.get(
@@ -224,3 +245,149 @@ async def test_worker_retryable_failure_returns_503(
     assert body["status"] == "FAILED_RETRYABLE"
     assert body["error"] == "PROVIDER_TIMEOUT"
     assert state.store.behavior_events[event_id].attempt_count == 1
+
+
+async def test_unknown_context_and_checkin_reach_the_composer(
+    client: httpx.AsyncClient, worker_client: httpx.AsyncClient, auth_headers
+):
+    from datetime import UTC, datetime
+
+    dog_id = await create_dog(client, auth_headers)
+    patched = await client.patch(
+        f"/v1/dogs/{dog_id}/lifestyle",
+        json={
+            "routine": {
+                "today_vs_usual": {
+                    "concern": "off",
+                    "note": "oggi non è come al solito",
+                    "day": datetime.now(UTC).date().isoformat(),
+                }
+            },
+            "confirm": True,
+        },
+        headers=auth_headers,
+    )
+    assert patched.status_code == 200, patched.text
+
+    init = await client.post(
+        "/v1/behavior/captures/init",
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "crid-unknown-ctx",
+            "duration_ms": 8000,
+            "has_audio": True,
+            "bytes": 1_000_000,
+            "content_type": "video/mp4",
+            "context_bucket": "UNKNOWN",
+        },
+        headers=auth_headers,
+    )
+    assert init.status_code == 200, init.text
+    capture_id = init.json()["capture_id"]
+    complete = await client.post(
+        f"/v1/behavior/captures/{capture_id}/complete", headers=auth_headers
+    )
+    assert complete.status_code == 200, complete.text
+    event_id = complete.json()["event_id"]
+
+    processed = await worker_client.post(
+        "/tasks/run",
+        json={"task_type": "behavior_analysis", "event_id": event_id},
+        headers={"x-internal-token": "test-internal-token"},
+    )
+    assert processed.status_code == 200, processed.text
+    assert processed.json()["status"] == "COMPLETED"
+
+    body = (
+        await client.get(f"/v1/behavior/events/{event_id}", headers=auth_headers)
+    ).json()
+    assert body["baseline_comparison"] == "VARIATION"
+    assert "diverso dal solito" in body["baseline_note"]
+    # Fixture video shows a toy: UNKNOWN must not stay UNKNOWN.
+    assert body["context_bucket"] == "PLAY"
+    assert "SAFE_" not in (body.get("consumer_headline") or "")
+
+
+async def test_owner_context_refines_without_observing_video_again(
+    client: httpx.AsyncClient,
+    worker_client: httpx.AsyncClient,
+    auth_headers,
+    state,
+):
+    event_id = await _queue_behavior_event(
+        client, auth_headers, "crid-context-refine"
+    )
+    processed = await worker_client.post(
+        "/tasks/run",
+        json={"task_type": "behavior_analysis", "event_id": event_id},
+        headers={"x-internal-token": "test-internal-token"},
+    )
+    assert processed.status_code == 200
+    observer_calls_before = len(
+        [
+            record
+            for record in state.cost_meter.records
+            if record["operation"] == "observer.observe"
+        ]
+    )
+
+    refined = await client.post(
+        f"/v1/behavior/events/{event_id}/context",
+        json={"context_bucket": "DOOR_EXIT"},
+        headers=auth_headers,
+    )
+
+    assert refined.status_code == 200, refined.text
+    assert refined.json()["context_bucket"] == "DOOR_EXIT"
+    assert any(
+        record["operation"] == "reasoner.refine_context"
+        for record in state.cost_meter.records
+    )
+    assert (
+        len(
+            [
+                record
+                for record in state.cost_meter.records
+                if record["operation"] == "observer.observe"
+            ]
+        )
+        == observer_calls_before
+    )
+
+
+async def test_feedback_correction_research_eligibility_follows_server_consent(
+    client: httpx.AsyncClient,
+    worker_client: httpx.AsyncClient,
+    auth_headers,
+    state,
+):
+    event_id = await _queue_behavior_event(
+        client, auth_headers, "crid-feedback-consent"
+    )
+    await worker_client.post(
+        "/tasks/run",
+        json={"task_type": "behavior_analysis", "event_id": event_id},
+        headers={"x-internal-token": "test-internal-token"},
+    )
+
+    without_consent = await client.post(
+        f"/v1/behavior/events/{event_id}/feedback",
+        json={"value": "NO", "correction_label": "OUTSIDE_REQUEST"},
+        headers=auth_headers,
+    )
+    assert without_consent.status_code == 200
+    assert state.store.behavior_feedback[event_id].research_eligible is False
+
+    consent = await client.patch(
+        "/v1/me/consents",
+        json={"policy_version": "privacy-beta/v1", "research_training": True},
+        headers=auth_headers,
+    )
+    assert consent.status_code == 200
+    with_consent = await client.post(
+        f"/v1/behavior/events/{event_id}/feedback",
+        json={"value": "NO", "correction_label": "OUTSIDE_REQUEST"},
+        headers=auth_headers,
+    )
+    assert with_consent.status_code == 200
+    assert state.store.behavior_feedback[event_id].research_eligible is True

@@ -26,6 +26,10 @@ export interface PendingUpload {
   eventId: string | null;
   uploadUrl: string | null;
   uploadUrlExpiresAt: string | null;
+  durationMs: number | null;
+  hasAudio: boolean | null;
+  contentType: string | null;
+  captureId: string | null;
   retryCount: number;
   lastError: string | null;
   createdAt: string;
@@ -52,6 +56,13 @@ export const ALLOWED_TRANSITIONS: Record<MediaUploadState, MediaUploadState[]> =
 };
 
 const TERMINAL_STATES: MediaUploadState[] = ['completed', 'terminal_error'];
+export const MAX_UPLOAD_RETRIES = 5;
+const RETRY_BACKOFF_MS = [0, 5_000, 15_000, 45_000, 120_000] as const;
+
+export function uploadRetryDelayMs(retryCount: number): number {
+  const index = Math.max(0, Math.min(retryCount, RETRY_BACKOFF_MS.length - 1));
+  return RETRY_BACKOFF_MS[index];
+}
 
 function rowToUpload(row: Record<string, unknown>): PendingUpload {
   return {
@@ -65,6 +76,13 @@ function rowToUpload(row: Record<string, unknown>): PendingUpload {
     eventId: (row.event_id as string | null) ?? null,
     uploadUrl: (row.upload_url as string | null) ?? null,
     uploadUrlExpiresAt: (row.upload_url_expires_at as string | null) ?? null,
+    durationMs: (row.duration_ms as number | null) ?? null,
+    hasAudio:
+      row.has_audio === null || row.has_audio === undefined
+        ? null
+        : Boolean(row.has_audio),
+    contentType: (row.content_type as string | null) ?? null,
+    captureId: (row.capture_id as string | null) ?? null,
     retryCount: (row.retry_count as number) ?? 0,
     lastError: (row.last_error as string | null) ?? null,
     createdAt: row.created_at as string,
@@ -86,6 +104,9 @@ export interface EnqueueInput {
   domain: AnalysisDomain;
   localUri: string;
   clientRequestId: string;
+  durationMs?: number;
+  hasAudio?: boolean;
+  contentType?: string;
 }
 
 export interface UploadQueue {
@@ -94,7 +115,12 @@ export interface UploadQueue {
   transitionTo(
     id: string,
     next: MediaUploadState,
-    patch?: Partial<Pick<PendingUpload, 'eventId' | 'uploadUrl' | 'uploadUrlExpiresAt' | 'lastError'>>,
+    patch?: Partial<
+      Pick<
+        PendingUpload,
+        'eventId' | 'uploadUrl' | 'uploadUrlExpiresAt' | 'captureId' | 'lastError'
+      >
+    >,
   ): PendingUpload;
   /** Errore recuperabile: incrementa retryCount e salva lastError */
   markRecoverable(id: string, error: string): PendingUpload;
@@ -123,6 +149,10 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
       event_id TEXT,
       upload_url TEXT,
       upload_url_expires_at TEXT,
+      duration_ms INTEGER,
+      has_audio INTEGER,
+      content_type TEXT,
+      capture_id TEXT,
       retry_count INTEGER NOT NULL DEFAULT 0,
       last_error TEXT,
       created_at TEXT NOT NULL,
@@ -131,6 +161,18 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
     CREATE INDEX IF NOT EXISTS idx_pending_uploads_user_state
       ON pending_uploads (user_id, state);
   `);
+  for (const column of [
+    'duration_ms INTEGER',
+    'has_audio INTEGER',
+    'content_type TEXT',
+    'capture_id TEXT',
+  ]) {
+    try {
+      db.exec(`ALTER TABLE pending_uploads ADD COLUMN ${column};`);
+    } catch {
+      // Existing installations already have the column.
+    }
+  }
 
   function mustGet(id: string): PendingUpload {
     const found = queue.get(id);
@@ -143,9 +185,22 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
       const now = new Date().toISOString();
       db.run(
         `INSERT INTO pending_uploads
-          (id, user_id, dog_id, domain, local_uri, state, client_request_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'local_pending', ?, ?, ?)`,
-        [input.id, input.userId, input.dogId, input.domain, input.localUri, input.clientRequestId, now, now],
+          (id, user_id, dog_id, domain, local_uri, state, client_request_id,
+           duration_ms, has_audio, content_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'local_pending', ?, ?, ?, ?, ?, ?)`,
+        [
+          input.id,
+          input.userId,
+          input.dogId,
+          input.domain,
+          input.localUri,
+          input.clientRequestId,
+          input.durationMs ?? null,
+          input.hasAudio === undefined ? null : Number(input.hasAudio),
+          input.contentType ?? null,
+          now,
+          now,
+        ],
       );
       return mustGet(input.id);
     },
@@ -160,20 +215,24 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
 
     transitionTo(id, next, patch = {}) {
       const current = mustGet(id);
-      if (!ALLOWED_TRANSITIONS[current.state].includes(next)) {
+      if (
+        next !== current.state &&
+        !ALLOWED_TRANSITIONS[current.state].includes(next)
+      ) {
         throw new InvalidTransitionError(current.state, next);
       }
       const now = new Date().toISOString();
       db.run(
         `UPDATE pending_uploads
            SET state = ?, event_id = ?, upload_url = ?, upload_url_expires_at = ?,
-               last_error = ?, updated_at = ?
+               capture_id = ?, last_error = ?, updated_at = ?
          WHERE id = ?`,
         [
           next,
           patch.eventId !== undefined ? patch.eventId : current.eventId,
           patch.uploadUrl !== undefined ? patch.uploadUrl : current.uploadUrl,
           patch.uploadUrlExpiresAt !== undefined ? patch.uploadUrlExpiresAt : current.uploadUrlExpiresAt,
+          patch.captureId !== undefined ? patch.captureId : current.captureId,
           patch.lastError !== undefined ? patch.lastError : current.lastError,
           now,
           id,
@@ -238,6 +297,20 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
   };
 
   return queue;
+}
+
+/** Persist a bounded failure; repeated permanent errors stop draining forever. */
+export function recordUploadFailure(
+  queue: UploadQueue,
+  id: string,
+  error: string,
+): PendingUpload {
+  const current = queue.get(id);
+  if (!current) throw new Error(`Pending upload non trovato: ${id}`);
+  if (current.retryCount + 1 >= MAX_UPLOAD_RETRIES) {
+    return queue.transitionTo(id, 'terminal_error', { lastError: error });
+  }
+  return queue.markRecoverable(id, error);
 }
 
 /**

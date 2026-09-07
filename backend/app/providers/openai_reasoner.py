@@ -31,6 +31,10 @@ General pretrained knowledge is only a tentative LOW-confidence hypothesis for
 uncovered observations and must not introduce consumer recommendations.
 Support abstention when evidence is insufficient. Never invent unobserved facts,
 write personal patterns, or create advice. Return InterpretationContract JSON only.
+When one simple owner answer would materially distinguish plausible readings,
+set needs_context=true and ask at most one concrete Italian question in
+context_question (for example whether they were near the door). Otherwise set
+needs_context=false and context_question=null. Do not ask for facts already present.
 Deterministic safety_flags in the input are established constraints: carry them
 into safety_flags and never downgrade or drop them (sez. 19.3).
 """
@@ -121,7 +125,12 @@ class OpenAIReasoner:
             output_tokens=int(usage_raw.get("completion_tokens") or 0),
             media_bytes=0,
             latency_ms=int((time.perf_counter() - started) * 1000),
-            cost_usd=_estimate_openai_cost(self._model, usage_raw),
+            cost_usd=_estimate_openai_cost(
+                usage_raw,
+                input_usd_per_million=self._settings.reasoner_input_usd_per_million,
+                output_usd_per_million=self._settings.reasoner_output_usd_per_million,
+                safety_margin=self._settings.ai_cost_safety_margin,
+            ),
             request_id=request_id,
         )
         return contract, usage
@@ -154,8 +163,16 @@ class OpenAIReasoner:
         return fixed
 
 
-def _estimate_openai_cost(model: str, usage_raw: dict[str, Any]) -> float:
+def _estimate_openai_cost(
+    usage_raw: dict[str, Any],
+    *,
+    input_usd_per_million: float,
+    output_usd_per_million: float,
+    safety_margin: float,
+) -> float:
     inn = int(usage_raw.get("prompt_tokens") or 0)
     out = int(usage_raw.get("completion_tokens") or 0)
-    # Default ballpark; override via billing dashboards.
-    return round((inn * 0.0000025) + (out * 0.00001), 6)
+    listed_cost = (
+        inn * input_usd_per_million + out * output_usd_per_million
+    ) / 1_000_000
+    return round(listed_cost * safety_margin, 6)

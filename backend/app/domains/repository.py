@@ -66,6 +66,7 @@ class InMemoryStore:
 
     def __init__(self) -> None:
         self.lock = asyncio.Lock()
+        self.rate_limits: dict[tuple[str, str, int], int] = {}
         self.profiles: dict[str, ProfileRec] = {}
         self.dogs: dict[str, DogRec] = {}
         self.captures: dict[str, BehaviorCaptureRec] = {}

@@ -7,12 +7,17 @@
 export type SessionState =
   | 'unauthenticated'
   | 'authenticated-no-dog'
-  | 'authenticated-with-dog';
+  | 'authenticated-with-dog'
+  | 'authenticated-dog-status-unknown';
 
 /** Fallback __DEV__ senza EXPO_PUBLIC_SUPABASE_* — non usato in produzione. */
 export const sessionMock: SessionState = 'unauthenticated';
 
-export type EntryRoute = '/(auth)/welcome' | '/onboarding/dog' | '/(tabs)/home';
+export type EntryRoute =
+  | '/(auth)/welcome'
+  | '/onboarding/dog'
+  | '/(tabs)/home'
+  | '/connection-error';
 
 /** Auth gate (sez. 7.1): instradamento dell'entry point per stato sessione. */
 export function resolveEntryRoute(state: SessionState): EntryRoute {
@@ -23,5 +28,7 @@ export function resolveEntryRoute(state: SessionState): EntryRoute {
       return '/onboarding/dog';
     case 'authenticated-with-dog':
       return '/(tabs)/home';
+    case 'authenticated-dog-status-unknown':
+      return '/connection-error';
   }
 }

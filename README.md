@@ -19,6 +19,7 @@ Stato corrente dei gate e blocker: vedi `PROJECT_STATE.md`.
 | --- | --- | --- |
 | `apps/mobile/` | App Expo React Native + TypeScript (Router, 3 tab) — brand Dogly | A / F |
 | `apps/admin/` | Admin Control Center web (Next.js, console interna — ADR-011) | F / J |
+| `apps/landing/` | Landing page pubblica Dogly (Next.js, marketing + CTA store) | F |
 | `api/index.py` | Shim serverless Vercel (public API + worker mount) | D / C |
 | `vercel.json` | Config deploy root (includeFiles backend) | D |
 | `backend/app/api/` | Public FastAPI API (route `/v1/*`, JWT Supabase) | C |

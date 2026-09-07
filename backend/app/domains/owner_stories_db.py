@@ -79,6 +79,7 @@ async def confirm_draft(
                 """
                 update public.owner_reported_observations
                 set facts_json = cast(:facts as jsonb),
+                    transcript = null,
                     status = 'CONFIRMED',
                     confirmed_at = now()
                 where id = cast(:id as uuid)
@@ -99,3 +100,106 @@ async def confirm_draft(
         )
     if result.rowcount != 1:
         raise ApiError(ErrorCode.NOT_FOUND, "Owner story draft not found")
+
+
+async def list_confirmed(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    dog_id: str,
+) -> list[dict]:
+    await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    """
+                    select id, dog_id, facts_json, confirmed_at
+                    from public.owner_reported_observations
+                    where dog_id = cast(:dog_id as uuid)
+                      and user_id = cast(:user_id as uuid)
+                      and status = 'CONFIRMED'
+                    order by confirmed_at desc
+                    """
+                ),
+                {"dog_id": dog_id, "user_id": user_id},
+            )
+        ).mappings().all()
+    return [
+        {
+            "id": str(row["id"]),
+            "dog_id": str(row["dog_id"]),
+            "facts": row["facts_json"],
+            "confirmed_at": row["confirmed_at"],
+        }
+        for row in rows
+    ]
+
+
+async def update_confirmed(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    dog_id: str,
+    observation_id: str,
+    facts: list[OwnerReportedFact],
+) -> dict:
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    update public.owner_reported_observations
+                    set facts_json = cast(:facts as jsonb)
+                    where id = cast(:id as uuid)
+                      and dog_id = cast(:dog_id as uuid)
+                      and user_id = cast(:user_id as uuid)
+                      and status = 'CONFIRMED'
+                    returning id, dog_id, facts_json, confirmed_at
+                    """
+                ),
+                {
+                    "id": observation_id,
+                    "dog_id": dog_id,
+                    "user_id": user_id,
+                    "facts": json.dumps(
+                        [fact.model_dump(mode="json") for fact in facts]
+                    ),
+                },
+            )
+        ).mappings().first()
+    if row is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Owner story not found")
+    return {
+        "id": str(row["id"]),
+        "dog_id": str(row["dog_id"]),
+        "facts": row["facts_json"],
+        "confirmed_at": row["confirmed_at"],
+    }
+
+
+async def delete_observation(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    dog_id: str,
+    observation_id: str,
+) -> None:
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text(
+                """
+                delete from public.owner_reported_observations
+                where id = cast(:id as uuid)
+                  and dog_id = cast(:dog_id as uuid)
+                  and user_id = cast(:user_id as uuid)
+                """
+            ),
+            {
+                "id": observation_id,
+                "dog_id": dog_id,
+                "user_id": user_id,
+            },
+        )
+    if result.rowcount != 1:
+        raise ApiError(ErrorCode.NOT_FOUND, "Owner story not found")

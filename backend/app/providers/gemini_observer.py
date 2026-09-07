@@ -204,10 +204,18 @@ class GeminiVideoObserver:
             provider="gemini",
             model=self._model,
             input_tokens=int(usage_meta.get("promptTokenCount") or 0),
-            output_tokens=int(usage_meta.get("candidatesTokenCount") or 0),
+            output_tokens=(
+                int(usage_meta.get("candidatesTokenCount") or 0)
+                + int(usage_meta.get("thoughtsTokenCount") or 0)
+            ),
             media_bytes=media_bytes,
             latency_ms=int((time.perf_counter() - started) * 1000),
-            cost_usd=_estimate_gemini_cost(usage_meta),
+            cost_usd=_estimate_gemini_cost(
+                usage_meta,
+                input_usd_per_million=self._settings.observer_input_usd_per_million,
+                output_usd_per_million=self._settings.observer_output_usd_per_million,
+                safety_margin=self._settings.ai_cost_safety_margin,
+            ),
             request_id=request_id,
         )
         return contract, usage
@@ -258,24 +266,31 @@ class GeminiVideoObserver:
         if not name:
             raise RuntimeError("Gemini Files API returned no file name")
 
-        for _ in range(_FILE_READY_ATTEMPTS):
-            state = str(file_data.get("state") or "")
-            if state == "ACTIVE":
-                uri = str(file_data.get("uri") or "")
-                if not uri:
-                    raise RuntimeError("Gemini active file has no URI")
-                return name, uri, len(media)
-            if state == "FAILED":
-                raise RuntimeError("Gemini rejected the uploaded behavior video")
-            await asyncio.sleep(1)
-            status = await self._client.get(
-                f"{_GEMINI_API_ROOT}/{name}",
-                params={"key": self._api_key},
-            )
-            status.raise_for_status()
-            file_data = status.json()
+        ready = False
+        try:
+            for _ in range(_FILE_READY_ATTEMPTS):
+                state = str(file_data.get("state") or "")
+                if state == "ACTIVE":
+                    uri = str(file_data.get("uri") or "")
+                    if not uri:
+                        raise RuntimeError("Gemini active file has no URI")
+                    ready = True
+                    return name, uri, len(media)
+                if state == "FAILED":
+                    raise RuntimeError("Gemini rejected the uploaded behavior video")
+                await asyncio.sleep(1)
+                status = await self._client.get(
+                    f"{_GEMINI_API_ROOT}/{name}",
+                    params={"key": self._api_key},
+                )
+                status.raise_for_status()
+                file_data = status.json()
 
-        raise TimeoutError("Gemini video processing did not become ACTIVE")
+            raise TimeoutError("Gemini video processing did not become ACTIVE")
+        finally:
+            if not ready:
+                # A provider copy must not survive a failed/aborted readiness poll.
+                await asyncio.shield(self._delete_video_file(name))
 
     async def _delete_video_file(self, name: str) -> None:
         try:
@@ -332,8 +347,18 @@ def _extract_text(payload: dict[str, Any]) -> str:
     return text
 
 
-def _estimate_gemini_cost(usage_meta: dict[str, Any]) -> float:
-    # Rough placeholder rates; real billing uses provider invoices + cost meter.
+def _estimate_gemini_cost(
+    usage_meta: dict[str, Any],
+    *,
+    input_usd_per_million: float,
+    output_usd_per_million: float,
+    safety_margin: float,
+) -> float:
     inn = int(usage_meta.get("promptTokenCount") or 0)
-    out = int(usage_meta.get("candidatesTokenCount") or 0)
-    return round((inn * 0.00000025) + (out * 0.000001), 6)
+    out = int(usage_meta.get("candidatesTokenCount") or 0) + int(
+        usage_meta.get("thoughtsTokenCount") or 0
+    )
+    listed_cost = (
+        inn * input_usd_per_million + out * output_usd_per_million
+    ) / 1_000_000
+    return round(listed_cost * safety_margin, 6)

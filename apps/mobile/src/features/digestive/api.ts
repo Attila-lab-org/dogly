@@ -27,6 +27,15 @@ export type FecalCompleteResponse = {
   status: string;
 };
 
+export type DigestiveSummary = {
+  dog_id: string;
+  rolling_score: number | null;
+  variability: number | null;
+  data_sufficiency: 'insufficient' | 'low' | 'sufficient';
+  recent_trend: 'improving' | 'worsening' | 'stable' | null;
+  safety_flags: ApiDigestiveEvent['safety_flags'];
+};
+
 export async function initFecalCapture(body: {
   dog_id: string;
   client_request_id: string;
@@ -53,6 +62,12 @@ export async function getDigestiveEvent(
   eventId: string,
 ): Promise<ApiDigestiveEvent> {
   return api.get<ApiDigestiveEvent>(`/v1/digestive/events/${eventId}`);
+}
+
+export async function getDigestiveSummary(
+  dogId: string,
+): Promise<DigestiveSummary> {
+  return api.get<DigestiveSummary>(`/v1/dogs/${dogId}/digestive-summary`);
 }
 
 export async function updateDigestiveContext(

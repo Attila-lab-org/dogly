@@ -3,7 +3,10 @@ import {
   ALLOWED_TRANSITIONS,
   createUploadQueue,
   InvalidTransitionError,
+  MAX_UPLOAD_RETRIES,
   markUploadsCompletedForEvent,
+  recordUploadFailure,
+  uploadRetryDelayMs,
   UploadQueueDatabase,
 } from '../lib/uploadQueue';
 import { MEDIA_UPLOAD_STATES } from '../contracts/types';
@@ -15,12 +18,15 @@ function createFakeDb(): UploadQueueDatabase {
     exec: () => {},
     run(sql, params = []) {
       if (sql.startsWith('INSERT INTO pending_uploads')) {
-        const [id, user_id, dog_id, domain, local_uri, client_request_id, created_at, updated_at] =
-          params as string[];
+        const [
+          id, user_id, dog_id, domain, local_uri, client_request_id,
+          duration_ms, has_audio, content_type, created_at, updated_at,
+        ] = params as string[];
         rows.set(id, {
           id, user_id, dog_id, domain, local_uri,
           state: 'local_pending', client_request_id,
           event_id: null, upload_url: null, upload_url_expires_at: null,
+          duration_ms, has_audio, content_type, capture_id: null,
           retry_count: 0, last_error: null, created_at, updated_at,
         });
         return { changes: 1 };
@@ -44,10 +50,18 @@ function createFakeDb(): UploadQueueDatabase {
         return { changes: 1 };
       }
       if (sql.startsWith('UPDATE pending_uploads')) {
-        const [state, event_id, upload_url, upload_url_expires_at, last_error, updated_at, id] =
-          params as [string, string | null, string | null, string | null, string | null, string, string];
+        const [
+          state, event_id, upload_url, upload_url_expires_at, capture_id,
+          last_error, updated_at, id,
+        ] = params as [
+          string, string | null, string | null, string | null, string | null,
+          string | null, string, string,
+        ];
         const r = rows.get(id)!;
-        Object.assign(r, { state, event_id, upload_url, upload_url_expires_at, last_error, updated_at });
+        Object.assign(r, {
+          state, event_id, upload_url, upload_url_expires_at, capture_id,
+          last_error, updated_at,
+        });
         return { changes: 1 };
       }
       if (sql.startsWith('DELETE FROM pending_uploads')) {
@@ -116,6 +130,25 @@ describe('uploadQueue — macchina a stati media (sez. 5.3)', () => {
     expect(done.state).toBe('completed');
     expect(done.eventId).toBe('evt-1');
     expect(q.listActive('u1')).toHaveLength(0);
+  });
+
+  it('persiste i metadati necessari dopo il riavvio', () => {
+    const q = makeQueue();
+    q.enqueue({
+      ...baseInput,
+      durationMs: 12_345,
+      hasAudio: false,
+      contentType: 'video/quicktime',
+    });
+    q.transitionTo('up1', 'upload_initializing');
+    q.transitionTo('up1', 'uploading', { captureId: 'capture-1' });
+
+    expect(q.get('up1')).toMatchObject({
+      durationMs: 12_345,
+      hasAudio: false,
+      contentType: 'video/quicktime',
+      captureId: 'capture-1',
+    });
   });
 
   it('rifiuta transizioni non consentite', () => {
@@ -189,5 +222,25 @@ describe('uploadQueue — macchina a stati media (sez. 5.3)', () => {
     expect(
       activeUploadForUri(q, 'u1', 'BEHAVIOR', baseInput.localUri)?.id,
     ).toBe('up1');
+  });
+
+  it('applica backoff e rende terminale un upload dopo il retry cap', () => {
+    const q = makeQueue();
+    q.enqueue(baseInput);
+    q.transitionTo('up1', 'upload_initializing');
+
+    for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt += 1) {
+      const result = recordUploadFailure(q, 'up1', 'offline');
+      if (attempt < MAX_UPLOAD_RETRIES) {
+        expect(result.state).toBe('recoverable_error');
+        expect(result.retryCount).toBe(attempt);
+        q.transitionTo('up1', 'upload_initializing');
+      } else {
+        expect(result.state).toBe('terminal_error');
+      }
+    }
+    expect(q.listActive('u1')).toHaveLength(0);
+    expect(uploadRetryDelayMs(1)).toBe(5_000);
+    expect(uploadRetryDelayMs(99)).toBe(120_000);
   });
 });

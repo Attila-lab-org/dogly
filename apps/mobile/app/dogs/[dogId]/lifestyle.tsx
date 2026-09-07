@@ -33,9 +33,11 @@ export default function LifestyleScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     if (!lifestyle.profile) return;
+    setShowIntro(false);
     setDraft({
       activity: lifestyle.profile.activity,
       sleep: lifestyle.profile.sleep,
@@ -63,6 +65,21 @@ export default function LifestyleScreen() {
     return (
       <ScreenContainer>
         <ErrorState title="Un momento" message="Sto aprendo le sue abitudini…" />
+      </ScreenContainer>
+    );
+  }
+
+  if (showIntro && !lifestyle.profile) {
+    return (
+      <ScreenContainer contentStyle={styles.introPage}>
+        <DogIllustration mood="welcome" size={210} />
+        <Text style={styles.title}>Conosciamo meglio {dog.name}</Text>
+        <Text style={styles.subtitle}>
+          Qualche abitudine può rendere le letture più personali. È tutto
+          facoltativo e puoi cambiare idea quando vuoi.
+        </Text>
+        <Button title="Inizia" onPress={() => setShowIntro(false)} />
+        <Button title="Non ora" variant="outline" onPress={() => router.back()} />
       </ScreenContainer>
     );
   }
@@ -130,6 +147,30 @@ export default function LifestyleScreen() {
             setDraft((current) => ({ ...current, timeAlone }))
           }
         />
+
+        {lifestyle.profile?.feedingLabel ? (
+          <Card style={styles.feedingCard}>
+            <View style={styles.cardIcon}>
+              <Ionicons name="nutrition-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.cardCopy}>
+              <Text style={styles.cardTitle}>Alimentazione attuale</Text>
+              <Text style={styles.cardValue}>
+                {lifestyle.profile.feedingLabel}
+              </Text>
+            </View>
+          </Card>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(`/dogs/${dogId}/tell` as never)}
+          style={styles.voiceLink}
+        >
+          <Ionicons name="mic-outline" size={20} color={colors.primary} />
+          <Text style={styles.voiceLinkText}>Oppure raccontamelo a voce</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
         <ChoiceCard
           sectionKey="social"
           icon="people-outline"
@@ -244,6 +285,11 @@ function ChoiceCard<T extends string>({
 }
 
 const styles = StyleSheet.create({
+  introPage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
   topBar: {
     minHeight: 56,
     paddingHorizontal: spacing.lg,
@@ -268,6 +314,26 @@ const styles = StyleSheet.create({
   intro: {
     alignItems: 'center',
     marginBottom: spacing.md,
+  },
+  feedingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  voiceLink: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+  },
+  voiceLinkText: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
   },
   title: {
     color: colors.text,

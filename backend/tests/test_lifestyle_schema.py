@@ -45,6 +45,11 @@ def test_routine_accepts_quantified_fields():
                 "social_contacts": ["cane del vicino"],
                 "usual_triggers": ["campanello"],
                 "recent_changes": ["trasloco la scorsa settimana"],
+                "today_vs_usual": {
+                    "concern": "off",
+                    "note": "oggi non è come al solito",
+                    "day": "2026-09-07",
+                },
             },
             "confirm": True,
         }
@@ -52,6 +57,7 @@ def test_routine_accepts_quantified_fields():
     dump = payload.routine_update()
     assert dump["meal_schedule"]["meals_per_day"] == 2
     assert dump["recent_changes"] == ["trasloco la scorsa settimana"]
+    assert dump["today_vs_usual"]["concern"] == "off"
 
 
 @pytest.mark.parametrize(

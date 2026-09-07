@@ -253,13 +253,50 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
             where user_id = :uid
             order by created_at, id
         """,
+        "behavior_captures": """
+            select id, dog_id, client_request_id, duration_ms, has_audio, bytes,
+                   content_type, context_bucket, upload_completed,
+                   retention_state, expires_at, created_at
+            from public.behavior_captures
+            where user_id = :uid
+            order by created_at, id
+        """,
         "behavior_feedback": "select * from public.behavior_feedback where user_id = :uid order by created_at",
+        "behavior_observations": """
+            select o.*
+            from internal.behavior_observations o
+            join public.behavior_events e on e.id = o.event_id
+            where e.user_id = :uid
+            order by o.created_at, o.event_id
+        """,
+        "behavior_interpretations": """
+            select i.*
+            from internal.behavior_interpretations i
+            join public.behavior_events e on e.id = i.event_id
+            where e.user_id = :uid
+            order by i.created_at, i.event_id
+        """,
+        "behavior_outcomes": """
+            select o.*
+            from internal.behavior_outcomes o
+            join public.behavior_events e on e.id = o.event_id
+            where e.user_id = :uid
+            order by o.observed_at, o.id
+        """,
         "personal_patterns": """
             select p.*
             from public.personal_patterns p
             join public.dogs d on d.id = p.dog_id
             where d.owner_id = :uid
             order by p.last_seen nulls last, p.id
+        """,
+        "pattern_event_links": """
+            select l.*
+            from internal.pattern_event_links l
+            join public.personal_patterns p on p.id = l.pattern_id
+            join public.dogs d on d.id = p.dog_id
+            where d.owner_id = :uid
+            order by l.created_at, l.pattern_id, l.event_id
         """,
         "fecal_events": """
             select id, dog_id, client_request_id, image_quality, fecal_score_estimate,
@@ -287,6 +324,27 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
             where d.owner_id = :uid
             order by fp.start_at, fp.id
         """,
+        "digestive_baselines": """
+            select b.*
+            from public.digestive_baselines b
+            join public.dogs d on d.id = b.dog_id
+            where d.owner_id = :uid
+            order by b.calculated_at, b.id
+        """,
+        "digestive_insights": """
+            select i.*
+            from public.digestive_insights i
+            join public.dogs d on d.id = i.dog_id
+            where d.owner_id = :uid
+            order by i.created_at, i.id
+        """,
+        "digestive_observations": """
+            select o.*
+            from internal.digestive_observations o
+            join public.fecal_events f on f.id = o.fecal_event_id
+            where f.user_id = :uid
+            order by o.created_at, o.fecal_event_id
+        """,
         "consents": "select * from public.user_consents where user_id = :uid order by created_at, id",
         "lifestyle_profiles": """
             select * from public.dog_lifestyle_profiles
@@ -303,6 +361,91 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
             where user_id = :uid order by created_at, id
         """,
         "subscriptions": "select * from public.subscriptions where user_id = :uid",
+        "usage_ledgers": """
+            select * from public.usage_ledgers
+            where user_id = :uid order by period_start, id
+        """,
+        "gallery_visibility": """
+            select v.*
+            from public.dog_profile_visibility v
+            join public.dogs d on d.id = v.dog_id
+            where d.owner_id = :uid
+            order by v.dog_id
+        """,
+        "gallery_albums": """
+            select * from public.dog_albums
+            where owner_id = :uid order by created_at, id
+        """,
+        "gallery_photos": """
+            select id, dog_id, album_id, caption, visibility, taken_at,
+                   created_at, deleted_at
+            from public.dog_photos
+            where owner_id = :uid order by created_at, id
+        """,
+        "care_events": """
+            select * from public.care_events
+            where user_id = :uid
+            order by scheduled_at, id
+        """,
+        "devices": """
+            select * from public.device_installations
+            where user_id = :uid order by created_at, id
+        """,
+        "dog_profile_versions": """
+            select v.*
+            from internal.dog_profile_versions v
+            join public.dogs d on d.id = v.dog_id
+            where d.owner_id = :uid
+            order by v.created_at, v.id
+        """,
+        "signal_experiments": """
+            select * from public.signal_experiments
+            where user_id = :uid order by created_at, id
+        """,
+        "signal_map_entries": """
+            select * from public.signal_map_entries
+            where user_id = :uid
+            order by dog_id, category
+        """,
+        "knowledge_scores": """
+            select k.*
+            from public.knowledge_scores k
+            join public.dogs d on d.id = k.dog_id
+            where d.owner_id = :uid
+            order by k.calculated_at, k.id
+        """,
+        "analysis_jobs": """
+            select id, job_type, domain, event_id, status, attempt_count,
+                   last_error_code, scheduled_at, started_at, completed_at,
+                   created_at, updated_at
+            from internal.analysis_jobs j
+            where exists (
+              select 1 from public.behavior_events e
+              where e.id = j.event_id and e.user_id = :uid
+            )
+            or exists (
+              select 1 from public.fecal_events f
+              where f.id = j.event_id and f.user_id = :uid
+            )
+            or exists (
+              select 1 from public.food_products p
+              where p.id = j.event_id and p.owner_id = :uid
+            )
+            order by created_at, id
+        """,
+        "ai_cost_events": """
+            select id, provider, model, operation, domain, event_id,
+                   input_tokens, output_tokens, media_bytes, latency_ms,
+                   cost_usd, created_at
+            from internal.ai_cost_events
+            where user_id = :uid order by created_at, id
+        """,
+        "usage_reservations": """
+            select id, reference_id, domain, units, state, reason,
+                   created_at, updated_at
+            from internal.usage_reservations
+            where user_id = :uid order by created_at, id
+        """,
     }
     payload: dict[str, Any] = {"user_id": user_id, "generated_at": now_utc().isoformat()}
     async with engine.connect() as conn:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 
 from app.api.deps import AppState, StateDep, UserIdDep
@@ -68,7 +70,11 @@ async def list_albums(dog_id: str, state: StateDep, user_id: UserIdDep) -> DogAl
     else:
         items = gallery_domain.list_albums(state.store, user_id=user_id, dog_id=dog_id)
     return DogAlbumListResponse(
-        items=[await album_with_cover(item, state, user_id) for item in items]
+        items=list(
+            await asyncio.gather(
+                *(album_with_cover(item, state, user_id) for item in items)
+            )
+        )
     )
 
 
@@ -100,7 +106,11 @@ async def list_photos(album_id: str, state: StateDep, user_id: UserIdDep) -> Dog
         items = await gallery_db.list_photos(state.engine, user_id=user_id, album_id=album_id)
     else:
         items = gallery_domain.list_photos(state.store, user_id=user_id, album_id=album_id)
-    return DogPhotoListResponse(items=[await photo_with_url(photo, state) for photo in items])
+    return DogPhotoListResponse(
+        items=list(
+            await asyncio.gather(*(photo_with_url(photo, state) for photo in items))
+        )
+    )
 
 
 @router.post(

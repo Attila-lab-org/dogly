@@ -364,6 +364,56 @@ async def test_gemini_prompt_carries_closed_allowed_values(monkeypatch):
     assert contract.vocalization.type_candidates == [VocalizationType.GROWL]
 
 
+async def test_gemini_failed_file_is_deleted_before_returning(monkeypatch):
+    from app.config import Settings
+    from app.providers import gemini_observer
+
+    deleted: list[str] = []
+
+    class FailedFileClient(_FakeGeminiClient):
+        async def post(self, url, params=None, json=None, headers=None, content=None):
+            if url == "https://upload.test/session":
+                return _FakeGeminiResponse(
+                    {
+                        "file": {
+                            "name": "files/failed-video",
+                            "uri": "https://generativelanguage.googleapis.com/v1beta/files/failed-video",
+                            "state": "FAILED",
+                        }
+                    }
+                )
+            return await super().post(
+                url,
+                params=params,
+                json=json,
+                headers=headers,
+                content=content,
+            )
+
+        async def delete(self, url, params=None):
+            deleted.append(url)
+            return _FakeGeminiResponse({})
+
+    fake_client = FailedFileClient({}, [])
+    monkeypatch.setattr(
+        gemini_observer.httpx, "AsyncClient", lambda *a, **k: fake_client
+    )
+    observer = gemini_observer.GeminiVideoObserver(
+        Settings(app_env="local", gemini_api_key="test-key")
+    )
+
+    with pytest.raises(RuntimeError, match="rejected"):
+        await observer._upload_video_file(
+            video_ref="https://example.test/clip.webm",
+            content_type="video/webm",
+            request_id="gem-cleanup-test",
+        )
+
+    assert deleted == [
+        "https://generativelanguage.googleapis.com/v1beta/files/failed-video"
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Task 3 — copertura a punteggio
 # ---------------------------------------------------------------------------

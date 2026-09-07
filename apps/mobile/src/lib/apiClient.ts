@@ -1,4 +1,5 @@
 import { getAccessToken } from './secureStore';
+import { createRequestTimeout } from './requestTimeout';
 
 /**
  * API client per il backend pubblico (FastAPI deployato su Vercel,
@@ -39,7 +40,11 @@ export interface RequestOptions {
   /** Salta l'header Authorization (route pubbliche) */
   skipAuth?: boolean;
   headers?: Record<string, string>;
+  /** Evita loading infiniti su reti mobili degradate. */
+  timeoutMs?: number;
 }
+
+export const DEFAULT_API_TIMEOUT_MS = 15_000;
 
 async function buildHeaders(
   skipAuth: boolean,
@@ -60,12 +65,39 @@ export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, skipAuth, headers } = options;
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method,
-    headers: await buildHeaders(skipAuth ?? false, headers),
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const {
+    method = 'GET',
+    body,
+    skipAuth,
+    headers,
+    timeoutMs = DEFAULT_API_TIMEOUT_MS,
+  } = options;
+  const timeout = createRequestTimeout(timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method,
+      headers: await buildHeaders(skipAuth ?? false, headers),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: timeout.controller.signal,
+    });
+  } catch (error) {
+    if (timeout.controller.signal.aborted) {
+      throw new ApiError(
+        0,
+        'REQUEST_TIMEOUT',
+        'La richiesta sta impiegando troppo tempo. Riprova.',
+      );
+    }
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      'Non riesco a raggiungere Dogly. Controlla la connessione e riprova.',
+    );
+  } finally {
+    timeout.clear();
+  }
 
   if (!response.ok) {
     let code = 'UNKNOWN';

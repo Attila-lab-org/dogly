@@ -19,6 +19,7 @@ export type AnalysisCareContext =
       source: 'checkin';
       concern: 'soft' | 'off';
       note: string;
+      dogId: string;
     }
   | null;
 
@@ -112,7 +113,7 @@ export function dismissWelcomeCheckIn() {
   emit();
 }
 
-export function markCheckInSoftOk() {
+export function markCheckInSoftOk(dogId = '') {
   state = {
     ...state,
     welcomePending: false,
@@ -120,6 +121,7 @@ export function markCheckInSoftOk() {
       source: 'checkin',
       concern: 'soft',
       note: 'Buon segno: confermiamolo con un breve video quando vuoi.',
+      dogId,
     },
   };
   emit();
@@ -127,13 +129,14 @@ export function markCheckInSoftOk() {
 }
 
 /** Tiene il modal aperto (welcomePending) per lo step CTA. */
-export function markCheckInNeedsCare(dogName: string) {
+export function markCheckInNeedsCare(dogName: string, dogId = '') {
   state = {
     ...state,
     analysisContext: {
       source: 'checkin',
       concern: 'off',
       note: `Hai notato che ${dogName} non è come al solito.`,
+      dogId,
     },
   };
   emit();

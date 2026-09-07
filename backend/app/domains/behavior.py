@@ -12,6 +12,7 @@ from app.contracts.api import BehaviorCaptureInitRequest, BehaviorFeedbackReques
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus
 from app.domains.billing import QuotaService
+from app.domains.consents import get_consents
 from app.domains.dogs import get_owned_dog
 from app.domains.models import (
     AnalysisJobRec,
@@ -189,6 +190,10 @@ def record_feedback(
     """Three-way feedback (sez. 6.1). Upsert per (event, user); owner only.
     Feedback is a useful label, not ground truth (sez. 17.1)."""
     get_event(store, user_id=user_id, event_id=event_id)
+    research_eligible = (
+        payload.correction_label is not None
+        and get_consents(store, user_id).research_training
+    )
     existing = store.behavior_feedback.get(event_id)
     if existing and existing.user_id == user_id:
         updated = existing.model_copy(
@@ -196,6 +201,7 @@ def record_feedback(
                 "value": payload.value,
                 "correction_label": payload.correction_label,
                 "corrected_context": payload.corrected_context,
+                "research_eligible": research_eligible,
                 "updated_at": now_utc(),
             }
         )
@@ -207,6 +213,7 @@ def record_feedback(
         value=payload.value,
         correction_label=payload.correction_label,
         corrected_context=payload.corrected_context,
+        research_eligible=research_eligible,
         created_at=now_utc(),
         updated_at=now_utc(),
     )

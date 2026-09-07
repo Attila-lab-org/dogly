@@ -17,6 +17,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import { File } from 'expo-file-system';
+import { deleteAsync } from 'expo-file-system/legacy';
 
 import {
   Button,
@@ -98,23 +99,30 @@ export default function TellDogScreen() {
       if (recorderState.isRecording) {
         await recorder.stop();
         if (!recorder.uri) throw new Error('missing recording');
-        if (useMock) {
-          setError(
-            'La trascrizione vocale usa il servizio reale. In questa anteprima puoi scrivere.',
+        const recordingUri = recorder.uri;
+        try {
+          if (useMock) {
+            setError(
+              'La trascrizione vocale usa il servizio reale. In questa anteprima puoi scrivere.',
+            );
+            return;
+          }
+          setWorking(true);
+          const audioBase64 = await new File(recordingUri).base64();
+          const contentType =
+            Platform.OS === 'web'
+              ? 'audio/webm'
+              : Platform.OS === 'ios'
+                ? 'audio/m4a'
+                : 'audio/mp4';
+          applyDraft(
+            await prepareOwnerStoryAudio(dogId, audioBase64, contentType),
           );
-          return;
+        } finally {
+          await deleteAsync(recordingUri, { idempotent: true }).catch(() => {
+            // Il file temporaneo può essere già stato rimosso dal sistema.
+          });
         }
-        setWorking(true);
-        const audioBase64 = await new File(recorder.uri).base64();
-        const contentType =
-          Platform.OS === 'web'
-            ? 'audio/webm'
-            : Platform.OS === 'ios'
-              ? 'audio/m4a'
-              : 'audio/mp4';
-        applyDraft(
-          await prepareOwnerStoryAudio(dogId, audioBase64, contentType),
-        );
         return;
       }
       const permission = await requestRecordingPermissionsAsync();
@@ -173,7 +181,7 @@ export default function TellDogScreen() {
       <StackScreenHeader
         title={
           phase === 'compose'
-            ? `Dimmi qualcosa di ${dog.name}`
+            ? `Raccontami di ${dog.name}`
             : 'Controlla il racconto'
         }
       />
@@ -182,7 +190,7 @@ export default function TellDogScreen() {
         <>
           <View style={styles.intro}>
             <DogIllustration mood="welcome" size={170} />
-            <Text style={styles.title}>Cosa vuoi che sappia di {dog.name}?</Text>
+            <Text style={styles.title}>Dimmi cosa hai notato</Text>
             <Text style={styles.subtitle}>
               Puoi parlare oppure scrivere. Prima di salvare ti mostrerò ciò che
               ho capito.
@@ -278,6 +286,25 @@ export default function TellDogScreen() {
               />
             </Card>
           ))}
+          {facts.some((fact) => fact.category === 'HEALTH') ? (
+            <View style={styles.healthNotice} testID="owner-story-health-notice">
+              <Ionicons
+                name="medkit-outline"
+                size={20}
+                color={colors.warning}
+              />
+              <View style={styles.healthNoticeCopy}>
+                <Text style={styles.healthNoticeTitle}>
+                  Potrebbe essere utile parlarne con il veterinario
+                </Text>
+                <Text style={styles.healthNoticeText}>
+                  Salvo ciò che hai raccontato, ma Dogly non può valutare una
+                  causa medica. Se il cambiamento è nuovo, intenso o persiste,
+                  chiedi un parere al veterinario.
+                </Text>
+              </View>
+            </View>
+          ) : null}
           <Button
             title="Conferma e salva"
             loading={working}
@@ -392,6 +419,28 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     lineHeight: typography.size.md * typography.lineHeight.normal,
     textAlignVertical: 'top',
+  },
+  healthNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.warningSoft,
+  },
+  healthNoticeCopy: {
+    flex: 1,
+  },
+  healthNoticeTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  healthNoticeText: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   error: {
     color: colors.danger,
