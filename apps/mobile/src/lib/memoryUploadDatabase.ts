@@ -97,6 +97,8 @@ export function createMemoryUploadDatabase(): UploadQueueDatabase {
       let result = all;
       if (sql.includes('WHERE id = ?')) {
         result = all.filter((row) => row.id === params[0]);
+      } else if (sql.includes('WHERE event_id = ?')) {
+        result = all.filter((row) => row.event_id === params[0]);
       } else if (sql.includes('state NOT IN')) {
         const excluded = params.slice(1) as string[];
         result = all.filter(

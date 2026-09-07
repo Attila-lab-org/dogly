@@ -8,7 +8,13 @@ import { Platform } from 'react-native';
 
 import { completeFecalCapture, initFecalCapture } from './api';
 import { putSignedUpload } from '../../lib/signedUpload';
-import { discardUploadsForUri, getUploadQueue } from '../../lib/uploadQueue';
+import {
+  activeUploadForUri,
+  discardUploadsForUri,
+  getUploadQueue,
+  markUploadsCompletedForEvent,
+} from '../../lib/uploadQueue';
+import { contentTypeFromUri } from '../dogs/photoUri';
 
 const draining = new Set<string>();
 
@@ -78,7 +84,7 @@ export async function processPendingDigestiveUpload(
       item = queue.transitionTo(id, 'upload_initializing');
     }
 
-    const contentType = 'image/jpeg';
+    const contentType = contentTypeFromUri(item.localUri);
 
     if (
       item.state === 'upload_initializing' ||
@@ -165,6 +171,18 @@ export async function enqueueAndUploadDigestivePhoto(
   input: EnqueueDigestivePhotoInput,
 ): Promise<{ uploadId: string; eventId: string }> {
   const queue = getUploadQueue();
+  const existing = activeUploadForUri(
+    queue,
+    input.userId,
+    'DIGESTIVE',
+    input.localUri,
+  );
+  if (existing) {
+    const eventId = await processPendingDigestiveUpload(existing.id);
+    if (!eventId) throw new Error('Retry upload digestivo senza eventId');
+    return { uploadId: existing.id, eventId };
+  }
+
   const uploadId = newId('upl');
   const clientRequestId = newId('crid');
 
@@ -182,6 +200,10 @@ export async function enqueueAndUploadDigestivePhoto(
     throw new Error('Upload completato senza eventId');
   }
   return { uploadId, eventId };
+}
+
+export function markDigestiveUploadCompletedForEvent(eventId: string): void {
+  markUploadsCompletedForEvent(getUploadQueue(), eventId);
 }
 
 /**

@@ -19,6 +19,7 @@ import logging
 
 from app.api.deps import AppState
 from app.contracts.errors import ErrorCode
+from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import (
     BEHAVIOR_EVENT_TRANSITIONS,
     ELIGIBLE_PATTERN_STATES,
@@ -203,46 +204,61 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     event.attempt_count += 1
     quota = QuotaService(state.store, engine=state.engine)
 
-    # QUEUED -> OBSERVING (or FAILED_RETRYABLE -> OBSERVING retry).
-    transition(event, BehaviorEventStatus.OBSERVING)
-    if state.engine is not None:
-        await behavior_db.save_event_state(state.engine, event)
-    try:
-        video_ref = capture.storage_path
-        # Real observers need an HTTPS media URI; mint a short-lived signed read URL.
-        create_read = getattr(state.storage, "create_signed_read_url", None)
-        if callable(create_read) and state.settings.observer_provider != "mock":
-            from app.domains.behavior import BEHAVIOR_BUCKET
+    observation: ObservationContract | None = None
+    if (
+        event.status == BehaviorEventStatus.INTERPRETING
+        and event.observation_json
+    ):
+        # Resume after a crash between observer and reasoner without paying for
+        # the same video observation twice.
+        observation = ObservationContract.model_validate(event.observation_json)
+    else:
+        # QUEUED/FAILED_RETRYABLE enter OBSERVING. An OBSERVING redelivery
+        # resumes in place; old INTERPRETING rows without an observation restart.
+        if event.status != BehaviorEventStatus.OBSERVING:
+            if event.status == BehaviorEventStatus.INTERPRETING:
+                event.status = BehaviorEventStatus.OBSERVING
+            else:
+                transition(event, BehaviorEventStatus.OBSERVING)
+        if state.engine is not None:
+            await behavior_db.save_event_state(state.engine, event)
+        try:
+            video_ref = capture.storage_path
+            # Real observers need an HTTPS media URI; mint a short-lived signed read URL.
+            create_read = getattr(state.storage, "create_signed_read_url", None)
+            if callable(create_read) and state.settings.observer_provider != "mock":
+                from app.domains.behavior import BEHAVIOR_BUCKET
 
-            video_ref = await create_read(
-                bucket=BEHAVIOR_BUCKET,
-                path=capture.storage_path,
-                ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 600),
+                video_ref = await create_read(
+                    bucket=BEHAVIOR_BUCKET,
+                    path=capture.storage_path,
+                    ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 600),
+                )
+            observation, obs_usage = await state.observer.observe(
+                video_ref=video_ref,
+                content_type=capture.content_type,
+                policy_version=INTERPRETATION_POLICY_VERSION,
+                duration_ms=capture.duration_ms,
             )
-        observation, obs_usage = await state.observer.observe(
-            video_ref=video_ref,
-            content_type=capture.content_type,
-            policy_version=INTERPRETATION_POLICY_VERSION,
-            duration_ms=capture.duration_ms,
+        except TimeoutError:
+            return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
+        except BudgetExceededError:
+            return await _fail(
+                state,
+                event,
+                ErrorCode.AI_BUDGET_EXCEEDED,
+                retryable=False,
+            )
+        except Exception:  # noqa: BLE001 -- provider failures become durable retries
+            return await _fail(state, event, ErrorCode.PROCESSING_FAILED, retryable=True)
+        await state.cost_meter.record(
+            usage=obs_usage,
+            operation="observer.observe",
+            domain=AnalysisDomain.BEHAVIOR,
+            event_id=event.id,
+            user_id=event.user_id,
         )
-    except TimeoutError:
-        return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
-    except BudgetExceededError:
-        # Budget exhaustion is operational, not transient (sez. 25):
-        # always a NON-retryable terminal failure — retrying would burn
-        # budget. Never raises RetryableTaskError.
-        return await _fail(state, event, ErrorCode.AI_BUDGET_EXCEEDED, retryable=False)
-    except Exception:  # noqa: BLE001 -- deliberate: any non-timeout provider/observer
-        # failure maps to a retryable job failure (sez. 22), never crashes the worker.
-        return await _fail(state, event, ErrorCode.PROCESSING_FAILED, retryable=True)
-    await state.cost_meter.record(
-        usage=obs_usage,
-        operation="observer.observe",
-        domain=AnalysisDomain.BEHAVIOR,
-        event_id=event.id,
-        user_id=event.user_id,
-    )
-    event.observation_json = observation.model_dump(mode="json")
+        event.observation_json = observation.model_dump(mode="json")
 
     # Server/provider quality gate (sez. 13): dog not observable -> reject
     # before meaningful AI work and refund the reservation (sez. 7.3).
@@ -258,8 +274,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             await behavior_db.save_event_state(state.engine, event)
         return {"event_id": event.id, "status": event.status.value}
 
-    # OBSERVING -> INTERPRETING
-    transition(event, BehaviorEventStatus.INTERPRETING)
+    # Persist the observer checkpoint before entering the paid reasoner step.
+    if event.status != BehaviorEventStatus.INTERPRETING:
+        transition(event, BehaviorEventStatus.INTERPRETING)
+        if state.engine is not None:
+            await behavior_db.save_event_state(state.engine, event)
     try:
         dog_context = await _dog_context(state, event)
         knowledge_context = retrieve_evidence(

@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, EmptyState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
@@ -29,6 +29,7 @@ export default function PhotoViewerScreen() {
     albumId: string;
   }>();
   const { dog } = useDogProfile();
+  const queryClient = useQueryClient();
   const photosQuery = useQuery({
     queryKey: ['gallery-photos', albumId],
     queryFn: () => fetchAlbumPhotos(albumId!),
@@ -78,6 +79,9 @@ export default function PhotoViewerScreen() {
           try {
             await updateAlbumPhotoVisibility(base.id, next);
             setVisibility(next);
+            await queryClient.invalidateQueries({
+              queryKey: ['gallery-photos', albumId],
+            });
             Alert.alert(
               next === 'published' ? 'Foto visibile' : 'Foto privata',
               PHOTO_COPY.publishedHint,

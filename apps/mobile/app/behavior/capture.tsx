@@ -45,7 +45,7 @@ import { isApiConfigured } from '@/features/auth/env';
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { loading: sessionLoading, userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const params = useLocalSearchParams<{ from?: string }>();
   const fromCheckIn =
@@ -296,6 +296,7 @@ export default function BehaviorCaptureScreen() {
     if (uploadStartedRef.current) return;
     const uri = pendingUriRef.current;
     if (!uri) return;
+    if (!usingMockGate && isApiConfigured() && sessionLoading) return;
 
     uploadStartedRef.current = true;
     setUploading(true);
@@ -303,9 +304,12 @@ export default function BehaviorCaptureScreen() {
 
     (async () => {
       try {
-        if (usingMockGate || !isApiConfigured() || !userId || !dog.id) {
+        if (usingMockGate || !isApiConfigured()) {
           router.replace('/behavior/processing/evt-processing');
           return;
+        }
+        if (!userId || !dog.id) {
+          throw new Error('Sessione non pronta');
         }
         const durationMs = Math.max(
           CAPTURE_MIN_SECONDS * 1000,
@@ -336,6 +340,7 @@ export default function BehaviorCaptureScreen() {
     state.phase,
     state.audioDegraded,
     usingMockGate,
+    sessionLoading,
     userId,
     dog.id,
     micGranted,
@@ -344,8 +349,12 @@ export default function BehaviorCaptureScreen() {
 
   const retryUpload = async () => {
     const uri = pendingUriRef.current;
-    if (!uri || !userId || !dog.id) {
+    if (!uri) {
       retake();
+      return;
+    }
+    if (!userId || !dog.id) {
+      setUploadError('Sessione non disponibile. Attendi e riprova.');
       return;
     }
     setUploading(true);

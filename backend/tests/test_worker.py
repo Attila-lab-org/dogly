@@ -5,6 +5,7 @@ commit/refund semantics; internal auth on workflow routes."""
 import httpx
 import pytest
 
+from app.contracts.taxonomy import BehaviorEventStatus
 from app.worker.handlers import (
     MAX_TASK_ATTEMPTS,
     RetryableTaskError,
@@ -81,6 +82,46 @@ async def test_worker_duplicate_delivery_is_noop(worker_client: httpx.AsyncClien
     )
     assert r1.json()["status"] == "COMPLETED"
     assert r2.json().get("noop") is True
+
+
+async def test_worker_resumes_event_left_in_observing(
+    client, auth_headers, state
+):
+    event_id = await _queue_behavior_event(
+        client,
+        auth_headers,
+        "crid-resume-observing",
+    )
+    state.store.behavior_events[event_id].status = BehaviorEventStatus.OBSERVING
+
+    result = await process_behavior_event(state, event_id=event_id)
+
+    assert result["status"] == "COMPLETED"
+
+
+async def test_worker_resumes_interpreting_from_saved_observation(
+    client, auth_headers, state
+):
+    event_id = await _queue_behavior_event(
+        client,
+        auth_headers,
+        "crid-resume-interpreting",
+    )
+    event = state.store.behavior_events[event_id]
+    capture = state.store.captures[event.capture_id]
+    observation, _ = await state.observer.observe(
+        video_ref=capture.storage_path,
+        content_type=capture.content_type,
+        policy_version="test",
+        duration_ms=capture.duration_ms,
+    )
+    event.observation_json = observation.model_dump(mode="json")
+    event.status = BehaviorEventStatus.INTERPRETING
+    state.observer = TimeoutObserver()
+
+    result = await process_behavior_event(state, event_id=event_id)
+
+    assert result["status"] == "COMPLETED"
 
 
 async def test_worker_rejects_missing_or_wrong_internal_token(worker_client: httpx.AsyncClient):

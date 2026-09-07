@@ -196,26 +196,58 @@ async def complete_fecal_event(
     if not ok:
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Uploaded object failed validation.", retryable=True)
 
-    task_id = await queue.enqueue(
-        task_type="digestive_analysis",
-        payload={"event_id": event.id, "user_id": user_id},
-    )
-    job_id = _uuid_id()
-
+    # Claim atomically before enqueue to prevent duplicate paid workflows.
     async with engine.begin() as conn:
-        row = (
+        claimed = (
             await conn.execute(
                 text(
                     """
                     update public.fecal_events
                     set upload_completed = true, status = 'QUEUED'
                     where id = :id and user_id = :user_id
+                      and status in ('DRAFT', 'UPLOADING')
                     returning *
                     """
                 ),
                 {"id": event.id, "user_id": user_id},
             )
-        ).mappings().one()
+        ).mappings().first()
+        if not claimed:
+            current = (
+                await conn.execute(
+                    text(
+                        "select * from public.fecal_events where id = :id and user_id = :user_id"
+                    ),
+                    {"id": event.id, "user_id": user_id},
+                )
+            ).mappings().one()
+            return _fecal_from_row(current)
+    event = _fecal_from_row(claimed)
+
+    try:
+        task_id = await queue.enqueue(
+            task_type="digestive_analysis",
+            payload={"event_id": event.id, "user_id": user_id},
+        )
+    except Exception:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    update public.fecal_events
+                    set upload_completed = false, status = 'UPLOADING'
+                    where id = :id and status = 'QUEUED'
+                      and not exists (
+                        select 1 from internal.analysis_jobs where event_id = :id
+                      )
+                    """
+                ),
+                {"id": event.id},
+            )
+        raise
+
+    job_id = _uuid_id()
+    async with engine.begin() as conn:
         await conn.execute(
             text(
                 """
@@ -224,11 +256,14 @@ async def complete_fecal_event(
                 ) values (
                   :id, 'DIGESTIVE_ANALYSIS', 'DIGESTIVE', :event_id, 'PENDING', :task_id
                 )
+                on conflict (event_id) do update set
+                  task_id = excluded.task_id,
+                  updated_at = now()
                 """
             ),
             {"id": job_id, "event_id": event.id, "task_id": task_id},
         )
-    return _fecal_from_row(row)
+    return event
 
 
 async def get_fecal_event(engine: AsyncEngine, *, user_id: str, event_id: str) -> FecalEventRec:

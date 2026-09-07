@@ -99,6 +99,7 @@ export interface UploadQueue {
   /** Errore recuperabile: incrementa retryCount e salva lastError */
   markRecoverable(id: string, error: string): PendingUpload;
   listByUser(userId: string): PendingUpload[];
+  listByEvent(eventId: string): PendingUpload[];
   /** Upload che richiedono lavoro (non completati, non terminali) */
   listActive(userId: string): PendingUpload[];
   /**
@@ -200,6 +201,15 @@ export function createUploadQueue(db: UploadQueueDatabase): UploadQueue {
         .map(rowToUpload);
     },
 
+    listByEvent(eventId) {
+      return db
+        .all<Record<string, unknown>>(
+          'SELECT * FROM pending_uploads WHERE event_id = ? ORDER BY created_at ASC',
+          [eventId],
+        )
+        .map(rowToUpload);
+    },
+
     listActive(userId) {
       const placeholders = TERMINAL_STATES.map(() => '?').join(', ');
       return db
@@ -248,6 +258,30 @@ export function discardUploadsForUri(
     }
   }
   return removed;
+}
+
+export function activeUploadForUri(
+  queue: UploadQueue,
+  userId: string,
+  domain: AnalysisDomain,
+  localUri: string,
+): PendingUpload | undefined {
+  return queue
+    .listActive(userId)
+    .find((item) => item.domain === domain && item.localUri === localUri);
+}
+
+export function markUploadsCompletedForEvent(
+  queue: UploadQueue,
+  eventId: string,
+): number {
+  let completed = 0;
+  for (const item of queue.listByEvent(eventId)) {
+    if (item.state !== 'processing') continue;
+    queue.transitionTo(item.id, 'completed');
+    completed += 1;
+  }
+  return completed;
 }
 
 let defaultQueue: UploadQueue | null = null;

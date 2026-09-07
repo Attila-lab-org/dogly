@@ -11,7 +11,12 @@ import {
 } from './api';
 import { processPendingDigestiveUpload } from '../digestive/upload';
 import { putSignedUpload } from '../../lib/signedUpload';
-import { discardUploadsForUri, getUploadQueue } from '../../lib/uploadQueue';
+import {
+  activeUploadForUri,
+  discardUploadsForUri,
+  getUploadQueue,
+  markUploadsCompletedForEvent,
+} from '../../lib/uploadQueue';
 
 const draining = new Set<string>();
 let recoverStarted = false;
@@ -204,6 +209,18 @@ export async function enqueueAndUploadBehaviorClip(
   input: EnqueueCaptureInput,
 ): Promise<{ uploadId: string; eventId: string }> {
   const queue = getUploadQueue();
+  const existing = activeUploadForUri(
+    queue,
+    input.userId,
+    'BEHAVIOR',
+    input.localUri,
+  );
+  if (existing) {
+    const eventId = await processPendingUpload(existing.id);
+    if (!eventId) throw new Error('Retry upload senza eventId');
+    return { uploadId: existing.id, eventId };
+  }
+
   const uploadId = newId('upl');
   const clientRequestId = newId('crid');
   const contentType = await detectVideoContentType(input.localUri);
@@ -261,17 +278,7 @@ export async function recoverAndDrainUploads(userId: string): Promise<void> {
 
 /** Quando il polling evento arriva a COMPLETED, chiude la riga coda. */
 export function markUploadCompletedForEvent(eventId: string): void {
-  const queue = getUploadQueue();
-  for (const [uploadId] of uploadMeta) {
-    const item = queue.get(uploadId);
-    if (item?.eventId === eventId && item.state === 'processing') {
-      try {
-        queue.transitionTo(uploadId, 'completed');
-      } catch {
-        // ignore
-      }
-    }
-  }
+  markUploadsCompletedForEvent(getUploadQueue(), eventId);
 }
 
 /**

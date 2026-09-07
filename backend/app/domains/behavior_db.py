@@ -242,23 +242,68 @@ async def complete_capture(
     if not ok:
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Uploaded object failed validation.", retryable=True)
 
-    task_id = await queue.enqueue(
-        task_type="behavior_analysis",
-        payload={"event_id": event.id, "capture_id": capture.id, "user_id": user_id},
-    )
+    # Claim atomically before enqueue. Concurrent complete calls cannot start
+    # two paid workflows for the same event.
+    async with engine.begin() as conn:
+        claimed = (
+            await conn.execute(
+                text(
+                    """
+                    update public.behavior_events
+                    set status = 'QUEUED'
+                    where id = :id
+                      and user_id = :user_id
+                      and status in ('DRAFT', 'UPLOADING')
+                    returning *
+                    """
+                ),
+                {"id": event.id, "user_id": user_id},
+            )
+        ).mappings().first()
+        if not claimed:
+            current = (
+                await conn.execute(
+                    text(
+                        "select * from public.behavior_events where id = :id and user_id = :user_id"
+                    ),
+                    {"id": event.id, "user_id": user_id},
+                )
+            ).mappings().one()
+            return _event_from_row(current)
+        await conn.execute(
+            text(
+                "update public.behavior_captures set upload_completed = true where id = :id"
+            ),
+            {"id": capture_id},
+        )
+    event = _event_from_row(claimed)
+
+    try:
+        task_id = await queue.enqueue(
+            task_type="behavior_analysis",
+            payload={"event_id": event.id, "capture_id": capture.id, "user_id": user_id},
+        )
+    except Exception:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    update public.behavior_events
+                    set status = 'UPLOADING'
+                    where id = :id and status = 'QUEUED'
+                      and not exists (
+                        select 1 from internal.analysis_jobs where event_id = :id
+                      )
+                    """
+                ),
+                {"id": event.id},
+            )
+        raise
     job_id = new_id()
     if len(job_id) == 32:
         job_id = f"{job_id[:8]}-{job_id[8:12]}-{job_id[12:16]}-{job_id[16:20]}-{job_id[20:]}"
 
     async with engine.begin() as conn:
-        await conn.execute(
-            text("update public.behavior_captures set upload_completed = true where id = :id"),
-            {"id": capture_id},
-        )
-        await conn.execute(
-            text("update public.behavior_events set status = 'QUEUED' where id = :id"),
-            {"id": event.id},
-        )
         await conn.execute(
             text(
                 """
@@ -267,11 +312,13 @@ async def complete_capture(
                 ) values (
                   :id, 'BEHAVIOR_ANALYSIS', 'BEHAVIOR', :event_id, 'PENDING', :task_id
                 )
+                on conflict (event_id) do update set
+                  task_id = excluded.task_id,
+                  updated_at = now()
                 """
             ),
             {"id": job_id, "event_id": event.id, "task_id": task_id},
         )
-    event.status = BehaviorEventStatus.QUEUED
     return event
 
 

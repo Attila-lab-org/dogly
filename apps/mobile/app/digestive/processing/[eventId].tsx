@@ -18,19 +18,20 @@ import {
 } from '@/features/digestive/api';
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
+import { markDigestiveUploadCompletedForEvent } from '@/features/digestive/upload';
 
 const STEP_DURATION_MS = 1100;
 
 export default function DigestiveProcessingScreen() {
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
   const eventId = Array.isArray(params.eventId)
-    ? params.eventId[0] ?? 'fecal-ok-1'
-    : params.eventId ?? 'fecal-ok-1';
+    ? params.eventId[0] ?? ''
+    : params.eventId ?? '';
   const router = useRouter();
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
   const [stepIndex, setStepIndex] = useState(0);
-  const useApi = isApiConfigured() && !usingMockGate;
+  const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
   const query = useQuery({
     queryKey: ['digestive-event', eventId],
@@ -53,6 +54,7 @@ export default function DigestiveProcessingScreen() {
   );
 
   useEffect(() => {
+    if (!eventId) return undefined;
     if (stepIndex >= steps.length) {
       if (!useApi) router.replace(`/digestive/result/${eventId}`);
       return undefined;
@@ -67,9 +69,25 @@ export default function DigestiveProcessingScreen() {
   useEffect(() => {
     if (!useApi || !query.data) return;
     if (query.data.status === 'COMPLETED' || query.data.status === 'INSUFFICIENT_IMAGE') {
+      markDigestiveUploadCompletedForEvent(query.data.id);
       router.replace(`/digestive/result/${query.data.id}`);
     }
   }, [useApi, query.data, router]);
+
+  if (!eventId && !usingMockGate) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          title="Analisi non valida"
+          message="Manca l’identificativo dell’analisi. Torna indietro e riprova."
+        />
+        <Button
+          title="Torna alla Home"
+          onPress={() => router.replace('/(tabs)/rocky')}
+        />
+      </ScreenContainer>
+    );
+  }
 
   if (useApi && query.isError) {
     return (

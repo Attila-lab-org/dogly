@@ -1,7 +1,9 @@
 import {
+  activeUploadForUri,
   ALLOWED_TRANSITIONS,
   createUploadQueue,
   InvalidTransitionError,
+  markUploadsCompletedForEvent,
   UploadQueueDatabase,
 } from '../lib/uploadQueue';
 import { MEDIA_UPLOAD_STATES } from '../contracts/types';
@@ -58,6 +60,7 @@ function createFakeDb(): UploadQueueDatabase {
       const all = [...rows.values()];
       let result: Record<string, unknown>[];
       if (sql.includes('WHERE id = ?')) result = all.filter((r) => r.id === params[0]);
+      else if (sql.includes('WHERE event_id = ?')) result = all.filter((r) => r.event_id === params[0]);
       else if (sql.includes('state NOT IN')) {
         const excluded = params.slice(1) as string[];
         result = all.filter((r) => r.user_id === params[0] && !excluded.includes(r.state as string));
@@ -162,5 +165,29 @@ describe('uploadQueue — macchina a stati media (sez. 5.3)', () => {
     q.remove('up1');
     expect(q.get('up1')).toBeNull();
     expect(q.listByUser('u1')).toHaveLength(0);
+  });
+
+  it('chiude una riga processing tramite eventId anche dopo un riavvio', () => {
+    const q = makeQueue();
+    q.enqueue(baseInput);
+    q.transitionTo('up1', 'upload_initializing');
+    q.transitionTo('up1', 'uploading');
+    q.transitionTo('up1', 'uploaded');
+    q.transitionTo('up1', 'processing', { eventId: 'event-real-1' });
+
+    expect(markUploadsCompletedForEvent(q, 'event-real-1')).toBe(1);
+    expect(q.get('up1')?.state).toBe('completed');
+    expect(q.listActive('u1')).toHaveLength(0);
+  });
+
+  it('trova il retry esistente senza creare una seconda riga', () => {
+    const q = makeQueue();
+    q.enqueue(baseInput);
+    q.transitionTo('up1', 'upload_initializing');
+    q.markRecoverable('up1', 'offline');
+
+    expect(
+      activeUploadForUri(q, 'u1', 'BEHAVIOR', baseInput.localUri)?.id,
+    ).toBe('up1');
   });
 });
