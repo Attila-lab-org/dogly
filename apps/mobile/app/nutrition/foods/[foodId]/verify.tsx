@@ -5,19 +5,26 @@
  * FeedingPeriod (POST /v1/nutrition/feeding-periods), chiudendo quello
  * precedente senza riscrivere la storia.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { foodProductsMock } from '@/mocks/secondary';
 import { useSession } from '@/features/auth/SessionProvider';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   ConfidenceBandPill,
   StackScreenHeader,
 } from '@/features/secondary/components';
 import type { ConfidenceBand } from '@/contracts/types';
+import {
+  activateFeedingPeriod,
+  getFood,
+  verifyFood,
+} from '@/features/nutrition/api';
 
 function EditableField({
   label,
@@ -56,39 +63,71 @@ export default function FoodVerifyScreen() {
   const { foodId } = useLocalSearchParams<{ foodId: string }>();
   const router = useRouter();
   const { usingMockGate } = useSession();
-  const food = foodProductsMock.find((f) => f.id === foodId);
+  const { dog } = useDogProfile();
+  const mockFood = foodProductsMock.find((f) => f.id === foodId);
+  const realEnabled = !usingMockGate && Boolean(foodId);
 
-  const [name, setName] = useState(food?.name ?? '');
-  const [brand, setBrand] = useState(food?.brand ?? '');
-  const [ingredients, setIngredients] = useState(food?.ingredientsRaw ?? '');
-  const [protein, setProtein] = useState(
-    food?.guaranteedAnalysis.crudeProteinMin?.toString() ?? '',
-  );
-  const [fat, setFat] = useState(
-    food?.guaranteedAnalysis.crudeFatMin?.toString() ?? '',
-  );
-  const [fiber, setFiber] = useState(
-    food?.guaranteedAnalysis.crudeFiberMax?.toString() ?? '',
-  );
-  const [moisture, setMoisture] = useState(
-    food?.guaranteedAnalysis.moistureMax?.toString() ?? '',
-  );
-  const [calories, setCalories] = useState(food?.calories ?? '');
+  const foodQuery = useQuery({
+    queryKey: ['nutrition-food', foodId],
+    queryFn: () => getFood(foodId!),
+    enabled: realEnabled,
+  });
+
+  const food = realEnabled ? foodQuery.data : mockFood
+    ? {
+        id: mockFood.id,
+        brand: mockFood.brand,
+        name: mockFood.name,
+        ingredients_raw: mockFood.ingredientsRaw,
+        guaranteed_analysis: {
+          crude_protein_min: mockFood.guaranteedAnalysis.crudeProteinMin,
+          crude_fat_min: mockFood.guaranteedAnalysis.crudeFatMin,
+          crude_fiber_max: mockFood.guaranteedAnalysis.crudeFiberMax,
+          moisture_max: mockFood.guaranteedAnalysis.moistureMax,
+          calories: mockFood.calories,
+        },
+        verified_at: mockFood.verifiedAt,
+      }
+    : undefined;
+
+  const [name, setName] = useState('');
+  const [brand, setBrand] = useState('');
+  const [ingredients, setIngredients] = useState('');
+  const [protein, setProtein] = useState('');
+  const [fat, setFat] = useState('');
+  const [fiber, setFiber] = useState('');
+  const [moisture, setMoisture] = useState('');
+  const [calories, setCalories] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  if (!usingMockGate) {
+  useEffect(() => {
+    if (!food) return;
+    setName(food.name ?? '');
+    setBrand(food.brand ?? '');
+    setIngredients(food.ingredients_raw ?? '');
+    setProtein(food.guaranteed_analysis?.crude_protein_min?.toString() ?? '');
+    setFat(food.guaranteed_analysis?.crude_fat_min?.toString() ?? '');
+    setFiber(food.guaranteed_analysis?.crude_fiber_max?.toString() ?? '');
+    setMoisture(food.guaranteed_analysis?.moisture_max?.toString() ?? '');
+    setCalories(food.guaranteed_analysis?.calories ?? '');
+  }, [food]);
+
+  if (realEnabled && foodQuery.isError) {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Verifica etichetta" />
         <ErrorState
-          title="Verifica non disponibile"
-          message="La verifica delle etichette non è ancora disponibile in questa versione. Nessun dato simulato verrà attivato."
+          title="Prodotto non trovato"
+          message="Non riesco a caricare questa etichetta. Torna alla lista e riprova."
+          onRetry={() => void foodQuery.refetch()}
         />
       </ScreenContainer>
     );
   }
 
-  if (!food) {
+  if (!food && !realEnabled) {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Verifica etichetta" />
@@ -103,7 +142,42 @@ export default function FoodVerifyScreen() {
   }
 
   const band = (key: string): ConfidenceBand =>
-    food.fieldConfidence[key] ?? 'MEDIUM';
+    mockFood?.fieldConfidence[key] ?? 'MEDIUM';
+
+  const confirm = async () => {
+    if (!brand.trim() || !name.trim()) {
+      setSaveError('Servono almeno marca e nome del prodotto.');
+      return;
+    }
+    if (usingMockGate) {
+      setConfirmed(true);
+      return;
+    }
+    if (!foodId) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await verifyFood({
+        foodId,
+        brand: brand.trim(),
+        name: name.trim(),
+        ingredientsRaw: ingredients.trim(),
+        protein,
+        fat,
+        fiber,
+        moisture,
+        calories,
+      });
+      await activateFeedingPeriod({ dogId: dog.id, foodId });
+      setConfirmed(true);
+    } catch {
+      setSaveError(
+        'Non sono riuscito a salvare il cibo. Controlla i campi e riprova.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (confirmed) {
     return (
@@ -115,12 +189,12 @@ export default function FoodVerifyScreen() {
             <Text style={styles.doneTitle}>Cibo attivato</Text>
           </View>
           <Text style={styles.note}>
-            "{brand} {name}" è ora il cibo attivo di Rocky. Il periodo del cibo
+            "{brand} {name}" è ora il cibo attivo di {dog.name}. Il periodo del cibo
             precedente è stato chiuso: le prossime osservazioni digestive
             saranno collegate a questo alimento.
           </Text>
           <Button
-            title="Vai ai cibi di Rocky"
+            title={`Vai ai cibi di ${dog.name}`}
             style={styles.doneButton}
             onPress={() => router.replace('/nutrition/foods')}
           />
@@ -135,7 +209,7 @@ export default function FoodVerifyScreen() {
       <Text style={styles.intro}>
         Controlla e correggi i campi letti dall'etichetta. Solo ciò che
         confermi diventa definitivo: i valori servono a confrontare la
-        digestione di Rocky nel tempo.
+        digestione di {dog.name} nel tempo.
       </Text>
 
       <Card style={styles.card}>
@@ -194,11 +268,13 @@ export default function FoodVerifyScreen() {
         non misure esatte del contenuto. Non le useremo mai da sole per trarre
         conclusioni nutrizionali.
       </Text>
+      {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
 
       <Button
         title="Conferma e attiva"
         icon={<Ionicons name="checkmark" size={18} color={colors.textOnPrimary} />}
-        onPress={() => setConfirmed(true)}
+        onPress={() => void confirm()}
+        loading={saving}
         style={styles.confirm}
       />
     </ScreenContainer>
@@ -219,7 +295,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   field: {
     marginBottom: spacing.md,
@@ -255,6 +331,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
     marginBottom: spacing.lg,
+  },
+  error: {
+    fontSize: typography.size.xs,
+    color: colors.danger,
+    marginBottom: spacing.md,
   },
   confirm: {
     marginBottom: spacing.xl,

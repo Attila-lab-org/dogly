@@ -20,7 +20,7 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains import dogs_db
 from app.domains.billing import QuotaExceeded
-from app.domains.db import reserve_usage_sql
+from app.domains.db import reserve_usage_on_conn
 from app.domains.digestive_intelligence import (
     DIGESTIVE_BASELINE_VERSION,
     DigestiveContext,
@@ -121,8 +121,8 @@ async def init_fecal_event(
         event_id = _uuid_id()
         path = _storage_path(user_id, dog.id, event_id)
 
-        reserved = await reserve_usage_sql(
-            engine,
+        reserved = await reserve_usage_on_conn(
+            conn,
             user_id=user_id,
             domain=AnalysisDomain.DIGESTIVE.value,
             reference_id=event_id,
@@ -820,3 +820,68 @@ async def digestive_summary(engine: AsyncEngine, *, user_id: str, dog_id: str) -
         "recent_trend": trend,
         "safety_flags": flags,
     }
+
+
+async def list_food_products(
+    engine: AsyncEngine, *, user_id: str, dog_id: str
+) -> list[FoodProductRec]:
+    await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    """
+                    select *
+                    from public.food_products
+                    where owner_id = :owner_id
+                      and dog_id = cast(:dog_id as uuid)
+                    order by created_at desc, id desc
+                    """
+                ),
+                {"owner_id": user_id, "dog_id": dog_id},
+            )
+        ).mappings().all()
+    return [_food_from_row(row) for row in rows]
+
+
+async def get_food_product(
+    engine: AsyncEngine, *, user_id: str, food_id: str
+) -> FoodProductRec:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    select *
+                    from public.food_products
+                    where id = :id and owner_id = :owner_id
+                    """
+                ),
+                {"id": food_id, "owner_id": user_id},
+            )
+        ).mappings().first()
+    if not row:
+        raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
+    return _food_from_row(row)
+
+
+async def list_feeding_periods(
+    engine: AsyncEngine, *, user_id: str, dog_id: str
+) -> list[FeedingPeriodRec]:
+    await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    """
+                    select id, dog_id, food_product_id, start_at, end_at,
+                           quantity_per_day, treats_notes, transition_notes
+                    from public.feeding_periods
+                    where dog_id = cast(:dog_id as uuid)
+                    order by start_at desc, id desc
+                    """
+                ),
+                {"dog_id": dog_id},
+            )
+        ).mappings().all()
+    return [_feeding_from_row(row) for row in rows]

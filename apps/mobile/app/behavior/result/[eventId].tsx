@@ -130,11 +130,16 @@ export default function BehaviorResultScreen() {
       setSavingFeedback(false);
     }
   };
+  const [contextDismissed, setContextDismissed] = useState(false);
   const contextAnswers = contextAnswersForQuestion(result.context_question);
 
   const handleContext = async (
-    contextBucket: Parameters<typeof postBehaviorContext>[1],
+    contextBucket: (typeof contextAnswers)[number]['contextBucket'],
   ) => {
+    if (contextBucket == null) {
+      setContextDismissed(true);
+      return;
+    }
     if (!useApi || refiningContext) return;
     setRefiningContext(true);
     setContextError(null);
@@ -184,7 +189,8 @@ export default function BehaviorResultScreen() {
           contextPrompt={
             result.needs_context &&
             result.context_question &&
-            contextAnswers.length > 0 ? (
+            contextAnswers.length > 0 &&
+            !contextDismissed ? (
               <Card style={styles.contextCard} testID="behavior-context-question">
                 <Text style={styles.contextKicker}>Una cosa può aiutarmi</Text>
                 <Text style={styles.contextQuestion}>
@@ -193,17 +199,14 @@ export default function BehaviorResultScreen() {
                 <View style={styles.contextAnswers}>
                   {contextAnswers.map((answer) => (
                     <Button
-                      key={answer.contextBucket}
+                      key={answer.label}
                       title={answer.label}
                       variant={
-                        answer.contextBucket === 'HOME'
-                          ? 'outline'
-                          : 'secondary'
+                        answer.contextBucket == null ? 'outline' : 'secondary'
                       }
                       disabled={refiningContext}
                       loading={
-                        refiningContext &&
-                        answer.contextBucket !== 'HOME'
+                        refiningContext && answer.contextBucket != null
                       }
                       onPress={() => void handleContext(answer.contextBucket)}
                       style={styles.contextAnswer}

@@ -95,6 +95,8 @@ class InMemoryStore:
         self.dog_photos: dict[str, DogPhotoRec] = {}
         self.dog_profile_visibility: dict[str, DogProfileVisibilityRec] = {}
         self.owner_reported_observations: dict[str, dict] = {}
+        self.pattern_event_links: set[tuple[str, str]] = set()
+        self.knowledge_scores: list[dict] = []
         # Index: (user_id, client_request_id) -> capture/fecal id
         self.capture_by_client_request: dict[tuple[str, str], str] = {}
         self.fecal_by_client_request: dict[tuple[str, str], str] = {}

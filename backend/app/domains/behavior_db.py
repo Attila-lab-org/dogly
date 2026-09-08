@@ -14,7 +14,7 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus, FeedbackValue
 from app.domains import dogs_db
 from app.domains.billing import QuotaExceeded
-from app.domains.db import reserve_usage_sql
+from app.domains.db import reserve_usage_on_conn
 from app.domains.models import (
     BehaviorCaptureRec,
     BehaviorEventRec,
@@ -125,9 +125,9 @@ async def init_capture(
             user_id, payload.dog_id, event_id, payload.content_type
         )
 
-        # Reserve quota keyed by event_id (reference_id) BEFORE insert (sez. 7.3).
-        reserved = await reserve_usage_sql(
-            engine,
+        # Reserve quota in the same transaction as the capture/event insert.
+        reserved = await reserve_usage_on_conn(
+            conn,
             user_id=user_id,
             domain=AnalysisDomain.BEHAVIOR.value,
             reference_id=event_id,

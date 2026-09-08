@@ -146,6 +146,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setHasDog(dogs.hasDog);
     setPrimaryDogId(dogs.primaryDogId);
     void recoverAndDrainUploads(next.user.id).catch(() => undefined);
+    const { ensureServiceTermsRecorded } = await import('../privacy/consents');
+    const { registerDevicePushToken } = await import('../notifications/pushToken');
+    void ensureServiceTermsRecorded().then(() => registerDevicePushToken());
   }, []);
 
   useEffect(() => {

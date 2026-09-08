@@ -64,4 +64,5 @@ def map_revenuecat_event(payload: dict[str, Any]) -> dict[str, Any] | None:
         "store": event.get("store"),
         "product_id": product_id,
         "expiration_at_ms": event.get("expiration_at_ms"),
+        "event_timestamp_ms": event.get("event_timestamp_ms"),
     }

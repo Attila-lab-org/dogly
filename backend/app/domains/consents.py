@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.contracts.api import UserConsentsPatch, UserConsentsResponse
+from app.contracts.taxonomy import RetentionState
 from app.domains.repository import InMemoryStore, now_utc
 
 FIELD_TO_TYPE = {
@@ -45,4 +46,27 @@ def patch_consents(
                 "created_at": now,
             }
         )
+    if payload.media_retention is not None:
+        _apply_media_retention_memory(store, user_id, payload.media_retention)
     return get_consents(store, user_id)
+
+
+def _apply_media_retention_memory(
+    store: InMemoryStore, user_id: str, keep: bool
+) -> None:
+    for capture in store.captures.values():
+        if capture.user_id != user_id:
+            continue
+        if keep and capture.retention_state == RetentionState.TEMPORARY:
+            capture.retention_state = RetentionState.USER_KEPT
+            capture.expires_at = None
+        elif not keep and capture.retention_state == RetentionState.USER_KEPT:
+            capture.retention_state = RetentionState.TEMPORARY
+    for event in store.fecal_events.values():
+        if event.user_id != user_id:
+            continue
+        if keep and event.retention_state == RetentionState.TEMPORARY:
+            event.retention_state = RetentionState.USER_KEPT
+            event.expires_at = None
+        elif not keep and event.retention_state == RetentionState.USER_KEPT:
+            event.retention_state = RetentionState.TEMPORARY

@@ -83,6 +83,31 @@ def get_engine(settings: Settings) -> AsyncEngine | None:
     return _engine
 
 
+async def reserve_usage_on_conn(
+    conn: Any,
+    *,
+    user_id: str,
+    domain: str,
+    reference_id: str,
+    units: int = 1,
+) -> dict[str, Any]:
+    """Quota reservation on an existing transaction (capture/event insert)."""
+    result = await conn.execute(
+        text(
+            "SELECT public.reserve_usage("
+            "CAST(:user_id AS uuid), :domain, :reference_id, :units) AS payload"
+        ),
+        {
+            "user_id": user_id,
+            "domain": domain,
+            "reference_id": reference_id,
+            "units": units,
+        },
+    )
+    row = result.mappings().first()
+    return dict(row["payload"]) if row and row["payload"] is not None else {}
+
+
 async def reserve_usage_sql(
     engine: AsyncEngine,
     *,
@@ -93,21 +118,13 @@ async def reserve_usage_sql(
 ) -> dict[str, Any]:
     """Atomic quota reservation (sez. 7.3 / 22). Idempotent on reference_id."""
     async with engine.begin() as conn:
-        result = await conn.execute(
-            text(
-                "SELECT public.reserve_usage("
-                "CAST(:user_id AS uuid), :domain, :reference_id, :units) AS payload"
-            ),
-            {
-                "user_id": user_id,
-                "domain": domain,
-                "reference_id": reference_id,
-                "units": units,
-            },
+        return await reserve_usage_on_conn(
+            conn,
+            user_id=user_id,
+            domain=domain,
+            reference_id=reference_id,
+            units=units,
         )
-        row = result.mappings().first()
-        payload = dict(row["payload"]) if row and row["payload"] is not None else {}
-        return payload
 
 
 async def commit_usage_sql(engine: AsyncEngine, *, reference_id: str) -> dict[str, Any]:

@@ -53,6 +53,7 @@ async def get_diary(
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     domain: Annotated[AnalysisDomain | None, Query()] = None,
     dog_id: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query(max_length=80)] = None,
 ) -> DiaryPage:
     if state.engine is not None:
         return await diary_db.list_diary_page(
@@ -62,6 +63,7 @@ async def get_diary(
             limit=limit,
             domain=domain,
             dog_id=dog_id,
+            q=q,
         )
 
     store = state.store
@@ -111,6 +113,14 @@ async def get_diary(
                     e.confidence_band,
                 )
             )
+
+    term = (q or "").strip().lower()
+    if term:
+        entries = [
+            entry
+            for entry in entries
+            if term in f"{entry.title} {entry.summary or ''}".lower()
+        ]
 
     page, next_cursor = paginate_desc(entries, cursor=cursor, limit=limit)
     return DiaryPage(

@@ -26,7 +26,7 @@ describe('contextAnswersForQuestion', () => {
   it('mappa la domanda sulla porta senza inventare un contesto generico', () => {
     expect(contextAnswersForQuestion('Eravate vicino alla porta?')).toEqual([
       { label: 'Sì', contextBucket: 'DOOR_EXIT' },
-      { label: 'No', contextBucket: 'HOME' },
+      { label: 'No', contextBucket: null },
     ]);
     expect(contextAnswersForQuestion('Che cosa è successo?')).toEqual([]);
   });

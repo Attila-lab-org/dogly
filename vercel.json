@@ -15,6 +15,10 @@
     {
       "path": "/tasks/cron/retention",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/tasks/cron/care-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }

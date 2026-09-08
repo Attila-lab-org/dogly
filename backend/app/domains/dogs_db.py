@@ -81,6 +81,27 @@ async def get_owned_dog(engine: AsyncEngine, *, user_id: str, dog_id: str) -> Do
 
 async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -> DogRec:
     async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                insert into public.profiles (user_id)
+                values (cast(:user_id as uuid))
+                on conflict (user_id) do nothing
+                """
+            ),
+            {"user_id": user_id},
+        )
+        await conn.execute(
+            text(
+                """
+                select user_id
+                from public.profiles
+                where user_id = cast(:user_id as uuid)
+                for update
+                """
+            ),
+            {"user_id": user_id},
+        )
         plan_row = (
             await conn.execute(
                 text(

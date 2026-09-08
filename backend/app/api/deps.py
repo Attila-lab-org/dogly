@@ -140,7 +140,7 @@ class IdempotencyGuard:
             return None
         # Sync lookup uses memory; async DB lookup is hydrated by routes if needed.
         rec = self._store.idempotency.get(self._scope)
-        if rec is None:
+        if rec is None or rec.status_code != 200:
             return None
         if self._payload_hash and rec.response_body.get("__payload_hash__") not in (None, self._payload_hash):
             raise ApiError(
@@ -180,10 +180,33 @@ async def idempotency_guard(
         payload_hash=payload_hash,
         engine=state.engine,
     )
+    if guard._scope and state.engine is None:
+        existing = state.store.idempotency.get(guard._scope)
+        if existing is None:
+            state.store.idempotency[guard._scope] = IdempotencyRec(
+                scope=guard._scope,
+                status_code=0,
+                response_body={},
+                created_at=now_utc(),
+            )
+        elif payload_hash and existing.response_body.get("__payload_hash__") not in (
+            None,
+            payload_hash,
+        ):
+            raise ApiError(
+                ErrorCode.IDEMPOTENCY_CONFLICT,
+                "Idempotency key was reused with a different payload.",
+            )
+        elif existing.status_code != 200:
+            raise ApiError(
+                ErrorCode.RATE_LIMITED,
+                "This request is already being processed. Retry shortly.",
+                retryable=True,
+            )
     if state.engine is not None and guard._scope:
         from app.domains import idempotency_db
 
-        cached = await idempotency_db.lookup(
+        cached = await idempotency_db.claim(
             state.engine, scope=guard._scope, payload_hash=payload_hash
         )
         if cached is not None:

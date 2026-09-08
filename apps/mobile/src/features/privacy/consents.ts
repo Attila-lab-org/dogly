@@ -10,7 +10,7 @@ import { consentsMock } from '../../mocks/secondary';
 import { getKeyValueStorage } from '../notifications/persistence';
 
 const STORAGE_KEY = 'dogly.consents.v1';
-const POLICY_VERSION = 'privacy-beta/v1';
+export const POLICY_VERSION = 'privacy-beta/v1';
 
 let consents: ConsentState = { ...consentsMock };
 let hydrated = false;
@@ -117,6 +117,16 @@ export async function hydrateConsents(options?: {
 }
 
 /**
+ * Dopo il login: registra SERVICE_TERMS perché Welcome dice
+ * "Continuando accetti". Non ri-scrive se è già granted.
+ */
+export async function ensureServiceTermsRecorded(): Promise<void> {
+  const synced = await hydrateConsents({ syncRemote: true });
+  if (synced && getConsents().service) return;
+  await setConsent('service', true, { syncRemote: true });
+}
+
+/**
  * Aggiorna un consenso e lo persiste. In caso di errore di scrittura fa
  * revert allo stato precedente e restituisce false (mai finto successo).
  * Senza storage nativo (test/web) vale la sola sessione.
@@ -147,6 +157,10 @@ export async function setConsent(
       remoteHydrated = true;
       emit();
       await persistLocal(consents);
+      if (key === 'notifications' && consents.notifications) {
+        const { registerDevicePushToken } = await import('../notifications/pushToken');
+        void registerDevicePushToken();
+      }
       return true;
     } catch {
       consents = previous;

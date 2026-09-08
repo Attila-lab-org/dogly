@@ -41,7 +41,23 @@ async def get_knowledge_score(
             state.engine, user_id=user_id, dog_id=dog_id
         )
     dogs_domain.get_owned_dog(state.store, user_id=user_id, dog_id=dog_id)
-    return KnowledgeScoreOut(dog_id=dog_id)
+    latest = next(
+        (
+            row
+            for row in reversed(state.store.knowledge_scores)
+            if row.get("dog_id") == dog_id
+        ),
+        None,
+    )
+    if not latest:
+        return KnowledgeScoreOut(dog_id=dog_id)
+    return KnowledgeScoreOut(
+        dog_id=dog_id,
+        score=float(latest["score"]),
+        components=dict(latest.get("components") or {}),
+        version=str(latest.get("version") or "v1"),
+        calculated_at=latest.get("calculated_at"),
+    )
 
 
 @router.get("/dogs/{dog_id}/lifestyle", response_model=DogLifestyleOut)

@@ -36,6 +36,7 @@ export interface FetchDiaryOptions {
   domain?: DiaryDomain;
   cursor?: string | null;
   limit?: number;
+  q?: string;
 }
 
 /** GET /v1/diary con filtri opzionali (sez. 5.1 timeline unificata). */
@@ -47,6 +48,7 @@ export async function fetchDiaryPage(options: FetchDiaryOptions = {}): Promise<D
   if (options.limit) params.push(`limit=${options.limit}`);
   if (options.domain) params.push(`domain=${options.domain}`);
   if (options.dogId) params.push(`dog_id=${encodeURIComponent(options.dogId)}`);
+  if (options.q?.trim()) params.push(`q=${encodeURIComponent(options.q.trim())}`);
   const query = params.length > 0 ? `?${params.join('&')}` : '';
   return api.get<DiaryPage>(`/v1/diary${query}`);
 }

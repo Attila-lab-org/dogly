@@ -1,8 +1,8 @@
 /**
  * Food label scan (Spec V1 sez. 6 — "Food label scan": OCR confidence,
  * editable verification, duplicate active product).
- * Il flusso OCR è mockato (ML Kit on-device quando lo spike passa, sez. 20.1);
- * i campi a bassa confidence richiedono verifica nella schermata successiva.
+ * L'OCR on-device non è ancora collegato: in produzione si acquisisce la
+ * foto, si carica l'etichetta e i campi si compilano nella verifica.
  */
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -12,11 +12,14 @@ import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { foodProductsMock } from '@/mocks/secondary';
 import { useSession } from '@/features/auth/SessionProvider';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   ConfidenceBandPill,
   StackScreenHeader,
 } from '@/features/secondary/components';
 import type { ConfidenceBand } from '@/contracts/types';
+import { takeDigestivePhoto } from '@/features/digestive/photo';
+import { scanAndUploadFoodLabel } from '@/features/nutrition/api';
 
 type Phase = 'ready' | 'scanning' | 'done';
 
@@ -34,36 +37,54 @@ const FIELD_LABELS: Record<string, string> = {
 export default function FoodScanScreen() {
   const router = useRouter();
   const { usingMockGate } = useSession();
+  const { dog } = useDogProfile();
   const [phase, setPhase] = useState<Phase>('ready');
+  const [error, setError] = useState<string | null>(null);
   const draft = foodProductsMock.find((f) => f.verifiedAt === null);
 
   useEffect(() => {
-    if (phase !== 'scanning') return undefined;
+    if (!usingMockGate || phase !== 'scanning') return undefined;
     const timer = setTimeout(() => setPhase('done'), 1800);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [phase, usingMockGate]);
 
   const activeProduct = foodProductsMock.find((f) => f.verifiedAt !== null);
 
-  if (!usingMockGate) {
-    return (
-      <ScreenContainer>
-        <StackScreenHeader title="Scansiona etichetta" />
-        <ErrorState
-          title="Scansione non disponibile"
-          message="La lettura delle etichette non è ancora disponibile in questa versione. Riprova dopo un aggiornamento dell’app."
-        />
-      </ScreenContainer>
-    );
-  }
+  const startRealScan = async () => {
+    setError(null);
+    setPhase('scanning');
+    try {
+      const uri = await takeDigestivePhoto();
+      if (!uri) {
+        setPhase('ready');
+        return;
+      }
+      const foodId = await scanAndUploadFoodLabel({
+        dogId: dog.id,
+        localUri: uri,
+      });
+      router.replace(`/nutrition/foods/${foodId}/verify`);
+    } catch {
+      setError(
+        'Non sono riuscito a caricare l’etichetta. Controlla la connessione e riprova.',
+      );
+      setPhase('ready');
+    }
+  };
 
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Scansiona etichetta" />
       <Text style={styles.intro}>
         Inquadra l'etichetta con gli ingredienti e la tabella nutrizionale.
-        Leggerò il testo e poi potrai controllare tutto prima di confermare.
+        {usingMockGate
+          ? ' Leggerò il testo e poi potrai controllare tutto prima di confermare.'
+          : ' Poi controllerai e confermerai i campi: solo ciò che verifichi diventa definitivo.'}
       </Text>
+
+      {error ? (
+        <ErrorState title="Caricamento non riuscito" message={error} />
+      ) : null}
 
       <Card noPadding style={styles.frameCard}>
         <View style={styles.frameArea}>
@@ -74,13 +95,14 @@ export default function FoodScanScreen() {
           />
           <Text style={styles.frameLabel}>
             {phase === 'ready' && 'Nessuna etichetta acquisita'}
-            {phase === 'scanning' && 'Sto leggendo il testo…'}
+            {phase === 'scanning' &&
+              (usingMockGate ? 'Sto leggendo il testo…' : 'Carico la foto…')}
             {phase === 'done' && 'Testo letto: controlla i campi'}
           </Text>
         </View>
       </Card>
 
-      {phase === 'done' && draft && (
+      {usingMockGate && phase === 'done' && draft && (
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Campi letti dall'etichetta</Text>
           {Object.entries(FIELD_LABELS).map(([key, label]) => {
@@ -105,7 +127,7 @@ export default function FoodScanScreen() {
                 color={colors.primary}
               />
               <Text style={styles.duplicateText}>
-                Rocky sta già mangiando "{activeProduct.brand}{' '}
+                {dog.name} sta già mangiando "{activeProduct.brand}{' '}
                 {activeProduct.name}". Confermando, il nuovo cibo diventerà
                 quello attivo e il periodo precedente verrà chiuso.
               </Text>
@@ -119,13 +141,15 @@ export default function FoodScanScreen() {
           <Button
             title="Scansiona etichetta"
             icon={<Ionicons name="scan" size={18} color={colors.textOnPrimary} />}
-            onPress={() => setPhase('scanning')}
+            onPress={() =>
+              usingMockGate ? setPhase('scanning') : void startRealScan()
+            }
           />
         )}
         {phase === 'scanning' && (
           <Button title="Lettura in corso…" loading onPress={() => {}} />
         )}
-        {phase === 'done' && draft && (
+        {usingMockGate && phase === 'done' && draft && (
           <>
             <Button
               title="Verifica i campi"

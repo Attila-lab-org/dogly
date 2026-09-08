@@ -31,14 +31,17 @@ from app.contracts.taxonomy import (
     BehaviorEventStatus,
     ConfidenceBand,
     ContextBucket,
+    RetentionState,
 )
 from app.domains import (
     behavior_db,
     care_db,
+    consents_db,
     devices_db,
     digestive_db,
     dogs_db,
     lifestyle_db,
+    owner_stories_db,
     patterns_db,
     privacy_db,
 )
@@ -65,6 +68,7 @@ from app.domains.retention import (
     schedule_digestive_raw_expiry,
 )
 from app.knowledge.advice import build_advice
+from app.knowledge.models import LifestyleFact
 from app.knowledge.retrieval import retrieve_evidence
 from app.knowledge.safety import (
     deterministic_safety_flags as behavior_safety_flags,
@@ -95,6 +99,70 @@ class RetryableTaskError(Exception):
         self.payload = payload
 
 
+async def _claim_analysis_job(state: AppState, *, event_id: str) -> bool:
+    """Claim a PENDING/RETRYING job. False means another worker already holds it."""
+    if state.engine is None:
+        claimed = False
+        found = False
+        for job in state.store.analysis_jobs.values():
+            if job.event_id != event_id or job.job_type not in {
+                "behavior_analysis",
+                "digestive_analysis",
+            }:
+                continue
+            found = True
+            if job.status in {"queued", "PENDING", "RETRYING", "pending"}:
+                job.status = "RUNNING"
+                job.attempt_count += 1
+                job.updated_at = now_utc()
+                claimed = True
+            elif job.status == "RUNNING":
+                claimed = False
+            else:
+                claimed = True
+        return claimed or not found
+    async with state.engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    update internal.analysis_jobs
+                    set status = 'RUNNING',
+                        attempt_count = attempt_count + 1,
+                        started_at = coalesce(started_at, now()),
+                        completed_at = null,
+                        last_error_code = null,
+                        updated_at = now()
+                    where event_id = :event_id
+                      and (
+                        status in ('PENDING', 'RETRYING')
+                        or (
+                          status = 'RUNNING'
+                          and updated_at < now() - interval '10 minutes'
+                        )
+                      )
+                    returning id
+                    """
+                ),
+                {"event_id": event_id},
+            )
+        ).mappings().first()
+        if row:
+            return True
+        existing = (
+            await conn.execute(
+                text(
+                    """
+                    select status from internal.analysis_jobs
+                    where event_id = :event_id
+                    """
+                ),
+                {"event_id": event_id},
+            )
+        ).mappings().first()
+        return not (existing and str(existing["status"]) == "RUNNING")
+
+
 async def _set_analysis_job_status(
     state: AppState,
     *,
@@ -112,13 +180,10 @@ async def _set_analysis_job_status(
             job.status = status
             job.last_error_code = error_code
             job.updated_at = now_utc()
-            if status == "RUNNING":
-                job.attempt_count += 1
         return
     if status == "RUNNING":
         assignments = """
             status = 'RUNNING',
-            attempt_count = attempt_count + 1,
             started_at = coalesce(started_at, now()),
             completed_at = null,
             last_error_code = null,
@@ -188,13 +253,53 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
         lifestyle = await lifestyle_db.get_lifestyle(
             state.engine, event.user_id, event.dog_id
         )
+        stories = await owner_stories_db.list_confirmed(
+            state.engine, user_id=event.user_id, dog_id=event.dog_id
+        )
     else:
         dog = state.store.dogs[event.dog_id]
         lifestyle = lifestyle_domain.get_lifestyle(
             state.store, event.user_id, event.dog_id
         )
+        stories = [
+            row
+            for row in state.store.owner_reported_observations.values()
+            if row.get("dog_id") == event.dog_id
+            and row.get("user_id") == event.user_id
+            and row.get("status") == "CONFIRMED"
+        ]
     dump = lifestyle.model_dump()
-    return dog, build_dog_context(dog, dump), dump
+    context = build_dog_context(dog, dump)
+    extras: dict[str, list] = {
+        "preferences": list(context.preferences),
+        "health_context": list(context.health_context),
+        "recent_changes": list(context.recent_changes),
+    }
+    for story in stories:
+        facts = story.get("facts") or []
+        if isinstance(facts, str):
+            facts = json.loads(facts)
+        confirmed_at = story.get("confirmed_at")
+        for fact in facts:
+            if not isinstance(fact, dict):
+                continue
+            statement = str(fact.get("statement") or "").strip()
+            if not statement:
+                continue
+            category = str(fact.get("category") or "GENERAL")
+            item = LifestyleFact(
+                key=f"owner_{category.lower()}",
+                value=statement,
+                provenance="OWNER_CONFIRMED",
+                last_confirmed_at=confirmed_at,
+            )
+            if category == "PREFERENCE":
+                extras["preferences"].append(item)
+            elif category in {"HEALTH", "DIET"}:
+                extras["health_context"].append(item)
+            else:
+                extras["recent_changes"].append(item)
+    return dog, context.model_copy(update=extras), dump
 
 
 async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
@@ -210,6 +315,30 @@ async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
 
 
 async def _arm_behavior_raw_ttl(state: AppState, event: BehaviorEventRec) -> None:
+    consents = (
+        await consents_db.get_consents(state.engine, event.user_id)
+        if state.engine is not None
+        else get_consents(state.store, event.user_id)
+    )
+    if consents.media_retention:
+        if state.engine is not None:
+            async with state.engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        """
+                        update public.behavior_captures
+                        set retention_state = 'USER_KEPT', expires_at = null
+                        where id = :capture_id
+                        """
+                    ),
+                    {"capture_id": event.capture_id},
+                )
+            return
+        capture = state.store.captures.get(event.capture_id)
+        if capture is not None:
+            capture.retention_state = RetentionState.USER_KEPT
+            capture.expires_at = None
+        return
     if state.engine is not None:
         await arm_behavior_capture_expiry(state.engine, event.capture_id)
         return
@@ -288,6 +417,9 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             error_code=event.last_error_code,
         )
         return {"event_id": event.id, "status": event.status.value, "noop": True}
+
+    if not await _claim_analysis_job(state, event_id=event.id):
+        return {"event_id": event.id, "status": "already_running", "noop": True}
 
     await _set_analysis_job_status(
         state,
@@ -496,6 +628,12 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         status="COMPLETED",
     )
     try:
+        from app.domains.personal_engine import on_behavior_completed
+
+        await on_behavior_completed(state, event)
+    except Exception:
+        logger.exception("Personal Engine failed after completion")
+    try:
         await state.queue.enqueue(
             task_type="behavior_result_notification",
             payload={"event_id": event.id},
@@ -658,6 +796,9 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             error_code=event.last_error_code,
         )
         return {"event_id": event.id, "status": event.status, "noop": True}
+
+    if not await _claim_analysis_job(state, event_id=event.id):
+        return {"event_id": event.id, "status": "already_running", "noop": True}
 
     await _set_analysis_job_status(
         state,

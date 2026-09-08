@@ -47,16 +47,21 @@ async def list_diary_page(
     limit: int,
     domain: AnalysisDomain | None,
     dog_id: str | None,
+    q: str | None = None,
 ) -> DiaryPage:
     params: dict[str, Any] = {"user_id": user_id}
     dog_filter = ""
     domain_filter = ""
+    search_filter = ""
     if dog_id:
         dog_filter = "and dog_id = cast(:dog_id as uuid)"
         params["dog_id"] = dog_id
     if domain is not None:
         domain_filter = "and domain = :domain"
         params["domain"] = domain.value
+    if q and q.strip():
+        search_filter = "and (title ilike :q or coalesce(summary, '') ilike :q)"
+        params["q"] = f"%{q.strip()}%"
 
     async with engine.connect() as conn:
         rows = (
@@ -100,6 +105,7 @@ async def list_diary_page(
                     where true
                       {dog_filter}
                       {domain_filter}
+                      {search_filter}
                     order by created_at desc, id desc
                     """
                 ),

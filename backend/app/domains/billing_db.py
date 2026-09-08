@@ -132,6 +132,7 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
     limits = PLAN_ALLOWANCES.get(plan, PLAN_ALLOWANCES["FREE"])
     db_status = _webhook_status_to_db(update.get("status"))
     period_end = _expiration_ms_to_datetime(update.get("expiration_at_ms"))
+    event_at = _expiration_ms_to_datetime(update.get("event_timestamp_ms"))
 
     async with engine.begin() as conn:
         if event_id:
@@ -139,7 +140,7 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
                 await conn.execute(
                     text(
                         """
-                        select last_webhook_event_id
+                        select last_webhook_event_id, last_webhook_event_at
                         from public.subscriptions
                         where user_id = :user_id
                         """
@@ -149,16 +150,23 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
             ).mappings().first()
             if existing and existing["last_webhook_event_id"] == event_id:
                 return False
+            if (
+                existing
+                and event_at is not None
+                and existing["last_webhook_event_at"] is not None
+                and existing["last_webhook_event_at"] > event_at
+            ):
+                return False
 
         await conn.execute(
             text(
                 """
                 insert into public.subscriptions (
                   user_id, plan, status, store, product_id, period_end,
-                  last_webhook_event_id, updated_at
+                  last_webhook_event_id, last_webhook_event_at, updated_at
                 ) values (
                   :user_id, :plan, :status, :store, :product_id, :period_end,
-                  :event_id, now()
+                  :event_id, :event_at, now()
                 )
                 on conflict (user_id) do update set
                   plan = excluded.plan,
@@ -167,6 +175,7 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
                   product_id = excluded.product_id,
                   period_end = excluded.period_end,
                   last_webhook_event_id = excluded.last_webhook_event_id,
+                  last_webhook_event_at = excluded.last_webhook_event_at,
                   updated_at = now()
                 """
             ),
@@ -178,6 +187,7 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
                 "product_id": update.get("product_id"),
                 "period_end": period_end,
                 "event_id": event_id,
+                "event_at": event_at,
             },
         )
         await conn.execute(
@@ -186,6 +196,7 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
                 update public.usage_ledgers
                 set behavior_limit = :behavior_limit,
                     digestive_limit = :digestive_limit,
+                    reset_at = coalesce(:period_end, reset_at),
                     updated_at = now()
                 where user_id = :user_id
                   and reset_at > now()
@@ -195,6 +206,7 @@ async def upsert_subscription_from_webhook(engine: AsyncEngine, update: dict) ->
                 "user_id": user_id,
                 "behavior_limit": limits["behavior"],
                 "digestive_limit": limits["digestive"],
+                "period_end": period_end,
             },
         )
     return True

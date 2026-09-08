@@ -1,16 +1,11 @@
 /**
  * Notifica locale "risultato pronto" per il flusso behavior.
- * Schedulata quando l'utente lascia la processing screen prima dello stato
- * terminale, cancellata quando l'analisi raggiunge il terminale (o quando
- * l'utente torna a guardare la schermata).
- *
- * Contratto di navigazione: `data.href` viene aperto dal listener generico
- * in app/_layout.tsx (router.push). Nessun import statico di moduli nativi:
- * il file resta caricabile in Jest/node.
+ * Non usa più un timer da 30s: il risultato arriva dal worker via push
+ * (behavior_result_notification). Le funzioni restano per cancellare
+ * eventuali notifiche residue e per i test.
  */
 
 const CHANNEL_ID = 'analysis-results';
-const RESULT_READY_DELAY_SECONDS = 30;
 
 const scheduledByEvent = new Map<string, string>();
 
@@ -58,61 +53,16 @@ async function loadNotifications() {
   }
 }
 
-async function ensurePermission(): Promise<boolean> {
-  const Notifications = await loadNotifications();
-  if (!Notifications) return false;
-  try {
-    const current = await Notifications.getPermissionsAsync();
-    if (current.granted) return true;
-    const requested = await Notifications.requestPermissionsAsync();
-    return requested.granted;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Schedula la notifica "risultato pronto". Ritorna l'id notifica, oppure
- * null se notifiche non disponibili / permesso negato: il flusso non si
- * interrompe mai per colpa della notifica.
+ * Non schedula più un timer locale: il worker notifica a completamento.
+ * Mantenuta per compatibilità con la processing screen.
  */
 export async function scheduleResultReadyNotification(
-  eventId: string,
-  dogName: string,
+  _eventId: string,
+  _dogName: string,
 ): Promise<string | null> {
-  if (!notificationsSupported()) return null;
-  const Notifications = await loadNotifications();
-  if (!Notifications) return null;
-  if (!(await ensurePermission())) return null;
-
-  await cancelResultReadyNotification(eventId);
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Platform } = require('react-native') as typeof import('react-native');
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: 'Risultati analisi',
-        importance: Notifications.AndroidImportance.HIGH,
-      });
-    }
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        ...buildResultReadyContent(eventId, dogName),
-        sound: 'default',
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: RESULT_READY_DELAY_SECONDS,
-        repeats: false,
-        channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
-      },
-    });
-    scheduledByEvent.set(eventId, id);
-    return id;
-  } catch {
-    return null;
-  }
+  void CHANNEL_ID;
+  return null;
 }
 
 /** Cancella la notifica pendente per l'evento (completamento o rientro). */

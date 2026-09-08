@@ -122,7 +122,7 @@ async def cleanup_expired_raw_media_db(
             reference_id = str(reservation["reference_id"])
             await conn.execute(
                 text(
-                    "select public.refund_usage(:reference_id, 'UPLOAD_ABANDONED')"
+                    "select public.refund_usage(:reference_id, 'CANCELLED')"
                 ),
                 {"reference_id": reference_id},
             )
@@ -249,6 +249,14 @@ async def arm_behavior_capture_expiry(engine: AsyncEngine, capture_id: str) -> N
                 set expires_at = internal.media_expiry_at('BEHAVIOR_RAW')
                 where id = :capture_id
                   and retention_state = 'TEMPORARY'
+                  and not coalesce((
+                    select granted
+                    from public.user_consents
+                    where user_id = behavior_captures.user_id
+                      and consent_type = 'MEDIA_RETENTION'
+                    order by created_at desc, id desc
+                    limit 1
+                  ), false)
                 """
             ),
             {"capture_id": capture_id},
@@ -264,6 +272,14 @@ async def arm_fecal_expiry(engine: AsyncEngine, event_id: str) -> None:
                 set expires_at = internal.media_expiry_at('DIGESTIVE_RAW')
                 where id = :event_id
                   and retention_state = 'TEMPORARY'
+                  and not coalesce((
+                    select granted
+                    from public.user_consents
+                    where user_id = fecal_events.user_id
+                      and consent_type = 'MEDIA_RETENTION'
+                    order by created_at desc, id desc
+                    limit 1
+                  ), false)
                 """
             ),
             {"event_id": event_id},

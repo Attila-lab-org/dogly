@@ -131,6 +131,12 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
         st: AppState = request.app.state.cbi
         return await handlers.process_media_retention_cleanup(st)
 
+    @app.get("/tasks/cron/care-reminders", dependencies=[Depends(cron_auth)])
+    async def run_care_reminder_cron(request: Request) -> dict:
+        """Vercel Cron GET ingress for due care reminders."""
+        st: AppState = request.app.state.cbi
+        return await handlers.process_care_reminder_dispatch(st)
+
     return app
 
 

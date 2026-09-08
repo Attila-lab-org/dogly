@@ -143,13 +143,14 @@ export default function DiaryScreen() {
 
   // Timeline reale: cursor pagination server-side (GET /v1/diary, sez. 9)
   const query = useInfiniteQuery({
-    queryKey: [...queryKeys.diary(userId ?? 'anon', dog.id), filter],
+    queryKey: [...queryKeys.diary(userId ?? 'anon', dog.id), filter, search.trim()],
     queryFn: ({ pageParam }) =>
       fetchDiaryPage({
         dogId: dog.id,
         domain: filter === 'ALL' ? undefined : filter,
         cursor: pageParam,
         limit: 20,
+        q: search.trim() || undefined,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,

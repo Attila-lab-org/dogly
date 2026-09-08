@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Query
 
 from app.api.deps import IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
@@ -15,8 +17,32 @@ from app.contracts.api import (
 )
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, idempotency_db
+from app.domains.models import FeedingPeriodRec, FoodProductRec
 
 router = APIRouter()
+
+
+def _food_out(product: FoodProductRec) -> FoodProductOut:
+    return FoodProductOut(
+        id=product.id,
+        dog_id=product.dog_id or None,
+        brand=product.brand,
+        name=product.name,
+        ingredients_raw=product.ingredients_raw,
+        guaranteed_analysis=product.guaranteed_analysis or {},
+        verified_at=product.verified_at,
+    )
+
+
+def _period_out(rec: FeedingPeriodRec) -> FeedingPeriodOut:
+    return FeedingPeriodOut(
+        id=rec.id,
+        dog_id=rec.dog_id,
+        food_product_id=rec.food_product_id,
+        start_at=rec.start_at,
+        end_at=rec.end_at,
+        quantity_per_day=rec.quantity_per_day,
+    )
 
 
 async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
@@ -28,6 +54,57 @@ async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> N
             body=body,
             payload_hash=guard._payload_hash,
         )
+
+
+@router.get("/nutrition/foods", response_model=list[FoodProductOut])
+async def list_foods(
+    state: StateDep,
+    user_id: UserIdDep,
+    dog_id: Annotated[str, Query()],
+) -> list[FoodProductOut]:
+    if state.engine is not None:
+        products = await digestive_db.list_food_products(
+            state.engine, user_id=user_id, dog_id=dog_id
+        )
+    else:
+        products = digestive_domain.list_food_products(
+            state.store, user_id=user_id, dog_id=dog_id
+        )
+    return [_food_out(product) for product in products]
+
+
+@router.get("/nutrition/foods/{food_id}", response_model=FoodProductOut)
+async def get_food(
+    food_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> FoodProductOut:
+    if state.engine is not None:
+        product = await digestive_db.get_food_product(
+            state.engine, user_id=user_id, food_id=food_id
+        )
+    else:
+        product = digestive_domain.get_food_product(
+            state.store, user_id=user_id, food_id=food_id
+        )
+    return _food_out(product)
+
+
+@router.get("/nutrition/feeding-periods", response_model=list[FeedingPeriodOut])
+async def list_feeding_periods(
+    state: StateDep,
+    user_id: UserIdDep,
+    dog_id: Annotated[str, Query()],
+) -> list[FeedingPeriodOut]:
+    if state.engine is not None:
+        periods = await digestive_db.list_feeding_periods(
+            state.engine, user_id=user_id, dog_id=dog_id
+        )
+    else:
+        periods = digestive_domain.list_feeding_periods(
+            state.store, user_id=user_id, dog_id=dog_id
+        )
+    return [_period_out(period) for period in periods]
 
 
 @router.post("/nutrition/foods/scan/init", response_model=FoodScanInitResponse)
@@ -82,12 +159,7 @@ async def verify_food(
         product = digestive_domain.verify_food_product(
             state.store, user_id=user_id, food_id=food_id, payload=payload
         )
-    response = FoodProductOut(
-        id=product.id,
-        brand=product.brand,
-        name=product.name,
-        verified_at=product.verified_at,
-    )
+    response = _food_out(product)
     await _record_guard(state, guard, response.model_dump(mode="json"))
     return response
 
@@ -105,12 +177,6 @@ async def create_feeding_period(
         rec = await digestive_db.create_feeding_period(state.engine, user_id=user_id, payload=payload)
     else:
         rec = digestive_domain.create_feeding_period(state.store, user_id=user_id, payload=payload)
-    resp = FeedingPeriodOut(
-        id=rec.id,
-        dog_id=rec.dog_id,
-        food_product_id=rec.food_product_id,
-        start_at=rec.start_at,
-        end_at=rec.end_at,
-    )
+    resp = _period_out(rec)
     await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp

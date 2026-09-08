@@ -735,8 +735,11 @@ class FoodVerifyRequest(BaseModel):
 
 class FoodProductOut(BaseModel):
     id: str
+    dog_id: str | None = None
     brand: str | None = None
     name: str | None = None
+    ingredients_raw: str | None = None
+    guaranteed_analysis: dict[str, Any] = Field(default_factory=dict)
     verified_at: datetime | None = None
 
 
@@ -756,6 +759,7 @@ class FeedingPeriodOut(BaseModel):
     food_product_id: str
     start_at: datetime
     end_at: datetime | None = None
+    quantity_per_day: str | None = None
 
 
 class DigestiveSummaryOut(BaseModel):

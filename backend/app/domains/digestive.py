@@ -366,3 +366,34 @@ def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dic
         "recent_trend": trend,
         "safety_flags": flags,
     }
+
+
+def list_food_products(
+    store: InMemoryStore, *, user_id: str, dog_id: str
+) -> list[FoodProductRec]:
+    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    return [
+        product
+        for product in store.food_products.values()
+        if product.owner_id == user_id and product.dog_id == dog_id
+    ]
+
+
+def get_food_product(
+    store: InMemoryStore, *, user_id: str, food_id: str
+) -> FoodProductRec:
+    product = store.food_products.get(food_id)
+    if product is None or product.owner_id != user_id:
+        raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
+    return product
+
+
+def list_feeding_periods(
+    store: InMemoryStore, *, user_id: str, dog_id: str
+) -> list[FeedingPeriodRec]:
+    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    return [
+        period
+        for period in store.feeding_periods.values()
+        if period.dog_id == dog_id
+    ]
