@@ -68,6 +68,11 @@ describe('mapDiaryItemToEntry', () => {
     expect(
       mapDiaryItemToEntry(diaryItem({ status: 'OBSERVING' }))?.subtitle,
     ).toBe('Analisi in corso');
+    expect(
+      mapDiaryItemToEntry(
+        diaryItem({ domain: 'DIGESTIVE', status: 'INSUFFICIENT_IMAGE' }),
+      )?.subtitle,
+    ).toBe('Foto non abbastanza chiara');
   });
 });
 

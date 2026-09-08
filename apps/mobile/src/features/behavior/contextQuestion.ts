@@ -8,8 +8,8 @@ export type ContextAnswer = {
 
 /**
  * Closed one-tap answers for questions whose meaning maps safely to a
- * ContextBucket. Unknown generated questions remain visible but are not
- * converted into a guessed context. "No" never invents HOME.
+ * ContextBucket. Per domande generiche chiediamo il luogo con risposte
+ * esplicite: nessun contesto viene dedotto senza una scelta dell'utente.
  */
 export function contextAnswersForQuestion(
   question: string | null | undefined,
@@ -45,5 +45,9 @@ export function contextAnswersForQuestion(
       { label: 'No', contextBucket: null },
     ];
   }
-  return [];
+  return [
+    { label: 'A casa', contextBucket: 'HOME' },
+    { label: 'Fuori', contextBucket: 'OUTDOORS' },
+    { label: 'Non lo so', contextBucket: null },
+  ];
 }

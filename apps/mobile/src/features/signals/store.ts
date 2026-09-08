@@ -59,6 +59,7 @@ let mapEntries: SignalMapEntry[] = SIGNAL_CATEGORIES.map((meta) => ({
 
 let experiments: SignalExperiment[] = [];
 const hydratedDogs = new Set<string>();
+const nextCategoryByDog = new Map<string, SignalCategory>();
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {
@@ -79,13 +80,26 @@ export function useSignalMap(dogId: string): SignalMapEntry[] {
   useEffect(() => {
     void hydrateSignalMap(dogId);
   }, [dogId]);
-  return useMemo(
-    () => allEntries.filter((entry) => entry.dogId === dogId),
-    [allEntries, dogId],
-  );
+  return useMemo(() => {
+    const entries = allEntries.filter((entry) => entry.dogId === dogId);
+    if (entries.length > 0) return entries;
+    return SIGNAL_CATEGORIES.map((meta) => ({
+      dogId,
+      category: meta.category,
+      state: 'DISCOVERING' as const,
+      attemptCount: 0,
+      confirmCount: 0,
+      contradictCount: 0,
+      unknownCount: 0,
+      lastSummary: null,
+      updatedAt: now,
+    }));
+  }, [allEntries, dogId]);
 }
 
 export function nextSignalExperiment(dogId: string): SignalCategoryMeta {
+  const serverNext = nextCategoryByDog.get(dogId);
+  if (serverNext) return metaForCategory(serverNext);
   const entries = mapEntries.filter((entry) => entry.dogId === dogId);
   const next = [...entries].sort((a, b) => a.attemptCount - b.attemptCount)[0];
   return metaForCategory(next?.category ?? 'ATTENTION');
@@ -133,6 +147,7 @@ async function hydrateSignalMap(dogId: string): Promise<void> {
 
   try {
     const response = await api.get<ApiSignalMapResponse>(`/v1/dogs/${dogId}/signals`);
+    nextCategoryByDog.set(dogId, response.next_category);
     mapEntries = [
       ...mapEntries.filter((entry) => entry.dogId !== dogId),
       ...response.items.map(fromApiMapEntry),

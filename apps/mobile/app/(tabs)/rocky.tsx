@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components';
 import {
   colors,
@@ -65,6 +65,7 @@ export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
+  const queryClient = useQueryClient();
   const useDemoData = usingMockGate;
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
   useCareEvents(dog.id);
@@ -143,7 +144,14 @@ export default function DogProfileTabScreen() {
           style: 'destructive',
           onPress: () => {
             void deleteOwnerStory(dog.id, storyId)
-              .then(() => storiesQuery.refetch())
+              .then(async () => {
+                await storiesQuery.refetch();
+                if (userId) {
+                  await queryClient.invalidateQueries({
+                    queryKey: queryKeys.knowledgeScore(userId, dog.id),
+                  });
+                }
+              })
               .catch(() => setStoryError('Non sono riuscito a eliminare la nota.'));
           },
         },

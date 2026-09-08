@@ -21,6 +21,14 @@ from app.domains.models import BehaviorEventRec, FecalEventRec
 router = APIRouter()
 
 
+def _public_digestive_diary_status(status: str) -> str:
+    if status in {"OBSERVING", "INTERPRETING", "FAILED_RETRYABLE"}:
+        return "PROCESSING"
+    if status == "REJECTED_QUALITY":
+        return "INSUFFICIENT_IMAGE"
+    return status
+
+
 class _TimelineEntry:
     def __init__(
         self,
@@ -108,7 +116,7 @@ async def get_diary(
                     AnalysisDomain.DIGESTIVE,
                     title,
                     e.summary,
-                    e.status,
+                    _public_digestive_diary_status(e.status),
                     e.retention_state,
                     e.confidence_band,
                 )

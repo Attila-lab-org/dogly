@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.pagination import paginate_desc
+from app.api.routes.diary import _public_digestive_diary_status
 from app.api.routes.digestive import _public_digestive_status
 from app.contracts.api import BehaviorCaptureInitRequest, FecalInitRequest
 from app.domains.billing_db import _webhook_status_to_db
@@ -39,6 +40,11 @@ def test_digestive_worker_statuses_are_mapped_to_mobile_contract():
     assert _public_digestive_status("REJECTED_QUALITY") == "INSUFFICIENT_IMAGE"
     assert _public_digestive_status("COMPLETED") == "COMPLETED"
     assert _public_digestive_status("FAILED_TERMINAL") == "FAILED_TERMINAL"
+    assert _public_digestive_diary_status("FAILED_RETRYABLE") == "PROCESSING"
+    assert (
+        _public_digestive_diary_status("REJECTED_QUALITY")
+        == "INSUFFICIENT_IMAGE"
+    )
 
 
 def test_revenuecat_cancellation_keeps_access_until_expiration():

@@ -103,7 +103,9 @@ export function useStories(dogId: string, dogName: string): DogStory[] {
     queryKey: ['stories', dogId],
     queryFn: () => fetchRealStories(dogId, dogName),
     enabled: live && isPersistedId(dogId),
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    refetchInterval: live ? 45 * 60_000 : false,
+    refetchOnMount: true,
   });
   return usingMockGate ? mock : query.data ?? [];
 }

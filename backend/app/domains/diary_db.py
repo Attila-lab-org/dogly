@@ -95,7 +95,13 @@ async def list_diary_page(
                                else 'Controllo digestione'
                              end as title,
                              f.summary,
-                             f.status::text as status,
+                             case
+                               when f.status in ('OBSERVING', 'INTERPRETING', 'FAILED_RETRYABLE')
+                                 then 'PROCESSING'
+                               when f.status = 'REJECTED_QUALITY'
+                                 then 'INSUFFICIENT_IMAGE'
+                               else f.status::text
+                             end as status,
                              coalesce(f.retention_state::text, 'TEMPORARY') as retention_state,
                              f.confidence_band::text as confidence_band,
                              null::text as feedback

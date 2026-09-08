@@ -95,6 +95,7 @@ const IN_PROGRESS_STATUSES = new Set<string>([
   'OBSERVING',
   'INTERPRETING',
   'FAILED_RETRYABLE',
+  'PROCESSING',
 ]);
 
 const NON_COMPLETED_LABELS: Record<string, string> = {
@@ -104,7 +105,9 @@ const NON_COMPLETED_LABELS: Record<string, string> = {
   OBSERVING: 'Analisi in corso',
   INTERPRETING: 'Analisi in corso',
   FAILED_RETRYABLE: 'Nuovo tentativo in corso',
+  PROCESSING: 'Controllo digestivo in corso',
   REJECTED_QUALITY: 'Video non adatto',
+  INSUFFICIENT_IMAGE: 'Foto non abbastanza chiara',
   FAILED_TERMINAL: 'Analisi non riuscita',
   CANCELLED: 'Annullata',
 };

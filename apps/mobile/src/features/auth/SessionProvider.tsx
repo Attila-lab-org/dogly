@@ -14,7 +14,7 @@ import type { Session } from '@supabase/supabase-js';
 import { AppState, type AppStateStatus } from 'react-native';
 import { addNetworkStateListener } from 'expo-network';
 
-import { api } from '../../lib/apiClient';
+import { api, ApiError } from '../../lib/apiClient';
 import {
   clearProtectedCache,
   queryClient,
@@ -80,17 +80,30 @@ async function fetchHasDog(): Promise<DogLookupResult> {
   if (!isApiConfigured()) {
     return { reachable: false, hasDog: false, primaryDogId: null };
   }
-  try {
-    const list = await api.get<DogListResponse>('/v1/dogs');
-    const first = list.items[0];
-    return {
-      reachable: true,
-      hasDog: list.items.length > 0,
-      primaryDogId: first?.id ?? null,
-    };
-  } catch {
-    return { reachable: false, hasDog: false, primaryDogId: null };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const list = await api.get<DogListResponse>('/v1/dogs');
+      const first = list.items[0];
+      return {
+        reachable: true,
+        hasDog: list.items.length > 0,
+        primaryDogId: first?.id ?? null,
+      };
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        break;
+      }
+      if (attempt < 2) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, attempt === 0 ? 250 : 750),
+        );
+      }
+    }
   }
+  return { reachable: false, hasDog: false, primaryDogId: null };
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {

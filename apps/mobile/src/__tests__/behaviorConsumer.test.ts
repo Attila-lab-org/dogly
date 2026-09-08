@@ -23,11 +23,15 @@ describe('correctionOptions after Non proprio', () => {
 });
 
 describe('contextAnswersForQuestion', () => {
-  it('mappa la domanda sulla porta senza inventare un contesto generico', () => {
+  it('mappa la porta e offre scelte esplicite per domande generiche', () => {
     expect(contextAnswersForQuestion('Eravate vicino alla porta?')).toEqual([
       { label: 'Sì', contextBucket: 'DOOR_EXIT' },
       { label: 'No', contextBucket: null },
     ]);
-    expect(contextAnswersForQuestion('Che cosa è successo?')).toEqual([]);
+    expect(contextAnswersForQuestion('Che cosa è successo?')).toEqual([
+      { label: 'A casa', contextBucket: 'HOME' },
+      { label: 'Fuori', contextBucket: 'OUTDOORS' },
+      { label: 'Non lo so', contextBucket: null },
+    ]);
   });
 });

@@ -72,6 +72,8 @@ export default function BehaviorResultScreen() {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [refiningContext, setRefiningContext] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
+  const [contextDismissed, setContextDismissed] = useState(false);
+  const contextAnswers = contextAnswersForQuestion(result?.context_question);
 
   useEffect(() => {
     if (result?.feedback) setFeedback(result.feedback);
@@ -140,9 +142,6 @@ export default function BehaviorResultScreen() {
       setSavingFeedback(false);
     }
   };
-  const [contextDismissed, setContextDismissed] = useState(false);
-  const contextAnswers = contextAnswersForQuestion(result.context_question);
-
   const handleContext = async (
     contextBucket: (typeof contextAnswers)[number]['contextBucket'],
   ) => {
