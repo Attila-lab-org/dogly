@@ -162,7 +162,6 @@ export default function CameraTabScreen() {
 const styles = StyleSheet.create({
   screen: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingBottom: spacing.xxxl,
   },
   header: {
@@ -190,7 +189,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     width: '100%',
-    aspectRatio: 1,
+    aspectRatio: 4 / 3,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
   },
