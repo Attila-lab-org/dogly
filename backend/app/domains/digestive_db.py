@@ -25,6 +25,7 @@ from app.domains.digestive_intelligence import (
     DIGESTIVE_BASELINE_VERSION,
     DigestiveContext,
 )
+from app.domains.ids import require_uuid
 from app.domains.models import FecalEventRec, FeedingPeriodRec, FoodProductRec
 from app.domains.repository import new_id
 from app.providers.base import JobQueue, StorageProvider
@@ -177,6 +178,7 @@ async def complete_fecal_event(
     user_id: str,
     event_id: str,
 ) -> FecalEventRec:
+    require_uuid(event_id, not_found="Digestive event not found")
     async with engine.begin() as conn:
         row = (
             await conn.execute(
@@ -293,6 +295,7 @@ async def complete_fecal_event(
 
 
 async def get_fecal_event(engine: AsyncEngine, *, user_id: str, event_id: str) -> FecalEventRec:
+    require_uuid(event_id, not_found="Digestive event not found")
     async with engine.connect() as conn:
         row = (
             await conn.execute(

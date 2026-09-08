@@ -11,6 +11,7 @@ from app.contracts.api import CareEventCreate, CareEventUpdate
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import CareEventStatus
 from app.domains import dogs_db
+from app.domains.ids import require_uuid
 from app.domains.models import CareEventRec
 from app.domains.repository import now_utc
 
@@ -110,6 +111,7 @@ async def get_owned_care_event(
     user_id: str,
     event_id: str,
 ) -> CareEventRec:
+    require_uuid(event_id, not_found="Care event not found")
     async with engine.connect() as conn:
         row = (
             await conn.execute(

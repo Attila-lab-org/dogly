@@ -8,7 +8,9 @@ import logging
 from app.config import Settings
 from app.contracts.api import DogAvatarInitRequest, DogCreate, DogUpdate, SignedUpload
 from app.contracts.errors import ApiError, ErrorCode
+from app.domains.age_stage import normalize_age_stage
 from app.domains.billing import max_active_dogs
+from app.domains.ids import require_uuid
 from app.domains.models import DogRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
 from app.providers.base import StorageProvider
@@ -40,7 +42,7 @@ def create_dog(store: InMemoryStore, *, user_id: str, payload: DogCreate) -> Dog
         owner_id=user_id,
         name=payload.name,
         birth_date=payload.birth_date,
-        age_stage=payload.age_stage,
+        age_stage=normalize_age_stage(payload.age_stage),
         size=payload.size,
         breed_label=payload.breed_label,
         is_mix=payload.is_mix,
@@ -55,6 +57,7 @@ def create_dog(store: InMemoryStore, *, user_id: str, payload: DogCreate) -> Dog
 
 def get_owned_dog(store: InMemoryStore, *, user_id: str, dog_id: str) -> DogRec:
     """Ownership check: 404 (not 403) to avoid leaking existence (sez. 24.1)."""
+    require_uuid(dog_id, not_found="Dog not found")
     dog = store.get_dog(dog_id)
     if dog is None or dog.owner_id != user_id:
         raise ApiError(ErrorCode.NOT_FOUND, "Dog not found")
@@ -64,6 +67,8 @@ def get_owned_dog(store: InMemoryStore, *, user_id: str, dog_id: str) -> DogRec:
 def update_dog(store: InMemoryStore, *, user_id: str, dog_id: str, payload: DogUpdate) -> DogRec:
     dog = get_owned_dog(store, user_id=user_id, dog_id=dog_id)
     requested = payload.model_dump(exclude_unset=True)
+    if "age_stage" in requested:
+        requested["age_stage"] = normalize_age_stage(requested["age_stage"])
     changed = {
         key: value
         for key, value in requested.items()

@@ -8,6 +8,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
+import { isPersistedId } from '../../lib/persistedId';
 import { queryKeys } from '../../lib/queryClient';
 import { homeDataMock } from '../../mocks/core';
 import type { LastInsight, UsageSummary } from '../core/types';
@@ -33,7 +34,7 @@ export interface HomeDataState {
 export function useHomeData(dogId: string): HomeDataState {
   const { userId, usingMockGate } = useSession();
   const apiConfigured = isApiConfigured() && !usingMockGate;
-  const realEnabled = Boolean(userId) && Boolean(dogId) && apiConfigured;
+  const realEnabled = Boolean(userId) && isPersistedId(dogId) && apiConfigured;
 
   const usageQuery = useQuery({
     queryKey: [...queryKeys.user(userId ?? 'anon'), 'usage'],

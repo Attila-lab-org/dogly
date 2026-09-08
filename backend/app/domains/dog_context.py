@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from typing import Any
 
+from app.domains.age_stage import profile_life_stage_context
 from app.domains.models import DogRec
 from app.knowledge.models import (
     DogContextSnapshot,
@@ -49,15 +50,7 @@ def derive_life_stage(dog: DogRec, today: date | None = None) -> tuple[int | Non
         )
         return months, LifeStageContext(value=value, source="DERIVED", confidence="MEDIUM")
 
-    fallback = {
-        "PUPPY": "PUPPY",
-        "ADOLESCENT": "YOUNG_ADULT",
-        "ADULT": "MATURE_ADULT",
-        "SENIOR": "SENIOR",
-    }.get((dog.age_stage or "").upper())
-    if fallback:
-        return None, LifeStageContext(value=fallback, source="PROFILE", confidence="LOW")
-    return None, LifeStageContext(value="UNKNOWN", source="UNKNOWN", confidence="LOW")
+    return None, profile_life_stage_context(dog.age_stage)
 
 
 def _facts(

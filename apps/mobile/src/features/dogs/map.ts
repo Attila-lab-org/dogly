@@ -45,11 +45,46 @@ export function sizeFromApi(size: string | null): string {
   }
 }
 
+const AGE_STAGE_TO_LABEL: Record<string, string> = {
+  PUPPY: 'Cucciolo',
+  ADOLESCENT: 'Giovane',
+  ADULT: 'Adulto',
+  SENIOR: 'Anziano',
+  UNKNOWN: 'Età da completare',
+};
+
+const AGE_LABEL_TO_STAGE: Record<string, string> = {
+  cucciolo: 'PUPPY',
+  giovane: 'ADOLESCENT',
+  adolescente: 'ADOLESCENT',
+  adulto: 'ADULT',
+  anziano: 'SENIOR',
+  'età da completare': 'UNKNOWN',
+};
+
+export function ageStageFromApi(stage: string | null | undefined): string {
+  if (!stage) return 'Età da completare';
+  return AGE_STAGE_TO_LABEL[stage.toUpperCase()] ?? stage;
+}
+
+export function ageStageToApi(
+  label: string | null | undefined,
+): string | null {
+  if (!label) return null;
+  const trimmed = label.trim();
+  if (!trimmed) return null;
+  const canonical = trimmed.toUpperCase();
+  if (AGE_STAGE_TO_LABEL[canonical]) return canonical;
+  const mapped = AGE_LABEL_TO_STAGE[trimmed.toLocaleLowerCase('it')];
+  if (mapped) return mapped;
+  return trimmed;
+}
+
 export function mapApiDogToProfile(dog: ApiDog): DogProfile {
   const birthDate = dog.birth_date;
   const ageLabel = birthDate
     ? ageLabelFromYears(ageFromBirthDate(birthDate))
-    : dog.age_stage ?? 'Età da completare';
+    : ageStageFromApi(dog.age_stage);
 
   return {
     id: dog.id,

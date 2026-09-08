@@ -14,6 +14,7 @@ from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
 from app.domains.dogs import get_owned_dog
+from app.domains.ids import require_uuid
 from app.domains.models import (
     AnalysisJobRec,
     BehaviorCaptureRec,
@@ -178,6 +179,7 @@ async def complete_capture(
 
 
 def get_event(store: InMemoryStore, *, user_id: str, event_id: str) -> BehaviorEventRec:
+    require_uuid(event_id, not_found="Event not found")
     event = store.behavior_events.get(event_id)
     if event is None or event.user_id != user_id:
         raise ApiError(ErrorCode.NOT_FOUND, "Event not found")

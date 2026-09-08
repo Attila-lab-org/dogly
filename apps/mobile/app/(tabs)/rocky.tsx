@@ -45,6 +45,7 @@ import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
 import { useSession } from '@/features/auth/SessionProvider';
+import { isPersistedId } from '@/lib/persistedId';
 import {
   getDigestiveSummary,
   type DigestiveSummary,
@@ -81,18 +82,18 @@ export default function DogProfileTabScreen() {
   const albumsQuery = useQuery({
     queryKey: ['gallery-albums', dog.id],
     queryFn: () => fetchAlbums(dog.id),
-    enabled: !useDemoData && Boolean(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
   const firstAlbumId = albumsQuery.data?.[0]?.id;
   const photosQuery = useQuery({
     queryKey: ['gallery-photos', firstAlbumId],
     queryFn: () => fetchAlbumPhotos(firstAlbumId!),
-    enabled: !useDemoData && Boolean(firstAlbumId),
+    enabled: !useDemoData && isPersistedId(firstAlbumId),
   });
   const digestiveSummaryQuery = useQuery({
     queryKey: ['digestive-summary', dog.id],
     queryFn: () => getDigestiveSummary(dog.id),
-    enabled: !useDemoData && Boolean(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
   const previewPhotos = useDemoData
     ? photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3)
@@ -106,7 +107,7 @@ export default function DogProfileTabScreen() {
   const storiesQuery = useQuery({
     queryKey: ['owner-stories', dog.id],
     queryFn: () => fetchOwnerStories(dog.id),
-    enabled: !useDemoData && Boolean(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
 
   const beginStoryEdit = (story: OwnerStoryObservation) => {

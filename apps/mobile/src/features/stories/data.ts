@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '../../lib/queryClient';
+import { isPersistedId } from '../../lib/persistedId';
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
 import {
@@ -87,7 +88,7 @@ export function useStories(dogId: string, dogName: string): DogStory[] {
   const query = useQuery({
     queryKey: ['stories', dogId],
     queryFn: () => fetchRealStories(dogId, dogName),
-    enabled: live && Boolean(dogId),
+    enabled: live && isPersistedId(dogId),
     staleTime: 30_000,
   });
   return live ? query.data ?? [] : mock;

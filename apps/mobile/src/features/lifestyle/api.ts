@@ -7,6 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from '../auth/SessionProvider';
+import { isPersistedId } from '../../lib/persistedId';
 import {
   getLifestyleProfileLocal,
   saveLifestyleProfileLocal,
@@ -119,7 +120,7 @@ export function useLifestyle(dogId: string): LifestyleState {
   const query = useQuery({
     queryKey: ['lifestyle', userId ?? 'anon', dogId],
     queryFn: () => getLifestyleProfile(dogId, false),
-    enabled: !mockGate && Boolean(dogId),
+    enabled: !mockGate && isPersistedId(dogId),
     retry: false,
   });
 

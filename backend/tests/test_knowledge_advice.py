@@ -147,6 +147,13 @@ async def test_lifestyle_api_is_owner_scoped(
     assert denied.status_code == 404
 
 
+def test_italian_age_label_becomes_profile_life_stage():
+    months, stage = derive_life_stage(_dog(age_stage="5 anni"))
+    assert months is None
+    assert stage.value == "MATURE_ADULT"
+    assert stage.source == "PROFILE"
+
+
 def test_urgent_safety_suppresses_training_and_enrichment():
     context = build_dog_context(_dog(age_stage="ADULT"))
     knowledge = KnowledgeContext(registry_version="2.0", coverage="LOW")

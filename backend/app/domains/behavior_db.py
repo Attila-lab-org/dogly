@@ -15,6 +15,7 @@ from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus, Feedback
 from app.domains import dogs_db
 from app.domains.billing import QuotaExceeded
 from app.domains.db import reserve_usage_on_conn
+from app.domains.ids import require_uuid
 from app.domains.models import (
     BehaviorCaptureRec,
     BehaviorEventRec,
@@ -349,6 +350,7 @@ async def complete_capture(
 
 
 async def get_event(engine: AsyncEngine, *, user_id: str, event_id: str) -> BehaviorEventRec:
+    require_uuid(event_id, not_found="Event not found")
     async with engine.connect() as conn:
         row = (
             await conn.execute(
@@ -371,6 +373,7 @@ async def update_capture_context(
     context_bucket: str,
 ) -> None:
     """Persist an owner-confirmed context on the event's capture."""
+    require_uuid(event_id, not_found="Event not found")
     async with engine.begin() as conn:
         result = await conn.execute(
             text(

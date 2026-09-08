@@ -9,7 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { getDogProfileSnapshot } from '@/features/core/useDogProfile';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { isPersistedId } from '@/lib/persistedId';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
 
@@ -26,7 +27,8 @@ export default function SettingsScreen() {
   // Stessa fonte della schermata Abbonamento (query condivisa): il
   // sottotitolo riflette lo stato reale, non sempre il mock.
   const { live, query, state: subscription } = useSubscriptionState();
-  const dogId = getDogProfileSnapshot().dog.id;
+  const { dog } = useDogProfile();
+  const dogId = isPersistedId(dog.id) ? dog.id : '';
 
   const subscriptionSubtitle = (() => {
     if (live && query.isLoading) return 'Verifica del piano in corso…';
@@ -43,7 +45,7 @@ export default function SettingsScreen() {
       icon: 'person-outline',
       title: 'Profilo',
       subtitle: 'Dati del cane e avatar',
-      href: `/dogs/${dogId}/edit`,
+      href: dogId ? `/dogs/${dogId}/edit` : null,
     },
     {
       icon: 'notifications-outline',

@@ -13,6 +13,7 @@ import { PHOTO_COPY } from '@/features/photos/copy';
 import { fetchAlbums } from '@/features/photos/api';
 import type { AlbumPhoto, PhotoAlbum } from '@/features/photos/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { isPersistedId } from '@/lib/persistedId';
 import { Button } from '@/components';
 
 export default function AlbumIndexScreen() {
@@ -23,7 +24,7 @@ export default function AlbumIndexScreen() {
   const albumsQuery = useQuery({
     queryKey: ['gallery-albums', dogId],
     queryFn: () => fetchAlbums(dogId!),
-    enabled: Boolean(dogId),
+    enabled: isPersistedId(dogId),
   });
   const albums = albumsQuery.data ?? [];
 

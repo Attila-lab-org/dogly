@@ -12,6 +12,8 @@ export {
   mapApiDogToProfile,
   sizeFromApi,
   sizeToApi,
+  ageStageFromApi,
+  ageStageToApi,
 } from './map';
 
 export type DogAvatarInitResponse = {

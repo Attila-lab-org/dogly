@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../../lib/apiClient';
+import { isPersistedId } from '../../lib/persistedId';
 import { patternsMock } from '../../mocks/secondary';
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
@@ -44,7 +45,7 @@ export function usePersonalPatterns(dogId: string) {
       );
       return response.items.map(mapPattern);
     },
-    enabled: live && Boolean(dogId),
+    enabled: live && isPersistedId(dogId),
   });
 
   return {

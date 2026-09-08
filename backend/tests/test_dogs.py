@@ -160,6 +160,39 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     assert listed.json()["items"][0]["photo_url"]
 
 
+async def test_mock_ids_and_invalid_age_do_not_500(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    care = await client.get("/v1/dogs/dog-rocky/care-events", headers=auth_headers)
+    assert care.status_code == 404
+    assert care.json()["code"] == "NOT_FOUND"
+
+    feedback = await client.post(
+        "/v1/behavior/events/evt-relax/feedback",
+        headers={**auth_headers, "X-Idempotency-Key": "fb-mock-id"},
+        json={"value": "YES"},
+    )
+    assert feedback.status_code == 404
+    assert feedback.json()["code"] == "NOT_FOUND"
+
+    created = await client.post(
+        "/v1/dogs",
+        headers={**auth_headers, "X-Idempotency-Key": "dog-age-label"},
+        json={"name": "Ciao", "age_stage": "5 anni", "size": "medium"},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["age_stage"] == "5 anni"
+
+    patched = await client.patch(
+        f"/v1/dogs/{created.json()['id']}",
+        headers=auth_headers,
+        json={"age_stage": "boh"},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["age_stage"] == "UNKNOWN"
+
+
 async def test_web_preview_can_call_dogs_from_localhost(
     client: httpx.AsyncClient,
 ) -> None:

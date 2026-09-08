@@ -36,6 +36,13 @@ describe('onboarding + servizi: foto e mapping profilo', () => {
     expect(isLocalPhotoUri(null)).toBe(false);
   });
 
+  it('mostra l’età italiana o lo stage, mai il valore grezzo ADULT', () => {
+    const fromStage = mapApiDogToProfile(apiDog({ birth_date: null, age_stage: 'ADULT' }));
+    expect(fromStage.ageLabel).toBe('Adulto');
+    const fromYears = mapApiDogToProfile(apiDog({ birth_date: null, age_stage: '5 anni' }));
+    expect(fromYears.ageLabel).toBe('5 anni');
+  });
+
   it('deriva il content-type dal file scelto', () => {
     expect(contentTypeFromUri('file:///tmp/a.PNG')).toBe('image/png');
     expect(contentTypeFromUri('file:///tmp/a.webp?x=1')).toBe('image/webp');

@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.api.deps import AppState, build_default_state
 from app.api.routes import (
@@ -30,6 +31,17 @@ from app.api.routes import (
 )
 from app.contracts.errors import ApiError, ErrorBody, ErrorCode
 from app.observability import init_sentry
+
+
+def _map_database_error(exc: BaseException) -> ApiError | None:
+    message = str(getattr(exc, "orig", exc)).lower()
+    if "invalid uuid" in message or (
+        "invalid input for query argument" in message and "uuid" in message
+    ):
+        return ApiError(ErrorCode.NOT_FOUND, "Resource not found")
+    if "check violation" in message or "check constraint" in message:
+        return ApiError(ErrorCode.VALIDATION_FAILED, "Request failed validation.")
+    return None
 
 
 def create_app(state: AppState | None = None) -> FastAPI:
@@ -67,6 +79,26 @@ def create_app(state: AppState | None = None) -> FastAPI:
             correlation_id=uuid.uuid4().hex,
         )
         return JSONResponse(status_code=422, content=body.model_dump(mode="json"))
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(_: Request, exc: IntegrityError) -> JSONResponse:
+        mapped = _map_database_error(exc)
+        if mapped is not None:
+            return JSONResponse(
+                status_code=mapped.http_status,
+                content=mapped.to_body().model_dump(mode="json"),
+            )
+        return await unhandled_error_handler(_, exc)
+
+    @app.exception_handler(DBAPIError)
+    async def dbapi_error_handler(_: Request, exc: DBAPIError) -> JSONResponse:
+        mapped = _map_database_error(exc)
+        if mapped is not None:
+            return JSONResponse(
+                status_code=mapped.http_status,
+                content=mapped.to_body().model_dump(mode="json"),
+            )
+        return await unhandled_error_handler(_, exc)
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:

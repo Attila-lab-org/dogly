@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
 import { api } from '../../lib/apiClient';
+import { isPersistedId } from '../../lib/persistedId';
 import { queryKeys } from '../../lib/queryClient';
 import {
   createDog,
@@ -19,6 +20,7 @@ import {
   type DogCreateBody,
   type DogUpdateBody,
 } from '../dogs/api';
+import { ageStageToApi } from '../dogs/map';
 import type { DogProfile, KnowledgeScore } from './types';
 import { dogMock, homeKnowledgeScoreMock } from '../../mocks/core';
 
@@ -34,7 +36,7 @@ type ApiKnowledgeScore = {
 
 /** Il mock resta disponibile esclusivamente nel mock gate. */
 let knowledgeScore: KnowledgeScore = { ...homeKnowledgeScoreMock };
-let lastDog: DogProfile = { ...dogMock };
+let lastDog: DogProfile = emptyDog();
 
 export function mapKnowledgeScore(
   value: ApiKnowledgeScore | null | undefined,
@@ -98,7 +100,7 @@ export function useDogProfile(): DogProfileState {
     queryKey: queryKeys.knowledgeScore(userId ?? 'anon', dog.id),
     queryFn: () =>
       api.get<ApiKnowledgeScore>(`/v1/dogs/${dog.id}/knowledge-score`),
-    enabled: enabled && Boolean(dog.id),
+    enabled: enabled && isPersistedId(dog.id),
   });
 
   const resolvedKnowledgeScore =
@@ -165,7 +167,7 @@ export function profileToCreateBody(
   return {
     name: profile.name,
     birth_date: profile.birthDate,
-    age_stage: profile.ageLabel ?? null,
+    age_stage: ageStageToApi(profile.ageLabel),
     size: sizeToApi(profile.sizeLabel),
     weight_kg: profile.weightKg,
     breed_label: profile.breedLabel,

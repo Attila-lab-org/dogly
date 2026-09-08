@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { api } from '../../lib/apiClient';
+import { isPersistedId } from '../../lib/persistedId';
 import { getAccessToken } from '../../lib/secureStore';
 import type {
   CareEvent,
@@ -92,7 +93,7 @@ function snapshot() {
 export function useCareEvents(dogId: string): CareEvent[] {
   const allEvents = useSyncExternalStore(subscribe, snapshot, snapshot);
   useEffect(() => {
-    if (!dogId) return;
+    if (!isPersistedId(dogId)) return;
     void hydrateCareEvents(dogId);
   }, [dogId]);
   return useMemo(
@@ -105,7 +106,7 @@ export function useCareEvents(dogId: string): CareEvent[] {
 }
 
 async function hydrateCareEvents(dogId: string): Promise<void> {
-  if (!dogId) return;
+  if (!isPersistedId(dogId)) return;
   if (hydratedDogs.has(dogId)) return;
   hydratedDogs.add(dogId);
   if (!(await getAccessToken())) return;
@@ -164,7 +165,10 @@ export async function addCareEvent(
   };
 
   const token = await getAccessToken();
-  const event = token ? await createRemoteCareEvent(localEvent) : localEvent;
+  const event =
+    token && isPersistedId(localEvent.dogId)
+      ? await createRemoteCareEvent(localEvent)
+      : localEvent;
   const notificationId = await scheduleCareReminder(event, input.dogName);
   const saved = { ...event, notificationId };
   events = [...events, saved];
@@ -190,7 +194,7 @@ export async function completeCareEvent(eventId: string): Promise<void> {
   );
   emit();
 
-  if (await getAccessToken()) {
+  if (await getAccessToken() && isPersistedId(eventId)) {
     await api.patch(`/v1/care-events/${eventId}`, { status: 'COMPLETED' });
   }
 }
@@ -202,7 +206,7 @@ export async function removeCareEvent(eventId: string): Promise<void> {
   events = events.filter((item) => item.id !== eventId);
   emit();
 
-  if (await getAccessToken()) {
+  if (await getAccessToken() && isPersistedId(eventId)) {
     await api.delete(`/v1/care-events/${eventId}`);
   }
 }

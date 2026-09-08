@@ -1,6 +1,6 @@
 import type { DogProfile } from '../core/types';
 import type { DogUpdateBody } from './api';
-import { sizeToApi } from './map';
+import { ageStageToApi, sizeToApi } from './map';
 
 export function profileToUpdateBody(
   profile: Partial<DogProfile>,
@@ -8,7 +8,10 @@ export function profileToUpdateBody(
   return {
     name: profile.name,
     birth_date: profile.birthDate,
-    age_stage: profile.ageLabel,
+    age_stage:
+      profile.ageLabel === undefined
+        ? undefined
+        : ageStageToApi(profile.ageLabel),
     size:
       profile.sizeLabel === undefined
         ? undefined

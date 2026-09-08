@@ -5,14 +5,15 @@ from __future__ import annotations
 import logging
 from datetime import date
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.contracts.api import DogCreate, DogUpdate
 from app.contracts.errors import ApiError, ErrorCode
+from app.domains.age_stage import normalize_age_stage
 from app.domains.billing import max_active_dogs
+from app.domains.ids import require_uuid
 from app.domains.models import DogRec
 
 logger = logging.getLogger(__name__)
@@ -55,10 +56,7 @@ async def list_dogs(engine: AsyncEngine, *, user_id: str) -> list[DogRec]:
 
 
 async def get_owned_dog(engine: AsyncEngine, *, user_id: str, dog_id: str) -> DogRec:
-    try:
-        UUID(dog_id)
-    except (TypeError, ValueError):
-        raise ApiError(ErrorCode.NOT_FOUND, "Dog not found") from None
+    require_uuid(dog_id, not_found="Dog not found")
 
     async with engine.connect() as conn:
         row = (
@@ -147,7 +145,7 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
                     "owner_id": user_id,
                     "name": payload.name,
                     "birth_date": _parse_birth_date(payload.birth_date),
-                    "age_stage": payload.age_stage or "UNKNOWN",
+                    "age_stage": normalize_age_stage(payload.age_stage),
                     "size": _normalize_size(payload.size),
                     "breed_label": payload.breed_label,
                     "is_mix": payload.is_mix,
@@ -176,6 +174,7 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
 async def update_dog(
     engine: AsyncEngine, *, user_id: str, dog_id: str, payload: DogUpdate
 ) -> DogRec:
+    require_uuid(dog_id, not_found="Dog not found")
     requested = payload.model_dump(exclude_unset=True)
     if not requested:
         return await get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
@@ -183,6 +182,8 @@ async def update_dog(
         requested["birth_date"] = _parse_birth_date(requested["birth_date"])
     if "size" in requested:
         requested["size"] = _normalize_size(requested["size"])
+    if "age_stage" in requested:
+        requested["age_stage"] = normalize_age_stage(requested["age_stage"])
 
     async with engine.begin() as conn:
         current_row = (
@@ -250,6 +251,7 @@ async def update_dog(
 async def set_photo_path(
     engine: AsyncEngine, *, user_id: str, dog_id: str, photo_path: str
 ) -> DogRec:
+    require_uuid(dog_id, not_found="Dog not found")
     async with engine.begin() as conn:
         row = (
             await conn.execute(
