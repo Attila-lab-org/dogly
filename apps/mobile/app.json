@@ -64,8 +64,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Dogly usa le foto che scegli per creare storie e album.",
-          "cameraPermission": "Dogly usa la fotocamera solo quando scegli di scattare una foto.",
-          "microphonePermission": false
+          "cameraPermission": "Dogly usa la fotocamera solo quando scegli di scattare una foto."
         }
       ]
     ],
