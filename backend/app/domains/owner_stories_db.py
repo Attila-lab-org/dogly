@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.contracts.api import OwnerReportedFact
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import dogs_db
+from app.domains.ids import require_uuid
 from app.domains.repository import new_id
 
 
@@ -73,6 +74,7 @@ async def confirm_draft(
     draft_id: str,
     facts: list[OwnerReportedFact],
 ) -> None:
+    require_uuid(draft_id, not_found="Owner story draft not found")
     async with engine.begin() as conn:
         result = await conn.execute(
             text(
@@ -144,6 +146,7 @@ async def update_confirmed(
     observation_id: str,
     facts: list[OwnerReportedFact],
 ) -> dict:
+    require_uuid(observation_id, not_found="Owner story not found")
     async with engine.begin() as conn:
         row = (
             await conn.execute(
@@ -185,6 +188,7 @@ async def delete_observation(
     dog_id: str,
     observation_id: str,
 ) -> None:
+    require_uuid(observation_id, not_found="Owner story not found")
     async with engine.begin() as conn:
         result = await conn.execute(
             text(

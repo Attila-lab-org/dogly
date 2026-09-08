@@ -34,6 +34,8 @@ export const queryKeys = {
     [...queryKeys.dog(userId, dogId), 'foods'] as const,
   knowledgeScore: (userId: string, dogId: string) =>
     [...queryKeys.dog(userId, dogId), 'knowledge-score'] as const,
+  ownerStories: (userId: string, dogId: string) =>
+    [...queryKeys.dog(userId, dogId), 'owner-stories'] as const,
   subscription: (userId: string) =>
     [...queryKeys.user(userId), 'subscription'] as const,
 };

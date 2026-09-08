@@ -10,10 +10,24 @@ from app.domains.repository import new_id
 
 def _category(statement: str) -> str:
     text = statement.lower()
+    if any(
+        word in text
+        for word in (
+            "vomit",
+            "rigurgit",
+            "dolore",
+            "feci",
+            "diarrea",
+            "zopp",
+            "farmac",
+            "prurito",
+            "tosse",
+            "febbre",
+        )
+    ):
+        return "HEALTH"
     if any(word in text for word in ("mangia", "cibo", "crocchette", "snack")):
         return "DIET"
-    if any(word in text for word in ("vomit", "dolore", "feci", "zopp", "farmac")):
-        return "HEALTH"
     if any(word in text for word in ("dorme", "passegg", "mattina", "sera", "routine")):
         return "ROUTINE"
     if any(word in text for word in ("ama", "prefer", "piace", "odia")):
@@ -23,7 +37,11 @@ def _category(statement: str) -> str:
 
 def extract_owner_reported_facts(text: str) -> list[OwnerReportedFact]:
     """Split only explicit owner statements; never infer causes or patterns."""
-    normalized = " ".join(text.strip().split())
+    normalized = "\n".join(
+        re.sub(r"[^\S\n]+", " ", line).strip()
+        for line in text.strip().splitlines()
+        if line.strip()
+    )
     sentences = [
         item.strip(" -")
         for item in re.split(r"(?<=[.!?])\s+|\n+", normalized)

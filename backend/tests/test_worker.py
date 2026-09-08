@@ -140,6 +140,31 @@ async def test_worker_resumes_interpreting_from_saved_observation(
     assert result["status"] == "COMPLETED"
 
 
+async def test_worker_retry_after_reasoner_failure_reuses_saved_observation(
+    client, auth_headers, state
+):
+    event_id = await _queue_behavior_event(
+        client,
+        auth_headers,
+        "crid-resume-reasoner",
+    )
+    event = state.store.behavior_events[event_id]
+    capture = state.store.captures[event.capture_id]
+    observation, _ = await state.observer.observe(
+        video_ref=capture.storage_path,
+        content_type=capture.content_type,
+        policy_version="test",
+        duration_ms=capture.duration_ms,
+    )
+    event.observation_json = observation.model_dump(mode="json")
+    event.status = BehaviorEventStatus.FAILED_RETRYABLE
+    state.observer = TimeoutObserver()
+
+    result = await process_behavior_event(state, event_id=event_id)
+
+    assert result["status"] == "COMPLETED"
+
+
 async def test_worker_rejects_missing_or_wrong_internal_token(worker_client: httpx.AsyncClient):
     r = await worker_client.post("/tasks/run", json={"task_type": "behavior_analysis", "event_id": "x"})
     assert r.status_code in (401, 403)

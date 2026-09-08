@@ -7,7 +7,9 @@ import { Platform } from 'react-native';
 
 import {
   completeBehaviorCapture,
+  getBehaviorEvent,
   initBehaviorCapture,
+  isTerminalBehaviorStatus,
 } from './api';
 import { deriveContextBucketHint } from './contextBucket';
 import { processPendingDigestiveUpload } from '../digestive/upload';
@@ -44,9 +46,11 @@ async function fileBytes(localUri: string): Promise<number> {
       return Math.max(1, info.size);
     }
   } catch {
-    // fallback
+    // handled below
   }
-  return 1;
+  throw new Error(
+    'Non riesco a leggere il video sul dispositivo. Registralo di nuovo.',
+  );
 }
 
 async function detectVideoContentType(localUri: string): Promise<VideoContentType> {
@@ -252,6 +256,21 @@ export async function recoverAndDrainUploads(userId: string): Promise<void> {
   }
   const active = queue.listActive(userId);
   for (const item of active) {
+    if (
+      item.domain === 'BEHAVIOR' &&
+      item.state === 'processing' &&
+      item.eventId
+    ) {
+      try {
+        const event = await getBehaviorEvent(item.eventId);
+        if (isTerminalBehaviorStatus(event.status)) {
+          queue.transitionTo(item.id, 'completed');
+        }
+      } catch {
+        // Stato remoto non disponibile: sarà riconciliato al prossimo resume.
+      }
+      continue;
+    }
     if (
       item.state === 'local_pending' ||
       item.state === 'recoverable_error' ||

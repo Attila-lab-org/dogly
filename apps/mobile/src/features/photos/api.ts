@@ -123,10 +123,23 @@ export async function uploadAlbumPhoto(
     visibility?: 'PRIVATE' | 'PUBLISHED';
   } = {},
 ): Promise<AlbumPhoto> {
-  const info = await getInfoAsync(localUri);
-  const bytes = info.exists && 'size' in info && typeof info.size === 'number'
-    ? Math.max(1, info.size)
-    : 1;
+  let bytes: number | null = null;
+  if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    bytes = blob.size > 0 ? blob.size : null;
+  } else {
+    const info = await getInfoAsync(localUri);
+    bytes =
+      info.exists && 'size' in info && typeof info.size === 'number' && info.size > 0
+        ? info.size
+        : null;
+  }
+  if (!bytes) {
+    throw new Error(
+      'Non riesco a leggere la foto sul dispositivo. Sceglila di nuovo.',
+    );
+  }
   const contentType = contentTypeFromUri(localUri);
   const created = await apiRequest<{
     photo: GalleryPhotoDto;

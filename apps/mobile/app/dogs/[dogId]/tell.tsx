@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -31,11 +32,13 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import {
   confirmOwnerStory,
+  discardOwnerStoryDraft,
   prepareOwnerStory,
   prepareOwnerStoryAudio,
   type OwnerFact,
 } from '@/features/ownerStory/api';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { queryKeys } from '@/lib/queryClient';
 
 type Phase = 'compose' | 'review' | 'saved';
 
@@ -43,7 +46,8 @@ export default function TellDogScreen() {
   const { dogId = '' } = useLocalSearchParams<{ dogId: string }>();
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
+  const { userId, usingMockGate } = useSession();
+  const queryClient = useQueryClient();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
   const [phase, setPhase] = useState<Phase>('compose');
@@ -84,6 +88,9 @@ export default function TellDogScreen() {
           ],
         });
       } else {
+        if (draftId) {
+          await discardOwnerStoryDraft(dogId, draftId).catch(() => undefined);
+        }
         applyDraft(await prepareOwnerStory(dogId, text.trim()));
       }
     } catch {
@@ -152,12 +159,27 @@ export default function TellDogScreen() {
 
   const confirm = async () => {
     const validFacts = facts.filter((fact) => fact.statement.trim().length >= 2);
-    if (validFacts.length === 0) return;
+    if (validFacts.length === 0) {
+      setError('Conserva almeno un’informazione prima di salvare.');
+      return;
+    }
     setWorking(true);
     setError(null);
     try {
       if (!useMock) {
         await confirmOwnerStory(dogId, draftId, validFacts);
+        await Promise.all([
+          userId
+            ? queryClient.invalidateQueries({
+                queryKey: queryKeys.ownerStories(userId, dogId),
+              })
+            : Promise.resolve(),
+          userId
+            ? queryClient.invalidateQueries({
+                queryKey: queryKeys.knowledgeScore(userId, dogId),
+              })
+            : Promise.resolve(),
+        ]);
       }
       setPhase('saved');
     } catch {
@@ -173,7 +195,9 @@ export default function TellDogScreen() {
         <DogIllustration mood="resting" size={210} />
         <Text style={styles.savedTitle}>Grazie, lo terrò a mente</Text>
         <Text style={styles.savedText}>
-          Ho salvato solo ciò che hai confermato su {dog.name}.
+          {useMock
+            ? 'Questa è un’anteprima: il racconto non viene conservato.'
+            : `Ho salvato solo ciò che hai confermato su ${dog.name}.`}
         </Text>
         <Button
           title="Torna alla Home"
@@ -315,7 +339,10 @@ export default function TellDogScreen() {
           <Button
             title="Conferma e salva"
             loading={working}
-            disabled={facts.length === 0}
+            disabled={
+              facts.length === 0 ||
+              !facts.some((fact) => fact.statement.trim().length >= 2)
+            }
             onPress={() => void confirm()}
           />
           <Button

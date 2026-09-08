@@ -46,6 +46,7 @@ import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isPersistedId } from '@/lib/persistedId';
+import { queryKeys } from '@/lib/queryClient';
 import {
   getDigestiveSummary,
   type DigestiveSummary,
@@ -63,7 +64,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
+  const { userId, usingMockGate } = useSession();
   const useDemoData = usingMockGate;
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
   useCareEvents(dog.id);
@@ -105,7 +106,7 @@ export default function DogProfileTabScreen() {
   const [savingStory, setSavingStory] = useState(false);
   const [storyError, setStoryError] = useState<string | null>(null);
   const storiesQuery = useQuery({
-    queryKey: ['owner-stories', dog.id],
+    queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
     queryFn: () => fetchOwnerStories(dog.id),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
@@ -342,7 +343,23 @@ export default function DogProfileTabScreen() {
             <Text style={styles.seeAll}>Racconta</Text>
           </Pressable>
         </View>
-        {!useDemoData && (storiesQuery.data?.length ?? 0) === 0 ? (
+        {!useDemoData && storiesQuery.isLoading ? (
+          <Text style={styles.notesEmpty}>Carico le note confermate…</Text>
+        ) : null}
+        {!useDemoData && storiesQuery.isError ? (
+          <View style={styles.notesErrorRow}>
+            <Text style={styles.noteError}>
+              Non riesco a caricare le note.
+            </Text>
+            <Pressable onPress={() => void storiesQuery.refetch()}>
+              <Text style={styles.noteActionPrimary}>Riprova</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {!useDemoData &&
+        !storiesQuery.isLoading &&
+        !storiesQuery.isError &&
+        (storiesQuery.data?.length ?? 0) === 0 ? (
           <Text style={styles.notesEmpty}>
             Qui ritroverai solo le cose che hai confermato.
           </Text>
@@ -387,6 +404,10 @@ export default function DogProfileTabScreen() {
               </>
             ) : (
               <>
+                <Text style={styles.noteMeta}>
+                  Detto da te ·{' '}
+                  {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
+                </Text>
                 {story.facts.map((fact) => (
                   <Text key={fact.id} style={styles.noteText}>
                     {fact.statement}
@@ -782,6 +803,11 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
+  noteMeta: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+  },
   noteInput: {
     minHeight: 64,
     padding: spacing.md,
@@ -811,6 +837,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     color: colors.danger,
     fontSize: typography.size.sm,
+  },
+  notesErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   pressed: {
     opacity: 0.7,

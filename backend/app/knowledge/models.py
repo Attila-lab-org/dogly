@@ -136,6 +136,7 @@ class DogContextSnapshot(BaseModel):
     recent_changes: list[LifestyleFact] = Field(default_factory=list)
     preferences: list[LifestyleFact] = Field(default_factory=list)
     health_context: list[LifestyleFact] = Field(default_factory=list)
+    owner_reported: list[LifestyleFact] = Field(default_factory=list)
 
 
 class AdviceItem(BaseModel):

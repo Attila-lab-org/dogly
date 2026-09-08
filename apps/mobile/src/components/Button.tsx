@@ -45,9 +45,19 @@ export function Button({
   const content = (
     <>
       {loading ? (
-        <ActivityIndicator
-          color={variant === 'outline' ? colors.accent : colors.textOnPrimary}
-        />
+        <>
+          <ActivityIndicator
+            color={variant === 'outline' ? colors.accent : colors.textOnPrimary}
+          />
+          <Text
+            style={[
+              styles.label,
+              variant === 'outline' ? styles.labelOutline : styles.labelFilled,
+            ]}
+          >
+            {title}
+          </Text>
+        </>
       ) : (
         <>
           {icon}

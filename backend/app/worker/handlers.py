@@ -270,10 +270,12 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
         ]
     dump = lifestyle.model_dump()
     context = build_dog_context(dog, dump)
+    routine = dict(context.routine)
     extras: dict[str, list] = {
         "preferences": list(context.preferences),
         "health_context": list(context.health_context),
         "recent_changes": list(context.recent_changes),
+        "owner_reported": list(context.owner_reported),
     }
     for story in stories:
         facts = story.get("facts") or []
@@ -297,9 +299,12 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
                 extras["preferences"].append(item)
             elif category in {"HEALTH", "DIET"}:
                 extras["health_context"].append(item)
+            elif category == "ROUTINE":
+                fact_id = str(fact.get("id") or len(routine))
+                routine[f"owner_{fact_id}"] = item
             else:
-                extras["recent_changes"].append(item)
-    return dog, context.model_copy(update=extras), dump
+                extras["owner_reported"].append(item)
+    return dog, context.model_copy(update={**extras, "routine": routine}), dump
 
 
 async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
@@ -431,12 +436,21 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
 
     observation: ObservationContract | None = None
     if (
-        event.status == BehaviorEventStatus.INTERPRETING
+        event.status
+        in {
+            BehaviorEventStatus.INTERPRETING,
+            BehaviorEventStatus.FAILED_RETRYABLE,
+        }
         and event.observation_json
     ):
         # Resume after a crash between observer and reasoner without paying for
         # the same video observation twice.
         observation = ObservationContract.model_validate(event.observation_json)
+        if event.status == BehaviorEventStatus.FAILED_RETRYABLE:
+            transition(event, BehaviorEventStatus.OBSERVING)
+            transition(event, BehaviorEventStatus.INTERPRETING)
+            if state.engine is not None:
+                await behavior_db.save_event_state(state.engine, event)
     else:
         # QUEUED/FAILED_RETRYABLE enter OBSERVING. An OBSERVING redelivery
         # resumes in place; old INTERPRETING rows without an observation restart.
@@ -483,7 +497,12 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                 ErrorCode.RATE_LIMITED,
                 retryable=False,
             )
-        except Exception:  # noqa: BLE001 -- provider failures become durable retries
+        except Exception:
+            logger.exception(
+                "Behavior observer failed for event %s on attempt %s",
+                event.id,
+                event.attempt_count,
+            )
             return await _fail(state, event, ErrorCode.PROCESSING_FAILED, retryable=True)
         await state.cost_meter.record(
             usage=obs_usage,
@@ -565,8 +584,13 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         # always a NON-retryable terminal failure — retrying would burn
         # budget. Never raises RetryableTaskError.
         return await _fail(state, event, ErrorCode.AI_BUDGET_EXCEEDED, retryable=False)
-    except Exception:  # noqa: BLE001 -- deliberate: schema/validation/provider errors
+    except Exception:
         # follow the one-repair-then-terminal path (sez. 22), never crash the worker.
+        logger.exception(
+            "Behavior reasoner failed for event %s on attempt %s",
+            event.id,
+            event.attempt_count,
+        )
         return await _fail(state, event, ErrorCode.PROVIDER_SCHEMA_INVALID, retryable=True)
     await state.cost_meter.record(
         usage=rea_usage,
@@ -616,6 +640,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     event.advice_code = advice.code if advice is not None else None
     event.advice_json = advice.model_dump(mode="json") if advice is not None else None
     event.completed_at = now_utc()
+    event.last_error_code = None
     if not event.quota_committed and not event.quota_refunded:
         await quota.commit(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
         event.quota_committed = True

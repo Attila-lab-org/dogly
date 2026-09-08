@@ -26,17 +26,27 @@ import { AdviceCard } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
 import { selectAdvice } from '@/features/advice/logic';
 import { useSession } from '@/features/auth/SessionProvider';
+import { queryKeys } from '@/lib/queryClient';
+import { isPersistedId } from '@/lib/persistedId';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
+  const { userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const useApi = isApiConfigured() && Boolean(eventId) && !usingMockGate;
+  const useApi =
+    isApiConfigured() &&
+    Boolean(userId) &&
+    isPersistedId(eventId) &&
+    !usingMockGate;
 
   const query = useQuery({
-    queryKey: ['behavior-event', eventId],
+    queryKey: queryKeys.behaviorEvent(
+      userId ?? 'anon',
+      dog.id,
+      eventId ?? '',
+    ),
     queryFn: () => getBehaviorEvent(eventId!),
     enabled: useApi,
   });

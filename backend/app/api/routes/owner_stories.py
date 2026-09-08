@@ -20,6 +20,10 @@ from app.contracts.taxonomy import AnalysisDomain
 from app.domains import dogs_db, idempotency_db, owner_stories_db
 from app.domains.dogs import get_owned_dog
 from app.domains.owner_stories import extract_owner_reported_facts
+from app.domains.personal_engine import (
+    recalculate_knowledge_score_db,
+    recalculate_knowledge_score_memory,
+)
 from app.domains.repository import new_id, now_utc
 from app.providers.base import ProviderUsage
 from app.providers.openai_transcription import transcribe_owner_audio
@@ -189,6 +193,7 @@ async def confirm_owner_story(
             draft_id=draft_id,
             facts=payload.facts,
         )
+        await recalculate_knowledge_score_db(state.engine, dog_id=dog_id)
     else:
         draft = state.store.owner_reported_observations.get(draft_id)
         if (
@@ -204,6 +209,7 @@ async def confirm_owner_story(
         draft["transcript"] = None
         draft["status"] = "CONFIRMED"
         draft["confirmed_at"] = now_utc()
+        recalculate_knowledge_score_memory(state.store, dog_id=dog_id)
     return OwnerStoryConfirmedOut(
         observation_id=draft_id,
         dog_id=dog_id,
@@ -270,6 +276,7 @@ async def delete_owner_story(
             dog_id=dog_id,
             observation_id=observation_id,
         )
+        await recalculate_knowledge_score_db(state.engine, dog_id=dog_id)
     else:
         observation = state.store.owner_reported_observations.get(
             observation_id
@@ -281,4 +288,5 @@ async def delete_owner_story(
         ):
             raise ApiError(ErrorCode.NOT_FOUND, "Owner story not found")
         del state.store.owner_reported_observations[observation_id]
+        recalculate_knowledge_score_memory(state.store, dog_id=dog_id)
     return Response(status_code=204)

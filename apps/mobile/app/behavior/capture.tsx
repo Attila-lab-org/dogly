@@ -361,7 +361,7 @@ export default function BehaviorCaptureScreen() {
     try {
       const durationMs = Math.max(
         CAPTURE_MIN_SECONDS * 1000,
-        elapsedRef.current * 1000,
+        Math.min(CAPTURE_MAX_SECONDS * 1000, elapsedRef.current * 1000),
       );
       const { eventId } = await enqueueAndUploadBehaviorClip({
         userId,
@@ -444,7 +444,8 @@ export default function BehaviorCaptureScreen() {
                   facing="back"
                   mode="video"
                   mute={!micGranted}
-                  videoStabilizationMode="off"
+                  videoQuality="720p"
+                  videoStabilizationMode="auto"
                   active
                   onCameraReady={() => setCameraReady(true)}
                   onMountError={() => setCameraReady(false)}
@@ -487,7 +488,7 @@ export default function BehaviorCaptureScreen() {
               ) : (
                 <Text style={styles.hint}>
                   {cameraReady
-                    ? `Tocca il pulsante rosso. Non tenere premuto: registro da ${CAPTURE_MIN_SECONDS} a ${CAPTURE_MAX_SECONDS} secondi.`
+                    ? `Inquadra tutto ${dog.name}, con buona luce e senza zoom. Tocca il pulsante rosso: registro da ${CAPTURE_MIN_SECONDS} a ${CAPTURE_MAX_SECONDS} secondi.`
                     : 'Attendi, sto aprendo la fotocamera…'}
                 </Text>
               )}

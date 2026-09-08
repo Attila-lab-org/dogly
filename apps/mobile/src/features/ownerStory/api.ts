@@ -48,6 +48,13 @@ export async function deleteOwnerStory(
   return api.delete(`/v1/dogs/${dogId}/owner-stories/${observationId}`);
 }
 
+export async function discardOwnerStoryDraft(
+  dogId: string,
+  draftId: string,
+): Promise<void> {
+  return api.delete(`/v1/dogs/${dogId}/owner-stories/${draftId}`);
+}
+
 export function prepareOwnerStory(
   dogId: string,
   text: string,

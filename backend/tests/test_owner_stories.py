@@ -7,6 +7,7 @@ import pytest
 from app.api.routes import owner_stories
 from app.config import Settings
 from app.contracts.errors import ApiError, ErrorCode
+from app.domains.owner_stories import extract_owner_reported_facts
 from app.providers import openai_transcription
 from tests.conftest import create_dog
 
@@ -48,6 +49,7 @@ async def test_owner_story_requires_review_before_confirmation(
     assert draft["status"] == "CONFIRMED"
     assert draft["facts"] == edited
     assert draft["transcript"] is None
+    assert state.store.knowledge_scores[-1]["components"]["owner_stories"] == 0.05
 
     listed = await client.get(
         f"/v1/dogs/{dog_id}/owner-stories",
@@ -70,6 +72,7 @@ async def test_owner_story_requires_review_before_confirmation(
         headers=auth_headers,
     )
     assert deleted.status_code == 204
+    assert state.store.knowledge_scores[-1]["components"]["owner_stories"] == 0.0
     listed_after_delete = await client.get(
         f"/v1/dogs/{dog_id}/owner-stories",
         headers=auth_headers,
@@ -199,3 +202,12 @@ async def test_owner_audio_rejects_invalid_base64():
         )
 
     assert exc.value.code is ErrorCode.VALIDATION_FAILED
+
+
+def test_owner_story_extracts_newlines_and_italian_health_terms():
+    facts = extract_owner_reported_facts(
+        "Rocky ha vomitato questa mattina\nDi solito dorme dopo pranzo"
+    )
+
+    assert [fact.category for fact in facts] == ["HEALTH", "ROUTINE"]
+    assert len(facts) == 2

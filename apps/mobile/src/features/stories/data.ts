@@ -56,7 +56,21 @@ async function storyAlbum(dogId: string): Promise<PhotoAlbum> {
     (album) => album.title.trim().toLocaleLowerCase() ===
       STORIES_ALBUM_TITLE.toLocaleLowerCase(),
   );
-  return existing ?? createAlbum(dogId, STORIES_ALBUM_TITLE);
+  if (existing) return existing;
+  try {
+    return await createAlbum(dogId, STORIES_ALBUM_TITLE);
+  } catch (error) {
+    // Due dispositivi possono creare l'album nello stesso istante. Il vincolo
+    // DB ne conserva uno solo; rileggendolo il secondo upload può continuare.
+    const refreshed = await fetchAlbums(dogId);
+    const raced = refreshed.find(
+      (album) =>
+        album.title.trim().toLocaleLowerCase() ===
+        STORIES_ALBUM_TITLE.toLocaleLowerCase(),
+    );
+    if (raced) return raced;
+    throw error;
+  }
 }
 
 async function fetchRealStories(
@@ -91,7 +105,7 @@ export function useStories(dogId: string, dogName: string): DogStory[] {
     enabled: live && isPersistedId(dogId),
     staleTime: 30_000,
   });
-  return live ? query.data ?? [] : mock;
+  return usingMockGate ? mock : query.data ?? [];
 }
 
 export async function publishStory(input: {
@@ -101,7 +115,10 @@ export async function publishStory(input: {
   caption?: string;
   mockGate: boolean;
 }): Promise<DogStory> {
-  if (!input.mockGate && isApiConfigured()) {
+  if (!input.mockGate) {
+    if (!isApiConfigured() || !isPersistedId(input.dogId)) {
+      throw new Error('Servizio storie non disponibile');
+    }
     const album = await storyAlbum(input.dogId);
     const photo = await uploadAlbumPhoto(album.id, input.photoUri, {
       caption: input.caption,

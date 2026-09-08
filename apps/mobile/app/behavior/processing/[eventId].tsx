@@ -26,13 +26,19 @@ import { isApiConfigured } from '@/features/auth/env';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
 import { useSession } from '@/features/auth/SessionProvider';
+import { queryKeys } from '@/lib/queryClient';
+import { isPersistedId } from '@/lib/persistedId';
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
+  const { userId, usingMockGate } = useSession();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const useApi = isApiConfigured() && Boolean(eventId) && !usingMockGate;
+  const useApi =
+    isApiConfigured() &&
+    Boolean(userId) &&
+    isPersistedId(eventId) &&
+    !usingMockGate;
   const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
   const [finishing, setFinishing] = useState(false);
   const completionStarted = useRef(false);
@@ -46,7 +52,11 @@ export default function BehaviorProcessingScreen() {
   );
 
   const query = useQuery({
-    queryKey: ['behavior-event', eventId],
+    queryKey: queryKeys.behaviorEvent(
+      userId ?? 'anon',
+      dog.id,
+      eventId ?? '',
+    ),
     queryFn: () => getBehaviorEvent(eventId!),
     enabled: useApi,
     refetchInterval: (q) => {
@@ -98,11 +108,13 @@ export default function BehaviorProcessingScreen() {
   useEffect(() => {
     if (!useApi || !query.data) return;
     const s = query.data.status;
+    if (isTerminalBehaviorStatus(s)) {
+      markUploadCompletedForEvent(query.data.id);
+      void cancelResultReadyNotification(query.data.id);
+    }
     if (s === 'COMPLETED' && !completionStarted.current) {
       completionStarted.current = true;
       setFinishing(true);
-      markUploadCompletedForEvent(query.data.id);
-      void cancelResultReadyNotification(query.data.id);
       completionTimer.current = setTimeout(
         () => router.replace(`/behavior/result/${query.data!.id}`),
         850,
@@ -130,8 +142,8 @@ export default function BehaviorProcessingScreen() {
     return (
       <ScreenContainer>
         <ErrorState
-          title="Non riesco ad aggiornare l’analisi"
-          message="La connessione può essere momentaneamente instabile. L’analisi continua in sicurezza."
+          title="Non riesco ad aprire l’analisi"
+          message="Controlla la connessione e riprova. Se l’elaborazione è partita, ritroverai il risultato nel Diario."
           onRetry={() => void query.refetch()}
         />
         <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
@@ -151,6 +163,28 @@ export default function BehaviorProcessingScreen() {
     );
   }
 
+  if (status === 'DRAFT' || status === 'UPLOADING') {
+    return (
+      <ScreenContainer>
+        <View style={styles.statePage}>
+          <View style={[styles.stateIcon, { backgroundColor: colors.primarySoft }]}>
+            <Ionicons name="cloud-upload-outline" size={36} color={colors.primary} />
+          </View>
+          <Text style={styles.stateTitle}>Sto completando l’invio</Text>
+          <Text style={styles.stateText}>
+            Conserva la connessione per qualche momento. Il video rimane sul
+            telefono finché l’invio non è verificato.
+          </Text>
+          <Button
+            title="Torna alla Home"
+            variant="outline"
+            onPress={() => router.replace('/(tabs)/home')}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
   if (status === 'REJECTED_QUALITY') {
     return (
       <ScreenContainer>
@@ -161,7 +195,7 @@ export default function BehaviorProcessingScreen() {
           <Text style={styles.stateTitle}>Il video non è abbastanza chiaro</Text>
           <Text style={styles.stateText}>
             Non riesco a vedere bene {dog.name}: possibile scarsa luce, movimento
-            sfocato o inquadratura parziale. Nessuna analisi è stata usata:
+            sfocato o inquadratura parziale. Questa prova non viene conteggiata:
             riprova quando vuoi.
           </Text>
           <Button
@@ -193,6 +227,31 @@ export default function BehaviorProcessingScreen() {
           </Text>
           <Button
             title="Riprova"
+            onPress={() => router.replace('/behavior/capture')}
+          />
+          <Button
+            title="Torna alla Home"
+            variant="outline"
+            onPress={() => router.replace('/(tabs)/home')}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (status === 'CANCELLED') {
+    return (
+      <ScreenContainer>
+        <View style={styles.statePage}>
+          <View style={[styles.stateIcon, { backgroundColor: colors.surfaceMuted }]}>
+            <Ionicons name="close-circle-outline" size={36} color={colors.textMuted} />
+          </View>
+          <Text style={styles.stateTitle}>Analisi annullata</Text>
+          <Text style={styles.stateText}>
+            Questa analisi non è stata completata e non verrà conteggiata.
+          </Text>
+          <Button
+            title="Registra un nuovo video"
             onPress={() => router.replace('/behavior/capture')}
           />
           <Button
@@ -239,7 +298,8 @@ export default function BehaviorProcessingScreen() {
       />
 
       <Text style={styles.heroText}>
-        Puoi anche chiudere: ti avviso io quando il risultato è pronto.
+        Puoi anche chiudere. Se hai attivato le notifiche, ti avviso quando il
+        risultato è pronto; altrimenti lo ritrovi nel Diario.
       </Text>
 
       {isRetrying && (

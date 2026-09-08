@@ -27,6 +27,7 @@ import {
   mapApiEventToResult,
 } from '@/features/behavior/api';
 import { queryKeys } from '@/lib/queryClient';
+import { isPersistedId } from '@/lib/persistedId';
 import { behaviorResultsMock, diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain } from '@/features/core/types';
 import {
@@ -62,7 +63,8 @@ export default function DiaryEventScreen() {
   // gli id reali arrivano dalla timeline /v1/diary.
   const useApi =
     domain === 'BEHAVIOR' &&
-    Boolean(eventId) &&
+    Boolean(userId) &&
+    isPersistedId(eventId) &&
     !entry &&
     isApiConfigured() &&
     !usingMockGate;
@@ -99,6 +101,16 @@ export default function DiaryEventScreen() {
     if (behaviorResult?.feedback) setFeedback(behaviorResult.feedback);
   }, [behaviorResult?.feedback]);
 
+  const behaviorNotCompleted =
+    domain === 'BEHAVIOR' &&
+    behaviorResult !== undefined &&
+    behaviorResult.status !== 'COMPLETED';
+  useEffect(() => {
+    if (behaviorNotCompleted && behaviorResult) {
+      router.replace(`/behavior/processing/${behaviorResult.eventId}`);
+    }
+  }, [behaviorNotCompleted, behaviorResult, router]);
+
   if (useApi && query.isLoading) {
     return (
       <ScreenContainer>
@@ -120,6 +132,17 @@ export default function DiaryEventScreen() {
           onRetry={useApi && query.isError ? () => void query.refetch() : undefined}
         />
         <Button title="Torna al Diario" onPress={() => router.back()} />
+      </ScreenContainer>
+    );
+  }
+
+  if (behaviorNotCompleted) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          title="Analisi non ancora conclusa"
+          message="Ti porto allo stato corretto dell’analisi…"
+        />
       </ScreenContainer>
     );
   }
