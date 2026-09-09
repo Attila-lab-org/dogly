@@ -4,6 +4,11 @@
   "outputDirectory": "dist",
   "installCommand": "pnpm install --frozen-lockfile=false",
   "framework": null,
+  "env": {
+    "EXPO_PUBLIC_SUPABASE_URL": "https://zcnzkpxgpbdspfmselwz.supabase.co",
+    "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_PiOO12UvFge_Cpex5jrXMQ_BqcfAGuG",
+    "EXPO_PUBLIC_API_URL": "https://dogly-eight.vercel.app"
+  },
   "rewrites": [
     {
       "source": "/(.*)",

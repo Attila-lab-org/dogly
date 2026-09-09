@@ -22,7 +22,7 @@ const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { sessionState, usingMockGate, loading } = useSession();
+  const { sessionState, usingMockGate, loading, authConfigured } = useSession();
   const [busy, setBusy] = useState<'google' | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
@@ -58,9 +58,14 @@ export default function WelcomeScreen() {
       ? 'Sei offline. Riprova quando hai connessione.'
       : 'Accesso non riuscito. Riprova.';
 
+  const configIncomplete = !usingMockGate && !authConfigured;
+
   const oauth = async () => {
     if (usingMockGate) {
       enterMock();
+      return;
+    }
+    if (configIncomplete) {
       return;
     }
     setError(null);
@@ -78,6 +83,9 @@ export default function WelcomeScreen() {
     // Mock gate dev: stesso comportamento della demo Google.
     if (usingMockGate) {
       enterMock();
+      return;
+    }
+    if (configIncomplete) {
       return;
     }
     setError(null);
@@ -118,13 +126,20 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.footer}>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {configIncomplete ? (
+          <Text style={styles.error}>
+            Configurazione incompleta: mancano le variabili Supabase. Contatta
+            l’amministratore.
+          </Text>
+        ) : error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : null}
         <View style={styles.actions}>
           <Button
             title="Continua con Google"
             variant="primary"
             loading={busy === 'google'}
-            disabled={busy !== null}
+            disabled={busy !== null || configIncomplete}
             onPress={() => void oauth()}
             icon={
               <Ionicons name="logo-google" size={19} color={colors.textOnPrimary} />
@@ -136,7 +151,7 @@ export default function WelcomeScreen() {
               title="Continua con Apple"
               variant="secondary"
               loading={busy === 'apple'}
-              disabled={busy !== null}
+              disabled={busy !== null || configIncomplete}
               onPress={() => void oauthApple()}
               icon={
                 <Ionicons name="logo-apple" size={19} color={colors.textOnPrimary} />

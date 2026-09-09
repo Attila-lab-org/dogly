@@ -46,7 +46,7 @@ const ERROR_COPY: Record<AuthErrorKind, string> = {
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { sessionState, usingMockGate, loading } = useSession();
+  const { sessionState, usingMockGate, loading, authConfigured } = useSession();
   const [loadingProvider, setLoadingProvider] = useState<AuthProvider | null>(
     null,
   );
@@ -56,6 +56,8 @@ export default function SignInScreen() {
   const [otp, setOtp] = useState('');
   const [appleAvailable, setAppleAvailable] = useState(false);
   const oauthInFlight = useRef(false);
+
+  const configIncomplete = !usingMockGate && !authConfigured;
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -211,6 +213,16 @@ export default function SignInScreen() {
         </View>
       )}
 
+      {configIncomplete && (
+        <View style={styles.errorBanner} accessibilityLiveRegion="polite">
+          <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+          <Text style={styles.errorText}>
+            Configurazione incompleta: mancano le variabili Supabase. Contatta
+            l’amministratore.
+          </Text>
+        </View>
+      )}
+
       {emailStep === 'enter_email' && (
         <View style={styles.emailBlock}>
           <Text style={styles.emailExplain}>
@@ -279,7 +291,7 @@ export default function SignInScreen() {
             title="Continua con Google"
             variant="primary"
             loading={loadingProvider === 'google'}
-            disabled={loadingProvider !== null}
+            disabled={loadingProvider !== null || configIncomplete}
             onPress={() => void signInOAuth()}
             icon={
               <Ionicons name="logo-google" size={18} color={colors.textOnPrimary} />
