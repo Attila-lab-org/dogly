@@ -9,7 +9,8 @@
     "REASONING_MODEL": "gpt-5-mini",
     "DIGESTIVE_VISION_PROVIDER": "openai",
     "DIGESTIVE_VISION_MODEL": "gpt-5-mini",
-    "OWNER_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe"
+    "OWNER_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe",
+    "CORS_ORIGINS": "https://dogly-eight.vercel.app,https://dogly-web.vercel.app,http://localhost:8083,http://127.0.0.1:8083"
   },
   "functions": {
     "api/index.py": {

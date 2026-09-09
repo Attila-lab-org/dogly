@@ -1,0 +1,5 @@
+appId: com.dogly.app
+---
+- launchApp
+- assertVisible: "Dogly"
+# Full OTP/Google path requires staging credentials; keep as manual device checklist companion.
