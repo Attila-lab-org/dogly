@@ -226,9 +226,10 @@ Registro completo in `docs/DECISIONS.md` (non duplicato qui):
 - **Cold start serverless**: la function Python Vercel carica l'intera app FastAPI
   (public + worker montate); il primo hit dopo idle paga l'import. Gli endpoint
   `/health` e `/ready` (con check DB) supportano smoke/monitoring.
-- **Durata request**: `vercel.json` non imposta oggi un `maxDuration` esplicito.
-  L'analisi video resta comunque fuori dalla request pubblica per vincolo
-  architetturale (complete → workflow → worker); il client usa polling/notifica.
+- **Durata request**: `vercel.json` imposta `maxDuration` 300s su `api/index.py`
+  (tetto del piano). L'analisi video resta fuori dalla request pubblica
+  (complete → workflow → worker); il client usa polling/notifica con tetto 10 min.
+  Cron `/tasks/cron/sweep-stuck` ogni 15 min chiude gli eventi bloccati e rimborsa.
   Mai spostare inferenza AI nel request path pubblico.
 - **Pooler Supabase**: `DATABASE_URL` punta al connection pooler (transaction mode);
   sessioni lunghe e prepared statement vanno trattati di conseguenza.

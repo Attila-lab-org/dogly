@@ -137,6 +137,14 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
             return JSONResponse(status_code=status_code, content=result)
         return result
 
+    @app.get("/tasks/cron/sweep-stuck", dependencies=[Depends(cron_auth)])
+    async def run_sweep_stuck_cron(request: Request) -> dict:
+        """Vercel Cron: sblocca analisi bloccate o le chiude con rimborso."""
+        from app.worker.sweep import sweep_stuck_events
+
+        st: AppState = request.app.state.cbi
+        return await sweep_stuck_events(st)
+
     @app.get("/tasks/cron/care-reminders", dependencies=[Depends(cron_auth)])
     async def run_care_reminder_cron(request: Request) -> dict:
         """Vercel Cron GET ingress for due care reminders."""

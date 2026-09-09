@@ -44,7 +44,13 @@ TERMINAL_EVENT_STATUSES = frozenset(
 BEHAVIOR_EVENT_TRANSITIONS: dict[BehaviorEventStatus, frozenset[BehaviorEventStatus]] = {
     BehaviorEventStatus.DRAFT: frozenset({BehaviorEventStatus.UPLOADING, BehaviorEventStatus.CANCELLED}),
     BehaviorEventStatus.UPLOADING: frozenset({BehaviorEventStatus.QUEUED, BehaviorEventStatus.CANCELLED}),
-    BehaviorEventStatus.QUEUED: frozenset({BehaviorEventStatus.OBSERVING, BehaviorEventStatus.CANCELLED}),
+    BehaviorEventStatus.QUEUED: frozenset(
+        {
+            BehaviorEventStatus.OBSERVING,
+            BehaviorEventStatus.CANCELLED,
+            BehaviorEventStatus.FAILED_TERMINAL,
+        }
+    ),
     BehaviorEventStatus.OBSERVING: frozenset(
         {
             BehaviorEventStatus.INTERPRETING,

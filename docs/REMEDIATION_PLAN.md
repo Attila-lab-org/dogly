@@ -183,7 +183,7 @@ Per ogni fase, Cursor consegna e io verifico:
 
 | Fase | Stato | Note |
 |------|-------|------|
-| Fase 1 (P0) | 🟡 Parziale | FIX 1.6 in produzione (tabella + cron isolato). Resto Fase 1 ancora aperto. |
+| Fase 1 (P0) | 🟡 Parziale | 1.1 sweep-stuck + cron 15 min; 1.2 timeout polling 10 min; 1.3 push su fallimento; 1.6 retention; 1.8 maxDuration 300s. Restano 1.4, 1.5, 1.7. |
 | GATE-1 | ⏭️ Saltato | Nessuno staging: si testa direttamente in produzione. |
 | Fase 2 (P1) | ⬜ | |
 | Fase 3 (P2) | ⬜ | |

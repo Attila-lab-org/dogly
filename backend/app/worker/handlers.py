@@ -307,6 +307,38 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
     return dog, context.model_copy(update={**extras, "routine": routine}), dump
 
 
+async def notify_analysis_failure(
+    state: AppState,
+    *,
+    user_id: str,
+    event_id: str,
+    domain: str,
+) -> None:
+    """Push on terminal analysis failure. Never raise — delivery is best-effort."""
+    try:
+        tokens = await _notification_tokens(state, user_id)
+        if domain == "DIGESTIVE":
+            href = f"/digestive/processing/{event_id}"
+            body = (
+                "Non siamo riusciti ad analizzare la foto. "
+                "Nessun addebito: puoi riprovare quando vuoi."
+            )
+        else:
+            href = f"/behavior/processing/{event_id}"
+            body = (
+                "Non siamo riusciti ad analizzare il video. "
+                "Nessun addebito: puoi riprovare quando vuoi."
+            )
+        await send_push(
+            tokens,
+            title="Analisi non riuscita",
+            body=body,
+            data={"href": href, "event_id": event_id},
+        )
+    except Exception:
+        logger.exception("Could not send analysis failure notification")
+
+
 async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
     if state.engine is not None:
         return await devices_db.list_notification_tokens(state.engine, user_id)
@@ -371,7 +403,12 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
             {"event_id": event.id, "status": event.status.value, "error": code.value}
         )
     # Terminal: refund the reservation once (sez. 7.3 / 22).
-    if event.status == BehaviorEventStatus.FAILED_RETRYABLE or event.status in (BehaviorEventStatus.OBSERVING, BehaviorEventStatus.INTERPRETING):
+    if event.status in (
+        BehaviorEventStatus.QUEUED,
+        BehaviorEventStatus.OBSERVING,
+        BehaviorEventStatus.INTERPRETING,
+        BehaviorEventStatus.FAILED_RETRYABLE,
+    ):
         transition(event, BehaviorEventStatus.FAILED_TERMINAL)
     else:
         raise InvalidTransition(f"cannot fail terminally from {event.status}")
@@ -388,7 +425,74 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
         status="FAILED",
         error_code=code.value,
     )
+    await notify_analysis_failure(
+        state,
+        user_id=event.user_id,
+        event_id=event.id,
+        domain="BEHAVIOR",
+    )
     return {"event_id": event.id, "status": event.status.value, "error": code.value}
+
+
+async def fail_stuck_analysis(
+    state: AppState,
+    *,
+    event_id: str,
+    domain: str,
+) -> bool:
+    """Force a stuck event to FAILED_TERMINAL, refund quota, notify the owner."""
+    quota = QuotaService(state.store, engine=state.engine)
+    if domain == "BEHAVIOR":
+        if state.engine is not None:
+            event = await behavior_db.load_event(state.engine, event_id=event_id)
+            if event is not None:
+                state.store.behavior_events[event.id] = event
+        else:
+            event = state.store.behavior_events.get(event_id)
+        if event is None or event.status in TERMINAL_EVENT_STATUSES:
+            return False
+        await _fail(state, event, ErrorCode.PROCESSING_TIMEOUT, retryable=False)
+        return True
+
+    if state.engine is not None:
+        event = await digestive_db.load_fecal_event(state.engine, event_id=event_id)
+        if event is not None:
+            state.store.fecal_events[event.id] = event
+    else:
+        event = state.store.fecal_events.get(event_id)
+    if event is None or event.status in (
+        "COMPLETED",
+        "REJECTED_QUALITY",
+        "FAILED_TERMINAL",
+    ):
+        return False
+    event.status = "FAILED_TERMINAL"
+    event.last_error_code = ErrorCode.PROCESSING_TIMEOUT.value
+    if not event.quota_refunded and not event.quota_committed:
+        await quota.refund(
+            event.user_id,
+            AnalysisDomain.DIGESTIVE,
+            reference_id=event.id,
+        )
+        event.quota_refunded = True
+    event.completed_at = now_utc()
+    schedule_digestive_raw_expiry(event, state.settings)
+    if state.engine is not None:
+        await digestive_db.save_fecal_state(state.engine, event)
+        await arm_fecal_expiry(state.engine, event.id)
+    await _set_analysis_job_status(
+        state,
+        event_id=event.id,
+        status="FAILED",
+        error_code=ErrorCode.PROCESSING_TIMEOUT.value,
+    )
+    await notify_analysis_failure(
+        state,
+        user_id=event.user_id,
+        event_id=event.id,
+        domain="DIGESTIVE",
+    )
+    return True
 
 
 async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
@@ -887,6 +991,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             status="FAILED",
             error_code=ErrorCode.PROVIDER_TIMEOUT.value,
         )
+        await notify_analysis_failure(
+            state,
+            user_id=event.user_id,
+            event_id=event.id,
+            domain="DIGESTIVE",
+        )
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_TIMEOUT.value}
     except BudgetExceededError:
         event.status = "FAILED_TERMINAL"
@@ -908,6 +1018,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             event_id=event.id,
             status="FAILED",
             error_code=ErrorCode.AI_BUDGET_EXCEEDED.value,
+        )
+        await notify_analysis_failure(
+            state,
+            user_id=event.user_id,
+            event_id=event.id,
+            domain="DIGESTIVE",
         )
         return {
             "event_id": event.id,
@@ -931,6 +1047,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             event_id=event.id,
             status="FAILED",
             error_code=ErrorCode.PROVIDER_SCHEMA_INVALID.value,
+        )
+        await notify_analysis_failure(
+            state,
+            user_id=event.user_id,
+            event_id=event.id,
+            domain="DIGESTIVE",
         )
         return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_SCHEMA_INVALID.value}
     await state.cost_meter.record(

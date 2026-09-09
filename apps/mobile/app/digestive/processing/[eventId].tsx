@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,10 @@ import {
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
 import { markDigestiveUploadCompletedForEvent } from '@/features/digestive/upload';
+import {
+  ANALYSIS_POLL_TIMEOUT_MS,
+  analysisPollIntervalMs,
+} from '@/features/core/processingTimeout';
 
 const STEP_DURATION_MS = 1100;
 
@@ -31,6 +35,9 @@ export default function DigestiveProcessingScreen() {
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
   const [stepIndex, setStepIndex] = useState(0);
+  const [timedOut, setTimedOut] = useState(false);
+  const pollStartedAt = useRef(Date.now());
+  const statusRef = useRef<string | undefined>(undefined);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
   const query = useQuery({
@@ -40,7 +47,10 @@ export default function DigestiveProcessingScreen() {
     refetchInterval: (q) => {
       const status = q.state.data?.status;
       if (!status || isTerminalDigestiveStatus(status)) return false;
-      return 2000;
+      if (Date.now() - pollStartedAt.current >= ANALYSIS_POLL_TIMEOUT_MS) {
+        return false;
+      }
+      return analysisPollIntervalMs(q.state.dataUpdateCount);
     },
   });
 
@@ -65,6 +75,19 @@ export default function DigestiveProcessingScreen() {
     );
     return () => clearTimeout(timer);
   }, [useApi, eventId, router, stepIndex, steps.length]);
+
+  statusRef.current = query.data?.status;
+
+  useEffect(() => {
+    if (!useApi) return;
+    const timer = setTimeout(() => {
+      const status = statusRef.current;
+      if (!status || !isTerminalDigestiveStatus(status)) {
+        setTimedOut(true);
+      }
+    }, ANALYSIS_POLL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [useApi, eventId]);
 
   useEffect(() => {
     if (!useApi || !query.data) return;
@@ -123,6 +146,37 @@ export default function DigestiveProcessingScreen() {
           <Text style={styles.failedText}>
             C'è stato un problema tecnico dall'altra parte. Non è colpa della
             foto: l'analisi non è stata conteggiata.
+          </Text>
+          <Button
+            title="Riprova"
+            onPress={() => router.replace('/digestive/capture')}
+          />
+          <Button
+            title="Torna alla Home"
+            variant="outline"
+            onPress={() => router.replace('/(tabs)/rocky')}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (
+    timedOut &&
+    useApi &&
+    (!query.data?.status || !isTerminalDigestiveStatus(query.data.status))
+  ) {
+    return (
+      <ScreenContainer>
+        <View style={styles.failedPage}>
+          <View style={styles.failedIcon}>
+            <Ionicons name="time-outline" size={36} color={colors.warning} />
+          </View>
+          <Text style={styles.failedTitle}>L’analisi sta impiegando troppo</Text>
+          <Text style={styles.failedText}>
+            Sto ancora lavorando in background. Questa attesa non viene
+            conteggiata come un’analisi andata a buon fine: puoi riprovare o
+            tornare più tardi dal Diario.
           </Text>
           <Button
             title="Riprova"

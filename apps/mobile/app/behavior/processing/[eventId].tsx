@@ -28,6 +28,10 @@ import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
 import { useSession } from '@/features/auth/SessionProvider';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
+import {
+  ANALYSIS_POLL_TIMEOUT_MS,
+  analysisPollIntervalMs,
+} from '@/features/core/processingTimeout';
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
@@ -41,8 +45,10 @@ export default function BehaviorProcessingScreen() {
     !usingMockGate;
   const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
   const [finishing, setFinishing] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
   const completionStarted = useRef(false);
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollStartedAt = useRef(Date.now());
 
   useEffect(
     () => () => {
@@ -62,10 +68,10 @@ export default function BehaviorProcessingScreen() {
     refetchInterval: (q) => {
       const status = q.state.data?.status;
       if (!status || isTerminalBehaviorStatus(status)) return false;
-      const updates = q.state.dataUpdateCount;
-      if (updates < 5) return 2_000;
-      if (updates < 12) return 4_000;
-      return 8_000;
+      if (Date.now() - pollStartedAt.current >= ANALYSIS_POLL_TIMEOUT_MS) {
+        return false;
+      }
+      return analysisPollIntervalMs(q.state.dataUpdateCount);
     },
   });
 
@@ -105,6 +111,20 @@ export default function BehaviorProcessingScreen() {
     return () => clearInterval(t);
   }, [useApi, mockEvent, router, steps.length]);
 
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
+  useEffect(() => {
+    if (!useApi) return;
+    const timer = setTimeout(() => {
+      const s = statusRef.current;
+      if (!s || !isTerminalBehaviorStatus(s)) {
+        setTimedOut(true);
+      }
+    }, ANALYSIS_POLL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [useApi, eventId]);
+
   useEffect(() => {
     if (!useApi || !query.data) return;
     const s = query.data.status;
@@ -125,8 +145,6 @@ export default function BehaviorProcessingScreen() {
   // "Ti avviso quando il risultato è pronto": se l'utente lascia la
   // schermata prima dello stato terminale, schedula la notifica locale.
   // Al mount (rientro a guardare) la notifica pendente viene cancellata.
-  const statusRef = useRef(status);
-  statusRef.current = status;
   useEffect(() => {
     if (!eventId) return;
     void cancelResultReadyNotification(eventId);
@@ -224,6 +242,37 @@ export default function BehaviorProcessingScreen() {
             C'è stato un problema tecnico dall'altra parte. Non è colpa del
             video: l'analisi non è stata conteggiata e il problema è già stato
             segnalato.
+          </Text>
+          <Button
+            title="Riprova"
+            onPress={() => router.replace('/behavior/capture')}
+          />
+          <Button
+            title="Torna alla Home"
+            variant="outline"
+            onPress={() => router.replace('/(tabs)/home')}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (
+    timedOut &&
+    useApi &&
+    (!status || !isTerminalBehaviorStatus(status))
+  ) {
+    return (
+      <ScreenContainer>
+        <View style={styles.statePage}>
+          <View style={[styles.stateIcon, { backgroundColor: colors.warningSoft }]}>
+            <Ionicons name="time-outline" size={36} color={colors.warning} />
+          </View>
+          <Text style={styles.stateTitle}>L’analisi sta impiegando troppo</Text>
+          <Text style={styles.stateText}>
+            Sto ancora lavorando in background e ti avviso se il risultato
+            arriva. Questa attesa non viene conteggiata come un’analisi
+            andata a buon fine: puoi riprovare o tornare più tardi dal Diario.
           </Text>
           <Button
             title="Riprova"
