@@ -75,7 +75,7 @@ export default function HomeScreen() {
   const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
   // Prossimo evento agenda: solo futuri non completati (store.nextCareEvent);
   // useCareEvents idrata lo store e rende reattiva la card.
-  useCareEvents(dog.id);
+  useCareEvents(dog.id, dog.name);
   const nextCare = nextCareEvent(dog.id);
   const dogMeta = [
     currentAgeLabel(dog.birthDate, dog.ageLabel),

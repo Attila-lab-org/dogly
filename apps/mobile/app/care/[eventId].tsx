@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ErrorState, ScreenContainer } from '@/components';
@@ -8,6 +8,7 @@ import {
   completeCareEvent,
   removeCareEvent,
   useCareEvents,
+  useCareEventsHydrating,
 } from '@/features/care/store';
 import { CARE_TYPE_META } from '@/features/care/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -21,9 +22,23 @@ export default function CareEventDetailScreen() {
     ? params.eventId[0] ?? ''
     : params.eventId ?? '';
   const { dog } = useDogProfile();
-  const events = useCareEvents(dog.id);
+  const events = useCareEvents(dog.id, dog.name);
+  const hydrating = useCareEventsHydrating(dog.id);
   const event = events.find((item) => item.id === eventId);
   const [working, setWorking] = useState(false);
+
+  if (!event && hydrating) {
+    // Apertura da notifica (cold-start): l'idratazione degli eventi è in
+    // corso. Mostriamo uno spinner invece del flash "non trovato".
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Appuntamento" />
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   if (!event) {
     return (
@@ -43,7 +58,7 @@ export default function CareEventDetailScreen() {
   const complete = async () => {
     setWorking(true);
     try {
-      await completeCareEvent(event.id);
+      await completeCareEvent(event.id, dog.name);
       router.replace('/care' as never);
     } catch {
       Alert.alert('Non riesco ad aggiornare', 'Riprova tra poco.');
@@ -64,7 +79,7 @@ export default function CareEventDetailScreen() {
           onPress: async () => {
             setWorking(true);
             try {
-              await removeCareEvent(event.id);
+              await removeCareEvent(event.id, dog.name);
               router.replace('/care' as never);
             } catch {
               Alert.alert('Non riesco a eliminare', 'Riprova tra poco.');
@@ -233,5 +248,11 @@ const styles = StyleSheet.create({
   delete: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
   },
 });

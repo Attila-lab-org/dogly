@@ -35,7 +35,7 @@ export default function NotificationsScreen() {
   const { userId, usingMockGate } = useSession();
   const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
 
-  const careEvents = useCareEvents(dog.id).filter(
+  const careEvents = useCareEvents(dog.id, dog.name).filter(
     (event) =>
       event.status === 'SCHEDULED' &&
       event.reminderEnabled &&

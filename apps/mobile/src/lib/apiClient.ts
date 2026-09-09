@@ -1,11 +1,35 @@
 import { getAccessToken } from './secureStore';
 import { createRequestTimeout } from './requestTimeout';
+import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 
 /**
  * API client per il backend pubblico (FastAPI deployato su Vercel,
  * Amendment V1.1). Base URL da EXPO_PUBLIC_API_URL (vedi .env.example).
  * JWT Supabase in Authorization: Bearer, letto da SecureStore (sez. 5.3).
  */
+
+/**
+ * Refresh sessione dedup: se più chiamate 401 arrivano contemporaneamente
+ * (es. resume da background con token scaduto), condividono un unico
+ * refresh Supabase invece di lanciarne uno per richiesta.
+ */
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshSessionOnce(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  if (!isSupabaseConfigured()) return false;
+  refreshPromise = (async () => {
+    try {
+      const { data } = await getSupabaseClient().auth.refreshSession();
+      return Boolean(data.session);
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
 
 export function getApiBaseUrl(): string {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -42,6 +66,8 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   /** Evita loading infiniti su reti mobili degradate. */
   timeoutMs?: number;
+  /** Interno: marca un retry dopo refresh token (evita loop). */
+  _isRetry?: boolean;
 }
 
 export const DEFAULT_API_TIMEOUT_MS = 15_000;
@@ -100,6 +126,19 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
+    // 401 con token probabilmente scaduto: refresh Supabase (dedup) e retry
+    // una sola volta. Su 403 (permessi) o se il refresh fallisce, propaga.
+    if (
+      response.status === 401 &&
+      !skipAuth &&
+      !options._isRetry
+    ) {
+      const refreshed = await refreshSessionOnce();
+      if (refreshed) {
+        return apiRequest<T>(path, { ...options, _isRetry: true });
+      }
+    }
+
     let code = 'UNKNOWN';
     let message = `Errore API (${response.status})`;
     try {

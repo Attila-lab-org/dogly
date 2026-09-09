@@ -68,7 +68,7 @@ export default function DogProfileTabScreen() {
   const queryClient = useQueryClient();
   const useDemoData = usingMockGate;
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
-  useCareEvents(dog.id);
+  useCareEvents(dog.id, dog.name);
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor(

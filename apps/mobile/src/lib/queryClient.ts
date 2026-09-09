@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { ApiError } from './apiClient';
 
 /**
  * TanStack Query possiede la cache server/API (Spec V1 sez. 5.3).
@@ -9,7 +10,14 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 2,
+      retry: (failureCount, error) => {
+        // Non ritentare su 401/403: il token non è valido e il retry
+        // non cambierebbe l'esito (lo risolve il refresh/ri-auth).
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          return false;
+        }
+        return failureCount < 2;
+      },
       refetchOnWindowFocus: false,
     },
   },

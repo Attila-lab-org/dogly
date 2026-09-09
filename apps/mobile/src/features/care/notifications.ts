@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { relativeCareDate } from './date';
 import type { CareEvent } from './types';
 
 const CHANNEL_ID = 'care-reminders';
@@ -49,6 +50,23 @@ async function ensureAndroidChannel() {
   });
 }
 
+/**
+ * Corpo della notifica: usa la data relativa reale (Oggi/Domani/Tra N giorni)
+ * invece di "Domani" hardcodato, così è coerente con qualsiasi
+ * reminderMinutesBefore (es. 60 min → "Oggi alle 10:00").
+ */
+function buildReminderBody(event: CareEvent, dogName: string): string {
+  const when = relativeCareDate(event.scheduledAt);
+  const time = event.allDay
+    ? ''
+    : ` alle ${new Date(event.scheduledAt).toLocaleTimeString('it-IT', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`;
+  const title = event.title.toLocaleLowerCase('it');
+  return `${when}${time}: ${title} per ${dogName}.`;
+}
+
 export async function scheduleCareReminder(
   event: CareEvent,
   dogName: string,
@@ -63,17 +81,11 @@ export async function scheduleCareReminder(
   if (!(await ensurePermission())) return null;
 
   await ensureAndroidChannel();
-  const time = event.allDay
-    ? ''
-    : ` alle ${new Date(event.scheduledAt).toLocaleTimeString('it-IT', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })}`;
 
   return Notifications.scheduleNotificationAsync({
     content: {
       title: `Agenda di ${dogName}`,
-      body: `Domani${time}: ${event.title.toLocaleLowerCase('it')} per ${dogName}.`,
+      body: buildReminderBody(event, dogName),
       data: { href: `/care/${event.id}` },
       sound: 'default',
     },
@@ -92,19 +104,36 @@ export async function cancelCareReminder(notificationId: string | null) {
   await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
 
-export async function subscribeToCareNotificationResponses(
-  onOpen: (href: string) => void,
-): Promise<() => void> {
-  if (!notificationsAvailable) return () => {};
+/**
+ * Cancella TUTTE le notifiche schedulate dall'app. Sicuro perché care è
+ * l'unico scheduler locale (behavior/notify.ts è un no-op di compatibilità).
+ * Usato al logout e prima del reschedule su idratazione, per eliminare
+ * i promemoria "fantasma" di eventi completati/eliminati di cui non abbiamo
+ * più il notificationId dopo un riavvio.
+ */
+export async function cancelAllCareReminders(): Promise<void> {
+  if (!notificationsAvailable) return;
   const Notifications = await loadNotifications();
-  if (!Notifications) return () => {};
+  if (!Notifications) return;
+  await Notifications.cancelAllScheduledNotificationsAsync();
+}
 
-  const subscription =
-    Notifications.addNotificationResponseReceivedListener((response) => {
-      const href = response.notification.request.content.data?.href;
-      if (typeof href === 'string' && href.startsWith('/care/')) onOpen(href);
-    });
-  return () => subscription.remove();
+/**
+ * Re-schedula i promemoria per gli eventi SCHEDULEED con reminder attivo.
+ * Da chiamare dopo aver (ri)caricato gli eventi dal backend: garantisce che
+ * ogni evento abbia esattamente un promemoria, indipendentemente dal
+ * notificationId (perso al riavvio). Il chiamante deve aver già fatto
+ * cancelAllCareReminders() per evitare duplicati.
+ */
+export async function rescheduleCareReminders(
+  events: CareEvent[],
+  dogName: string,
+): Promise<void> {
+  if (!notificationsAvailable) return;
+  for (const event of events) {
+    if (event.status !== 'SCHEDULED' || !event.reminderEnabled) continue;
+    await scheduleCareReminder(event, dogName);
+  }
 }
 
 async function loadNotifications() {

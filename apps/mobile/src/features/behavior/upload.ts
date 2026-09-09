@@ -26,6 +26,7 @@ import {
 } from '../../lib/uploadQueue';
 
 const draining = new Set<string>();
+const inflight = new Map<string, Promise<string | null>>();
 let recoverStarted = false;
 
 type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm';
@@ -77,8 +78,25 @@ async function deleteLocalIfExists(uri: string): Promise<void> {
 /**
  * Processa un singolo pending upload fino a `processing` (AI lato server).
  * Ritorna eventId quando l'upload è verificato.
+ *
+ * Concorrenza: se un drain in background sta già processando questo id,
+ * le chiamate concorrenti (es. retry utente) condividono la stessa promise
+ * invece di ricevere `null` e lanciare un errore spurio "Upload completato
+ * senza eventId".
  */
 export async function processPendingUpload(id: string): Promise<string | null> {
+  const existing = inflight.get(id);
+  if (existing) return existing;
+  const promise = processPendingUploadInner(id);
+  inflight.set(id, promise);
+  try {
+    return await promise;
+  } finally {
+    inflight.delete(id);
+  }
+}
+
+async function processPendingUploadInner(id: string): Promise<string | null> {
   if (draining.has(id)) return null;
   draining.add(id);
   const queue = getUploadQueue();

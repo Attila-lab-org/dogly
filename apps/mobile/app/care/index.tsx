@@ -14,7 +14,7 @@ import { colors, radius, spacing, typography } from '@/theme/tokens';
 export default function CareAgendaScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const events = useCareEvents(dog.id);
+  const events = useCareEvents(dog.id, dog.name);
   // "Prossimo" = solo eventi SCHEDULED futuri (nextCareEvent): un evento
   // passato non completato non deve mai apparire come prossimo; resta però
   // in "In programma" finché non viene completato o eliminato.

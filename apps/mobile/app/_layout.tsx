@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import * as Sentry from '@sentry/react-native';
 import { SessionProvider } from '../src/features/auth/SessionProvider';
 import { queryClient } from '../src/lib/queryClient';
 import { configureCareNotifications } from '../src/features/care/notifications';
-import { registerNotificationResponseHandler } from '../src/features/home/notificationLinks';
+import { NotificationNavigator } from '../src/features/home/NotificationNavigator';
 import { applyAvailableUpdate } from '../src/features/updates/applyAvailableUpdate';
 import { colors } from '../src/theme/tokens';
 import { AppErrorBoundary } from '../src/components/AppErrorBoundary';
@@ -27,15 +27,14 @@ if (sentryDsn) {
 /**
  * Root layout (Expo Router).
  * - TanStack Query + SessionProvider (Supabase Auth → SecureStore)
- * - Auth gate in app/index.tsx
+ * - Auth gate in app/index.tsx (consuma anche i deep link da notifica
+ *   in cold-start tramite NotificationNavigator + pendingNotificationHref)
  * - Notifiche: handler di presentazione + deep link da data.href
  *   (reminder agenda '/care/<id>', "risultato pronto" '/behavior/result/<id>').
  *   In __DEV__/Expo Go entrambe sono no-op: mock gate invariato, niente
  *   scheduling in dev.
  */
 function RootLayout() {
-  const router = useRouter();
-
   useEffect(() => {
     const setOnline = (state: {
       isConnected?: boolean | null;
@@ -60,16 +59,14 @@ function RootLayout() {
 
   useEffect(() => {
     void configureCareNotifications();
-    return registerNotificationResponseHandler((href) => {
-      router.push(href as never);
-    });
-  }, [router]);
+  }, []);
 
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <SessionProvider>
+            <NotificationNavigator />
             <StatusBar style="dark" />
             <Stack
               screenOptions={{

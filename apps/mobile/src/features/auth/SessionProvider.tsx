@@ -26,6 +26,7 @@ import {
 } from '../../lib/secureStore';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import { recoverAndDrainUploads } from '../behavior/upload';
+import { clearCareState } from '../care/store';
 import {
   isApiConfigured,
   shouldUseMockAuthGate,
@@ -42,6 +43,8 @@ type DogLookupResult = {
   reachable: boolean;
   hasDog: boolean;
   primaryDogId: string | null;
+  /** 401/403 dal backend: sessione non valida, va ri-autenticata. */
+  authFailed: boolean;
 };
 
 export type SessionContextValue = {
@@ -78,7 +81,12 @@ async function syncTokensFromSession(session: Session | null): Promise<void> {
 
 async function fetchHasDog(): Promise<DogLookupResult> {
   if (!isApiConfigured()) {
-    return { reachable: false, hasDog: false, primaryDogId: null };
+    return {
+      reachable: false,
+      hasDog: false,
+      primaryDogId: null,
+      authFailed: false,
+    };
   }
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -88,13 +96,21 @@ async function fetchHasDog(): Promise<DogLookupResult> {
         reachable: true,
         hasDog: list.items.length > 0,
         primaryDogId: first?.id ?? null,
+        authFailed: false,
       };
     } catch (error) {
       if (
         error instanceof ApiError &&
         (error.status === 401 || error.status === 403)
       ) {
-        break;
+        // Token non valido: non è un problema di connessione.
+        // Il chiamante gestirà il sign-out.
+        return {
+          reachable: false,
+          hasDog: false,
+          primaryDogId: null,
+          authFailed: true,
+        };
       }
       if (attempt < 2) {
         await new Promise((resolve) =>
@@ -103,7 +119,12 @@ async function fetchHasDog(): Promise<DogLookupResult> {
       }
     }
   }
-  return { reachable: false, hasDog: false, primaryDogId: null };
+  return {
+    reachable: false,
+    hasDog: false,
+    primaryDogId: null,
+    authFailed: false,
+  };
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -116,6 +137,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [primaryDogId, setPrimaryDogId] = useState<string | null>(null);
   const [dogStatusUnknown, setDogStatusUnknown] = useState(false);
 
+  /**
+   * Sign-out condiviso: pulisce cache, token, stato care (notifiche fantasma)
+   * e resetta lo stato sessione. Usato sia dal pulsante "Esci" sia dal
+   * rilevamento di token non validi (401/403 su /v1/dogs).
+   */
+  const doSignOut = useCallback(async () => {
+    clearProtectedCache();
+    await clearSession();
+    await clearCareState();
+    setHasDog(false);
+    setPrimaryDogId(null);
+    setDogStatusUnknown(false);
+    setSession(null);
+    if (authConfigured) {
+      try {
+        await getSupabaseClient().auth.signOut();
+      } catch {
+        // già pulito localmente
+      }
+    }
+  }, [authConfigured]);
+
   const refreshDogs = useCallback(async () => {
     if (!session?.user?.id) {
       setHasDog(false);
@@ -124,6 +167,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const result = await fetchHasDog();
+    if (result.authFailed) {
+      // Sessione non valida: forza il sign-out invece di mostrare
+      // la schermata "connection-error" (che è per problemi di rete).
+      void doSignOut();
+      return;
+    }
     if (!result.reachable) {
       setDogStatusUnknown(true);
       return;
@@ -136,33 +185,58 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         queryKey: queryKeys.dogs(session.user.id),
       });
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, doSignOut]);
 
-  const applySession = useCallback(async (next: Session | null) => {
+  /**
+   * Sync leggero: aggiorna solo i token in SecureStore per l'apiClient.
+   * Da chiamare su ogni evento auth (incluso TOKEN_REFRESHED) senza
+   * eseguire il bootstrap pesante (GET /v1/dogs, drain upload, push token).
+   */
+  const syncTokens = useCallback(async (next: Session | null) => {
     await syncTokensFromSession(next);
-    if (!next?.user?.id) {
-      setSession(null);
-      setHasDog(false);
-      setPrimaryDogId(null);
-      setDogStatusUnknown(false);
-      return;
-    }
-    const dogs = await fetchHasDog();
-    setSession(next);
-    if (!dogs.reachable) {
-      setHasDog(false);
-      setPrimaryDogId(null);
-      setDogStatusUnknown(true);
-      return;
-    }
-    setDogStatusUnknown(false);
-    setHasDog(dogs.hasDog);
-    setPrimaryDogId(dogs.primaryDogId);
-    void recoverAndDrainUploads(next.user.id).catch(() => undefined);
-    const { ensureServiceTermsRecorded } = await import('../privacy/consents');
-    const { registerDevicePushToken } = await import('../notifications/pushToken');
-    void ensureServiceTermsRecorded().then(() => registerDevicePushToken());
   }, []);
+
+  /**
+   * Bootstrap pesante: sync token + lookup dogs + drain upload + push token.
+   * Da chiamare solo su SIGNED_IN / SIGNED_OUT / al boot, NON su TOKEN_REFRESHED
+   * (altrimenti ogni refresh orario rilancia GET /v1/dogs e, su rete ballerina,
+   * degrada la sessione a dog-status-unknown).
+   */
+  const bootstrapSession = useCallback(
+    async (next: Session | null) => {
+      await syncTokensFromSession(next);
+      if (!next?.user?.id) {
+        setSession(null);
+        setHasDog(false);
+        setPrimaryDogId(null);
+        setDogStatusUnknown(false);
+        return;
+      }
+      const dogs = await fetchHasDog();
+      if (dogs.authFailed) {
+        // Token non valido: forza il sign-out.
+        void doSignOut();
+        return;
+      }
+      setSession(next);
+      if (!dogs.reachable) {
+        setHasDog(false);
+        setPrimaryDogId(null);
+        setDogStatusUnknown(true);
+        return;
+      }
+      setDogStatusUnknown(false);
+      setHasDog(dogs.hasDog);
+      setPrimaryDogId(dogs.primaryDogId);
+      void recoverAndDrainUploads(next.user.id).catch(() => undefined);
+      const { ensureServiceTermsRecorded } = await import('../privacy/consents');
+      const { registerDevicePushToken } = await import(
+        '../notifications/pushToken'
+      );
+      void ensureServiceTermsRecorded().then(() => registerDevicePushToken());
+    },
+    [doSignOut],
+  );
 
   useEffect(() => {
     if (usingMockGate) {
@@ -181,7 +255,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
-        await applySession(data.session);
+        await bootstrapSession(data.session);
       } catch {
         if (!cancelled) {
           setSession(null);
@@ -195,10 +269,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
-      if (!cancelled && event === 'SIGNED_IN') setLoading(true);
+      // TOKEN_REFRESHED: aggiorna solo i token (sync leggero). Il bootstrap
+      // pesante è già stato fatto al SIGNED_IN/INITIAL_SESSION; rilanciarlo
+      // ad ogni refresh orario causerebbe GET /v1/dogs ripetute e, su rete
+      // ballerina, degradi a dog-status-unknown durante l'uso dell'app.
+      if (event === 'TOKEN_REFRESHED') {
+        void syncTokens(next);
+        return;
+      }
+      // INITIAL_SESSION è già gestito dalla getSession() esplicita sopra;
+      // saltarlo evita un doppio bootstrap al boot.
+      if (event === 'INITIAL_SESSION') return;
+
+      if (event === 'SIGNED_IN') setLoading(true);
       void (async () => {
         try {
-          await applySession(next);
+          await bootstrapSession(next);
         } catch {
           if (!cancelled) {
             setSession(next);
@@ -216,7 +302,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [authConfigured, usingMockGate, applySession]);
+  }, [authConfigured, usingMockGate, bootstrapSession, syncTokens]);
 
   // Ripresa upload dopo background / restart
   useEffect(() => {
@@ -240,21 +326,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
   }, [session?.user?.id]);
 
-  const signOut = useCallback(async () => {
-    clearProtectedCache();
-    await clearSession();
-    setHasDog(false);
-    setPrimaryDogId(null);
-    setDogStatusUnknown(false);
-    setSession(null);
-    if (authConfigured) {
-      try {
-        await getSupabaseClient().auth.signOut();
-      } catch {
-        // già pulito localmente
-      }
-    }
-  }, [authConfigured]);
+  const signOut = doSignOut;
 
   const markDogCreated = useCallback((dogId: string) => {
     setHasDog(true);

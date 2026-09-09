@@ -8,7 +8,9 @@ import type {
   CareEventType,
 } from './types';
 import {
+  cancelAllCareReminders,
   cancelCareReminder,
+  rescheduleCareReminders,
   scheduleCareReminder,
 } from './notifications';
 
@@ -76,6 +78,7 @@ let events: CareEvent[] = [
 
 const listeners = new Set<() => void>();
 const hydratedDogs = new Set<string>();
+const hydratingDogs = new Set<string>();
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -90,12 +93,17 @@ function snapshot() {
   return events;
 }
 
-export function useCareEvents(dogId: string): CareEvent[] {
+/**
+ * Hook agli eventi care. `dogName` serve per (re)schedulare i promemoria
+ * locali (il corpo della notifica lo contiene): passarlo qui evita di
+ * doverlo recuperare a posteriori su rollback/idratazione.
+ */
+export function useCareEvents(dogId: string, dogName: string): CareEvent[] {
   const allEvents = useSyncExternalStore(subscribe, snapshot, snapshot);
   useEffect(() => {
     if (!isPersistedId(dogId)) return;
-    void hydrateCareEvents(dogId);
-  }, [dogId]);
+    void hydrateCareEvents(dogId, dogName);
+  }, [dogId, dogName]);
   return useMemo(
     () =>
       allEvents
@@ -105,11 +113,36 @@ export function useCareEvents(dogId: string): CareEvent[] {
   );
 }
 
-async function hydrateCareEvents(dogId: string): Promise<void> {
+/**
+ * True mentre gli eventi del cane stanno being idratati dal backend.
+ * Usato per evitare il flash "Appuntamento non trovato" aprendo il
+ * dettaglio da una notifica prima che l'idratazione sia completata.
+ */
+export function useCareEventsHydrating(dogId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => hydratingDogs.has(dogId),
+    () => false,
+  );
+}
+
+/**
+ * Idrata gli eventi dal backend e riconcilia i promemoria locali:
+ * cancel-all (elimina eventuali "fantasmi" di eventi completati/eliminati
+ * di cui non abbiamo più il notificationId) + reschedule per ogni evento
+ * SCHEDULED con reminder attivo. In __DEV__/Expo Go è un no-op.
+ */
+async function hydrateCareEvents(dogId: string, dogName: string): Promise<void> {
   if (!isPersistedId(dogId)) return;
   if (hydratedDogs.has(dogId)) return;
   hydratedDogs.add(dogId);
-  if (!(await getAccessToken())) return;
+  hydratingDogs.add(dogId);
+  emit();
+  if (!(await getAccessToken())) {
+    hydratingDogs.delete(dogId);
+    emit();
+    return;
+  }
 
   try {
     const response = await api.get<ApiCareEventList>(
@@ -120,8 +153,17 @@ async function hydrateCareEvents(dogId: string): Promise<void> {
       ...response.items.map(fromApi),
     ];
     emit();
+    // Riconcilia i promemoria locali con la fonte remota.
+    await cancelAllCareReminders();
+    await rescheduleCareReminders(
+      events.filter((event) => event.dogId === dogId),
+      dogName,
+    );
   } catch {
     hydratedDogs.delete(dogId);
+  } finally {
+    hydratingDogs.delete(dogId);
+    emit();
   }
 }
 
@@ -176,11 +218,26 @@ export async function addCareEvent(
   return { event: saved, reminderScheduled: Boolean(notificationId) };
 }
 
-export async function completeCareEvent(eventId: string): Promise<void> {
+/**
+ * Aggiorna ottimisticamente lo stato locale + cancella il promemoria,
+ * poi sincronizza col backend. Se il remoto fallisce, fa rollback dello
+ * stato locale e ri-schedula il promemoria, così l'utente non perde
+ * il promemoria a causa di un transient di rete.
+ */
+export async function completeCareEvent(
+  eventId: string,
+  dogName: string,
+): Promise<void> {
   const event = careEventById(eventId);
   if (!event) return;
-  await cancelCareReminder(event.notificationId);
+  if (event.status === 'COMPLETED') return;
+
+  const previousStatus = event.status;
+  const previousNotificationId = event.notificationId;
   const completedAt = new Date().toISOString();
+
+  // 1. Ottimistico: cancello promemoria + marco completato localmente.
+  await cancelCareReminder(event.notificationId);
   events = events.map((item) =>
     item.id === eventId
       ? {
@@ -194,21 +251,96 @@ export async function completeCareEvent(eventId: string): Promise<void> {
   );
   emit();
 
-  if (await getAccessToken() && isPersistedId(eventId)) {
+  // 2. Sync remoto (solo per eventi persistiti lato server).
+  const shouldSync = (await getAccessToken()) && isPersistedId(eventId);
+  if (!shouldSync) return;
+
+  try {
     await api.patch(`/v1/care-events/${eventId}`, { status: 'COMPLETED' });
+  } catch (err) {
+    // 3. Rollback: ripristino stato + ri-schedulo il promemoria.
+    events = events.map((item) =>
+      item.id === eventId
+        ? {
+            ...item,
+            status: previousStatus,
+            completedAt: null,
+            notificationId: previousNotificationId,
+            updatedAt: new Date().toISOString(),
+          }
+        : item,
+    );
+    emit();
+    if (
+      previousStatus === 'SCHEDULED' &&
+      event.reminderEnabled &&
+      !previousNotificationId
+    ) {
+      // Il notificationId era già null (es. dopo riavvio): ri-schedulo.
+      const id = await scheduleCareReminder(event, dogName);
+      if (id) {
+        events = events.map((item) =>
+          item.id === eventId ? { ...item, notificationId: id } : item,
+        );
+        emit();
+      }
+    }
+    throw err;
   }
 }
 
-export async function removeCareEvent(eventId: string): Promise<void> {
+/**
+ * Rimuove ottimisticamente l'evento + cancella il promemoria, poi
+ * sincronizza col backend. Se il remoto fallisce, fa rollback
+ * (re-inserisce l'evento e ri-schedula il promemoria).
+ */
+export async function removeCareEvent(
+  eventId: string,
+  dogName: string,
+): Promise<void> {
   const event = careEventById(eventId);
   if (!event) return;
+
+  const removedEvents = events;
+  // 1. Ottimistico: cancello promemoria + rimuovo localmente.
   await cancelCareReminder(event.notificationId);
   events = events.filter((item) => item.id !== eventId);
   emit();
 
-  if (await getAccessToken() && isPersistedId(eventId)) {
+  // 2. Sync remoto (solo per eventi persistiti lato server).
+  const shouldSync = (await getAccessToken()) && isPersistedId(eventId);
+  if (!shouldSync) return;
+
+  try {
     await api.delete(`/v1/care-events/${eventId}`);
+  } catch (err) {
+    // 3. Rollback: ripristino l'evento + ri-schedulo il promemoria.
+    events = removedEvents;
+    emit();
+    if (
+      event.status === 'SCHEDULED' &&
+      event.reminderEnabled &&
+      !event.notificationId
+    ) {
+      const id = await scheduleCareReminder(event, dogName);
+      if (id) {
+        events = events.map((item) =>
+          item.id === eventId ? { ...item, notificationId: id } : item,
+        );
+        emit();
+      }
+    }
+    throw err;
   }
+}
+
+/** Pulisce lo stato care (logout): reset in-memory + cancella i promemoria. */
+export async function clearCareState(): Promise<void> {
+  await cancelAllCareReminders();
+  events = [];
+  hydratedDogs.clear();
+  hydratingDogs.clear();
+  emit();
 }
 
 async function createRemoteCareEvent(event: CareEvent): Promise<CareEvent> {
@@ -249,6 +381,8 @@ function fromApi(event: ApiCareEvent): CareEvent {
     reminderMinutesBefore: event.reminder_minutes_before,
     status: event.status,
     completedAt: event.completed_at,
+    // notificationId non è persistito lato server: viene riconciliato
+    // da rescheduleCareReminders all'idratazione.
     notificationId: null,
     createdAt: event.created_at,
     updatedAt: event.updated_at,
