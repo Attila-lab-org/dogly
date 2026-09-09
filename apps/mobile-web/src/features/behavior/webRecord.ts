@@ -6,6 +6,7 @@
 export type WebVideoRecording = {
   finished: Promise<string | null>;
   stop: () => void;
+  hasAudio: boolean;
 };
 
 function findPreviewStream(): MediaStream | null {
@@ -53,7 +54,32 @@ function pickMimeType(): string | undefined {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
-export function startWebVideoRecording(): WebVideoRecording {
+async function attachMicrophone(stream: MediaStream): Promise<boolean> {
+  if (stream.getAudioTracks().some((track) => track.readyState === 'live')) {
+    return true;
+  }
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    return false;
+  }
+  try {
+    const mic = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+      video: false,
+    });
+    let added = false;
+    for (const track of mic.getAudioTracks()) {
+      stream.addTrack(track);
+      added = true;
+    }
+    return added;
+  } catch {
+    return false;
+  }
+}
+
+export async function startWebVideoRecording(
+  options: { includeAudio?: boolean } = {},
+): Promise<WebVideoRecording> {
   if (typeof MediaRecorder === 'undefined') {
     throw new Error('Questo browser non può registrare video.');
   }
@@ -66,6 +92,9 @@ export function startWebVideoRecording(): WebVideoRecording {
   if (stream.getVideoTracks().length === 0) {
     throw new Error('Fotocamera non pronta. Attendi l’anteprima e riprova.');
   }
+
+  const hasAudio =
+    options.includeAudio === false ? false : await attachMicrophone(stream);
 
   const mimeType = pickMimeType();
   const recorder = new MediaRecorder(
@@ -111,6 +140,7 @@ export function startWebVideoRecording(): WebVideoRecording {
 
   return {
     finished,
+    hasAudio,
     stop: () => {
       try {
         if (recorder.state === 'recording') {

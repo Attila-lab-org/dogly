@@ -82,6 +82,7 @@ export default function BehaviorCaptureScreen() {
   const canStopRef = useRef(false);
   const allowStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webRecordingRef = useRef<WebVideoRecording | null>(null);
+  const webHasAudioRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const micGranted = Boolean(micPermission?.granted);
@@ -244,8 +245,14 @@ export default function BehaviorCaptureScreen() {
     let recording: Promise<{ uri?: string } | undefined>;
     if (Platform.OS === 'web') {
       try {
-        const session = startWebVideoRecording();
+        const session = await startWebVideoRecording({
+          includeAudio: !state.audioDegraded,
+        });
         webRecordingRef.current = session;
+        webHasAudioRef.current = session.hasAudio;
+        if (!session.hasAudio && !state.audioDegraded) {
+          dispatch({ type: 'PERMISSION_GRANTED', micGranted: false });
+        }
         recording = session.finished.then((uri) =>
           uri ? { uri } : { uri: undefined },
         );
@@ -308,7 +315,7 @@ export default function BehaviorCaptureScreen() {
       clearAllowStopTimer();
       if (mountedRef.current) setCanStop(false);
     }
-  }, [cameraReady, finishWithUri]);
+  }, [cameraReady, finishWithUri, state.audioDegraded]);
 
   const stopRecording = useCallback(() => {
     if (!canStopRef.current) return;
@@ -370,7 +377,10 @@ export default function BehaviorCaptureScreen() {
           dogId: dog.id,
           localUri: uri,
           durationMs,
-          hasAudio: micGranted && !state.audioDegraded,
+          hasAudio:
+            Platform.OS === 'web'
+              ? webHasAudioRef.current
+              : micGranted && !state.audioDegraded,
         });
         router.replace(`/behavior/processing/${eventId}`);
       } catch (err) {
@@ -419,7 +429,10 @@ export default function BehaviorCaptureScreen() {
         dogId: dog.id,
         localUri: uri,
         durationMs,
-        hasAudio: micGranted && !state.audioDegraded,
+        hasAudio:
+          Platform.OS === 'web'
+            ? webHasAudioRef.current
+            : micGranted && !state.audioDegraded,
       });
       router.replace(`/behavior/processing/${eventId}`);
     } catch (err) {
