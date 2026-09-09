@@ -25,7 +25,7 @@ export const dogMock: DogProfile = {
   birthDate: '2022-05-18',
   sizeLabel: 'Taglia media',
   weightKg: 28.5,
-  breedLabel: 'Golden Retriever',
+  breedLabel: 'Labrador',
   isMix: false,
   photoUri:
     'https://images.unsplash.com/photo-1552053831-71594a27632d?w=800&q=80',

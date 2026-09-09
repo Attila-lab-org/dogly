@@ -28,11 +28,9 @@ export function shouldUseMockAuthGate(): boolean {
     return false;
   }
   const forcedWebDemo =
-    typeof __DEV__ !== 'undefined' &&
-    __DEV__ &&
     typeof window !== 'undefined' &&
     (new URLSearchParams(window.location.search).get('demo') === '1' ||
-      window.location.hash === '#demo');
+      window.location.hash.includes('demo'));
   return (
     forcedWebDemo ||
     (typeof __DEV__ !== 'undefined' && __DEV__ && !isSupabaseConfigured())

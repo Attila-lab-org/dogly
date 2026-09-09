@@ -7,7 +7,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import type { ButtonVariant } from '@/components/Button';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
 import { PROCESSING_STEP_ORDER, processingStepsFor } from '@/features/core/copy';
 import { behaviorResultsMock } from '@/mocks/core';
@@ -32,6 +33,57 @@ import {
   ANALYSIS_POLL_TIMEOUT_MS,
   analysisPollIntervalMs,
 } from '@/features/core/processingTimeout';
+
+const TITLE_COLOR = '#1A2B48';
+const MUTED_COLOR = '#64748B';
+const CARD_BORDER = '#EDF2F7';
+const PAGE_BG = '#F8FAFC';
+
+function StatePage({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  message,
+  primaryTitle,
+  onPrimary,
+  primaryVariant = 'danger',
+  secondaryTitle = 'Torna alla Home',
+  onSecondary,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  message: string;
+  primaryTitle: string;
+  onPrimary: () => void;
+  primaryVariant?: ButtonVariant;
+  secondaryTitle?: string;
+  onSecondary: () => void;
+}) {
+  return (
+    <View style={styles.statePage}>
+      <View style={[styles.stateIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={36} color={iconColor} />
+      </View>
+      <Text style={styles.stateTitle}>{title}</Text>
+      <Text style={styles.stateText}>{message}</Text>
+      <Button
+        title={primaryTitle}
+        variant={primaryVariant}
+        onPress={onPrimary}
+        style={styles.stateButton}
+      />
+      <Button
+        title={secondaryTitle}
+        variant="outline"
+        onPress={onSecondary}
+        style={styles.stateButton}
+      />
+    </View>
+  );
+}
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
@@ -156,103 +208,83 @@ export default function BehaviorProcessingScreen() {
     };
   }, [eventId, dog.name]);
 
+  const goHome = () => router.replace('/(tabs)/home');
+  const retryCapture = () => router.replace('/behavior/capture');
+
   if (useApi && query.isError) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <ErrorState
           title="Non riesco ad aprire l’analisi"
           message="Controlla la connessione e riprova. Se l’elaborazione è partita, ritroverai il risultato nel Diario."
           onRetry={() => void query.refetch()}
         />
-        <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
+        <Button title="Torna alla Home" variant="danger" onPress={goHome} />
       </ScreenContainer>
     );
   }
 
   if (!useApi && !mockEvent) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <ErrorState
           title="Analisi non trovata"
           message="Non riesco a trovare questa analisi. Torna alla Home e riprova."
         />
-        <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
+        <Button title="Torna alla Home" variant="danger" onPress={goHome} />
       </ScreenContainer>
     );
   }
 
   if (status === 'DRAFT' || status === 'UPLOADING') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.primarySoft }]}>
-            <Ionicons name="cloud-upload-outline" size={36} color={colors.primary} />
-          </View>
-          <Text style={styles.stateTitle}>Sto completando l’invio</Text>
-          <Text style={styles.stateText}>
-            Conserva la connessione per qualche momento. Il video rimane sul
-            telefono finché l’invio non è verificato.
-          </Text>
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="cloud-upload-outline"
+          iconBg={colors.tealSoft}
+          iconColor={colors.teal}
+          title="Sto completando l’invio"
+          message="Conserva la connessione per qualche momento. Il video rimane sul telefono finché l’invio non è verificato."
+          primaryTitle="Torna alla Home"
+          primaryVariant="primary"
+          onPrimary={goHome}
+          secondaryTitle="Registra di nuovo"
+          onSecondary={retryCapture}
+        />
       </ScreenContainer>
     );
   }
 
   if (status === 'REJECTED_QUALITY') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.warningSoft }]}>
-            <Ionicons name="videocam-off-outline" size={36} color={colors.warning} />
-          </View>
-          <Text style={styles.stateTitle}>Il video non è abbastanza chiaro</Text>
-          <Text style={styles.stateText}>
-            Non riesco a vedere bene {dog.name}: possibile scarsa luce, movimento
-            sfocato o inquadratura parziale. Questa prova non viene conteggiata:
-            riprova quando vuoi.
-          </Text>
-          <Button
-            title="Registra di nuovo"
-            onPress={() => router.replace('/behavior/capture')}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="videocam-off-outline"
+          iconBg={colors.coralSoft}
+          iconColor={colors.coral}
+          title="Il video non è abbastanza chiaro"
+          message={`Non riesco a vedere bene ${dog.name}: possibile scarsa luce, movimento sfocato o inquadratura parziale. Questa prova non viene conteggiata: riprova quando vuoi.`}
+          primaryTitle="Registra di nuovo"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
 
   if (status === 'FAILED_TERMINAL') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.dangerSoft }]}>
-            <Ionicons name="cloud-offline-outline" size={36} color={colors.danger} />
-          </View>
-          <Text style={styles.stateTitle}>Qualcosa non ha funzionato</Text>
-          <Text style={styles.stateText}>
-            C'è stato un problema tecnico dall'altra parte. Non è colpa del
-            video: l'analisi non è stata conteggiata e il problema è già stato
-            segnalato.
-          </Text>
-          <Button
-            title="Riprova"
-            onPress={() => router.replace('/behavior/capture')}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="cloud-offline-outline"
+          iconBg={colors.coralSoft}
+          iconColor={colors.coral}
+          title="Qualcosa non ha funzionato"
+          message="C'è stato un problema tecnico dall'altra parte. Non è colpa del video: l'analisi non è stata conteggiata e il problema è già stato segnalato."
+          primaryTitle="Riprova"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
@@ -263,52 +295,34 @@ export default function BehaviorProcessingScreen() {
     (!status || !isTerminalBehaviorStatus(status))
   ) {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.warningSoft }]}>
-            <Ionicons name="time-outline" size={36} color={colors.warning} />
-          </View>
-          <Text style={styles.stateTitle}>L’analisi sta impiegando troppo</Text>
-          <Text style={styles.stateText}>
-            Sto ancora lavorando in background e ti avviso se il risultato
-            arriva. Questa attesa non viene conteggiata come un’analisi
-            andata a buon fine: puoi riprovare o tornare più tardi dal Diario.
-          </Text>
-          <Button
-            title="Riprova"
-            onPress={() => router.replace('/behavior/capture')}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="time-outline"
+          iconBg={colors.coralSoft}
+          iconColor={colors.coral}
+          title="L’analisi sta impiegando troppo"
+          message="Sto ancora lavorando in background e ti avviso se il risultato arriva. Questa attesa non viene conteggiata come un’analisi andata a buon fine: puoi riprovare o tornare più tardi dal Diario."
+          primaryTitle="Riprova"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
 
   if (status === 'CANCELLED') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.surfaceMuted }]}>
-            <Ionicons name="close-circle-outline" size={36} color={colors.textMuted} />
-          </View>
-          <Text style={styles.stateTitle}>Analisi annullata</Text>
-          <Text style={styles.stateText}>
-            Questa analisi non è stata completata e non verrà conteggiata.
-          </Text>
-          <Button
-            title="Registra un nuovo video"
-            onPress={() => router.replace('/behavior/capture')}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="close-circle-outline"
+          iconBg={colors.surfaceMuted}
+          iconColor={MUTED_COLOR}
+          title="Analisi annullata"
+          message="Questa analisi non è stata completata e non verrà conteggiata."
+          primaryTitle="Registra un nuovo video"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
@@ -324,19 +338,25 @@ export default function BehaviorProcessingScreen() {
 
   const currentOrder = PROCESSING_STEP_ORDER[displayStatus] ?? 0;
   const isRetrying = displayStatus === 'FAILED_RETRYABLE';
+  const progressRatio = finishing
+    ? 1
+    : Math.min(1, (currentOrder + (isRetrying ? 0 : 0.45)) / Math.max(1, steps.length - 1));
 
   return (
-    <ScreenContainer>
+    <ScreenContainer style={styles.screen} contentStyle={styles.content}>
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Torna alla Home"
-          onPress={() => router.replace('/(tabs)/home')}
+          onPress={goHome}
           hitSlop={12}
+          style={styles.backButton}
         >
-          <Ionicons name="close" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={TITLE_COLOR} />
         </Pressable>
-        <Text style={styles.topTitle}>Sto guardando {dog.name}</Text>
+        <Text style={styles.topTitle} numberOfLines={1}>
+          Analisi in corso
+        </Text>
         <View style={styles.topSpacer} />
       </View>
 
@@ -351,9 +371,18 @@ export default function BehaviorProcessingScreen() {
         risultato è pronto; altrimenti lo ritrovi nel Diario.
       </Text>
 
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            { width: `${Math.round(progressRatio * 100)}%` },
+          ]}
+        />
+      </View>
+
       {isRetrying && (
         <View style={styles.retryBanner}>
-          <Ionicons name="refresh" size={16} color={colors.warning} />
+          <Ionicons name="refresh" size={16} color={colors.coral} />
           <Text style={styles.retryText}>
             Connessione instabile: ci riprovo automaticamente, senza usare
             altre analisi.
@@ -362,12 +391,18 @@ export default function BehaviorProcessingScreen() {
       )}
 
       <View style={styles.stepper}>
-        {steps.map((step, index) => {
+        {steps.map((step) => {
           const stepOrder = PROCESSING_STEP_ORDER[step.status];
-          const done = !isRetrying && stepOrder < currentOrder;
-          const active = !isRetrying && stepOrder === currentOrder;
+          const done = finishing || (!isRetrying && stepOrder < currentOrder);
+          const active = !finishing && !isRetrying && stepOrder === currentOrder;
           return (
-            <View key={step.id} style={styles.stepRow}>
+            <View
+              key={step.id}
+              style={[
+                styles.stepCard,
+                active && styles.stepCardActive,
+              ]}
+            >
               <View
                 style={[
                   styles.stepDot,
@@ -376,17 +411,19 @@ export default function BehaviorProcessingScreen() {
                 ]}
               >
                 {done ? (
-                  <Ionicons name="checkmark" size={14} color={colors.textOnPrimary} />
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                ) : active ? (
+                  <View style={styles.stepInnerDotActive} />
                 ) : (
-                  <View style={[styles.stepInnerDot, active && styles.stepInnerDotActive]} />
+                  <View style={styles.stepInnerDot} />
                 )}
               </View>
-              {index < steps.length - 1 && (
-                <View style={[styles.stepLine, done && styles.stepLineDone]} />
-              )}
               <View style={styles.stepTextWrap}>
                 <Text
-                  style={[styles.stepTitle, active && styles.stepTitleActive]}
+                  style={[
+                    styles.stepTitle,
+                    (active || done) && styles.stepTitleActive,
+                  ]}
                 >
                   {step.title}
                 </Text>
@@ -403,49 +440,92 @@ export default function BehaviorProcessingScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: PAGE_BG,
+  },
+  content: {
+    paddingBottom: spacing.xl,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    fontWeight: typography.weight.bold,
+    color: TITLE_COLOR,
+    marginHorizontal: spacing.sm,
   },
   topSpacer: {
-    width: 26,
+    width: 40,
   },
   heroText: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-    marginBottom: spacing.xl,
+    fontSize: 13,
+    color: MUTED_COLOR,
+    lineHeight: 19,
+    marginBottom: spacing.lg,
     textAlign: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  progressTrack: {
+    alignSelf: 'stretch',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+    marginBottom: spacing.xl,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#2DAAAB',
   },
   retryBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
+    backgroundColor: colors.coralSoft,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   retryText: {
     flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.text,
+    fontSize: 13,
+    color: TITLE_COLOR,
+    lineHeight: 18,
   },
   stepper: {
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
-  stepRow: {
+  stepCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    ...shadows.card,
+  },
+  stepCardActive: {
+    borderColor: '#C7EDEC',
   },
   stepDot: {
     width: 28,
@@ -454,14 +534,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
   },
   stepDotDone: {
-    backgroundColor: colors.accent,
+    backgroundColor: '#2DAAAB',
   },
   stepDotActive: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.tealSoft,
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: '#2DAAAB',
   },
   stepInnerDot: {
     width: 8,
@@ -470,18 +551,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   stepInnerDotActive: {
-    backgroundColor: colors.primary,
-  },
-  stepLine: {
-    position: 'absolute',
-    left: 13,
-    top: 30,
-    width: 2,
-    height: spacing.lg,
-    backgroundColor: colors.border,
-  },
-  stepLineDone: {
-    backgroundColor: colors.accent,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2DAAAB',
   },
   stepTextWrap: {
     flex: 1,
@@ -489,16 +562,16 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-    color: colors.textMuted,
+    color: MUTED_COLOR,
   },
   stepTitleActive: {
-    color: colors.text,
+    color: TITLE_COLOR,
   },
   stepDescription: {
     marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
+    color: MUTED_COLOR,
+    fontSize: 13,
+    lineHeight: 18,
   },
   statePage: {
     flex: 1,
@@ -508,22 +581,26 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   stateIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#E0F2F7',
   },
   stateTitle: {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: TITLE_COLOR,
     textAlign: 'center',
   },
   stateText: {
     fontSize: typography.size.md,
-    color: colors.textSecondary,
+    color: MUTED_COLOR,
     textAlign: 'center',
     lineHeight: typography.size.md * typography.lineHeight.relaxed,
+  },
+  stateButton: {
+    alignSelf: 'stretch',
   },
 });

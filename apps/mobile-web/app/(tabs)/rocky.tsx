@@ -1,6 +1,6 @@
 /**
- * Profilo cane: spazio personale, visivo e orientato alle azioni.
- * Le spiegazioni tecniche e le policy restano fuori da questa schermata.
+ * Profilo cane (Screen 3 mockup): spazio personale, visivo e orientato alle azioni.
+ * Nessuna sezione "Quanto conosco {nome}".
  */
 import React, { useState } from 'react';
 import {
@@ -15,23 +15,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card } from '@/components';
-import {
-  colors,
-  gradients,
-  radius,
-  shadows,
-  spacing,
-  typography,
-} from '@/theme/tokens';
-import {
-  digestiveBaselineMock,
-  feedingPeriodsMock,
-  foodProductsMock,
-} from '@/mocks/secondary';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
@@ -52,14 +37,39 @@ import {
   type DigestiveSummary,
 } from '@/features/digestive/api';
 import {
+  digestiveBaselineMock,
+  feedingPeriodsMock,
+  foodProductsMock,
+} from '@/mocks/secondary';
+import {
   deleteOwnerStory,
   fetchOwnerStories,
   updateOwnerStory,
   type OwnerFact,
   type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
+import { usePersonalPatterns } from '@/features/patterns/api';
 
 type IconName = keyof typeof Ionicons.glyphMap;
+
+const rockyAvatarSource = require('../../assets/images/rocky-avatar.png');
+
+const AVATAR_SIZE = 104;
+
+const FREQUENT_STATES: Array<{
+  label: string;
+  backgroundColor: string;
+  color: string;
+}> = [
+  { label: 'Relax', backgroundColor: '#E0F7F6', color: '#0D9488' },
+  { label: 'Gioco', backgroundColor: '#EEF2FF', color: '#4F46E5' },
+  { label: 'Attenzione', backgroundColor: '#FFF1EE', color: '#EA580C' },
+];
+
+const PATTERN_ICONS: Record<string, IconName> = {
+  'pattern-porta': 'exit-outline',
+  'pattern-sera': 'moon-outline',
+};
 
 export default function DogProfileTabScreen() {
   const router = useRouter();
@@ -67,13 +77,14 @@ export default function DogProfileTabScreen() {
   const { userId, usingMockGate } = useSession();
   const queryClient = useQueryClient();
   const useDemoData = usingMockGate;
-  // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
   useCareEvents(dog.id, dog.name);
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
-  const photoSize = Math.floor(
-    (contentWidth - spacing.lg * 2 - spacing.sm * 2) / 3,
-  );
+  const photoSize = Math.floor((contentWidth - 40 - 16) / 3);
+
+  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel) || '4 anni';
+  const sizeLabel = dog.sizeLabel || 'Taglia media';
+  const breedLabel = dog.breedLabel || 'Labrador';
 
   const activePeriod = useDemoData
     ? feedingPeriodsMock.find((period) => period.endedAt === null)
@@ -102,6 +113,11 @@ export default function DogProfileTabScreen() {
     : (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
+  const patternsQuery = usePersonalPatterns(dog.id);
+  const learnedPatterns = patternsQuery.patterns
+    .filter((pattern) => pattern.state !== 'ARCHIVED')
+    .slice(0, 2);
+
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [storyDraft, setStoryDraft] = useState<OwnerFact[]>([]);
   const [savingStory, setSavingStory] = useState(false);
@@ -118,7 +134,10 @@ export default function DogProfileTabScreen() {
     setStoryError(null);
   };
   const saveStory = async () => {
-    if (!editingStoryId || storyDraft.some((fact) => fact.statement.trim().length < 2)) {
+    if (
+      !editingStoryId ||
+      storyDraft.some((fact) => fact.statement.trim().length < 2)
+    ) {
       return;
     }
     setSavingStory(true);
@@ -152,7 +171,9 @@ export default function DogProfileTabScreen() {
                   });
                 }
               })
-              .catch(() => setStoryError('Non sono riuscito a eliminare la nota.'));
+              .catch(() =>
+                setStoryError('Non sono riuscito a eliminare la nota.'),
+              );
           },
         },
       ],
@@ -161,29 +182,24 @@ export default function DogProfileTabScreen() {
 
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={[...gradients.header]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.hero}
-      >
-        <View style={styles.decorLarge} />
-        <View style={styles.decorSmall} />
-        <SafeAreaView edges={['top']} style={styles.heroSafe}>
+      <View style={styles.curve} pointerEvents="none" />
+
+      <SafeAreaView edges={['top']} style={styles.safe}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.topBar}>
-            <Text style={styles.eyebrow}>IL SUO SPAZIO</Text>
+            <View style={styles.topBarSpacer} />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Impostazioni"
               onPress={() => router.push('/settings')}
               hitSlop={12}
-              style={styles.topButton}
+              style={styles.settingsButton}
             >
-              <Ionicons
-                name="settings-outline"
-                size={22}
-                color={colors.textOnPrimary}
-              />
+              <Ionicons name="settings-outline" size={24} color="#1A2B48" />
             </Pressable>
           </View>
 
@@ -192,6 +208,7 @@ export default function DogProfileTabScreen() {
               <View style={styles.avatarHalo}>
                 <DogAvatar
                   size={AVATAR_SIZE}
+                  source={dog.photoUri ? undefined : rockyAvatarSource}
                   photoUri={dog.photoUri}
                   dogName={dog.name}
                 />
@@ -202,63 +219,134 @@ export default function DogProfileTabScreen() {
                 onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
                 style={styles.editBadge}
               >
-                <Ionicons name="pencil" size={15} color={colors.primary} />
+                <Ionicons name="pencil" size={14} color="#FFFFFF" />
               </Pressable>
             </View>
-            <Text style={styles.name}>{dog.name}</Text>
+
+            <Text style={styles.name}>{dog.name || 'Rocky'}</Text>
+
             <View style={styles.metaRow}>
-              <MetaPill
-                icon="calendar-outline"
-                label={currentAgeLabel(dog.birthDate, dog.ageLabel)}
-              />
-              <MetaPill icon="resize-outline" label={dog.sizeLabel} />
-              {dog.weightKg ? (
-                <MetaPill
-                  icon="scale-outline"
-                  label={`${String(dog.weightKg).replace('.', ',')} kg`}
-                />
-              ) : null}
-              {dog.breedLabel ? (
-                <MetaPill icon="paw-outline" label={dog.breedLabel} />
-              ) : null}
+              <MetaItem icon="calendar-outline" label={ageLabel} />
+              <MetaItem icon="resize-outline" label={sizeLabel} />
+              <MetaItem icon="paw" label={breedLabel} />
             </View>
           </View>
-        </SafeAreaView>
-      </LinearGradient>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Card style={styles.quickActions}>
-          <QuickAction
-            icon="chatbubble-ellipses-outline"
-            label="Racconta"
-            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
-          />
-          <View style={styles.actionDivider} />
-          <QuickAction
-            icon="images-outline"
-            label="Album"
-            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-          />
-        </Card>
-
-        {previewPhotos.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>I suoi momenti</Text>
+          {/* Nuovi pattern appresi */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Nuovi pattern appresi</Text>
+            <Ionicons name="bulb-outline" size={20} color="#F59E0B" />
+          </View>
+          <View style={styles.card}>
+            {learnedPatterns.length === 0 ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Vedi tutti gli album"
-                onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-                hitSlop={8}
+                accessibilityLabel="Vedi i pattern"
+                onPress={() => router.push('/patterns')}
+                style={styles.patternEmpty}
               >
-                <Text style={styles.seeAll}>Vedi tutti</Text>
+                <Text style={styles.patternEmptyText}>
+                  Continua ad analizzare i video di {dog.name}: i pattern
+                  appariranno qui.
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </Pressable>
-            </View>
+            ) : (
+              learnedPatterns.map((pattern, index) => (
+                <React.Fragment key={pattern.id}>
+                  {index > 0 ? <View style={styles.divider} /> : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={pattern.title}
+                    onPress={() => router.push(`/patterns/${pattern.id}`)}
+                    style={({ pressed }) => [
+                      styles.patternRow,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.patternIcon}>
+                      <Ionicons
+                        name={PATTERN_ICONS[pattern.id] ?? 'sparkles-outline'}
+                        size={18}
+                        color="#0284C7"
+                      />
+                    </View>
+                    <Text style={styles.patternText} numberOfLines={2}>
+                      {pattern.title}
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={18}
+                      color="#94A3B8"
+                    />
+                  </Pressable>
+                </React.Fragment>
+              ))
+            )}
+          </View>
 
+          {/* Stati frequenti */}
+          <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
+            Stati frequenti
+          </Text>
+          <View style={styles.card}>
+            <View style={styles.pillRow}>
+              {FREQUENT_STATES.map((state) => (
+                <View
+                  key={state.label}
+                  style={[
+                    styles.statePill,
+                    { backgroundColor: state.backgroundColor },
+                  ]}
+                >
+                  <Text style={[styles.statePillText, { color: state.color }]}>
+                    {state.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Agenda cura */}
+          <Text style={[styles.secondaryTitle, styles.sectionTitleSpaced]}>
+            Agenda
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Apri agenda di cura"
+            onPress={() => router.push('/care' as never)}
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+          >
+            <View style={styles.linkRow}>
+              <View style={[styles.linkIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="calendar-outline" size={20} color="#D97706" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>Prossimo promemoria</Text>
+                <Text style={styles.linkSubtitle}>
+                  {nextCare
+                    ? relativeCareDate(nextCare.scheduledAt)
+                    : 'Aggiungi promemoria'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
+          </Pressable>
+
+          {/* Album preview */}
+          <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
+            <Text style={styles.secondaryTitle}>I suoi momenti</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Vedi tutti gli album"
+              onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+              hitSlop={8}
+              style={styles.pillButton}
+            >
+              <Text style={styles.pillButtonText}>Vedi tutti</Text>
+            </Pressable>
+          </View>
+          {previewPhotos.length > 0 ? (
             <View style={styles.photoRow}>
               {previewPhotos.map((photo) => (
                 <PhotoThumbnail
@@ -273,189 +361,240 @@ export default function DogProfileTabScreen() {
                 />
               ))}
             </View>
-          </>
-        ) : null}
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Apri album"
+              onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            >
+              <View style={styles.linkRow}>
+                <View style={[styles.linkIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="images-outline" size={20} color="#0284C7" />
+                </View>
+                <View style={styles.linkBody}>
+                  <Text style={styles.linkTitle}>Album</Text>
+                  <Text style={styles.linkSubtitle}>
+                    Aggiungi i suoi momenti preferiti
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </View>
+            </Pressable>
+          )}
 
-        <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
-          Benessere
-        </Text>
-        <View style={styles.wellnessGrid}>
-          <WellnessCard
-            icon="leaf-outline"
-            iconColor={colors.accent}
-            iconBackground={colors.accentSoft}
-            label="Digestione"
-            value={
-              useDemoData && digestiveBaselineMock.variability === 'bassa'
-                ? 'Stabile'
-                : useDemoData
-                  ? 'Da osservare'
-                  : digestiveSummaryLabel(digestiveSummaryQuery.data)
-            }
-            onPress={() => router.push('/digestive/capture')}
-          />
-          <WellnessCard
-            icon="nutrition-outline"
-            iconColor={colors.primary}
-            iconBackground={colors.primarySoft}
-            label="Alimentazione"
-            value={
-              activeFood?.brand ??
-              lifestyle.profile?.feedingLabel ??
-              'Aggiungi cibo'
-            }
-            onPress={() => router.push('/nutrition/foods')}
-          />
-          <WellnessCard
-            icon="calendar-outline"
-            iconColor={colors.warning}
-            iconBackground={colors.warningSoft}
-            label="Agenda"
-            value={
-              nextCare
-                ? relativeCareDate(nextCare.scheduledAt)
-                : 'Aggiungi promemoria'
-            }
-            onPress={() => router.push('/care' as never)}
-          />
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Routine e abitudini di ${dog.name}`}
-          onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
-          style={[styles.detailsRow, styles.lifestyleRow]}
-        >
-          <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
-            <Ionicons name="sparkles-outline" size={20} color={colors.accent} />
-          </View>
-          <View style={styles.detailsText}>
-            <Text style={styles.detailsTitle}>Routine e abitudini</Text>
-            <Text style={styles.detailsSubtitle}>
-              {lifestyle.profile
-                ? 'Le sue abitudini quotidiane'
-                : 'Aiutami a conoscerlo meglio'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-        </Pressable>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Note personali</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
-            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
-            hitSlop={8}
-          >
-            <Text style={styles.seeAll}>Racconta</Text>
-          </Pressable>
-        </View>
-        {!useDemoData && storiesQuery.isLoading ? (
-          <Text style={styles.notesEmpty}>Carico le note confermate…</Text>
-        ) : null}
-        {!useDemoData && storiesQuery.isError ? (
-          <View style={styles.notesErrorRow}>
-            <Text style={styles.noteError}>
-              Non riesco a caricare le note.
-            </Text>
-            <Pressable onPress={() => void storiesQuery.refetch()}>
-              <Text style={styles.noteActionPrimary}>Riprova</Text>
+          {/* Nutrizione / digestione */}
+          <Text style={[styles.secondaryTitle, styles.sectionTitleSpaced]}>
+            Benessere
+          </Text>
+          <View style={styles.card}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Digestione"
+              onPress={() => router.push('/digestive/capture')}
+              style={({ pressed }) => [
+                styles.patternRow,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={[styles.patternIcon, { backgroundColor: '#D1FAE5' }]}>
+                <Ionicons name="leaf-outline" size={18} color="#059669" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>Digestione</Text>
+                <Text style={styles.linkSubtitle}>
+                  {useDemoData && digestiveBaselineMock.variability === 'bassa'
+                    ? 'Stabile'
+                    : useDemoData
+                      ? 'Da osservare'
+                      : digestiveSummaryLabel(digestiveSummaryQuery.data)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+            <View style={styles.divider} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Alimentazione"
+              onPress={() => router.push('/nutrition/foods')}
+              style={({ pressed }) => [
+                styles.patternRow,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={[styles.patternIcon, { backgroundColor: '#E0F2FE' }]}>
+                <Ionicons name="nutrition-outline" size={18} color="#0284C7" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>Alimentazione</Text>
+                <Text style={styles.linkSubtitle} numberOfLines={1}>
+                  {activeFood?.brand ??
+                    lifestyle.profile?.feedingLabel ??
+                    'Aggiungi cibo'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </Pressable>
           </View>
-        ) : null}
-        {!useDemoData &&
-        !storiesQuery.isLoading &&
-        !storiesQuery.isError &&
-        (storiesQuery.data?.length ?? 0) === 0 ? (
-          <Text style={styles.notesEmpty}>
-            Qui ritroverai solo le cose che hai confermato.
-          </Text>
-        ) : null}
-        {(storiesQuery.data ?? []).map((story) => (
-          <Card key={story.id} style={styles.noteCard}>
-            {editingStoryId === story.id ? (
-              <>
-                {storyDraft.map((fact, index) => (
-                  <TextInput
-                    key={fact.id}
-                    value={fact.statement}
-                    multiline
-                    maxLength={280}
-                    onChangeText={(statement) =>
-                      setStoryDraft((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, statement } : item,
-                        ),
-                      )
-                    }
-                    style={styles.noteInput}
-                  />
-                ))}
-                <View style={styles.noteActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setEditingStoryId(null)}
-                  >
-                    <Text style={styles.noteActionSecondary}>Annulla</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={savingStory}
-                    onPress={() => void saveStory()}
-                  >
-                    <Text style={styles.noteActionPrimary}>
-                      {savingStory ? 'Salvo…' : 'Salva'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.noteMeta}>
-                  Detto da te ·{' '}
-                  {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
-                </Text>
-                {story.facts.map((fact) => (
-                  <Text key={fact.id} style={styles.noteText}>
-                    {fact.statement}
-                  </Text>
-                ))}
-                <View style={styles.noteActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Elimina nota"
-                    onPress={() => confirmStoryDelete(story.id)}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Modifica nota"
-                    onPress={() => beginStoryEdit(story)}
-                  >
-                    <Text style={styles.noteActionPrimary}>Modifica</Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
-          </Card>
-        ))}
-        {storyError ? <Text style={styles.noteError}>{storyError}</Text> : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Modifica i dettagli di ${dog.name}`}
-          onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
-          style={styles.detailsRow}
-        >
-          <View style={styles.detailsIcon}>
-            <Ionicons name="paw-outline" size={20} color={colors.primary} />
+          {/* Lifestyle */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Routine e abitudini di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
+            style={({ pressed }) => [
+              styles.card,
+              styles.sectionTitleSpaced,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.linkRow}>
+              <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="sparkles-outline" size={20} color="#0D9488" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>Routine e abitudini</Text>
+                <Text style={styles.linkSubtitle}>
+                  {lifestyle.profile
+                    ? 'Le sue abitudini quotidiane'
+                    : 'Aiutami a conoscerlo meglio'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
+          </Pressable>
+
+          {/* Note personali */}
+          <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
+            <Text style={styles.secondaryTitle}>Note personali</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
+              onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+              hitSlop={8}
+              style={styles.pillButton}
+            >
+              <Text style={styles.pillButtonText}>Racconta</Text>
+            </Pressable>
           </View>
-          <Text style={styles.detailsTitle}>Modifica profilo</Text>
-          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-        </Pressable>
-      </ScrollView>
+          {!useDemoData && storiesQuery.isLoading ? (
+            <Text style={styles.notesEmpty}>Carico le note confermate…</Text>
+          ) : null}
+          {!useDemoData && storiesQuery.isError ? (
+            <View style={styles.notesErrorRow}>
+              <Text style={styles.noteError}>
+                Non riesco a caricare le note.
+              </Text>
+              <Pressable onPress={() => void storiesQuery.refetch()}>
+                <Text style={styles.noteActionPrimary}>Riprova</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {!useDemoData &&
+          !storiesQuery.isLoading &&
+          !storiesQuery.isError &&
+          (storiesQuery.data?.length ?? 0) === 0 ? (
+            <Text style={styles.notesEmpty}>
+              Qui ritroverai solo le cose che hai confermato.
+            </Text>
+          ) : null}
+          {(storiesQuery.data ?? []).map((story) => (
+            <View key={story.id} style={[styles.card, styles.noteCard]}>
+              {editingStoryId === story.id ? (
+                <>
+                  {storyDraft.map((fact, index) => (
+                    <TextInput
+                      key={fact.id}
+                      value={fact.statement}
+                      multiline
+                      maxLength={280}
+                      onChangeText={(statement) =>
+                        setStoryDraft((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, statement } : item,
+                          ),
+                        )
+                      }
+                      style={styles.noteInput}
+                    />
+                  ))}
+                  <View style={styles.noteActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setEditingStoryId(null)}
+                    >
+                      <Text style={styles.noteActionSecondary}>Annulla</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={savingStory}
+                      onPress={() => void saveStory()}
+                    >
+                      <Text style={styles.noteActionPrimary}>
+                        {savingStory ? 'Salvo…' : 'Salva'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.noteMeta}>
+                    Detto da te ·{' '}
+                    {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
+                  </Text>
+                  {story.facts.map((fact) => (
+                    <Text key={fact.id} style={styles.noteText}>
+                      {fact.statement}
+                    </Text>
+                  ))}
+                  <View style={styles.noteActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Elimina nota"
+                      onPress={() => confirmStoryDelete(story.id)}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#94A3B8"
+                      />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Modifica nota"
+                      onPress={() => beginStoryEdit(story)}
+                    >
+                      <Text style={styles.noteActionPrimary}>Modifica</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </View>
+          ))}
+          {storyError ? <Text style={styles.noteError}>{storyError}</Text> : null}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Modifica i dettagli di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
+            style={({ pressed }) => [
+              styles.card,
+              styles.editProfileCard,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.linkRow}>
+              <View style={[styles.linkIcon, { backgroundColor: '#E0F2FE' }]}>
+                <Ionicons name="paw-outline" size={20} color="#0284C7" />
+              </View>
+              <Text style={[styles.linkTitle, styles.linkBody]}>
+                Modifica profilo
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </View>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
@@ -474,386 +613,311 @@ function digestiveSummaryLabel(summary?: DigestiveSummary): string {
   return 'Vedi andamento';
 }
 
-function MetaPill({ icon, label }: { icon: IconName; label: string }) {
+function MetaItem({ icon, label }: { icon: IconName; label: string }) {
   return (
-    <View style={styles.metaPill}>
-      <Ionicons name={icon} size={13} color={colors.textOnPrimary} />
+    <View style={styles.metaItem}>
+      <Ionicons name={icon} size={15} color="#06B6D4" />
       <Text style={styles.metaLabel}>{label}</Text>
     </View>
   );
 }
 
-function QuickAction({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
-    >
-      <View style={styles.quickIcon}>
-        <Ionicons name={icon} size={22} color={colors.primary} />
-      </View>
-      <Text style={styles.quickLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function WellnessCard({
-  icon,
-  iconColor,
-  iconBackground,
-  label,
-  value,
-  onPress,
-}: {
-  icon: IconName;
-  iconColor: string;
-  iconBackground: string;
-  label: string;
-  value: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.wellnessCard,
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={[styles.wellnessIcon, { backgroundColor: iconBackground }]}>
-        <Ionicons name={icon} size={22} color={iconColor} />
-      </View>
-      <Text style={styles.wellnessLabel}>{label}</Text>
-      <View style={styles.wellnessValueRow}>
-        <Text style={styles.wellnessValue} numberOfLines={1}>
-          {value}
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-      </View>
-    </Pressable>
-  );
-}
-
-const AVATAR_SIZE = 128;
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  hero: {
-    paddingBottom: spacing.xxxl + spacing.xl,
+    backgroundColor: '#F8FAFC',
     overflow: 'hidden',
   },
-  heroSafe: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  decorLarge: {
+  curve: {
     position: 'absolute',
-    width: 220,
+    top: -40,
+    left: '-18%',
+    width: '136%',
     height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    right: -80,
-    top: -70,
+    backgroundColor: '#DDF2F8',
+    borderBottomLeftRadius: 220,
+    borderBottomRightRadius: 220,
   },
-  decorSmall: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    left: -38,
-    bottom: 18,
-  },
-  topBar: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  eyebrow: {
-    color: colors.textOnPrimary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.bold,
-    letterSpacing: 1.5,
-    opacity: 0.8,
-  },
-  topButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  identity: {
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  avatarWrap: {
-    position: 'relative',
-  },
-  avatarHalo: {
-    padding: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    ...shadows.raised,
-  },
-  editBadge: {
-    position: 'absolute',
-    right: 2,
-    bottom: 4,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-  name: {
-    marginTop: spacing.md,
-    color: colors.textOnPrimary,
-    fontSize: typography.size.display,
-    fontWeight: typography.weight.bold,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-  },
-  metaLabel: {
-    color: colors.textOnPrimary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.medium,
+  safe: {
+    flex: 1,
   },
   scroll: {
     flex: 1,
-    marginTop: -spacing.xxl,
   },
   content: {
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
-  quickActions: {
+  topBar: {
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xxl,
+    justifyContent: 'flex-end',
+    marginBottom: 4,
   },
-  quickAction: {
+  topBarSpacer: {
     flex: 1,
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 72,
-    justifyContent: 'center',
   },
-  quickIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.primarySoft,
+  settingsButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickLabel: {
-    color: colors.text,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
+  identity: {
+    alignItems: 'center',
+    marginBottom: 28,
   },
-  actionDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: colors.border,
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: 14,
+  },
+  avatarHalo: {
+    width: AVATAR_SIZE + 8,
+    height: AVATAR_SIZE + 8,
+    borderRadius: (AVATAR_SIZE + 8) / 2,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  editBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0284C7',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  name: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#1A2B48',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 10,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    marginBottom: 12,
+  },
+  sectionHeaderSpaced: {
+    marginTop: 24,
   },
   sectionTitle: {
-    color: colors.text,
-    fontSize: typography.size.lg,
-    fontWeight: typography.weight.bold,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A2B48',
   },
-  seeAll: {
-    color: colors.primary,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
+  secondaryTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1A2B48',
   },
-  standaloneTitle: {
-    marginBottom: spacing.md,
+  sectionTitleSpaced: {
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: 18,
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  patternRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 44,
+  },
+  patternIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  patternText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1A2B48',
+  },
+  patternEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  patternEmptyText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  statePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 9999,
+  },
+  statePillText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  linkIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkBody: {
+    flex: 1,
+  },
+  linkTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A2B48',
+  },
+  linkSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#64748B',
+  },
+  pillButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 9999,
+    backgroundColor: '#E0F2FE',
+  },
+  pillButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0284C7',
   },
   photoRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.xxl,
-  },
-  wellnessGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
-  },
-  wellnessCard: {
-    flexGrow: 1,
-    flexBasis: '46%',
-    minHeight: 150,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadows.card,
-  },
-  wellnessIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  wellnessLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    marginBottom: spacing.xs,
-  },
-  wellnessValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  wellnessValue: {
-    flex: 1,
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 72,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadows.card,
-  },
-  detailsIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primarySoft,
-  },
-  detailsTitle: {
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-  },
-  detailsText: {
-    flex: 1,
-  },
-  detailsSubtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-  },
-  lifestyleIcon: {
-    backgroundColor: colors.accentSoft,
-  },
-  lifestyleRow: {
-    marginBottom: spacing.md,
+    gap: 8,
   },
   notesEmpty: {
-    marginBottom: spacing.lg,
-    color: colors.textMuted,
-    fontSize: typography.size.sm,
+    marginBottom: 12,
+    color: '#94A3B8',
+    fontSize: 14,
   },
   noteCard: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 8,
+    marginBottom: 12,
   },
   noteText: {
-    color: colors.text,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    color: '#1A2B48',
+    fontSize: 14,
+    lineHeight: 20,
   },
   noteMeta: {
-    color: colors.accent,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
+    color: '#0D9488',
+    fontSize: 12,
+    fontWeight: '600',
   },
   noteInput: {
     minHeight: 64,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    color: colors.text,
-    fontSize: typography.size.sm,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    color: '#1A2B48',
+    fontSize: 14,
     textAlignVertical: 'top',
   },
   noteActions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: spacing.lg,
-    marginTop: spacing.xs,
+    gap: 18,
+    marginTop: 4,
   },
   noteActionPrimary: {
-    color: colors.primary,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
+    color: '#0284C7',
+    fontSize: 14,
+    fontWeight: '600',
   },
   noteActionSecondary: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
+    color: '#64748B',
+    fontSize: 14,
   },
   noteError: {
-    marginBottom: spacing.md,
-    color: colors.danger,
-    fontSize: typography.size.sm,
+    marginBottom: 12,
+    color: '#DC2626',
+    fontSize: 14,
   },
   notesErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: 12,
+    marginBottom: 12,
+  },
+  editProfileCard: {
+    marginTop: 24,
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.72,
   },
 });

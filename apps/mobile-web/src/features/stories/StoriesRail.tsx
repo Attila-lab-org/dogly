@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import type { DogStory } from './data';
+
+const SIZE = 72;
 
 export function StoriesRail({
   stories,
@@ -51,7 +53,7 @@ export function StoriesRail({
           style={styles.item}
         >
           <View style={styles.addRing}>
-            <Ionicons name="camera" size={26} color={colors.primary} />
+            <Ionicons name="camera" size={26} color="#2DAAAB" />
           </View>
           <Text style={styles.label} numberOfLines={1}>
             La tua
@@ -68,16 +70,13 @@ export function StoriesRail({
           >
             {story.unseen ? (
               <LinearGradient
-                colors={[colors.primary, colors.accent]}
+                colors={['#0050d8', '#01AEC5']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.ring}
               >
                 <View style={styles.ringInner}>
-                  <Image
-                    source={{ uri: story.photoUri }}
-                    style={styles.avatar}
-                  />
+                  <Image source={{ uri: story.photoUri }} style={styles.avatar} />
                 </View>
               </LinearGradient>
             ) : (
@@ -95,44 +94,42 @@ export function StoriesRail({
   );
 }
 
-const SIZE = 68;
-
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    marginBottom: 12,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A2B48',
   },
   hint: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
+    fontSize: 12,
+    color: '#8295A8',
   },
   row: {
-    gap: spacing.md,
+    gap: 14,
     paddingRight: spacing.lg,
   },
   item: {
     width: SIZE + 8,
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 6,
   },
   addRing: {
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: '#E0F7F6',
     borderStyle: 'dashed',
-    backgroundColor: colors.surface,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -144,8 +141,8 @@ const styles = StyleSheet.create({
   },
   ringInner: {
     flex: 1,
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
+    borderRadius: 9999,
+    backgroundColor: '#FFFFFF',
     padding: 2,
   },
   ringSeen: {
@@ -153,17 +150,18 @@ const styles = StyleSheet.create({
     height: SIZE,
     borderRadius: SIZE / 2,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     padding: 2,
   },
   avatar: {
     width: '100%',
     height: '100%',
-    borderRadius: radius.full,
+    borderRadius: 9999,
   },
   label: {
-    fontSize: typography.size.xs,
-    color: colors.text,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
     textAlign: 'center',
     width: '100%',
   },

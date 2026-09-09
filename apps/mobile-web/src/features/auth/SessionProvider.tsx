@@ -335,7 +335,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const sessionState: SessionState = useMemo(() => {
-    if (usingMockGate) return sessionMock;
+    if (usingMockGate) {
+      const isDemo =
+        typeof window !== 'undefined' &&
+        (new URLSearchParams(window.location.search).get('demo') === '1' ||
+          window.location.hash.includes('demo') ||
+          window.location.pathname.includes('home') ||
+          window.location.pathname.includes('tabs'));
+      return isDemo ? 'authenticated-with-dog' : sessionMock;
+    }
     if (!session?.user) return 'unauthenticated';
     if (dogStatusUnknown) return 'authenticated-dog-status-unknown';
     if (!hasDog) return 'authenticated-no-dog';

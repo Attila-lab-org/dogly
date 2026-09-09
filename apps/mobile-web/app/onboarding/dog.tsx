@@ -6,11 +6,10 @@
  * Validazione con zod (schema condiviso, pronto a essere spostato lato
  * contratti quando il backend espone POST /v1/dogs).
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,8 +18,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
-import { Button, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { Button, ProgressBar, ScreenContainer } from '@/components';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -83,6 +82,15 @@ export default function DogOnboardingScreen() {
     kind: 'unselected',
   });
   const [error, setError] = useState<string | null>(null);
+
+  const stepProgress = useMemo(() => {
+    let filled = 0;
+    if (draft.name.trim()) filled += 1;
+    if (ageYears !== null) filled += 1;
+    if (draft.size) filled += 1;
+    if (breedSelection.kind !== 'unselected') filled += 1;
+    return filled / 4;
+  }, [draft.name, draft.size, ageYears, breedSelection.kind]);
 
   useEffect(() => {
     void refreshDogs();
@@ -178,12 +186,21 @@ export default function DogOnboardingScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
-      <Text style={styles.title}>Crea il profilo del tuo cane</Text>
-      <Text style={styles.subtitle}>
-        Bastano pochi secondi: nome e taglia, il resto possiamo scoprirlo
-        insieme.
-      </Text>
+    <ScreenContainer scroll style={styles.safe}>
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepLabel}>Passo 1 di 1</Text>
+        <Text style={styles.title}>Crea il profilo del tuo cane</Text>
+        <ProgressBar
+          progress={Math.max(0.15, stepProgress)}
+          tone="accent"
+          height={6}
+          style={styles.progress}
+        />
+        <Text style={styles.subtitle}>
+          Bastano pochi secondi: nome e taglia, il resto possiamo scoprirlo
+          insieme.
+        </Text>
+      </View>
 
       {/* Foto opzionale con placeholder zampa */}
       <View style={styles.avatarSection}>
@@ -197,25 +214,26 @@ export default function DogOnboardingScreen() {
           }}
           style={styles.photoBadge}
         >
-          <Ionicons name="camera" size={16} color={colors.primary} />
+          <Ionicons name="camera" size={16} color="#2DAAAB" />
         </Pressable>
         <Text style={styles.photoHint}>Foto (facoltativa)</Text>
       </View>
 
-      {/* Nome — obbligatorio */}
-      <Text style={styles.label}>Nome *</Text>
-      <TextInput
-        value={draft.name}
-        onChangeText={(name) => patch({ name })}
-        placeholder="Es. Rocky"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
-        autoCapitalize="words"
-        testID="onboarding-name"
-      />
+      <View style={styles.fieldCard}>
+        <Text style={styles.label}>Nome *</Text>
+        <TextInput
+          value={draft.name}
+          onChangeText={(name) => patch({ name })}
+          placeholder="Es. Rocky"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+          autoCapitalize="words"
+          testID="onboarding-name"
+        />
+      </View>
 
-      <Text style={styles.label}>Età</Text>
-      <View style={styles.profileField}>
+      <View style={styles.fieldCard}>
+        <Text style={styles.label}>Età</Text>
         <AgePicker
           value={ageYears}
           onChange={(years) => {
@@ -226,8 +244,8 @@ export default function DogOnboardingScreen() {
         />
       </View>
 
-      <Text style={styles.label}>Compleanno (facoltativo)</Text>
-      <View style={styles.profileField}>
+      <View style={styles.fieldCard}>
+        <Text style={styles.label}>Compleanno (facoltativo)</Text>
         <BirthdayPicker
           value={birthDate}
           ageYears={ageYears}
@@ -239,36 +257,41 @@ export default function DogOnboardingScreen() {
         />
       </View>
 
-      {/* Taglia */}
-      <Text style={styles.label}>Taglia</Text>
-      <View style={styles.chips}>
-        {SIZES.map((size) => (
-          <OptionChip
-            key={size}
-            label={size}
-            selected={draft.size === size}
-            onPress={() => patch({ size })}
-          />
-        ))}
+      <View style={styles.fieldCard}>
+        <Text style={styles.label}>Taglia</Text>
+        <View style={styles.chips}>
+          {SIZES.map((size) => (
+            <OptionChip
+              key={size}
+              label={size}
+              selected={draft.size === size}
+              onPress={() => patch({ size })}
+            />
+          ))}
+        </View>
       </View>
 
-      <Text style={styles.label}>Peso (kg, facoltativo)</Text>
-      <TextInput
-        value={draft.weightKg}
-        onChangeText={(weightKg) => patch({ weightKg })}
-        placeholder="Es. 12,5"
-        placeholderTextColor={colors.textMuted}
-        keyboardType="decimal-pad"
-        style={styles.input}
-        testID="onboarding-weight"
-      />
+      <View style={styles.fieldCard}>
+        <Text style={styles.label}>Peso (kg, facoltativo)</Text>
+        <TextInput
+          value={draft.weightKg}
+          onChangeText={(weightKg) => patch({ weightKg })}
+          placeholder="Es. 12,5"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="decimal-pad"
+          style={styles.input}
+          testID="onboarding-weight"
+        />
+      </View>
 
-      <Text style={styles.label}>Razza</Text>
-      <BreedPicker
-        value={breedSelection}
-        onChange={setBreedSelection}
-        testID="onboarding-breed"
-      />
+      <View style={styles.fieldCard}>
+        <Text style={styles.label}>Razza</Text>
+        <BreedPicker
+          value={breedSelection}
+          onChange={setBreedSelection}
+          testID="onboarding-breed"
+        />
+      </View>
 
       {error && (
         <View style={styles.errorBanner} accessibilityLiveRegion="polite">
@@ -315,17 +338,33 @@ function OptionChip({
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    backgroundColor: '#F8FAFC',
+  },
+  stepHeader: {
+    marginBottom: spacing.lg,
+  },
+  stepLabel: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: '#2DAAAB',
+    marginBottom: spacing.xs,
+  },
   title: {
     fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: '#1A2B48',
+  },
+  progress: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: '#E0F7F6',
   },
   subtitle: {
     marginTop: spacing.sm,
     fontSize: typography.size.md,
     color: colors.textSecondary,
     lineHeight: typography.size.md * typography.lineHeight.normal,
-    marginBottom: spacing.xl,
   },
   avatarSection: {
     alignItems: 'center',
@@ -338,36 +377,42 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EDF2F7',
+    ...shadows.card,
   },
   photoHint: {
     marginTop: spacing.sm,
     fontSize: typography.size.xs,
     color: colors.textMuted,
   },
+  fieldCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.card,
+  },
   label: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
+    color: '#1A2B48',
     marginBottom: spacing.sm,
-    marginTop: spacing.md,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EDF2F7',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     fontSize: typography.size.md,
-    color: colors.text,
-  },
-  profileField: {
-    marginBottom: spacing.sm,
+    color: '#1A2B48',
   },
   chips: {
     flexDirection: 'row',
@@ -378,13 +423,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EDF2F7',
   },
   optionChipSelected: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary,
+    backgroundColor: '#E0F7F6',
+    borderColor: '#2DAAAB',
   },
   optionLabel: {
     fontSize: typography.size.sm,
@@ -392,7 +437,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   optionLabelSelected: {
-    color: colors.primary,
+    color: '#2DAAAB',
+    fontWeight: typography.weight.semibold,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -401,7 +447,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dangerSoft,
     borderRadius: radius.md,
     padding: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
   },
   errorText: {
     flex: 1,

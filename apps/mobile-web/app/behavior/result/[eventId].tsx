@@ -1,5 +1,6 @@
 /**
  * Behavior result — GET evento reale + POST feedback.
+ * Layout Screen 2: nav Risultato, hero circolare, Perché?, feedback pills.
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -28,6 +29,8 @@ import { selectAdvice } from '@/features/advice/logic';
 import { useSession } from '@/features/auth/SessionProvider';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
+
+const NAVY = '#1A2B48';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
@@ -88,7 +91,7 @@ export default function BehaviorResultScreen() {
 
   if (useApi && query.isLoading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState title="Caricamento" message="Sto aprendo il risultato…" />
       </ScreenContainer>
     );
@@ -96,7 +99,7 @@ export default function BehaviorResultScreen() {
 
   if (!result) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
           title="Risultato non trovato"
           message="Non riesco ad aprire questa analisi. Controlla il Diario."
@@ -111,7 +114,7 @@ export default function BehaviorResultScreen() {
 
   if (notCompleted) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
           title="Analisi in corso"
           message="Ti porto allo stato dell'analisi…"
@@ -163,18 +166,30 @@ export default function BehaviorResultScreen() {
   };
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer padded={false} style={styles.whiteScreen}>
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Indietro"
           onPress={() => router.back()}
           hitSlop={12}
+          style={styles.topSide}
         >
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={NAVY} />
         </Pressable>
         <Text style={styles.topTitle}>Risultato</Text>
-        <View style={styles.topSpacer} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Condividi"
+          onPress={() =>
+            void shareBehaviorResult(result, dog.name, dog.photoUri)
+          }
+          hitSlop={12}
+          style={styles.topSide}
+          testID="share-result"
+        >
+          <Ionicons name="share-outline" size={22} color={NAVY} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -195,6 +210,7 @@ export default function BehaviorResultScreen() {
               : null
           }
           photoUri={dog.photoUri}
+          onSaveDiary={() => router.replace('/(tabs)/diary')}
           contextPrompt={
             result.needs_context &&
             result.context_question &&
@@ -232,45 +248,38 @@ export default function BehaviorResultScreen() {
             advice ? <AdviceCard advice={advice} dogName={dog.name} /> : null
           }
         />
-
-        <Button
-          title="Condividi"
-          variant="outline"
-          icon={<Ionicons name="share-outline" size={18} color={colors.accent} />}
-          onPress={() =>
-            void shareBehaviorResult(result, dog.name, dog.photoUri)
-          }
-          style={styles.saveButton}
-          testID="share-result"
-        />
-
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  whiteScreen: {
+    backgroundColor: '#FFFFFF',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    backgroundColor: '#FFFFFF',
+  },
+  topSide: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-  },
-  topSpacer: {
-    width: 26,
+    fontSize: 17,
+    fontWeight: '700',
+    color: NAVY,
   },
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
-  },
-  saveButton: {
-    marginTop: spacing.xl,
+    backgroundColor: '#FFFFFF',
   },
   contextCard: {
     marginTop: spacing.md,

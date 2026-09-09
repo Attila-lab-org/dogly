@@ -91,6 +91,7 @@ export default function StoryViewerScreen() {
                 <View
                   style={[
                     styles.progressValue,
+                    itemIndex === index && styles.progressActive,
                     itemIndex > index && styles.progressPending,
                   ]}
                 />
@@ -98,19 +99,24 @@ export default function StoryViewerScreen() {
             ))}
           </View>
           <View style={styles.topBar}>
-            <Text style={styles.name}>{story.dogName}</Text>
+            <View style={styles.namePill}>
+              <Text style={styles.name}>{story.dogName}</Text>
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Chiudi"
               onPress={() => router.back()}
               hitSlop={12}
+              style={styles.closeButton}
             >
-              <Ionicons name="close" size={28} color={colors.textOnPrimary} />
+              <Ionicons name="close" size={22} color="#FFFFFF" />
             </Pressable>
           </View>
         </View>
         {story.caption ? (
-          <Text style={styles.caption}>{story.caption}</Text>
+          <View style={styles.captionCard}>
+            <Text style={styles.caption}>{story.caption}</Text>
+          </View>
         ) : null}
       </SafeAreaView>
     </View>
@@ -120,7 +126,7 @@ export default function StoryViewerScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0E2A47',
   },
   image: {
     ...StyleSheet.absoluteFill,
@@ -151,11 +157,14 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 2,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
   },
   progressValue: {
     flex: 1,
-    backgroundColor: colors.textOnPrimary,
+    backgroundColor: colors.teal,
+  },
+  progressActive: {
+    backgroundColor: '#FFFFFF',
   },
   progressPending: {
     opacity: 0,
@@ -165,16 +174,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  namePill: {
+    backgroundColor: 'rgba(14, 42, 71, 0.45)',
+    borderRadius: 9999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
   name: {
-    color: colors.textOnPrimary,
-    fontSize: typography.size.lg,
+    color: '#FFFFFF',
+    fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
-  caption: {
-    color: colors.textOnPrimary,
-    fontSize: typography.size.md,
-    marginBottom: spacing.xl,
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(14, 42, 71, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captionCard: {
     zIndex: 1,
+    backgroundColor: 'rgba(14, 42, 71, 0.55)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+  },
+  caption: {
+    color: '#FFFFFF',
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * typography.lineHeight.relaxed,
   },
   empty: {
     flex: 1,
@@ -183,10 +215,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   emptyText: {
-    color: colors.textOnPrimary,
+    color: '#FFFFFF',
   },
   closeLabel: {
-    color: colors.accent,
+    color: colors.teal,
     fontWeight: typography.weight.semibold,
   },
 });

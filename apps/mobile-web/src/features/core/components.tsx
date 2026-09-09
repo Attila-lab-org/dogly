@@ -7,7 +7,7 @@
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Chip, ProgressBar, SectionHeader } from '../../components';
+import { Card, ProgressBar, SectionHeader } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type {
   BehaviorEventResult,
@@ -23,6 +23,10 @@ import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
 import { getConsents } from '../privacy/consents';
 
+const puppyPlaySource = require('../../../assets/images/puppy-play.png');
+const NAVY = '#1A2B48';
+const SUMMARY_MUTED = '#5A7184';
+
 export { SectionHeader };
 
 /* ------------------------------------------------------------------ */
@@ -33,12 +37,15 @@ export function DogAvatar({
   size = 96,
   photoUri,
   dogName = 'il cane',
+  source,
 }: {
   size?: number;
   photoUri?: string | null;
   dogName?: string;
+  source?: any;
 }) {
-  const hasPhoto = Boolean(photoUri);
+  const resolvedSource = source || (photoUri ? { uri: photoUri as string } : null);
+  const hasPhoto = Boolean(resolvedSource);
   return (
     <View
       accessibilityRole="image"
@@ -52,7 +59,7 @@ export function DogAvatar({
     >
       {hasPhoto ? (
         <Image
-          source={{ uri: photoUri as string }}
+          source={resolvedSource}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           accessibilityIgnoresInvertColors
         />
@@ -107,19 +114,14 @@ const BAND_TONE: Record<ConfidenceBand, 'primary' | 'warning' | 'neutral'> = {
   LOW: 'neutral',
 };
 
-export function ConfidencePill({ band }: { band: ConfidenceBand }) {
+export function ConfidencePill({ band }: { band?: ConfidenceBand | null }) {
+  if (!band) return null;
   return (
-    <Chip
-      label={CONFIDENCE_BAND_LABELS[band]}
-      tone={BAND_TONE[band]}
-      icon={
-        <Ionicons
-          name="sparkles"
-          size={14}
-          color={band === 'LOW' ? colors.textSecondary : colors.primary}
-        />
-      }
-    />
+    <View style={styles.confidencePill}>
+      <Text style={styles.confidencePillText}>
+        Confidenza {CONFIDENCE_BAND_LABELS[band]}
+      </Text>
+    </View>
   );
 }
 
@@ -159,7 +161,7 @@ export function EvidenceRow({ item }: { item: EvidenceItem }) {
   return (
     <View style={styles.evidenceRow}>
       <View style={styles.evidenceIconWrap}>
-        <CuteIcon name={evidenceIconName(item)} size={18} />
+        <CuteIcon name={evidenceIconName(item)} size={18} color="#2DAAAB" />
       </View>
       <Text style={styles.evidenceText}>{item.label}</Text>
     </View>
@@ -177,6 +179,7 @@ export function FeedbackButtons({
   dogName = 'lui',
   primaryIntent = null,
   alternatives = [],
+  onSaveDiary,
 }: {
   value: FeedbackValue | null;
   onFeedback: (
@@ -188,6 +191,8 @@ export function FeedbackButtons({
   dogName?: string;
   primaryIntent?: BehaviorIntent | null;
   alternatives?: Array<{ intent: BehaviorIntent }>;
+  /** Pulsante outline "Salva nel diario" (Screen 2). */
+  onSaveDiary?: () => void;
 }) {
   const [awaitingCorrection, setAwaitingCorrection] = React.useState(false);
   const researchOptIn = getConsents().researchTraining;
@@ -195,10 +200,34 @@ export function FeedbackButtons({
     value: FeedbackValue;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
+    bgColor: string;
+    textColor: string;
+    iconColor: string;
   }> = [
-    { value: 'YES', label: 'Sì, è così', icon: 'checkmark' },
-    { value: 'NO', label: 'Non proprio', icon: 'close' },
-    { value: 'UNKNOWN', label: 'Non lo so', icon: 'help' },
+    {
+      value: 'YES',
+      label: 'Sì, è così',
+      icon: 'thumbs-up',
+      bgColor: '#2DAAAB',
+      textColor: '#FFFFFF',
+      iconColor: '#FFFFFF',
+    },
+    {
+      value: 'NO',
+      label: 'Non credo',
+      icon: 'thumbs-down',
+      bgColor: '#FF8B74',
+      textColor: '#FFFFFF',
+      iconColor: '#FFFFFF',
+    },
+    {
+      value: 'UNKNOWN',
+      label: 'Non lo so',
+      icon: 'help-circle-outline',
+      bgColor: '#F1F5F9',
+      textColor: '#1A2B48',
+      iconColor: '#1A2B48',
+    },
   ];
   const chips = correctionOptions(primaryIntent, alternatives);
 
@@ -226,7 +255,7 @@ export function FeedbackButtons({
           </View>
         ) : null}
       </View>
-      <View style={styles.feedbackOptions}>
+      <View style={styles.feedbackOptionsVertical}>
         {options.map((option) => {
           const selected = value === option.value;
           return (
@@ -242,28 +271,22 @@ export function FeedbackButtons({
                 submit(option.value);
               }}
               style={({ pressed }) => [
-                styles.feedbackOption,
+                styles.feedbackPillButton,
+                { backgroundColor: option.bgColor },
                 selected && styles.feedbackOptionSelected,
                 pressed && styles.feedbackOptionPressed,
               ]}
               testID={`feedback-${option.value.toLowerCase()}`}
             >
-              <View
-                style={[
-                  styles.feedbackIcon,
-                  selected && styles.feedbackIconSelected,
-                ]}
-              >
-                <Ionicons
-                  name={option.icon}
-                  size={16}
-                  color={selected ? colors.textOnPrimary : colors.textSecondary}
-                />
-              </View>
+              <Ionicons
+                name={option.icon}
+                size={18}
+                color={option.iconColor}
+              />
               <Text
                 style={[
-                  styles.feedbackOptionLabel,
-                  selected && styles.feedbackOptionLabelSelected,
+                  styles.feedbackPillLabel,
+                  { color: option.textColor },
                 ]}
               >
                 {option.label}
@@ -271,6 +294,21 @@ export function FeedbackButtons({
             </Pressable>
           );
         })}
+        {onSaveDiary ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Salva nel diario"
+            onPress={onSaveDiary}
+            style={({ pressed }) => [
+              styles.saveDiaryButton,
+              pressed && styles.feedbackOptionPressed,
+            ]}
+            testID="save-diary"
+          >
+            <Ionicons name="bookmark-outline" size={18} color="#2DAAAB" />
+            <Text style={styles.saveDiaryLabel}>Salva nel diario</Text>
+          </Pressable>
+        ) : null}
       </View>
       {awaitingCorrection ? (
         <View style={styles.correctionBlock} testID="feedback-correction">
@@ -313,22 +351,6 @@ export function FeedbackButtons({
 /* BehaviorResultView — contratto UX_REFERENCE (risultato per il cliente) */
 /* ------------------------------------------------------------------ */
 
-/** Disegno carino dell'hero per ogni intent della tassonomia (sez. 16.2). */
-const INTENT_HERO_ICONS: Record<BehaviorIntent, CuteIconName> = {
-  PLAY_INTERACTION: 'play',
-  ATTENTION_REQUEST: 'attention',
-  OUTSIDE_REQUEST: 'door',
-  ALERT_VIGILANCE: 'alert',
-  DISCOMFORT_AVOIDANCE: 'cloud',
-  FEAR_INSECURITY: 'cloud',
-  HIGH_AROUSAL: 'bolt',
-  FRUSTRATION: 'frustration',
-  RELAX_REST: 'moon',
-  RESOURCE_TENSION: 'bowl',
-  AMBIGUOUS: 'question',
-  INSUFFICIENT: 'search',
-};
-
 export function BehaviorResultView({
   result,
   dogName,
@@ -339,6 +361,7 @@ export function BehaviorResultView({
   photoUri,
   contextPrompt,
   primaryAdvice,
+  onSaveDiary,
 }: {
   result: BehaviorEventResult;
   dogName: string;
@@ -353,6 +376,7 @@ export function BehaviorResultView({
   photoUri?: string | null;
   contextPrompt?: React.ReactNode;
   primaryAdvice?: React.ReactNode;
+  onSaveDiary?: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const isInsufficient =
@@ -373,35 +397,78 @@ export function BehaviorResultView({
           safety ? styles.resultHeroSafety : null,
         ]}
       >
-        {photoUri ? (
-          <Image
-            source={{ uri: photoUri }}
-            style={styles.resultPhoto}
-            resizeMode="cover"
-            accessibilityLabel={`Foto di ${dogName}`}
-          />
-        ) : (
-          <View style={styles.resultIcon}>
-            <CuteIcon
-              name={
-                isInsufficient || !result.primary_intent
-                  ? 'search'
-                  : INTENT_HERO_ICONS[result.primary_intent]
-              }
-              size={32}
-              color={
-                safety || isInsufficient || isAmbiguous
-                  ? colors.warning
-                  : colors.accent
-              }
-            />
+        <View style={styles.resultHeroGraphicWrap}>
+          <View style={styles.resultPuppyCircle}>
+            {photoUri ? (
+              <Image
+                source={{ uri: photoUri }}
+                style={styles.resultPuppyImage}
+                resizeMode="cover"
+                accessibilityLabel={`Foto di ${dogName}`}
+              />
+            ) : (
+              <Image
+                source={puppyPlaySource}
+                style={styles.resultPuppyImage}
+                resizeMode="contain"
+                accessibilityLabel="Illustrazione cucciolo"
+              />
+            )}
           </View>
-        )}
-        <Text style={styles.headline}>{headline}</Text>
-        <Text style={styles.summary}>
-          {personalizeCopy(result.consumer_summary, dogName)}
-        </Text>
+          <View
+            style={[
+              styles.confettiDot,
+              { top: 10, left: 22, backgroundColor: '#FED7AA', width: 7, height: 7, borderRadius: 3.5 },
+            ]}
+          />
+          <View
+            style={[
+              styles.confettiDot,
+              { top: 18, right: 26, backgroundColor: '#BAE6FD', width: 8, height: 8, borderRadius: 4 },
+            ]}
+          />
+          <View
+            style={[
+              styles.confettiDot,
+              { bottom: 16, left: 32, backgroundColor: '#FBCFE8', width: 6, height: 6, borderRadius: 3 },
+            ]}
+          />
+          <View
+            style={[
+              styles.confettiDot,
+              { bottom: 22, right: 24, backgroundColor: '#BBF7D0', width: 7, height: 7, borderRadius: 3.5 },
+            ]}
+          />
+        </View>
+        <View style={styles.headlineRow}>
+          <Text style={styles.headline}>{headline}</Text>
+          <Text style={styles.headlineSparkle}> ✨</Text>
+        </View>
+
+        <ConfidencePill band={result.confidence_band} />
+
+        {result.consumer_summary ? (
+          <Text style={styles.summary}>
+            {personalizeCopy(result.consumer_summary, dogName)}
+          </Text>
+        ) : null}
       </View>
+
+      {/* Sezione "Perché?" — capsule con icona circolare come da Screen 2 */}
+      {result.evidence.length > 0 ? (
+        <View style={styles.whySection}>
+          <Text style={styles.whyTitle}>Perché?</Text>
+          {result.evidence.map((item, index) => (
+            <EvidenceRow
+              key={`${item.label}-${index}`}
+              item={{
+                ...item,
+                label: personalizeCopy(item.label, dogName),
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
 
       {result.baseline_note ? (
         <View style={styles.baselineCard} testID="per-rocky">
@@ -522,6 +589,7 @@ export function BehaviorResultView({
         dogName={dogName}
         primaryIntent={result.primary_intent}
         alternatives={result.alternatives}
+        onSaveDiary={onSaveDiary}
       />
     </View>
   );
@@ -570,27 +638,60 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     color: colors.textSecondary,
   },
+  confidencePill: {
+    backgroundColor: '#E0F7F6',
+    borderRadius: radius.full,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    alignSelf: 'center',
+  },
+  confidencePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
   evidenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   evidenceIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: colors.accentSoft,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E0F7F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   evidenceText: {
     flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    color: NAVY,
+  },
+  whySection: {
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  whyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: NAVY,
+    marginBottom: 12,
   },
   feedbackCard: {
     marginTop: spacing.lg,
@@ -605,7 +706,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   feedbackTitle: {
-    color: colors.text,
+    color: NAVY,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
@@ -624,88 +725,116 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },
-  feedbackOptions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  feedbackOptionsVertical: {
+    gap: 10,
   },
-  feedbackOption: {
-    flex: 1,
-    minHeight: 70,
+  feedbackPillButton: {
+    height: 50,
+    borderRadius: radius.full,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceMuted,
+    gap: 10,
+    paddingHorizontal: 20,
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  feedbackPillLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  saveDiaryButton: {
+    height: 50,
+    borderRadius: radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#2DAAAB',
+  },
+  saveDiaryLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2DAAAB',
   },
   feedbackOptionSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    transform: [{ scale: 0.99 }],
   },
   feedbackOptionPressed: {
-    backgroundColor: colors.border,
-  },
-  feedbackIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  feedbackIconSelected: {
-    backgroundColor: colors.primary,
-  },
-  feedbackOptionLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-    textAlign: 'center',
-  },
-  feedbackOptionLabelSelected: {
-    color: colors.primary,
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
   },
   resultHero: {
     alignItems: 'center',
-    padding: spacing.xl,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accentSoft,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    backgroundColor: '#FFFFFF',
+  },
+  resultHeroGraphicWrap: {
+    width: 160,
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  resultPuppyCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#E0F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  resultPuppyImage: {
+    width: 120,
+    height: 120,
+  },
+  confettiDot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  headlineRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    paddingHorizontal: spacing.sm,
+  },
+  headlineSparkle: {
+    fontSize: 22,
   },
   resultHeroUncertain: {
-    backgroundColor: colors.warningSoft,
+    backgroundColor: '#FFFDF9',
   },
   resultHeroSafety: {
     backgroundColor: colors.dangerSoft,
   },
-  resultIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  resultPhoto: {
-    width: '100%',
-    height: 210,
-    borderRadius: radius.md,
-    marginBottom: spacing.lg,
-  },
   headline: {
-    fontSize: typography.size.xxl,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
+    fontSize: 22,
+    fontWeight: '700',
+    color: NAVY,
     textAlign: 'center',
-    lineHeight: typography.size.xxl * typography.lineHeight.tight,
+    lineHeight: 28,
   },
   summary: {
     marginTop: spacing.md,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: SUMMARY_MUTED,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 14 * typography.lineHeight.relaxed,
+    paddingHorizontal: spacing.sm,
   },
   careCard: {
     flexDirection: 'row',

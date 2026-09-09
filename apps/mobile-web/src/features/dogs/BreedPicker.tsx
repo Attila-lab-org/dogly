@@ -174,7 +174,7 @@ function ChoiceRow({
         {label}
       </Text>
       {selected ? (
-        <Ionicons name="checkmark-circle" size={21} color={colors.primary} />
+        <Ionicons name="checkmark-circle" size={21} color="#2DAAAB" />
       ) : null}
     </Pressable>
   );
@@ -223,7 +223,7 @@ function SpecialChoice({
         <Ionicons
           name="checkmark-circle"
           size={19}
-          color={colors.primary}
+          color="#2DAAAB"
           style={styles.specialCheck}
         />
       ) : null}
@@ -252,12 +252,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    borderColor: '#EDF2F7',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
   },
   fieldPressed: {
-    borderColor: colors.primary,
+    borderColor: '#2DAAAB',
   },
   fieldText: {
     flex: 1,
@@ -321,8 +321,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   specialCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: '#2DAAAB',
+    backgroundColor: '#E0F7F6',
   },
   specialIcon: {
     width: 46,
@@ -330,10 +330,10 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
+    backgroundColor: '#E0F7F6',
   },
   specialIconSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#2DAAAB',
   },
   specialLabel: {
     color: colors.text,
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   choiceSelected: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: '#E0F7F6',
   },
   choicePressed: {
     backgroundColor: colors.surfaceMuted,
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
   },
   choiceTextSelected: {
-    color: colors.primary,
+    color: '#2DAAAB',
     fontWeight: typography.weight.semibold,
   },
   empty: {

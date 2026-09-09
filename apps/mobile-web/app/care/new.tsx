@@ -3,6 +3,7 @@ import {
   Alert,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -28,9 +29,20 @@ import {
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useNotificationPreferences } from '@/features/notifications/store';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 
 const TIME_OPTIONS = [9, 10, 15, 18] as const;
+
+const CARE = {
+  bg: '#F8FAFC',
+  text: '#1A2B48',
+  muted: '#64748B',
+  border: '#EDF2F7',
+  teal: '#2DAAAB',
+  tealSoft: '#E0F7F6',
+  coral: '#FF8B74',
+  peach: '#FFF1EE',
+} as const;
 
 export default function NewCareEventScreen() {
   const router = useRouter();
@@ -112,11 +124,15 @@ export default function NewCareEventScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Nuovo promemoria" />
 
       <Text style={styles.step}>Cosa vuoi ricordare?</Text>
-      <View style={styles.typeGrid}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.typeRow}
+      >
         {CARE_EVENT_TYPES.map((type) => {
           const meta = CARE_TYPE_META[type];
           const selected = eventType === type;
@@ -126,23 +142,13 @@ export default function NewCareEventScreen() {
               accessibilityRole="button"
               accessibilityState={{ selected }}
               onPress={() => chooseType(type)}
-              style={[
-                styles.typeCard,
-                selected && styles.typeCardSelected,
-              ]}
+              style={[styles.typeChip, selected && styles.typeChipSelected]}
             >
-              <View
-                style={[
-                  styles.typeIcon,
-                  selected && styles.typeIconSelected,
-                ]}
-              >
-                <Ionicons
-                  name={meta.icon}
-                  size={21}
-                  color={selected ? colors.textOnPrimary : colors.primary}
-                />
-              </View>
+              <Ionicons
+                name={meta.icon}
+                size={16}
+                color={selected ? colors.textOnPrimary : CARE.teal}
+              />
               <Text
                 style={[
                   styles.typeLabel,
@@ -154,14 +160,14 @@ export default function NewCareEventScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <Text style={styles.label}>Titolo</Text>
       <TextInput
         value={title}
         onChangeText={setTitle}
         placeholder="Es. Richiamo vaccino"
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={CARE.muted}
         maxLength={120}
         style={styles.input}
       />
@@ -179,7 +185,7 @@ export default function NewCareEventScreen() {
           <Ionicons
             name={allDay ? 'checkbox' : 'square-outline'}
             size={19}
-            color={allDay ? colors.primary : colors.textMuted}
+            color={allDay ? CARE.teal : CARE.muted}
           />
           <Text style={styles.allDayText}>Senza orario</Text>
         </Pressable>
@@ -215,7 +221,7 @@ export default function NewCareEventScreen() {
           <Ionicons
             name="notifications-outline"
             size={21}
-            color={colors.accent}
+            color={CARE.teal}
           />
         </View>
         <View style={styles.reminderCopy}>
@@ -227,8 +233,8 @@ export default function NewCareEventScreen() {
         <Switch
           value={reminderEnabled}
           onValueChange={setReminderEnabled}
-          trackColor={{ false: colors.border, true: colors.accentSoft }}
-          thumbColor={reminderEnabled ? colors.accent : colors.textMuted}
+          trackColor={{ false: CARE.border, true: CARE.tealSoft }}
+          thumbColor={reminderEnabled ? CARE.teal : CARE.muted}
           accessibilityLabel="Avvisami il giorno prima"
         />
       </View>
@@ -241,7 +247,7 @@ export default function NewCareEventScreen() {
         <Ionicons
           name={showDetails ? 'remove-circle-outline' : 'add-circle-outline'}
           size={20}
-          color={colors.primary}
+          color={CARE.teal}
         />
         <Text style={styles.detailsToggleText}>
           {showDetails ? 'Nascondi dettagli' : 'Aggiungi luogo o nota'}
@@ -254,7 +260,7 @@ export default function NewCareEventScreen() {
             value={location}
             onChangeText={setLocation}
             placeholder="Luogo o veterinario (facoltativo)"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={CARE.muted}
             maxLength={160}
             style={styles.input}
           />
@@ -262,7 +268,7 @@ export default function NewCareEventScreen() {
             value={notes}
             onChangeText={setNotes}
             placeholder="Nota (facoltativa)"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={CARE.muted}
             maxLength={1000}
             multiline
             style={[styles.input, styles.notes]}
@@ -272,6 +278,7 @@ export default function NewCareEventScreen() {
 
       <Button
         title="Aggiungi all’agenda"
+        variant="secondary"
         onPress={save}
         loading={saving}
         style={styles.save}
@@ -281,69 +288,59 @@ export default function NewCareEventScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: CARE.bg,
+  },
   step: {
     marginBottom: spacing.md,
-    color: colors.text,
+    color: CARE.text,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
-  typeGrid: {
+  typeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.xl,
+    paddingBottom: spacing.xl,
   },
-  typeCard: {
-    width: '31%',
-    minHeight: 92,
+  typeChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
-    padding: spacing.sm,
-    borderRadius: radius.md,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 9999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: CARE.border,
+    backgroundColor: '#FFFFFF',
   },
-  typeCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  typeIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primarySoft,
-  },
-  typeIconSelected: {
-    backgroundColor: colors.primary,
+  typeChipSelected: {
+    borderColor: CARE.teal,
+    backgroundColor: CARE.teal,
   },
   typeLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
+    color: CARE.text,
+    fontSize: 13,
     fontWeight: typography.weight.semibold,
-    textAlign: 'center',
   },
   typeLabelSelected: {
-    color: colors.primary,
+    color: colors.textOnPrimary,
   },
   label: {
     marginBottom: spacing.sm,
-    color: colors.text,
+    color: CARE.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
   input: {
     minHeight: 54,
     marginBottom: spacing.lg,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    color: colors.text,
+    borderColor: CARE.border,
+    borderRadius: 16,
+    backgroundColor: CARE.bg,
+    color: CARE.text,
     fontSize: typography.size.md,
   },
   timeHeader: {
@@ -354,7 +351,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   labelInline: {
-    color: colors.text,
+    color: CARE.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
@@ -364,7 +361,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   allDayText: {
-    color: colors.textSecondary,
+    color: CARE.muted,
     fontSize: typography.size.xs,
   },
   timeRow: {
@@ -377,17 +374,17 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    borderRadius: 9999,
+    backgroundColor: CARE.bg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: CARE.border,
   },
   timeChipSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
+    borderColor: CARE.teal,
+    backgroundColor: CARE.teal,
   },
   timeText: {
-    color: colors.textSecondary,
+    color: CARE.muted,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },
@@ -399,8 +396,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accentSoft,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: CARE.border,
+    ...shadows.card,
   },
   reminderIcon: {
     width: 38,
@@ -408,20 +408,20 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: CARE.tealSoft,
   },
   reminderCopy: {
     flex: 1,
   },
   reminderTitle: {
-    color: colors.text,
+    color: CARE.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
   reminderDescription: {
     marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
+    color: CARE.muted,
+    fontSize: 13,
   },
   detailsToggle: {
     flexDirection: 'row',
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   detailsToggleText: {
-    color: colors.primary,
+    color: CARE.teal,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },

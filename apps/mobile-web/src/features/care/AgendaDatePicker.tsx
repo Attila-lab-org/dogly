@@ -44,10 +44,10 @@ export function AgendaDatePicker({
         ]}
       >
         <View style={styles.fieldIcon}>
-          <Ionicons name="calendar-outline" size={19} color={colors.primary} />
+          <Ionicons name="calendar-outline" size={19} color="#2DAAAB" />
         </View>
         <Text style={styles.fieldText}>{formatDateKey(value)}</Text>
-        <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+        <Ionicons name="chevron-down" size={20} color="#64748B" />
       </Pressable>
 
       <Modal
@@ -210,18 +210,18 @@ function capitalize(value: string): string {
 
 const styles = StyleSheet.create({
   field: {
-    minHeight: 56,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    borderColor: '#EDF2F7',
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
   },
   fieldPressed: {
-    borderColor: colors.primary,
+    borderColor: '#2DAAAB',
   },
   fieldIcon: {
     width: 34,
@@ -229,17 +229,17 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: '#E0F7F6',
   },
   fieldText: {
     flex: 1,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.medium,
   },
   modal: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     minHeight: 64,
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monthTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   weekDay: {
     width: '14.2857%',
-    color: colors.textMuted,
+    color: '#64748B',
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
     textAlign: 'center',
@@ -303,15 +303,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   daySelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#2DAAAB',
   },
   dayText: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
   dayTextDisabled: {
-    color: colors.border,
+    color: '#EDF2F7',
   },
   dayTextSelected: {
     color: colors.textOnPrimary,

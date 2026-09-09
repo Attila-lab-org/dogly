@@ -13,7 +13,7 @@ import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import type { ConsentState } from '@/features/secondary/types';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -33,6 +33,9 @@ type ExportState = 'idle' | 'pending' | 'ready';
 
 interface ConsentRow {
   key: keyof ConsentState;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
   title: string;
   description: string;
   locked?: boolean;
@@ -41,6 +44,9 @@ interface ConsentRow {
 const CONSENT_ROWS: ConsentRow[] = [
   {
     key: 'service',
+    icon: 'document-text-outline',
+    iconBg: '#E0F2FE',
+    iconColor: '#0284C7',
     title: 'Servizio e termini',
     description:
       "Necessario per usare l'app: trattamento dei dati per fornire le analisi.",
@@ -48,18 +54,27 @@ const CONSENT_ROWS: ConsentRow[] = [
   },
   {
     key: 'researchTraining',
+    icon: 'flask-outline',
+    iconBg: colors.tealSoft,
+    iconColor: colors.teal,
     title: 'Ricerca e miglioramento dei modelli',
     description:
       'Facoltativo e sempre separato: se attivo, alcuni dati possono essere usati per migliorare il servizio. Spento di default.',
   },
   {
     key: 'notifications',
+    icon: 'notifications-outline',
+    iconBg: '#E0F2FE',
+    iconColor: '#0284C7',
     title: 'Notifiche',
     description:
       'Preferenza dell’app, indipendente dal permesso del telefono: puoi cambiarla quando vuoi.',
   },
   {
     key: 'keepClip',
+    icon: 'videocam-outline',
+    iconBg: colors.tealSoft,
+    iconColor: colors.teal,
     title: 'Conserva i clip originali (eccezione)',
     description:
       'I video originali delle analisi vengono eliminati automaticamente 24 ore dopo il completamento. Risultati, evidenze e feedback restano nel Diario. Attiva solo se vuoi mantenere un clip oltre il TTL (richiede consenso esplicito).',
@@ -176,11 +191,16 @@ export default function PrivacyScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Privacy e dati" />
 
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Documenti beta</Text>
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconWrap, { backgroundColor: '#E0F2FE' }]}>
+            <Ionicons name="book-outline" size={18} color="#0284C7" />
+          </View>
+          <Text style={styles.sectionTitle}>Documenti beta</Text>
+        </View>
         <Text style={styles.note}>
           Privacy Policy e Termini della closed beta sono sempre raggiungibili da qui.
         </Text>
@@ -199,14 +219,31 @@ export default function PrivacyScreen() {
       </Card>
 
       {/* Consensi separati */}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>I tuoi consensi</Text>
-        <Text style={styles.note}>
-          Ogni consenso è separato: puoi cambiare idea in qualsiasi momento,
-          senza perdere l'accesso al servizio di base.
-        </Text>
-        {CONSENT_ROWS.map((row) => (
-          <View key={row.key} style={styles.consentRow}>
+      <Card noPadding style={styles.card}>
+        <View style={styles.consentIntro}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.tealSoft }]}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={18}
+                color={colors.teal}
+              />
+            </View>
+            <Text style={styles.sectionTitle}>I tuoi consensi</Text>
+          </View>
+          <Text style={styles.note}>
+            Ogni consenso è separato: puoi cambiare idea in qualsiasi momento,
+            senza perdere l'accesso al servizio di base.
+          </Text>
+        </View>
+        {CONSENT_ROWS.map((row, index) => (
+          <View
+            key={row.key}
+            style={[styles.consentRow, index > 0 && styles.divider]}
+          >
+            <View style={[styles.iconWrap, { backgroundColor: row.iconBg }]}>
+              <Ionicons name={row.icon} size={18} color={row.iconColor} />
+            </View>
             <View style={styles.consentText}>
               <Text style={styles.consentTitle}>{row.title}</Text>
               <Text style={styles.consentDescription}>{row.description}</Text>
@@ -215,8 +252,8 @@ export default function PrivacyScreen() {
               value={consents[row.key]}
               onValueChange={() => toggle(row.key)}
               disabled={row.locked}
-              trackColor={{ false: colors.border, true: colors.accentSoft }}
-              thumbColor={consents[row.key] ? colors.accent : colors.textMuted}
+              trackColor={{ false: colors.border, true: colors.teal }}
+              thumbColor="#FFFFFF"
               accessibilityLabel={row.title}
             />
           </View>
@@ -225,7 +262,12 @@ export default function PrivacyScreen() {
 
       {/* Export */}
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Esporta i miei dati</Text>
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconWrap, { backgroundColor: '#E0F2FE' }]}>
+            <Ionicons name="download-outline" size={18} color="#0284C7" />
+          </View>
+          <Text style={styles.sectionTitle}>Esporta i miei dati</Text>
+        </View>
         <Text style={styles.note}>
           Ricevi un file con profilo, dati di {dog.name}, risultati, feedback,
           pattern, eventi digestivi, cibi e consensi.
@@ -234,13 +276,13 @@ export default function PrivacyScreen() {
           <Button
             title="Richiedi l'esportazione"
             variant="outline"
-            icon={<Ionicons name="download-outline" size={18} color={colors.accent} />}
+            icon={<Ionicons name="download-outline" size={18} color={colors.teal} />}
             onPress={startExport}
           />
         )}
         {exportState === 'pending' && (
           <View style={styles.statusRow}>
-            <Ionicons name="time-outline" size={18} color={colors.primary} />
+            <Ionicons name="time-outline" size={18} color={colors.teal} />
             <Text style={styles.statusText}>
               Richiesta in corso… ti avvisiamo quando il file è pronto.
             </Text>
@@ -249,7 +291,7 @@ export default function PrivacyScreen() {
         {exportState === 'ready' && (
           <>
             <View style={styles.statusRow}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+              <Ionicons name="checkmark-circle" size={18} color={colors.teal} />
               <Text style={styles.statusText}>
                 Il tuo export è pronto. Il link è privato e scade tra 7 giorni.
               </Text>
@@ -275,7 +317,12 @@ export default function PrivacyScreen() {
 
       {/* Delete — doppia conferma esplicita */}
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Elimina account</Text>
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.dangerSoft }]}>
+            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          </View>
+          <Text style={styles.sectionTitle}>Elimina account</Text>
+        </View>
         <Text style={styles.note}>
           Elimina account, dati di {dog.name}, media e cronologia. Azione
           irreversibile.
@@ -323,14 +370,40 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
   card: {
     marginBottom: spacing.lg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
+  },
+  consentIntro: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
+    color: '#1A2B48',
+    flex: 1,
   },
   note: {
     fontSize: typography.size.xs,
@@ -342,17 +415,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+  },
+  divider: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.surfaceMuted,
   },
   consentText: {
     flex: 1,
   },
   consentTitle: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
+    color: '#1A2B48',
   },
   consentDescription: {
     fontSize: typography.size.xs,
@@ -365,13 +441,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.md,
+    borderRadius: 12,
     padding: spacing.md,
   },
   statusText: {
     flex: 1,
     fontSize: typography.size.xs,
-    color: colors.text,
+    color: '#1A2B48',
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   exportButton: {

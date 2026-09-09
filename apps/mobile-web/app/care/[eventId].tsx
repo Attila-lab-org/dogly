@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ErrorState, ScreenContainer } from '@/components';
-import { formatCareDate } from '@/features/care/date';
+import { dayDistance, formatCareDate } from '@/features/care/date';
 import {
   completeCareEvent,
   removeCareEvent,
@@ -13,7 +13,18 @@ import {
 import { CARE_TYPE_META } from '@/features/care/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
+
+const CARE = {
+  bg: '#F8FAFC',
+  text: '#1A2B48',
+  muted: '#64748B',
+  border: '#EDF2F7',
+  teal: '#2DAAAB',
+  tealSoft: '#E0F7F6',
+  coral: '#FF8B74',
+  peach: '#FFF1EE',
+} as const;
 
 export default function CareEventDetailScreen() {
   const router = useRouter();
@@ -31,10 +42,10 @@ export default function CareEventDetailScreen() {
     // Apertura da notifica (cold-start): l'idratazione degli eventi è in
     // corso. Mostriamo uno spinner invece del flash "non trovato".
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <StackScreenHeader title="Appuntamento" />
         <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={CARE.teal} />
         </View>
       </ScreenContainer>
     );
@@ -42,7 +53,7 @@ export default function CareEventDetailScreen() {
 
   if (!event) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <StackScreenHeader title="Appuntamento" />
         <ErrorState
           title="Appuntamento non trovato"
@@ -54,6 +65,8 @@ export default function CareEventDetailScreen() {
 
   const meta = CARE_TYPE_META[event.eventType];
   const completed = event.status === 'COMPLETED';
+  const urgent = !completed && dayDistance(event.scheduledAt) <= 1;
+  const scheduled = new Date(event.scheduledAt);
 
   const complete = async () => {
     setWorking(true);
@@ -92,18 +105,66 @@ export default function CareEventDetailScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Appuntamento" />
 
-      <View style={styles.hero}>
-        <View style={styles.icon}>
-          <Ionicons
-            name={completed ? 'checkmark' : meta.icon}
-            size={34}
-            color={completed ? colors.success : colors.primary}
-          />
+      <View
+        style={[
+          styles.hero,
+          urgent && styles.heroUrgent,
+          completed && styles.heroDone,
+        ]}
+      >
+        <View
+          style={[
+            styles.dateBadge,
+            urgent && styles.dateBadgeUrgent,
+            completed && styles.dateBadgeDone,
+          ]}
+        >
+          {completed ? (
+            <Ionicons name="checkmark" size={28} color={colors.success} />
+          ) : (
+            <>
+              <Text
+                style={[styles.dateDay, urgent && styles.dateDayUrgent]}
+              >
+                {String(scheduled.getDate())}
+              </Text>
+              <Text
+                style={[styles.dateMonth, urgent && styles.dateMonthUrgent]}
+              >
+                {scheduled
+                  .toLocaleDateString('it-IT', { month: 'short' })
+                  .replace('.', '')}
+              </Text>
+            </>
+          )}
         </View>
-        <Text style={styles.type}>{meta.label.toUpperCase()}</Text>
+        <View
+          style={[
+            styles.typePill,
+            urgent && styles.typePillUrgent,
+            completed && styles.typePillDone,
+          ]}
+        >
+          <Ionicons
+            name={meta.icon}
+            size={14}
+            color={
+              completed ? colors.success : urgent ? CARE.coral : CARE.teal
+            }
+          />
+          <Text
+            style={[
+              styles.type,
+              urgent && styles.typeUrgent,
+              completed && styles.typeDone,
+            ]}
+          >
+            {meta.label}
+          </Text>
+        </View>
         <Text style={styles.title}>{event.title}</Text>
         <Text style={styles.date}>
           {formatCareDate(event.scheduledAt, event.allDay)}
@@ -135,7 +196,10 @@ export default function CareEventDetailScreen() {
       {!completed ? (
         <Button
           title="Segna come fatto"
-          icon={<Ionicons name="checkmark" size={20} color={colors.textOnPrimary} />}
+          variant="secondary"
+          icon={
+            <Ionicons name="checkmark" size={20} color={colors.textOnPrimary} />
+          }
           onPress={complete}
           loading={working}
           style={styles.primary}
@@ -162,7 +226,7 @@ function InfoRow({
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoIcon}>
-        <Ionicons name={icon} size={18} color={colors.accent} />
+        <Ionicons name={icon} size={18} color={CARE.teal} />
       </View>
       <Text style={styles.infoText}>{label}</Text>
     </View>
@@ -170,45 +234,103 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: CARE.bg,
+  },
   hero: {
     alignItems: 'center',
     padding: spacing.xl,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primarySoft,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: CARE.border,
+    ...shadows.card,
   },
-  icon: {
+  heroUrgent: {
+    borderColor: '#FBCFC5',
+    backgroundColor: '#FFFBFA',
+  },
+  heroDone: {
+    borderColor: CARE.border,
+  },
+  dateBadge: {
     width: 68,
     height: 68,
     borderRadius: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: CARE.tealSoft,
+  },
+  dateBadgeUrgent: {
+    backgroundColor: CARE.peach,
+  },
+  dateBadgeDone: {
+    backgroundColor: colors.successSoft,
+  },
+  dateDay: {
+    color: CARE.teal,
+    fontSize: 22,
+    fontWeight: typography.weight.bold,
+    lineHeight: 24,
+  },
+  dateDayUrgent: {
+    color: CARE.coral,
+  },
+  dateMonth: {
+    color: CARE.teal,
+    fontSize: 12,
+    fontWeight: typography.weight.semibold,
+    textTransform: 'uppercase',
+  },
+  dateMonthUrgent: {
+    color: CARE.coral,
+  },
+  typePill: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 9999,
+    backgroundColor: CARE.tealSoft,
+  },
+  typePillUrgent: {
+    backgroundColor: CARE.peach,
+  },
+  typePillDone: {
+    backgroundColor: colors.successSoft,
   },
   type: {
-    marginTop: spacing.md,
-    color: colors.primary,
+    color: CARE.teal,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
-    letterSpacing: 0.7,
+    letterSpacing: 0.3,
+  },
+  typeUrgent: {
+    color: CARE.coral,
+  },
+  typeDone: {
+    color: colors.success,
   },
   title: {
-    marginTop: spacing.xs,
-    color: colors.text,
+    marginTop: spacing.md,
+    color: CARE.text,
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     textAlign: 'center',
   },
   date: {
     marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
+    color: CARE.muted,
+    fontSize: 13,
     textAlign: 'center',
   },
   doneBadge: {
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radius.full,
+    borderRadius: 9999,
     backgroundColor: colors.successSoft,
   },
   doneText: {
@@ -219,8 +341,11 @@ const styles = StyleSheet.create({
   infoCard: {
     marginTop: spacing.lg,
     padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: CARE.border,
+    ...shadows.card,
   },
   infoRow: {
     flexDirection: 'row',
@@ -234,13 +359,13 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
+    backgroundColor: CARE.tealSoft,
   },
   infoText: {
     flex: 1,
-    color: colors.text,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * typography.lineHeight.normal,
+    color: CARE.text,
+    fontSize: 13,
+    lineHeight: 13 * typography.lineHeight.normal,
   },
   primary: {
     marginTop: spacing.xl,

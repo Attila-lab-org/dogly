@@ -4,12 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Button,
-  Card,
   DogIllustration,
   ErrorState,
   ScreenContainer,
 } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import {
   saveLifestyleProfile,
   useLifestyle,
@@ -78,7 +77,7 @@ export default function LifestyleScreen() {
           Qualche abitudine può rendere le letture più personali. È tutto
           facoltativo e puoi cambiare idea quando vuoi.
         </Text>
-        <Button title="Inizia" onPress={() => setShowIntro(false)} />
+        <Button title="Inizia" variant="secondary" onPress={() => setShowIntro(false)} />
         <Button title="Non ora" variant="outline" onPress={() => router.back()} />
       </ScreenContainer>
     );
@@ -93,7 +92,7 @@ export default function LifestyleScreen() {
           onPress={() => router.back()}
           hitSlop={12}
         >
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={26} color="#1A2B48" />
         </Pressable>
         <Text style={styles.topTitle}>Routine e abitudini</Text>
         <View style={styles.topSpacer} />
@@ -101,12 +100,12 @@ export default function LifestyleScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.intro}>
-          <DogIllustration mood="welcome" size={170} />
+          <DogIllustration mood="welcome" size={150} />
           <Text style={styles.title}>Conosciamo meglio {dog.name}</Text>
-        <Text style={styles.subtitle}>
+          <Text style={styles.subtitle}>
             Scegli solo ciò che ti va di condividere. Puoi modificare tutto
             quando vuoi.
-        </Text>
+          </Text>
         </View>
 
         <ChoiceCard
@@ -149,9 +148,9 @@ export default function LifestyleScreen() {
         />
 
         {lifestyle.profile?.feedingLabel ? (
-          <Card style={styles.feedingCard}>
+          <View style={styles.feedingCard}>
             <View style={styles.cardIcon}>
-              <Ionicons name="nutrition-outline" size={20} color={colors.accent} />
+              <Ionicons name="nutrition-outline" size={20} color="#0284C7" />
             </View>
             <View style={styles.cardCopy}>
               <Text style={styles.cardTitle}>Alimentazione attuale</Text>
@@ -159,7 +158,7 @@ export default function LifestyleScreen() {
                 {lifestyle.profile.feedingLabel}
               </Text>
             </View>
-          </Card>
+          </View>
         ) : null}
 
         <Pressable
@@ -167,9 +166,11 @@ export default function LifestyleScreen() {
           onPress={() => router.push(`/dogs/${dogId}/tell` as never)}
           style={styles.voiceLink}
         >
-          <Ionicons name="mic-outline" size={20} color={colors.primary} />
+          <View style={styles.voiceIcon}>
+            <Ionicons name="mic" size={18} color="#FFFFFF" />
+          </View>
           <Text style={styles.voiceLinkText}>Oppure raccontamelo a voce</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
         </Pressable>
         <ChoiceCard
           sectionKey="social"
@@ -205,7 +206,12 @@ export default function LifestyleScreen() {
             {error ?? 'Non riesco a caricare le abitudini. Puoi riprovare.'}
           </Text>
         ) : null}
-        <Button title="Continua" loading={saving} onPress={() => void save()} />
+        <Button
+          title="Continua"
+          variant="secondary"
+          loading={saving}
+          onPress={() => void save()}
+        />
       </ScrollView>
     </ScreenContainer>
   );
@@ -232,7 +238,7 @@ function ChoiceCard<T extends string>({
   const selectedLabel =
     value == null ? 'Opzionale' : (options[value] ?? 'Selezionato');
   return (
-    <Card style={styles.card}>
+    <View style={styles.card}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -240,7 +246,7 @@ function ChoiceCard<T extends string>({
         style={styles.cardHeading}
       >
         <View style={styles.cardIcon}>
-          <Ionicons name={icon} size={20} color={colors.accent} />
+          <Ionicons name={icon} size={20} color="#0284C7" />
         </View>
         <View style={styles.cardCopy}>
           <Text style={styles.cardTitle}>{title}</Text>
@@ -249,38 +255,50 @@ function ChoiceCard<T extends string>({
         <Ionicons
           name={open ? 'chevron-up' : 'chevron-forward'}
           size={19}
-          color={colors.textMuted}
+          color="#94A3B8"
         />
       </Pressable>
-      {open ? <View style={styles.options}>
-        {(Object.entries(options) as [T, string][]).map(([option, label]) => {
-          const selected = value === option;
-          return (
-            <Pressable
-              key={option}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
-              onPress={() => onChange(selected ? null : option)}
-              style={[styles.option, selected && styles.optionSelected]}
+      {open ? (
+        <View style={styles.options}>
+          {(Object.entries(options) as [T, string][]).map(([option, label]) => {
+            const selected = value === option;
+            return (
+              <Pressable
+                key={option}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                onPress={() => onChange(selected ? null : option)}
+                style={[styles.option, selected && styles.optionSelected]}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    selected && styles.optionTextSelected,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: value == null }}
+            onPress={() => onChange(null)}
+            style={[styles.option, value == null && styles.optionSelected]}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                value == null && styles.optionTextSelected,
+              ]}
             >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-        <Pressable
-          accessibilityRole="radio"
-          accessibilityState={{ checked: value == null }}
-          onPress={() => onChange(null)}
-          style={[styles.option, value == null && styles.optionSelected]}
-        >
-          <Text style={[styles.optionText, value == null && styles.optionTextSelected]}>
-            Non so
-          </Text>
-        </Pressable>
-      </View> : null}
-    </Card>
+              Non so
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -298,9 +316,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   topTitle: {
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
+    color: '#1A2B48',
+    fontSize: 18,
+    fontWeight: typography.weight.bold,
   },
   topSpacer: { width: 26 },
   content: {
@@ -313,30 +331,47 @@ const styles = StyleSheet.create({
   },
   intro: {
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   feedingCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: spacing.lg,
+    ...shadows.card,
   },
   voiceLink: {
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    ...shadows.card,
+  },
+  voiceIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   voiceLinkText: {
     flex: 1,
-    color: colors.primary,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
   title: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     textAlign: 'center',
@@ -348,7 +383,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
-  card: { gap: spacing.md },
+  card: {
+    gap: spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: spacing.lg,
+    ...shadows.card,
+  },
   cardHeading: {
     minHeight: 48,
     flexDirection: 'row',
@@ -356,18 +399,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   cardIcon: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.accentSoft,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
   },
   cardCopy: {
     flex: 1,
   },
   cardTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
   },
@@ -380,22 +423,20 @@ const styles = StyleSheet.create({
   option: {
     minHeight: 44,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
     borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: '#F1F5F9',
   },
   optionSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.teal,
   },
   optionText: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
-  optionTextSelected: { color: colors.accent },
+  optionTextSelected: { color: '#FFFFFF', fontWeight: typography.weight.semibold },
   error: {
     color: colors.danger,
     fontSize: typography.size.sm,

@@ -16,7 +16,7 @@ import {
   ProgressBar,
   ScreenContainer,
 } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 
@@ -33,7 +33,7 @@ export default function SubscriptionScreen() {
   // Live: mai fallback silenzioso al mock — loading ed errore sono visibili.
   if (live && query.isLoading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <StackScreenHeader title="Abbonamento" />
         <LoadingState message="Sto leggendo il tuo piano…" />
       </ScreenContainer>
@@ -42,7 +42,7 @@ export default function SubscriptionScreen() {
 
   if (live && (query.isError || !state)) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <StackScreenHeader title="Abbonamento" />
         <ErrorState
           title="Piano non disponibile"
@@ -61,15 +61,20 @@ export default function SubscriptionScreen() {
   const digestiveLimit = Math.max(1, usage.digestiveLimit);
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Abbonamento" />
 
       {/* Piano corrente */}
       <Card style={styles.card}>
         <View style={styles.planHeader}>
-          <View>
-            <Text style={styles.planLabel}>Piano attuale</Text>
-            <Text style={styles.planName}>{PLAN_LABELS[plan]}</Text>
+          <View style={styles.planLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.tealSoft }]}>
+              <Ionicons name="star-outline" size={18} color={colors.teal} />
+            </View>
+            <View>
+              <Text style={styles.planLabel}>Piano attuale</Text>
+              <Text style={styles.planName}>{PLAN_LABELS[plan]}</Text>
+            </View>
           </View>
           <Chip
             label={isPremium ? 'Attivo' : 'Gratuito'}
@@ -85,11 +90,18 @@ export default function SubscriptionScreen() {
 
       {/* Quote d'uso (usage ledger server-side, sez. 21.1) */}
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Utilizzo di questo mese</Text>
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconWrap, { backgroundColor: '#E0F2FE' }]}>
+            <Ionicons name="stats-chart-outline" size={18} color="#0284C7" />
+          </View>
+          <Text style={styles.sectionTitle}>Utilizzo di questo mese</Text>
+        </View>
 
         <View style={styles.quotaHeader}>
           <View style={styles.quotaTitleRow}>
-            <Ionicons name="videocam-outline" size={16} color={colors.textSecondary} />
+            <View style={[styles.miniIcon, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="videocam-outline" size={14} color="#0284C7" />
+            </View>
             <Text style={styles.quotaTitle}>Analisi comportamentali</Text>
           </View>
           <Text style={styles.quotaValue}>
@@ -103,7 +115,9 @@ export default function SubscriptionScreen() {
 
         <View style={[styles.quotaHeader, styles.quotaGap]}>
           <View style={styles.quotaTitleRow}>
-            <Ionicons name="camera-outline" size={16} color={colors.textSecondary} />
+            <View style={[styles.miniIcon, { backgroundColor: colors.tealSoft }]}>
+              <Ionicons name="camera-outline" size={14} color={colors.teal} />
+            </View>
             <Text style={styles.quotaTitle}>Analisi digestive</Text>
           </View>
           <Text style={styles.quotaValue}>
@@ -134,7 +148,7 @@ export default function SubscriptionScreen() {
       <Button
         title="Ripristina acquisto"
         variant="outline"
-        icon={<Ionicons name="refresh-outline" size={18} color={colors.accent} />}
+        icon={<Ionicons name="refresh-outline" size={18} color={colors.teal} />}
         onPress={() => {
           Alert.alert(
             'Ripristino acquisto',
@@ -152,13 +166,47 @@ export default function SubscriptionScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
   card: {
     marginBottom: spacing.lg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
   },
   planHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  planLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   planLabel: {
     fontSize: typography.size.xs,
@@ -167,7 +215,7 @@ const styles = StyleSheet.create({
   planName: {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: '#1A2B48',
     marginTop: spacing.xxs,
   },
   renewal: {
@@ -176,10 +224,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   sectionTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-    marginBottom: spacing.md,
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
+    color: '#1A2B48',
+    flex: 1,
   },
   quotaHeader: {
     flexDirection: 'row',
@@ -195,14 +243,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   quotaTitle: {
-    fontSize: typography.size.sm,
-    color: colors.text,
+    fontSize: 15,
+    color: '#1A2B48',
     fontWeight: typography.weight.medium,
   },
   quotaValue: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: '#1A2B48',
   },
   reset: {
     marginTop: spacing.md,
@@ -210,7 +258,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
     backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     padding: spacing.md,
   },
   action: {

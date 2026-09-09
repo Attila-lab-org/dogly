@@ -20,6 +20,7 @@ import {
 } from 'expo-audio';
 import { File } from 'expo-file-system';
 import { deleteAsync } from 'expo-file-system/legacy';
+import Svg, { Rect } from 'react-native-svg';
 
 import {
   Button,
@@ -27,7 +28,7 @@ import {
   DogIllustration,
   ScreenContainer,
 } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import {
@@ -41,6 +42,30 @@ import { StackScreenHeader } from '@/features/secondary/components';
 import { queryKeys } from '@/lib/queryClient';
 
 type Phase = 'compose' | 'review' | 'saved';
+
+function VoiceWave({ active }: { active: boolean }) {
+  const bars = [18, 28, 14, 36, 22, 40, 16, 30, 20, 34, 12, 26];
+  return (
+    <Svg width={120} height={48} viewBox="0 0 120 48" fill="none">
+      {bars.map((height, index) => {
+        const x = 4 + index * 10;
+        const y = (48 - height) / 2;
+        return (
+          <Rect
+            key={index}
+            x={x}
+            y={y}
+            width={4}
+            height={height}
+            rx={2}
+            fill={active ? colors.teal : '#B6E4E4'}
+            opacity={active ? 0.95 : 0.7}
+          />
+        );
+      })}
+    </Svg>
+  );
+}
 
 export default function TellDogScreen() {
   const { dogId = '' } = useLocalSearchParams<{ dogId: string }>();
@@ -201,6 +226,7 @@ export default function TellDogScreen() {
         </Text>
         <Button
           title="Torna alla Home"
+          variant="secondary"
           onPress={() => router.replace('/(tabs)/home')}
         />
       </ScreenContainer>
@@ -219,38 +245,41 @@ export default function TellDogScreen() {
 
       {phase === 'compose' ? (
         <>
-          <View style={styles.intro}>
-            <DogIllustration mood="welcome" size={170} />
-            <Text style={styles.title}>Dimmi cosa hai notato</Text>
-            <Text style={styles.subtitle}>
-              Puoi parlare oppure scrivere. Prima di salvare ti mostrerò ciò che
-              ho capito.
+          <View style={styles.heroCard}>
+            <Text style={styles.heroTitle}>Dimmi cosa hai notato</Text>
+            <Text style={styles.heroSubtitle}>
+              Parla oppure scrivi. Prima di salvare ti mostro ciò che ho capito.
+            </Text>
+            <View style={styles.waveWrap}>
+              <VoiceWave active={recorderState.isRecording} />
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                recorderState.isRecording
+                  ? 'Ferma registrazione'
+                  : 'Inizia registrazione'
+              }
+              onPress={() => void toggleRecording()}
+              disabled={working}
+              style={({ pressed }) => [
+                styles.micButton,
+                recorderState.isRecording && styles.micButtonRecording,
+                pressed && styles.micPressed,
+              ]}
+            >
+              <Ionicons
+                name={recorderState.isRecording ? 'stop' : 'mic'}
+                size={34}
+                color="#FFFFFF"
+              />
+            </Pressable>
+            <Text style={styles.micLabel}>
+              {recorderState.isRecording
+                ? `Sto ascoltando · ${Math.floor(recorderState.durationMillis / 1000)}s`
+                : 'Tocca per raccontare'}
             </Text>
           </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              recorderState.isRecording ? 'Ferma registrazione' : 'Inizia registrazione'
-            }
-            onPress={() => void toggleRecording()}
-            disabled={working}
-            style={[
-              styles.micButton,
-              recorderState.isRecording && styles.micButtonRecording,
-            ]}
-          >
-            <Ionicons
-              name={recorderState.isRecording ? 'stop' : 'mic'}
-              size={30}
-              color={colors.textOnPrimary}
-            />
-          </Pressable>
-          <Text style={styles.micLabel}>
-            {recorderState.isRecording
-              ? `Sto ascoltando · ${Math.floor(recorderState.durationMillis / 1000)}s`
-              : 'Tocca per raccontare'}
-          </Text>
 
           <View style={styles.orRow}>
             <View style={styles.orLine} />
@@ -270,6 +299,7 @@ export default function TellDogScreen() {
           />
           <Button
             title="Continua"
+            variant="secondary"
             loading={working}
             disabled={text.trim().length < 3 || recorderState.isRecording}
             onPress={() => void prepareText()}
@@ -286,7 +316,7 @@ export default function TellDogScreen() {
             <Card key={fact.id} style={styles.factCard}>
               <View style={styles.factTop}>
                 <View style={styles.sourcePill}>
-                  <Ionicons name="person" size={13} color={colors.primary} />
+                  <Ionicons name="person" size={13} color={colors.teal} />
                   <Text style={styles.sourceText}>Detto da te</Text>
                 </View>
                 <Pressable
@@ -338,6 +368,7 @@ export default function TellDogScreen() {
           ) : null}
           <Button
             title="Conferma e salva"
+            variant="secondary"
             loading={working}
             disabled={
               facts.length === 0 ||
@@ -367,11 +398,35 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xxxl,
   },
-  intro: {
+  heroCard: {
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    ...shadows.card,
+  },
+  heroTitle: {
+    color: '#1A2B48',
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+  },
+  heroSubtitle: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    textAlign: 'center',
+  },
+  waveWrap: {
+    marginBottom: spacing.md,
   },
   title: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     textAlign: 'center',
@@ -384,20 +439,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   micButton: {
-    width: 78,
-    height: 78,
-    alignSelf: 'center',
+    width: 88,
+    height: 88,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 39,
-    backgroundColor: colors.primary,
+    borderRadius: 44,
+    backgroundColor: colors.teal,
+    shadowColor: colors.teal,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 6,
   },
   micButtonRecording: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.coral,
+    shadowColor: colors.coral,
+  },
+  micPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
   },
   micLabel: {
+    marginTop: spacing.md,
     color: colors.textSecondary,
     fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
     textAlign: 'center',
   },
   orRow: {
@@ -417,16 +483,18 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 132,
     padding: spacing.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    color: colors.text,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    color: '#1A2B48',
     fontSize: typography.size.md,
     textAlignVertical: 'top',
+    ...shadows.card,
   },
   factCard: {
     gap: spacing.md,
+    borderRadius: 20,
   },
   factTop: {
     flexDirection: 'row',
@@ -437,19 +505,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
     borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.tealSoft,
   },
   sourceText: {
-    color: colors.primary,
+    color: colors.teal,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },
   factInput: {
     minHeight: 64,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     lineHeight: typography.size.md * typography.lineHeight.normal,
     textAlignVertical: 'top',
@@ -459,14 +527,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     padding: spacing.lg,
-    borderRadius: radius.md,
+    borderRadius: 18,
     backgroundColor: colors.warningSoft,
   },
   healthNoticeCopy: {
     flex: 1,
   },
   healthNoticeTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
@@ -493,7 +561,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   savedTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
     textAlign: 'center',

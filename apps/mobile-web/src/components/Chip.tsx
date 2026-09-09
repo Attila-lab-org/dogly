@@ -13,11 +13,11 @@ export interface ChipProps {
 
 const toneStyles: Record<ChipTone, { bg: string; fg: string }> = {
   neutral: { bg: colors.surfaceMuted, fg: colors.textSecondary },
-  accent: { bg: colors.accentSoft, fg: colors.accentPressed },
-  primary: { bg: colors.primarySoft, fg: colors.primary },
-  success: { bg: colors.successSoft, fg: colors.success },
-  warning: { bg: colors.warningSoft, fg: colors.warning },
-  danger: { bg: colors.dangerSoft, fg: colors.danger },
+  accent: { bg: colors.tealSoft, fg: colors.teal },
+  primary: { bg: colors.lavenderSoft, fg: '#4F46E5' },
+  success: { bg: colors.tealSoft, fg: colors.teal },
+  warning: { bg: colors.coralSoft, fg: '#EA580C' },
+  danger: { bg: colors.coralSoft, fg: colors.coral },
 };
 
 /** Chip/pill colorata (es. "Stati frequenti", pill confidenza) */

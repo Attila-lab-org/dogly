@@ -12,8 +12,8 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ErrorState, ScreenContainer } from '@/components';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { Button, ErrorState, ScreenContainer } from '@/components';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import {
   reviewPattern,
   usePersonalPatterns,
@@ -38,6 +38,18 @@ const reviewCopy: Record<ReviewAction, string> = {
     'Pattern archiviato: non verrà più usato nelle interpretazioni né mostrato nel profilo.',
 };
 
+function patternIcon(title: string): IconName {
+  if (/porta|uscire|door|exit/i.test(title)) return 'exit-outline';
+  if (/sera|notte|dorm|moon|attivo/i.test(title)) return 'moon-outline';
+  if (/cibo|mangia|ciotola|food|bowl|pasto/i.test(title)) {
+    return 'restaurant-outline';
+  }
+  if (/fattorino|campanello|estraneo|visita|abbaia/i.test(title)) {
+    return 'notifications-outline';
+  }
+  return 'bulb-outline';
+}
+
 export default function PatternDetailScreen() {
   const { patternId } = useLocalSearchParams<{ patternId: string }>();
   const router = useRouter();
@@ -54,9 +66,9 @@ export default function PatternDetailScreen() {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Pattern" />
-        <Card>
+        <View style={styles.card}>
           <Text style={styles.bodyText}>Caricamento…</Text>
-        </Card>
+        </View>
       </ScreenContainer>
     );
   }
@@ -78,12 +90,12 @@ export default function PatternDetailScreen() {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Pattern" />
-        <Card>
+        <View style={styles.card}>
           <Text style={styles.bodyText}>
             Questo pattern non è più disponibile: potrebbe essere stato
             archiviato.
           </Text>
-        </Card>
+        </View>
       </ScreenContainer>
     );
   }
@@ -129,11 +141,20 @@ export default function PatternDetailScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Pattern" />
 
-      <Card style={styles.card}>
-        <Text style={styles.title}>{pattern.title}</Text>
+      <View style={styles.card}>
+        <View style={styles.titleRow}>
+          <View style={styles.iconSquare}>
+            <Ionicons
+              name={patternIcon(pattern.title)}
+              size={20}
+              color="#0284C7"
+            />
+          </View>
+          <Text style={styles.title}>{pattern.title}</Text>
+        </View>
         <View style={styles.chipsRow}>
           <PatternStateChip state={isArchived ? 'ARCHIVED' : pattern.state} />
           <ConfidenceBandPill band={pattern.reliabilityBand} />
@@ -147,19 +168,13 @@ export default function PatternDetailScreen() {
             </Text>
           </View>
         )}
-      </Card>
+      </View>
 
-      {/* Evidenze trasparenti */}
-      <Card style={styles.card}>
+      <View style={styles.card}>
         <Text style={styles.sectionTitle}>Perché lo penso</Text>
         {pattern.evidenceNotes.map((note) => (
           <View key={note} style={styles.evidenceRow}>
-            <Ionicons
-              name="ellipse"
-              size={6}
-              color={colors.accent}
-              style={styles.bullet}
-            />
+            <View style={styles.bullet} />
             <Text style={styles.bodyText}>{note}</Text>
           </View>
         ))}
@@ -173,7 +188,12 @@ export default function PatternDetailScreen() {
             <Text style={styles.countLabel}>Tue conferme</Text>
           </View>
           <View style={styles.countItem}>
-            <Text style={[styles.countValue, pattern.contradictCount > 0 && styles.countWarn]}>
+            <Text
+              style={[
+                styles.countValue,
+                pattern.contradictCount > 0 && styles.countWarn,
+              ]}
+            >
               {pattern.contradictCount}
             </Text>
             <Text style={styles.countLabel}>In contraddizione</Text>
@@ -185,16 +205,15 @@ export default function PatternDetailScreen() {
           osservazione il{' '}
           {new Date(pattern.lastSeen).toLocaleDateString('it-IT')}
         </Text>
-      </Card>
+      </View>
 
-      {/* Azioni di review */}
       {reviewed && outcome ? (
-        <Card style={styles.card}>
+        <View style={styles.card}>
           <View style={styles.reviewDone}>
             <Ionicons
               name={outcomeCopy[outcome].icon}
               size={28}
-              color={outcome === 'recorded' ? colors.accent : colors.textSecondary}
+              color={outcome === 'recorded' ? colors.teal : colors.textSecondary}
             />
             <Text style={styles.bodyText}>{outcomeCopy[outcome].text}</Text>
           </View>
@@ -204,9 +223,9 @@ export default function PatternDetailScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           />
-        </Card>
+        </View>
       ) : (
-        <Card style={styles.card}>
+        <View style={styles.card}>
           <Text style={styles.sectionTitle}>Questo pattern è corretto?</Text>
           <Text style={styles.bodyText}>
             Il tuo parere conta come evidenza, ma nessun pattern cambia solo
@@ -228,9 +247,10 @@ export default function PatternDetailScreen() {
           <View style={styles.actions}>
             <Button
               title="Corretto"
+              variant="secondary"
               loading={submitting}
               disabled={submitting}
-              icon={<Ionicons name="checkmark" size={18} color={colors.textOnPrimary} />}
+              icon={<Ionicons name="checkmark" size={18} color="#FFFFFF" />}
               onPress={() => void submitReview('CONFIRM')}
             />
             <Button
@@ -238,7 +258,9 @@ export default function PatternDetailScreen() {
               variant="danger"
               loading={submitting}
               disabled={submitting}
-              icon={<Ionicons name="flag-outline" size={18} color={colors.textOnPrimary} />}
+              icon={
+                <Ionicons name="flag-outline" size={18} color="#FFFFFF" />
+              }
               onPress={() => void submitReview('CONTEST')}
             />
             <Button
@@ -246,25 +268,54 @@ export default function PatternDetailScreen() {
               variant="outline"
               loading={submitting}
               disabled={submitting}
-              icon={<Ionicons name="archive-outline" size={18} color={colors.accent} />}
+              icon={
+                <Ionicons
+                  name="archive-outline"
+                  size={18}
+                  color={colors.teal}
+                />
+              }
               onPress={() => void submitReview('ARCHIVE')}
             />
           </View>
-        </Card>
+        </View>
       )}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  content: {
+    paddingBottom: spacing.xxxl,
+  },
   card: {
     marginBottom: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: spacing.lg,
+    ...shadows.card,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  iconSquare: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
+    flex: 1,
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: '#1A2B48',
   },
   chipsRow: {
     flexDirection: 'row',
@@ -276,30 +327,34 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     backgroundColor: colors.warningSoft,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: spacing.md,
     marginTop: spacing.md,
   },
   contestedText: {
     flex: 1,
     fontSize: typography.size.xs,
-    color: colors.text,
+    color: '#1A2B48',
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   sectionTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: '#1A2B48',
     marginBottom: spacing.sm,
   },
   evidenceRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   bullet: {
-    marginTop: spacing.sm - 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+    backgroundColor: colors.teal,
   },
   bodyText: {
     flex: 1,
@@ -313,7 +368,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#F1F5F9',
   },
   countItem: {
     alignItems: 'center',
@@ -321,7 +376,7 @@ const styles = StyleSheet.create({
   countValue: {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    color: colors.accent,
+    color: colors.teal,
   },
   countWarn: {
     color: colors.warning,
@@ -346,14 +401,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     backgroundColor: colors.dangerSoft,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: spacing.md,
     marginTop: spacing.md,
   },
   errorText: {
     flex: 1,
     fontSize: typography.size.xs,
-    color: colors.text,
+    color: '#1A2B48',
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   backButton: {

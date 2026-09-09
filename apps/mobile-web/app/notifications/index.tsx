@@ -21,7 +21,7 @@ import { StackScreenHeader } from '@/features/secondary/components';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, formatInsightTimestamp } from '@/features/home/api';
 import { diaryEntriesMock } from '@/mocks/core';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 
 interface ResultItem {
   id: string;
@@ -67,7 +67,7 @@ export default function NotificationsScreen() {
         }));
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Notifiche" />
 
       <Pressable
@@ -75,7 +75,7 @@ export default function NotificationsScreen() {
         onPress={() => router.push('/settings/notifications')}
         style={styles.settingsLink}
       >
-        <Ionicons name="options-outline" size={18} color={colors.primary} />
+        <Ionicons name="options-outline" size={18} color={colors.teal} />
         <Text style={styles.settingsText}>Gestisci le notifiche</Text>
       </Pressable>
 
@@ -92,17 +92,20 @@ export default function NotificationsScreen() {
                 pressed && styles.itemPressed,
               ]}
             >
-              <View style={styles.icon}>
+              <View style={[styles.icon, styles.iconCare]}>
                 <Ionicons
                   name="calendar-outline"
-                  size={20}
-                  color={colors.warning}
+                  size={18}
+                  color="#0284C7"
                 />
               </View>
               <View style={styles.copy}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.title}>{event.title}</Text>
-                  <Text style={styles.relative}>
+                  <View style={styles.titleWithDot}>
+                    <View style={styles.unreadDot} />
+                    <Text style={styles.title}>{event.title}</Text>
+                  </View>
+                  <Text style={styles.timestamp}>
                     {relativeCareDate(event.scheduledAt)}
                   </Text>
                 </View>
@@ -114,7 +117,7 @@ export default function NotificationsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={colors.textMuted}
+                color={colors.iconMuted}
               />
             </Pressable>
           ))}
@@ -145,16 +148,17 @@ export default function NotificationsScreen() {
               <View style={[styles.icon, styles.iconResult]}>
                 <Ionicons
                   name="happy-outline"
-                  size={20}
-                  color={colors.accent}
+                  size={18}
+                  color={colors.teal}
                 />
               </View>
               <View style={styles.copy}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.title}>{item.title}</Text>
-                  <Text style={[styles.relative, styles.relativeResult]}>
-                    {item.whenLabel}
-                  </Text>
+                  <View style={styles.titleWithDot}>
+                    <View style={styles.unreadDot} />
+                    <Text style={styles.title}>{item.title}</Text>
+                  </View>
+                  <Text style={styles.timestamp}>{item.whenLabel}</Text>
                 </View>
                 <Text style={styles.description}>
                   Analisi di {dog.name} completata
@@ -163,18 +167,20 @@ export default function NotificationsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={colors.textMuted}
+                color={colors.iconMuted}
               />
             </Pressable>
           ))}
         </View>
       ) : (
         <View style={styles.empty}>
-          <Ionicons
-            name="notifications-outline"
-            size={30}
-            color={colors.textMuted}
-          />
+          <View style={[styles.icon, styles.iconResult]}>
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={colors.teal}
+            />
+          </View>
           <Text style={styles.emptyTitle}>Tutto tranquillo</Text>
           <Text style={styles.emptyText}>
             Qui vedrai avvisi e risultati importanti appena arrivano.
@@ -186,6 +192,9 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
   settingsLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -196,14 +205,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   settingsText: {
-    color: colors.primary,
+    color: colors.teal,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
   section: {
     marginTop: spacing.md,
     marginBottom: spacing.md,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
@@ -215,45 +224,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.lg,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
   },
   itemPressed: {
     backgroundColor: colors.surfaceMuted,
   },
   icon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.warningSoft,
+  },
+  iconCare: {
+    backgroundColor: '#E0F2FE',
   },
   iconResult: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.tealSoft,
   },
   copy: {
     flex: 1,
   },
   titleRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
+  },
+  titleWithDot: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.coral,
   },
   title: {
     flex: 1,
-    color: colors.text,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
+    color: '#1A2B48',
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
   },
-  relative: {
-    color: colors.warning,
+  timestamp: {
+    color: '#8295A8',
     fontSize: typography.size.xs,
-    fontWeight: typography.weight.bold,
-  },
-  relativeResult: {
-    color: colors.accent,
+    fontWeight: typography.weight.medium,
   },
   description: {
     marginTop: spacing.xxs,
@@ -268,12 +290,15 @@ const styles = StyleSheet.create({
   empty: {
     alignItems: 'center',
     padding: spacing.xl,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
   },
   emptyTitle: {
     marginTop: spacing.md,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },

@@ -19,7 +19,7 @@ export function ProgressBar({
   style,
 }: ProgressBarProps) {
   const clamped = Math.min(1, Math.max(0, progress));
-  const fill = tone === 'accent' ? colors.accent : colors.primary;
+  const fill = tone === 'accent' ? colors.teal : colors.primary;
   const percent = Math.round(clamped * 100);
   return (
     <View

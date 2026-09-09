@@ -4,29 +4,27 @@
  * cursore vera ("Mostra eventi precedenti" carica davvero la pagina
  * successiva; a fine lista un testo onesto la sostituisce).
  * In mock gate dev: dati mock, nessuna paginazione simulata.
- * Filtri: Tutti / Comportamento / Digestione. Stati obbligatori: empty,
+ * Filtri: Tutti / Comportamento / Salute. Stati obbligatori: empty,
  * filter, mixed behavior/digestive, deleted media (badge sulle righe).
- * Il design language segue UX_REFERENCE (card bianche, icone teal).
+ * Visual language: anchor diary — #F8FAFC, card bianche radius 20,
+ * pill filtri teal, status chip come Screen 3 (Relax / Gioco / Attenzione).
  */
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  ScreenContainer,
-} from '@/components';
-import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -42,15 +40,24 @@ type TimelineItem =
       key: string;
       day: string;
       current: string;
-      startsMonth: boolean;
     }
   | {
       kind: 'entry';
       key: string;
       entry: DiaryEntry;
-      first: boolean;
-      last: boolean;
     };
+
+type StatusChip = {
+  label: string;
+  bg: string;
+  fg: string;
+};
+
+type IconTone = {
+  name: keyof typeof Ionicons.glyphMap;
+  bg: string;
+  fg: string;
+};
 
 const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'ALL', label: 'Tutti' },
@@ -58,10 +65,7 @@ const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'DIGESTIVE', label: 'Salute' },
 ];
 
-const DOMAIN_ICONS: Record<DiaryDomain, keyof typeof Ionicons.glyphMap> = {
-  BEHAVIOR: 'videocam-outline',
-  DIGESTIVE: 'leaf-outline',
-};
+const puppyPlaySource = require('../../assets/images/puppy-play.png');
 
 function dayLabel(iso: string): string {
   const date = new Date(iso);
@@ -73,11 +77,9 @@ function dayLabel(iso: string): string {
   const diffDays = Math.round((startOf(new Date()) - startOf(date)) / dayMs);
   if (diffDays <= 0) return 'Oggi';
   if (diffDays === 1) return 'Ieri';
-  return date.toLocaleDateString('it-IT', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  const day = date.getDate();
+  const month = date.toLocaleDateString('it-IT', { month: 'long' });
+  return `${day} ${month.charAt(0).toLocaleUpperCase('it-IT')}${month.slice(1)}`;
 }
 
 function timeLabel(iso: string): string {
@@ -87,48 +89,127 @@ function timeLabel(iso: string): string {
   });
 }
 
-function monthLabel(iso: string): string {
-  const value = new Date(iso).toLocaleDateString('it-IT', {
-    month: 'long',
-    year: 'numeric',
-  });
-  return value.charAt(0).toLocaleUpperCase('it-IT') + value.slice(1);
+function entryStatusChip(entry: DiaryEntry): StatusChip | null {
+  const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
+
+  if (entry.domain === 'DIGESTIVE') {
+    if (/morbid|variazion|flag|controll|attenzione/i.test(haystack)) {
+      return { label: 'Attenzione', bg: '#FFF1EE', fg: '#EA580C' };
+    }
+    return { label: 'Confermato', bg: '#DCFCE7', fg: '#16A34A' };
+  }
+  if (/rilass|ripos|relax/i.test(haystack)) {
+    return { label: 'Relax', bg: '#E0F7F6', fg: '#0D9488' };
+  }
+  if (/gioc|play|interazion/i.test(haystack)) {
+    return { label: 'Gioco', bg: '#EEF2FF', fg: '#4F46E5' };
+  }
+  if (/attenzion|ambig|ipotes|contesto/i.test(haystack)) {
+    return { label: 'Attenzione', bg: '#FFF1EE', fg: '#EA580C' };
+  }
+  if (/confermato/i.test(haystack)) {
+    return { label: 'Confermato', bg: '#E0F7F6', fg: '#0D9488' };
+  }
+  return { label: 'Relax', bg: '#E0F7F6', fg: '#0D9488' };
+}
+
+function entryIconTone(entry: DiaryEntry): IconTone {
+  const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
+  if (entry.domain === 'DIGESTIVE') {
+    if (/morbid|variazion|flag|controll|attenzione/i.test(haystack)) {
+      return { name: 'alert-circle-outline', bg: '#FFF1EE', fg: '#EA580C' };
+    }
+    return { name: 'leaf-outline', bg: '#DCFCE7', fg: '#16A34A' };
+  }
+  if (/gioc|play|interazion/i.test(haystack)) {
+    return { name: 'tennisball-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+  }
+  if (/attenzion|ambig|ipotes|contesto/i.test(haystack)) {
+    return { name: 'eye-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+  }
+  if (/rilass|ripos|relax/i.test(haystack)) {
+    return { name: 'happy-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+  }
+  return { name: 'paw-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
 }
 
 function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
+  const chip = entryStatusChip(entry);
+  const icon = entryIconTone(entry);
+
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [styles.entryCard, pressed && styles.entryCardPressed]}
     >
-      <View
-        style={[
-          styles.rowIcon,
-          entry.domain === 'DIGESTIVE' && styles.rowIconDigestive,
-        ]}
-      >
-        <Ionicons
-          name={DOMAIN_ICONS[entry.domain]}
-          size={18}
-          color={entry.domain === 'DIGESTIVE' ? colors.accent : colors.primary}
-        />
+      <View style={[styles.rowIcon, { backgroundColor: icon.bg }]}>
+        <Ionicons name={icon.name} size={20} color={icon.fg} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{entry.title}</Text>
-        <Text style={styles.rowSubtitle}>
-          {timeLabel(entry.occurredAt)}
-          {entry.subtitle ? ` · ${entry.subtitle}` : ''}
-        </Text>
-        {entry.mediaDeleted && (
+        {entry.subtitle ? (
+          <Text style={styles.rowSubtitle} numberOfLines={2}>
+            {entry.subtitle}
+          </Text>
+        ) : null}
+        <Text style={styles.rowTime}>{timeLabel(entry.occurredAt)}</Text>
+        {chip ? (
+          <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+            <Text style={[styles.statusChipText, { color: chip.fg }]}>{chip.label}</Text>
+          </View>
+        ) : null}
+        {entry.mediaDeleted ? (
           <View style={styles.deletedRow}>
-            <Ionicons name="trash-bin-outline" size={12} color={colors.textMuted} />
+            <Ionicons name="trash-bin-outline" size={12} color="#94A3B8" />
             <Text style={styles.deletedText}>Video eliminato (privacy)</Text>
           </View>
+        ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+    </Pressable>
+  );
+}
+
+function SoftState({
+  title,
+  message,
+  actionLabel,
+  onAction,
+  loading,
+}: {
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <View style={styles.stateWrap}>
+      <View style={styles.stateCircle}>
+        {loading ? (
+          <ActivityIndicator size="large" color="#2DAAAB" />
+        ) : (
+          <Image
+            source={puppyPlaySource}
+            style={styles.statePuppy}
+            resizeMode="contain"
+            accessibilityLabel="Cucciolo illustrato"
+          />
         )}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-    </Pressable>
+      <Text style={styles.stateTitle}>{title}</Text>
+      <Text style={styles.stateMessage}>{message}</Text>
+      {actionLabel && onAction ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onAction}
+          style={({ pressed }) => [styles.stateAction, pressed && styles.stateActionPressed]}
+        >
+          <Text style={styles.stateActionLabel}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -141,7 +222,6 @@ export default function DiaryScreen() {
 
   const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
 
-  // Timeline reale: cursor pagination server-side (GET /v1/diary, sez. 9)
   const query = useInfiniteQuery({
     queryKey: [...queryKeys.diary(userId ?? 'anon', dog.id), filter, search.trim()],
     queryFn: ({ pageParam }) =>
@@ -160,8 +240,8 @@ export default function DiaryScreen() {
   const entries = useMemo<DiaryEntry[]>(() => {
     const source = !realEnabled
       ? diaryEntriesMock.filter(
-        (entry) => filter === 'ALL' || entry.domain === filter,
-      )
+          (entry) => filter === 'ALL' || entry.domain === filter,
+        )
       : (query.data?.pages ?? [])
           .flatMap((page) => page.items)
           .map(mapDiaryItemToEntry)
@@ -175,7 +255,6 @@ export default function DiaryScreen() {
     );
   }, [realEnabled, filter, query.data, search]);
 
-  // Raggruppamento per giorno (timeline cursor, sez. 5.1)
   const groups = useMemo(() => {
     const map = new Map<string, DiaryEntry[]>();
     for (const entry of entries) {
@@ -189,23 +268,18 @@ export default function DiaryScreen() {
 
   const timelineItems = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = [];
-    groups.forEach(([day, dayEntries], groupIndex) => {
-      const previous = groups[groupIndex - 1]?.[1][0]?.occurredAt;
-      const current = dayEntries[0].occurredAt;
+    groups.forEach(([day, dayEntries]) => {
       items.push({
         kind: 'header',
         key: `header-${day}`,
         day,
-        current,
-        startsMonth: !previous || previous.slice(0, 7) !== current.slice(0, 7),
+        current: dayEntries[0].occurredAt,
       });
-      dayEntries.forEach((entry, index) => {
+      dayEntries.forEach((entry) => {
         items.push({
           kind: 'entry',
           key: entry.id,
           entry,
-          first: index === 0,
-          last: index === dayEntries.length - 1,
         });
       });
     });
@@ -213,303 +287,370 @@ export default function DiaryScreen() {
   }, [groups]);
 
   return (
-    <ScreenContainer>
-      <Text style={styles.title}>Le analisi di {dog.name}</Text>
-      <Text style={styles.subtitle}>
-        Tutto quello che ho capito di {dog.name}, giorno per giorno.
-      </Text>
+    <View style={styles.root}>
+      <SafeAreaView edges={['top']} style={styles.safe}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Diario</Text>
+          <Text style={styles.subtitle}>
+            I momenti e la salute di {dog.name}
+          </Text>
 
-      <View style={styles.search}>
-        <Ionicons name="search" size={18} color={colors.textMuted} />
-        <TextInput
-          accessibilityLabel="Cerca nelle analisi"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Cerca nelle analisi…"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          returnKeyType="search"
-        />
-        {search ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cancella ricerca"
-            onPress={() => setSearch('')}
-            hitSlop={8}
+          <View style={styles.search}>
+            <Ionicons name="search" size={18} color="#94A3B8" />
+            <TextInput
+              accessibilityLabel="Cerca nelle analisi"
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Cerca nelle analisi…"
+              placeholderTextColor="#94A3B8"
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
+            {search ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancella ricerca"
+                onPress={() => setSearch('')}
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            style={styles.filtersScroll}
           >
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* Filtri (sez. 5.1: All / Behavior / Digestive) */}
-      <View style={styles.filters}>
-        {FILTERS.map((f) => {
-          const active = filter === f.key;
-          return (
-            <Pressable
-              key={f.key}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              onPress={() => setFilter(f.key)}
-              style={[styles.filterPill, active && styles.filterPillActive]}
-              testID={`diary-filter-${f.key.toLowerCase()}`}
-            >
-              <Text
-                style={[styles.filterLabel, active && styles.filterLabelActive]}
-              >
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {realEnabled && query.isLoading ? (
-        <LoadingState message="Carico il diario…" />
-      ) : realEnabled && query.isError ? (
-        <ErrorState
-          title="Non riesco a caricare il diario"
-          message="Controlla la connessione e riprova."
-          onRetry={() => void query.refetch()}
-        />
-      ) : groups.length === 0 ? (
-        <EmptyState
-          title={
-            filter === 'ALL'
-              ? 'Il diario è ancora vuoto'
-              : 'Nessun evento in questo filtro'
-          }
-          message={`Registra il primo video di ${dog.name}: le analisi appariranno qui, insieme ai controlli digestivi.`}
-          icon={<Ionicons name="calendar-outline" size={40} color={colors.textMuted} />}
-          actionLabel={`Scopri i segnali di ${dog.name}`}
-          onAction={() => router.push('/behavior/capture')}
-        />
-      ) : (
-        <FlatList
-          style={styles.timeline}
-          contentContainerStyle={styles.timelineContent}
-          showsVerticalScrollIndicator={false}
-          data={timelineItems}
-          keyExtractor={(item) => item.key}
-          initialNumToRender={12}
-          maxToRenderPerBatch={12}
-          windowSize={7}
-          onEndReachedThreshold={0.4}
-          onEndReached={() => {
-            if (
-              realEnabled &&
-              query.hasNextPage &&
-              !query.isFetchingNextPage
-            ) {
-              void query.fetchNextPage();
-            }
-          }}
-          renderItem={({ item }) => {
-            if (item.kind === 'header') {
+            {FILTERS.map((f) => {
+              const active = filter === f.key;
               return (
-                <View style={styles.groupHeader}>
-                  {item.startsMonth ? (
-                    <Text style={styles.monthLabel}>
-                      {monthLabel(item.current)}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.groupLabel}>
-                    {dayLabel(item.current)}
+                <Pressable
+                  key={f.key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => setFilter(f.key)}
+                  style={[styles.filterPill, active && styles.filterPillActive]}
+                  testID={`diary-filter-${f.key.toLowerCase()}`}
+                >
+                  <Text
+                    style={[styles.filterLabel, active && styles.filterLabelActive]}
+                  >
+                    {f.label}
                   </Text>
-                </View>
+                </Pressable>
               );
-            }
-            const { entry } = item;
-            return (
-              <View
-                style={[
-                  styles.entryCard,
-                  item.first && styles.entryCardFirst,
-                  item.last && styles.entryCardLast,
-                ]}
-              >
-                <DiaryRow
-                  entry={entry}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/diary/event/[eventId]',
-                      params: {
-                        eventId: entry.id,
-                        domain: entry.domain,
-                        occurredAt: entry.occurredAt,
-                        deleted: entry.mediaDeleted ? '1' : '0',
-                        title: entry.title,
-                        subtitle: entry.subtitle ?? '',
-                      },
-                    } as never)
-                  }
-                />
-                {!item.last ? <View style={styles.rowDivider} /> : null}
-              </View>
-            );
-          }}
-          ListFooterComponent={
-            realEnabled ? (
-              query.isFetchingNextPage ? (
-                <Text style={styles.endNote}>Carico altri eventi…</Text>
-              ) : !query.hasNextPage ? (
-              <Text style={styles.endNote}>
-                Stai vedendo gli eventi più recenti.
-              </Text>
-              ) : null
-            ) : null
-          }
-        />
-      )}
-    </ScreenContainer>
+            })}
+          </ScrollView>
+
+          {realEnabled && query.isLoading ? (
+            <SoftState
+              loading
+              title="Carico il diario…"
+              message={`Sto recuperando i momenti di ${dog.name}.`}
+            />
+          ) : realEnabled && query.isError ? (
+            <SoftState
+              title="Non riesco a caricare il diario"
+              message="Controlla la connessione e riprova."
+              actionLabel="Riprova"
+              onAction={() => void query.refetch()}
+            />
+          ) : groups.length === 0 ? (
+            <SoftState
+              title={
+                filter === 'ALL'
+                  ? 'Il diario è ancora vuoto'
+                  : 'Nessun evento in questo filtro'
+              }
+              message={`Registra il primo video di ${dog.name}: le analisi appariranno qui, insieme ai controlli digestivi.`}
+              actionLabel={`Scopri i segnali di ${dog.name}`}
+              onAction={() => router.push('/behavior/capture')}
+            />
+          ) : (
+            <FlatList
+              style={styles.timeline}
+              contentContainerStyle={styles.timelineContent}
+              showsVerticalScrollIndicator={false}
+              data={timelineItems}
+              keyExtractor={(item) => item.key}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={7}
+              onEndReachedThreshold={0.4}
+              onEndReached={() => {
+                if (
+                  realEnabled &&
+                  query.hasNextPage &&
+                  !query.isFetchingNextPage
+                ) {
+                  void query.fetchNextPage();
+                }
+              }}
+              renderItem={({ item }) => {
+                if (item.kind === 'header') {
+                  return (
+                    <View style={styles.groupHeader}>
+                      <Text style={styles.groupLabel}>
+                        {dayLabel(item.current)}
+                      </Text>
+                    </View>
+                  );
+                }
+                const { entry } = item;
+                return (
+                  <DiaryRow
+                    entry={entry}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/diary/event/[eventId]',
+                        params: {
+                          eventId: entry.id,
+                          domain: entry.domain,
+                          occurredAt: entry.occurredAt,
+                          deleted: entry.mediaDeleted ? '1' : '0',
+                          title: entry.title,
+                          subtitle: entry.subtitle ?? '',
+                        },
+                      } as never)
+                    }
+                  />
+                );
+              }}
+              ListFooterComponent={
+                realEnabled ? (
+                  query.isFetchingNextPage ? (
+                    <Text style={styles.endNote}>Carico altri eventi…</Text>
+                  ) : !query.hasNextPage ? (
+                    <Text style={styles.endNote}>
+                      Stai vedendo gli eventi più recenti.
+                    </Text>
+                  ) : null
+                ) : null
+              }
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  safe: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
   title: {
-    fontSize: typography.size.xxl,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
+    marginTop: 8,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1A2B48',
   },
   subtitle: {
-    marginTop: spacing.xs,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  monthLabel: {
-    marginBottom: spacing.sm,
-    color: colors.text,
-    fontSize: typography.size.lg,
-    fontWeight: typography.weight.bold,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#64748B',
+    marginBottom: 16,
   },
   search: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    gap: 8,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
   },
   searchInput: {
     flex: 1,
-    color: colors.text,
-    fontSize: typography.size.sm,
+    color: '#1A2B48',
+    fontSize: 14,
+  },
+  filtersScroll: {
+    flexGrow: 0,
+    marginBottom: 8,
+  },
+  filters: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 8,
   },
   filterPill: {
-    borderRadius: radius.full,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surfaceMuted,
+    borderRadius: 9999,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    backgroundColor: '#F1F5F9',
   },
   filterPillActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#2DAAAB',
   },
   filterLabel: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.medium,
-    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748B',
   },
   filterLabelActive: {
-    color: colors.textOnPrimary,
+    color: '#FFFFFF',
   },
   timeline: {
     flex: 1,
-    marginHorizontal: -spacing.lg,
+    marginHorizontal: -20,
   },
   timelineContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingHorizontal: 20,
+    paddingBottom: 48,
   },
   groupHeader: {
-    marginTop: spacing.lg,
+    marginTop: 16,
+    marginBottom: 10,
   },
   groupLabel: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    textTransform: 'capitalize',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A2B48',
   },
   entryCard: {
-    backgroundColor: colors.surface,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-  },
-  entryCardFirst: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopLeftRadius: radius.md,
-    borderTopRightRadius: radius.md,
-    ...shadows.card,
-  },
-  entryCardLast: {
-    marginBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomLeftRadius: radius.md,
-    borderBottomRightRadius: radius.md,
-  },
-  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  rowPressed: {
-    opacity: 0.7,
+  entryCardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
   },
   rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  rowIconDigestive: {
-    backgroundColor: colors.accentSoft,
   },
   rowText: {
     flex: 1,
   },
   rowTitle: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A2B48',
   },
   rowSubtitle: {
-    marginTop: 2,
-    fontSize: typography.size.xs,
-    color: colors.textSecondary,
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  rowTime: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#94A3B8',
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderRadius: 9999,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  statusChipText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   deletedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    gap: 4,
+    marginTop: 6,
   },
   deletedText: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
+    fontSize: 11,
+    color: '#94A3B8',
     fontStyle: 'italic',
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: colors.border,
   },
   endNote: {
     alignSelf: 'center',
-    marginTop: spacing.sm,
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
+    marginTop: 8,
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  stateWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  stateCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#E0F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  statePuppy: {
+    width: 88,
+    height: 88,
+  },
+  stateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A2B48',
+    textAlign: 'center',
+  },
+  stateMessage: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  stateAction: {
+    marginTop: 8,
+    borderRadius: 9999,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    backgroundColor: '#2DAAAB',
+  },
+  stateActionPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  stateActionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

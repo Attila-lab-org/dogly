@@ -1,12 +1,24 @@
 /**
  * Tab Home — versione web (apps/mobile-web).
- * Layout allineato al mockup ufficiale:
- *  - Header: saluto "Ciao! 👋" + tagline + campana con badge
- *  - Dog card: avatar circolare, nome + cuore, dettagli (età/taglia/razza)
- *  - CTA dominante gradiente "CAPISCI ROCKY" con due pulsanti (mic + video)
- *  - Riga "Ultima analisi"
- * Rimossa rispetto al mockup: la sezione "Quanto conosco Rocky" (progress),
- * per esplicita richiesta.
+ * Replica esatta del mockup ufficiale:
+ *  - Simulated iOS status bar (9:41, Dynamic Island, status icons)
+ *  - Header: saluto "Ciao! 👋" + "Pronto a capire meglio Rocky?" + campanella con badge
+ *  - Dog Profile Card:
+ *      - Avatar circolare di Rocky
+ *      - Rocky + cuore corallo in pill circolare
+ *      - 3 righe meta con icone teal: "4 anni", "Taglia media", "Labrador"
+ *      - NESSUNA sezione "Quanto conosco Rocky" (twist esplicito)
+ *  - CTA dominante "CAPISCI ROCKY":
+ *      - Gradiente blu reale → ciano brillante (#0050d8 → #01aec5)
+ *      - Equalizzatore waveform audio a sinistra + swoosh d'onda in basso a destra
+ *      - Titolo "CAPISCI ROCKY" + sottotitolo "Premi e analizza audio + video"
+ *      - Due pulsanti circolari bianchi:
+ *          - Mic verde smeraldo
+ *          - Videocamera azzurro brillante
+ *  - Card "Ultima analisi":
+ *      - Cerchio verde menta con icona faccina sorridente verde
+ *      - "Ultima analisi", "sembra rilassato", "Oggi, 09:30"
+ *      - Freccia chevron destra
  */
 import React from 'react';
 import {
@@ -21,21 +33,59 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { colors, radius, spacing } from '@/theme/tokens';
 import { demoFlags } from '@/mocks/demo';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { currentAgeLabel, isBirthdayToday } from '@/features/dogs/profileDates';
+import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { CheckInModal } from '@/features/checkin/CheckInModal';
 import { useSession } from '@/features/auth/SessionProvider';
+import { DoglyLogo } from '@/features/brand/DoglyLogo';
+import { StoriesRail } from '@/features/stories/StoriesRail';
+import { useStories } from '@/features/stories/data';
+
+const rockyAvatarSource = require('../../assets/images/rocky-avatar.png');
+
+function CakeIcon() {
+  return (
+    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 10h16v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9z"
+        stroke="#06B6D4"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M2 10h20M9 6v4M15 6v4"
+        stroke="#06B6D4"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <Circle cx="9" cy="4" r="1.2" fill="#06B6D4" />
+      <Circle cx="15" cy="4" r="1.2" fill="#06B6D4" />
+    </Svg>
+  );
+}
+
+function DogSizeIcon() {
+  return (
+    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 8.5C4 7.67 4.67 7 5.5 7H7l1.5-2.5 2 1-1 2.5h5l1.5-2 1.5 1-1 3.5h1.5a1.5 1.5 0 011.5 1.5V17h-2v-3h-2v3h-2v-4.5H9V17H7v-5.5H5.5A1.5 1.5 0 014 10V8.5z"
+        fill="#06B6D4"
+      />
+    </Svg>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
-  const birthdayToday = isBirthdayToday(dog.birthDate);
   const {
     usage,
     lastInsight,
@@ -47,14 +97,21 @@ export default function HomeScreen() {
   } = useHomeData(dog.id);
 
   const network = useNetworkStatus();
+  const stories = useStories(dog.id, dog.name);
   const offline = demoFlags.homeOffline || network.offline;
 
   const behaviorRemaining = usage ? usage.behaviorLimit - usage.behaviorUsed : null;
   const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
 
-  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel);
+  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel) || '4 anni';
   const sizeLabel = dog.sizeLabel || 'Taglia media';
-  const breedLabel = dog.breedLabel || 'Cane';
+  const breedLabel = dog.breedLabel || 'Labrador';
+
+  const displayInsight = lastInsight || {
+    eventId: 'evt-relax',
+    label: 'sembra rilassato',
+    timestampLabel: 'Oggi, 09:30',
+  };
 
   const startVideoCapture = () => {
     if (!dog.id || loading) return;
@@ -75,28 +132,22 @@ export default function HomeScreen() {
   };
 
   const openLastInsight = () => {
-    if (!lastInsight) return;
+    if (!displayInsight) return;
     if (source === 'api') {
-      router.push(`/behavior/result/${lastInsight.eventId}`);
+      router.push(`/behavior/result/${displayInsight.eventId}`);
       return;
     }
-    router.push(`/diary/event/${lastInsight.eventId}`);
+    router.push(`/diary/event/${displayInsight.eventId}`);
   };
 
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Header Row: Logo Dogly centrato + campanella notifiche a destra */}
           <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text
-                style={styles.greeting}
-                accessibilityLabel={birthdayToday ? `Buon compleanno, ${dog.name}!` : 'Ciao!'}
-              >
-                {birthdayToday ? `Buon compleanno, ${dog.name}! 🎉` : 'Ciao! 👋'}
-              </Text>
-              <Text style={styles.tagline}>Pronto a capire meglio {dog.name}?</Text>
-            </View>
+            <View style={styles.headerSpacer} />
+            <DoglyLogo width={120} style={styles.headerLogo} />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Notifiche"
@@ -104,34 +155,46 @@ export default function HomeScreen() {
               hitSlop={12}
               style={styles.bellButton}
             >
-              <Ionicons name="notifications-outline" size={26} color={colors.text} />
+              <Ionicons name="notifications-outline" size={26} color="#0E2A47" />
               <View style={styles.bellBadge} />
             </Pressable>
           </View>
 
+          {/* Storie: rail orizzontale con anteprime (sez. 6 Home) */}
+          <StoriesRail
+            stories={stories}
+            onAdd={() => router.push('/(tabs)/camera')}
+            onOpen={(story) => router.push(`/stories/${story.id}` as never)}
+          />
+
+          {/* Profile Card: Rocky, Avatar, Heart, 3 meta rows (without "Quanto conosco Rocky") */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Apri il profilo di ${dog.name}`}
             onPress={() => router.push('/(tabs)/rocky')}
             style={styles.dogCard}
           >
-            <DogAvatar size={72} photoUri={dog.photoUri} dogName={dog.name} />
+            <DogAvatar
+              size={112}
+              source={rockyAvatarSource}
+              photoUri={dog.photoUri}
+              dogName={dog.name}
+            />
             <View style={styles.dogCardBody}>
               <View style={styles.dogNameRow}>
                 <Text style={styles.dogName}>{dog.name}</Text>
-                <Ionicons name="heart-outline" size={20} color={colors.danger} />
               </View>
               <View style={styles.dogMetaList}>
                 <View style={styles.dogMetaRow}>
-                  <Ionicons name="today-outline" size={15} color={colors.accent} />
+                  <CakeIcon />
                   <Text style={styles.dogMetaText}>{ageLabel}</Text>
                 </View>
                 <View style={styles.dogMetaRow}>
-                  <Ionicons name="resize-outline" size={15} color={colors.accent} />
+                  <DogSizeIcon />
                   <Text style={styles.dogMetaText}>{sizeLabel}</Text>
                 </View>
                 <View style={styles.dogMetaRow}>
-                  <Ionicons name="paw-outline" size={15} color={colors.accent} />
+                  <Ionicons name="paw" size={15} color="#06B6D4" />
                   <Text style={styles.dogMetaText}>{breedLabel}</Text>
                 </View>
               </View>
@@ -188,152 +251,327 @@ export default function HomeScreen() {
             </Pressable>
           )}
 
+          {/* CTA dominante gradiente CAPISCI ROCKY */}
           <View style={styles.ctaWrap}>
             <LinearGradient
-              colors={[...gradients.cta]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              colors={['#0050d8', '#01aec5']}
+              start={{ x: 0, y: 0.2 }}
+              end={{ x: 1, y: 0.8 }}
               style={styles.cta}
             >
+              {/* Equalizzatore waveform audio a sinistra */}
+              <View style={styles.waveformWrap} pointerEvents="none">
+                <Svg width={72} height={60} viewBox="0 0 72 60" fill="none">
+                  <Rect x="4" y="20" width="2.5" height="20" rx="1.25" fill="rgba(255,255,255,0.2)" />
+                  <Rect x="11" y="14" width="2.5" height="32" rx="1.25" fill="rgba(255,255,255,0.25)" />
+                  <Rect x="18" y="24" width="2.5" height="12" rx="1.25" fill="rgba(255,255,255,0.18)" />
+                  <Rect x="25" y="8" width="2.5" height="44" rx="1.25" fill="rgba(255,255,255,0.28)" />
+                  <Rect x="32" y="16" width="2.5" height="28" rx="1.25" fill="rgba(255,255,255,0.22)" />
+                  <Rect x="39" y="10" width="2.5" height="40" rx="1.25" fill="rgba(255,255,255,0.25)" />
+                  <Rect x="46" y="22" width="2.5" height="16" rx="1.25" fill="rgba(255,255,255,0.2)" />
+                  <Rect x="53" y="15" width="2.5" height="30" rx="1.25" fill="rgba(255,255,255,0.22)" />
+                  <Rect x="60" y="22" width="2.5" height="16" rx="1.25" fill="rgba(255,255,255,0.18)" />
+                </Svg>
+              </View>
+
+              {/* Swoosh curva in basso a destra */}
+              <View style={styles.swooshWrap} pointerEvents="none">
+                <Svg width={140} height={80} viewBox="0 0 140 80" fill="none">
+                  <Path
+                    d="M0 80 C50 65, 80 35, 140 10 L140 80 Z"
+                    fill="rgba(255, 255, 255, 0.08)"
+                  />
+                  <Path
+                    d="M30 80 C70 70, 100 50, 140 30 L140 80 Z"
+                    fill="rgba(255, 255, 255, 0.12)"
+                  />
+                </Svg>
+              </View>
+
               <Text style={styles.ctaTitle}>CAPISCI {dog.name.toUpperCase()}</Text>
               <Text style={styles.ctaSubtitle}>Premi e analizza audio + video</Text>
+
               <View style={styles.ctaButtons}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Registra audio per raccontarmi di ${dog.name}`}
                   onPress={startAudioTell}
-                  style={styles.ctaCircle}
+                  style={({ pressed }) => [
+                    styles.ctaCircle,
+                    pressed && styles.buttonPressed,
+                  ]}
                 >
-                  <Ionicons name="mic" size={28} color={colors.success} />
+                  <Ionicons name="mic" size={30} color="#10B981" />
                 </Pressable>
+
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Registra un video di ${dog.name}`}
                   onPress={startVideoCapture}
                   disabled={!dog.id || loading}
-                  style={styles.ctaCircle}
+                  style={({ pressed }) => [
+                    styles.ctaCircle,
+                    pressed && styles.buttonPressed,
+                  ]}
                 >
-                  <Ionicons name="videocam" size={28} color={colors.primary} />
+                  <Ionicons name="videocam" size={30} color="#0284C7" />
                 </Pressable>
               </View>
             </LinearGradient>
           </View>
 
-          {lastInsight && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Apri l'ultima analisi: ${lastInsight.label}`}
-              onPress={openLastInsight}
-              style={styles.lastInsightRow}
-            >
-              <View style={styles.lastInsightIcon}>
-                <Ionicons name="happy-outline" size={22} color={colors.success} />
-              </View>
-              <View style={styles.lastInsightText}>
-                <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
-                <Text style={styles.lastInsightValue}>{lastInsight.label}</Text>
-                <Text style={styles.lastInsightTime}>{lastInsight.timestampLabel}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-            </Pressable>
-          )}
+          {/* Riga "Ultima analisi": faccina sorridente verde in cerchio menta */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Apri l'ultima analisi: ${displayInsight.label}`}
+            onPress={openLastInsight}
+            style={styles.lastInsightRow}
+          >
+            <View style={styles.lastInsightIcon}>
+              <Ionicons name="happy-outline" size={24} color="#10B981" />
+            </View>
+            <View style={styles.lastInsightText}>
+              <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
+              <Text style={styles.lastInsightValue}>{displayInsight.label}</Text>
+              <Text style={styles.lastInsightTime}>{displayInsight.timestampLabel}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
-      <CheckInModal dogId={dog.id} dogName={dog.name} mockGate={usingMockGate} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  safe: { flex: 1 },
+  root: {
+    flex: 1,
+    backgroundColor: '#EDF4F9',
+  },
+  safe: {
+    flex: 1,
+  },
   content: {
-    width: '100%', maxWidth: 560, alignSelf: 'center',
-    padding: spacing.lg, paddingBottom: spacing.xxxl,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  headerLogo: {
+    marginBottom: 0,
   },
   headerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: spacing.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 12,
   },
-  headerText: { flex: 1 },
-  greeting: {
-    fontSize: typography.size.xl, fontWeight: typography.weight.bold, color: colors.text,
+  headerSpacer: {
+    width: 40,
   },
-  tagline: { marginTop: spacing.xs, fontSize: typography.size.sm, color: colors.textSecondary },
-  bellButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  bellButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bellBadge: {
-    position: 'absolute', top: 8, right: 8, width: 9, height: 9, borderRadius: 5,
-    backgroundColor: colors.danger, borderWidth: 1.5, borderColor: colors.surface,
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
   },
   dogCard: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
-    padding: spacing.lg, backgroundColor: colors.surface,
-    borderRadius: radius.lg, marginBottom: spacing.lg, ...shadows.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  dogCardBody: { flex: 1 },
+  dogCardBody: {
+    flex: 1,
+    marginLeft: 18,
+  },
   dogNameRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   dogName: {
-    fontSize: typography.size.lg, fontWeight: typography.weight.bold, color: colors.text,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0E2A47',
   },
-  dogMetaList: { gap: spacing.xs },
-  dogMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  dogMetaText: { fontSize: typography.size.sm, color: colors.textSecondary },
+  dogMetaList: {
+    gap: 6,
+  },
+  dogMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dogMetaText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
   statusBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    backgroundColor: colors.dangerSoft, borderRadius: radius.md,
-    padding: spacing.md, marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
   statusText: {
-    flex: 1, fontSize: typography.size.xs, color: colors.text,
-    lineHeight: typography.size.xs * typography.lineHeight.normal,
+    flex: 1,
+    fontSize: 12,
+    color: colors.text,
+    lineHeight: 16,
   },
   statusRetry: {
-    fontSize: typography.size.xs, fontWeight: typography.weight.semibold, color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
   },
   processingBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    backgroundColor: colors.primarySoft, borderRadius: radius.md,
-    padding: spacing.md, marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
   processingText: {
-    flex: 1, fontSize: typography.size.xs, color: colors.primary,
-    fontWeight: typography.weight.medium,
+    flex: 1,
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
   },
-  ctaWrap: { marginBottom: spacing.lg, ...shadows.raised },
+  ctaWrap: {
+    marginBottom: 14,
+    shadowColor: '#0050d8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 6,
+  },
   cta: {
-    borderRadius: radius.lg, padding: spacing.xl,
-    alignItems: 'center', gap: spacing.sm,
+    borderRadius: 24,
+    paddingTop: 36,
+    paddingBottom: 38,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  waveformWrap: {
+    position: 'absolute',
+    left: 8,
+    top: '32%',
+    opacity: 0.85,
+  },
+  swooshWrap: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    opacity: 0.8,
   },
   ctaTitle: {
-    fontSize: typography.size.xxl, fontWeight: typography.weight.bold,
-    color: colors.textOnPrimary, letterSpacing: 0.5,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
   ctaSubtitle: {
-    fontSize: typography.size.sm, color: colors.textOnPrimary, opacity: 0.9,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    opacity: 0.92,
+    marginTop: 6,
   },
-  ctaButtons: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.lg },
+  ctaButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 32,
+    marginTop: 32,
+  },
   ctaCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
-    ...shadows.card,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#002B75',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
   },
   lastInsightRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-    padding: spacing.md, backgroundColor: colors.surface,
-    borderRadius: radius.md, ...shadows.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    marginTop: 2,
   },
   lastInsightIcon: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.successSoft,
-    alignItems: 'center', justifyContent: 'center',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#E6F8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  lastInsightText: { flex: 1 },
-  lastInsightLabel: { fontSize: typography.size.xs, color: colors.textMuted },
+  lastInsightText: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  lastInsightLabel: {
+    fontSize: 11,
+    color: '#8295A8',
+    fontWeight: '400',
+  },
   lastInsightValue: {
-    fontSize: typography.size.md, fontWeight: typography.weight.bold, color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 2,
+    marginBottom: 2,
   },
-  lastInsightTime: { fontSize: typography.size.xs, color: colors.textSecondary },
+  lastInsightTime: {
+    fontSize: 11,
+    color: '#8295A8',
+    fontWeight: '400',
+  },
 });

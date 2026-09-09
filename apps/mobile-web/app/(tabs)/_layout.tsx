@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { tabBar } from '../../src/theme/tokens';
@@ -34,9 +35,41 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: tabBar.activeTint,
-        tabBarInactiveTintColor: tabBar.inactiveTint,
-        tabBarStyle: { backgroundColor: tabBar.background },
+        tabBarActiveTintColor: '#0066FF',
+        tabBarInactiveTintColor: '#8E9CAE',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+          marginTop: -2,
+        },
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E2E8F0',
+          borderTopWidth: 1,
+          height: 64,
+          paddingTop: 6,
+          paddingBottom: 8,
+        },
+        tabBarBackground: () => (
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              paddingBottom: 6,
+            }}
+          >
+            <View
+              style={{
+                width: 134,
+                height: 4.5,
+                borderRadius: 3,
+                backgroundColor: '#0E1726',
+              }}
+            />
+          </View>
+        ),
       }}
     >
       <Tabs.Screen
@@ -58,7 +91,7 @@ export default function TabsLayout() {
           title: 'Diario',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'book' : 'book-outline'}
+              name={focused ? 'calendar' : 'calendar-outline'}
               size={size}
               color={color as string}
             />

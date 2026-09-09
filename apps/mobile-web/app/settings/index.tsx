@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
@@ -16,6 +16,8 @@ import { useSession } from '@/features/auth/SessionProvider';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
   title: string;
   subtitle: string;
   href: string | null;
@@ -43,24 +45,32 @@ export default function SettingsScreen() {
   const rows: Row[] = [
     {
       icon: 'person-outline',
+      iconBg: '#E0F2FE',
+      iconColor: '#0284C7',
       title: 'Profilo',
       subtitle: 'Dati del cane e avatar',
       href: dogId ? `/dogs/${dogId}/edit` : null,
     },
     {
       icon: 'notifications-outline',
+      iconBg: colors.tealSoft,
+      iconColor: colors.teal,
       title: 'Notifiche',
       subtitle: 'Cosa vuoi ricevere e quando',
       href: '/settings/notifications',
     },
     {
       icon: 'shield-checkmark-outline',
+      iconBg: '#E0F2FE',
+      iconColor: '#0284C7',
       title: 'Privacy e dati',
       subtitle: 'Consensi, esportazione, eliminazione account',
       href: '/settings/privacy',
     },
     {
       icon: 'star-outline',
+      iconBg: colors.tealSoft,
+      iconColor: colors.teal,
       title: 'Abbonamento',
       subtitle: subscriptionSubtitle,
       href: '/settings/subscription',
@@ -68,9 +78,9 @@ export default function SettingsScreen() {
   ];
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Impostazioni" />
-      <Card noPadding>
+      <Card noPadding style={styles.group}>
         {rows.map((row, index) => (
           <Pressable
             key={row.title}
@@ -83,8 +93,8 @@ export default function SettingsScreen() {
               row.href === null && styles.rowDisabled,
             ]}
           >
-            <View style={styles.iconWrap}>
-              <Ionicons name={row.icon} size={20} color={colors.accent} />
+            <View style={[styles.iconWrap, { backgroundColor: row.iconBg }]}>
+              <Ionicons name={row.icon} size={18} color={row.iconColor} />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>{row.title}</Text>
@@ -93,7 +103,7 @@ export default function SettingsScreen() {
             <Ionicons
               name="chevron-forward"
               size={18}
-              color={colors.textMuted}
+              color={colors.iconMuted}
             />
           </Pressable>
         ))}
@@ -114,24 +124,34 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
+  group: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
   },
   rowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.surfaceMuted,
   },
   rowDisabled: {
     opacity: 0.6,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.accentSoft,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -139,9 +159,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
+    color: '#1A2B48',
   },
   rowSubtitle: {
     fontSize: typography.size.xs,

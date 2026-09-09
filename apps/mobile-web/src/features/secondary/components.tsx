@@ -34,7 +34,7 @@ export function StackScreenHeader({
         hitSlop={12}
         style={headerStyles.back}
       >
-        <Ionicons name="chevron-back" size={24} color={colors.text} />
+        <Ionicons name="chevron-back" size={24} color="#1A2B48" />
       </Pressable>
       <Text style={headerStyles.title} numberOfLines={1}>
         {title}
@@ -57,9 +57,9 @@ const headerStyles = StyleSheet.create({
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: typography.size.lg,
+    fontSize: 18,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: '#1A2B48',
   },
 });
 

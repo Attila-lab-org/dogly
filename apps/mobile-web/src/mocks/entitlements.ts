@@ -48,7 +48,7 @@ export const paywallOfferingMock: PaywallOffering = {
       title: 'Annuale',
       price: '€89,99',
       per: "all'anno",
-      badge: 'Risparmia 25%',
+      badge: 'Consigliato',
     },
   ],
 };

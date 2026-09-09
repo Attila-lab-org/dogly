@@ -16,9 +16,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Button, ScreenContainer } from '@/components';
-import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { useSession } from '@/features/auth/SessionProvider';
 import {
   mapAuthError,
@@ -179,190 +180,229 @@ export default function SignInScreen() {
   const showApple = shouldOfferAppleSignIn(Platform.OS, appleAvailable);
 
   return (
-    <ScreenContainer>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Indietro"
-        onPress={() => router.back()}
-        hitSlop={12}
-        style={styles.back}
-      >
-        <Ionicons name="chevron-back" size={26} color={colors.text} />
-      </Pressable>
+    <ScreenContainer style={styles.safe} contentStyle={styles.screen} padded={false}>
+      <LinearGradient
+        colors={[...gradients.authWash]}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.content}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Indietro"
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.back}
+        >
+          <Ionicons name="chevron-back" size={26} color="#1A2B48" />
+        </Pressable>
 
-      <View style={styles.header}>
-        <View style={styles.logoBadge}>
-          <Image
-            source={logoMarkSource}
-            style={styles.logoMark}
-            resizeMode="contain"
-            accessibilityLabel="Dogly"
-          />
+        <View style={styles.header}>
+          <View style={styles.logoBadge}>
+            <Image
+              source={logoMarkSource}
+              style={styles.logoMark}
+              resizeMode="contain"
+              accessibilityLabel="Dogly"
+            />
+          </View>
+          <Text style={styles.wordmark}>DOGLY</Text>
+          <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
+          {emailStep !== 'idle' ? (
+            <Text style={styles.subtitle}>
+              Un account per tenere al sicuro ciò che imparo sul tuo cane, su tutti
+              i tuoi dispositivi.
+            </Text>
+          ) : null}
         </View>
-        <Text style={styles.title}>Accedi</Text>
-        <Text style={styles.subtitle}>
-          Un account per tenere al sicuro ciò che imparo sul tuo cane, su tutti
-          i tuoi dispositivi.
+
+        {error && (
+          <View style={styles.errorBanner} accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.errorText}>{ERROR_COPY[error]}</Text>
+          </View>
+        )}
+
+        {configIncomplete && (
+          <View style={styles.errorBanner} accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.errorText}>
+              Configurazione incompleta: mancano le variabili Supabase. Contatta
+              l’amministratore.
+            </Text>
+          </View>
+        )}
+
+        {emailStep === 'enter_email' && (
+          <View style={styles.emailBlock}>
+            <Text style={styles.emailExplain}>
+              Ti inviamo un codice via email: niente password. Vale sia per
+              accedere sia per creare il tuo account.
+            </Text>
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputCard}>
+              <TextInput
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="tu@email.com"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+                testID="signin-email-input"
+              />
+            </View>
+            <Button
+              title="Invia il codice"
+              loading={loadingProvider === 'email'}
+              onPress={() => void sendOtp()}
+              testID="signin-send-otp"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Torna ai metodi di accesso"
+              onPress={() => setEmailStep('idle')}
+            >
+              <Text style={styles.link}>Torna ai metodi di accesso</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {emailStep === 'enter_code' && (
+          <View style={styles.emailBlock}>
+            <Text style={styles.label}>Codice ricevuto via email</Text>
+            <View style={styles.inputCard}>
+              <TextInput
+                keyboardType="number-pad"
+                value={otp}
+                onChangeText={setOtp}
+                placeholder="123456"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+                testID="signin-otp-input"
+              />
+            </View>
+            <Button
+              title="Verifica e accedi"
+              loading={loadingProvider === 'email'}
+              onPress={() => void confirmOtp()}
+              testID="signin-verify-otp"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reinvia codice"
+              onPress={() => void sendOtp()}
+            >
+              <Text style={styles.link}>Reinvia codice</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {emailStep === 'idle' && (
+          <View style={styles.buttons}>
+            <Button
+              title="Continua con Google"
+              variant="primary"
+              loading={loadingProvider === 'google'}
+              disabled={loadingProvider !== null || configIncomplete}
+              onPress={() => void signInOAuth()}
+              icon={
+                <Ionicons name="logo-google" size={18} color={colors.textOnPrimary} />
+              }
+              testID="signin-google"
+            />
+            {showApple ? (
+              <Button
+                title="Continua con Apple"
+                variant="secondary"
+                loading={loadingProvider === 'apple'}
+                disabled={loadingProvider !== null}
+                onPress={() => void signInApple()}
+                icon={
+                  <Ionicons name="logo-apple" size={18} color={colors.textOnPrimary} />
+                }
+                testID="signin-apple"
+              />
+            ) : null}
+            <Button
+              title="Continua con email"
+              variant="outline"
+              loading={loadingProvider === 'email'}
+              disabled={loadingProvider !== null}
+              onPress={startEmail}
+              testID="signin-email"
+            />
+          </View>
+        )}
+
+        <Text style={styles.footer}>
+          Continuando accetti i termini e l'informativa privacy del servizio.
+          Il consenso per ricerca e miglioramento del modello è separato e
+          facoltativo: lo trovi in Impostazioni, sempre modificabile.
         </Text>
       </View>
-
-      {error && (
-        <View style={styles.errorBanner} accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
-          <Text style={styles.errorText}>{ERROR_COPY[error]}</Text>
-        </View>
-      )}
-
-      {configIncomplete && (
-        <View style={styles.errorBanner} accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
-          <Text style={styles.errorText}>
-            Configurazione incompleta: mancano le variabili Supabase. Contatta
-            l’amministratore.
-          </Text>
-        </View>
-      )}
-
-      {emailStep === 'enter_email' && (
-        <View style={styles.emailBlock}>
-          <Text style={styles.emailExplain}>
-            Ti inviamo un codice via email: niente password. Vale sia per
-            accedere sia per creare il tuo account.
-          </Text>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="tu@email.com"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            testID="signin-email-input"
-          />
-          <Button
-            title="Invia il codice"
-            loading={loadingProvider === 'email'}
-            onPress={() => void sendOtp()}
-            testID="signin-send-otp"
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Torna ai metodi di accesso"
-            onPress={() => setEmailStep('idle')}
-          >
-            <Text style={styles.link}>Torna ai metodi di accesso</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {emailStep === 'enter_code' && (
-        <View style={styles.emailBlock}>
-          <Text style={styles.label}>Codice ricevuto via email</Text>
-          <TextInput
-            keyboardType="number-pad"
-            value={otp}
-            onChangeText={setOtp}
-            placeholder="123456"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            testID="signin-otp-input"
-          />
-          <Button
-            title="Verifica e accedi"
-            loading={loadingProvider === 'email'}
-            onPress={() => void confirmOtp()}
-            testID="signin-verify-otp"
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Reinvia codice"
-            onPress={() => void sendOtp()}
-          >
-            <Text style={styles.link}>Reinvia codice</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {emailStep === 'idle' && (
-        <View style={styles.buttons}>
-          <Button
-            title="Continua con Google"
-            variant="primary"
-            loading={loadingProvider === 'google'}
-            disabled={loadingProvider !== null || configIncomplete}
-            onPress={() => void signInOAuth()}
-            icon={
-              <Ionicons name="logo-google" size={18} color={colors.textOnPrimary} />
-            }
-            testID="signin-google"
-          />
-          {showApple ? (
-            <Button
-              title="Continua con Apple"
-              variant="secondary"
-              loading={loadingProvider === 'apple'}
-              disabled={loadingProvider !== null}
-              onPress={() => void signInApple()}
-              icon={
-                <Ionicons name="logo-apple" size={18} color={colors.textOnPrimary} />
-              }
-              testID="signin-apple"
-            />
-          ) : null}
-          <Button
-            title="Continua con email"
-            variant="outline"
-            loading={loadingProvider === 'email'}
-            disabled={loadingProvider !== null}
-            onPress={startEmail}
-            icon={<Ionicons name="mail-outline" size={18} color={colors.accent} />}
-            testID="signin-email"
-          />
-        </View>
-      )}
-
-      <Text style={styles.footer}>
-        Il consenso per ricerca e miglioramento del modello è separato e
-        facoltativo: lo trovi in Impostazioni, sempre modificabile.
-      </Text>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    backgroundColor: '#FFFFFF',
+  },
+  screen: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
   back: {
+    marginTop: spacing.sm,
     marginBottom: spacing.lg,
     alignSelf: 'flex-start',
   },
   header: {
+    alignItems: 'center',
     marginBottom: spacing.xl,
+    gap: spacing.sm,
   },
   logoBadge: {
-    width: 64,
-    height: 64,
+    width: 96,
+    height: 96,
     borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
-    ...shadows.card,
+    marginBottom: spacing.sm,
+    ...shadows.raised,
   },
   logoMark: {
-    width: 48,
-    height: 35,
+    width: 68,
+    height: 50,
   },
-  title: {
+  wordmark: {
     fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: '#1A2B48',
+    letterSpacing: 5,
+  },
+  tagline: {
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.medium,
+    color: '#2DAAAB',
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   subtitle: {
     marginTop: spacing.sm,
     fontSize: typography.size.md,
     color: colors.textSecondary,
     lineHeight: typography.size.md * typography.lineHeight.relaxed,
+    textAlign: 'center',
   },
   errorBanner: {
     flexDirection: 'row',
@@ -393,26 +433,30 @@ const styles = StyleSheet.create({
   label: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
+    color: '#1A2B48',
+  },
+  inputCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    ...shadows.card,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     fontSize: typography.size.md,
-    color: colors.text,
+    color: '#1A2B48',
   },
   link: {
     textAlign: 'center',
-    color: colors.accent,
+    color: '#2DAAAB',
     fontWeight: typography.weight.semibold,
     fontSize: typography.size.sm,
   },
   footer: {
-    marginTop: spacing.xl,
+    marginTop: 'auto',
+    paddingTop: spacing.xl,
     fontSize: typography.size.xs,
     color: colors.textMuted,
     textAlign: 'center',

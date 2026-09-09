@@ -3,6 +3,8 @@
  */
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
   AppState,
   type AppStateStatus,
   Linking,
@@ -19,8 +21,9 @@ import {
   useCameraPermissions,
   useMicrophonePermissions,
 } from 'expo-camera';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import {
   CAPTURE_MAX_SECONDS,
   CAPTURE_MIN_SECONDS,
@@ -41,6 +44,11 @@ import {
   type WebVideoRecording,
 } from '@/features/behavior/webRecord';
 
+const TITLE_COLOR = '#1A2B48';
+const HINT_COLOR = '#64748B';
+const CARD_BORDER = '#EDF2F7';
+const RING_GRADIENT = ['#0050D8', '#01AEC5'] as const;
+
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
@@ -57,6 +65,9 @@ export default function BehaviorCaptureScreen() {
   const [canStop, setCanStop] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [torchOn, setTorchOn] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const cameraRef = useRef<CameraView | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -71,8 +82,10 @@ export default function BehaviorCaptureScreen() {
   const canStopRef = useRef(false);
   const allowStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webRecordingRef = useRef<WebVideoRecording | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const micGranted = Boolean(micPermission?.granted);
+  const isRecording = state.phase === 'recording';
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -105,6 +118,39 @@ export default function BehaviorCaptureScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!isRecording || reduceMotion) {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.35,
+          duration: 550,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 550,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isRecording, pulseAnim, reduceMotion]);
 
   useEffect(() => {
     if (permissionReadyRef.current) return;
@@ -381,28 +427,73 @@ export default function BehaviorCaptureScreen() {
     }
   };
 
-  const progress = state.elapsedSeconds / CAPTURE_MAX_SECONDS;
   const showCamera =
     state.phase !== 'permission_denied' && Boolean(cameraPermission?.granted);
 
+  const timerLabel =
+    state.phase === 'recording'
+      ? `${formatCaptureTimer(state.elapsedSeconds)} / ${formatCaptureTimer(CAPTURE_MAX_SECONDS)}`
+      : cameraReady
+        ? 'Pronto'
+        : 'Apro la fotocamera…';
+
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer
+      padded={false}
+      style={styles.screen}
+      contentStyle={styles.screenContent}
+    >
       <View style={styles.container}>
         <View style={styles.topBar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Chiudi"
+            accessibilityLabel="Indietro"
             onPress={() => router.back()}
             hitSlop={12}
+            style={styles.iconButton}
           >
-            <Ionicons name="close" size={26} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={TITLE_COLOR} />
           </Pressable>
-          <Text style={styles.topTitle}>
-            {fromCheckIn
-              ? `Guardiamo ${dog.name}`
-              : `I segnali di ${dog.name}`}
+          <Text style={styles.topTitle} numberOfLines={1}>
+            Osserva {dog.name}
           </Text>
-          <View style={styles.topSpacer} />
+          <View style={styles.topActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={torchOn ? 'Spegni flash' : 'Accendi flash'}
+              onPress={() => setTorchOn((v) => !v)}
+              hitSlop={10}
+              style={styles.iconButton}
+              disabled={facing === 'front' || !showCamera}
+            >
+              <Ionicons
+                name={torchOn ? 'flash' : 'flash-outline'}
+                size={22}
+                color={
+                  facing === 'front' || !showCamera
+                    ? colors.iconMuted
+                    : TITLE_COLOR
+                }
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Inverti fotocamera"
+              onPress={() => {
+                setTorchOn(false);
+                setFacing((f) => (f === 'back' ? 'front' : 'back'));
+              }}
+              hitSlop={10}
+              style={styles.iconButton}
+              disabled={!showCamera || isRecording}
+            >
+              <Ionicons
+                name="camera-reverse-outline"
+                size={22}
+                color={!showCamera || isRecording ? colors.iconMuted : TITLE_COLOR}
+              />
+            </Pressable>
+          </View>
         </View>
 
         {fromCheckIn && analysisContext?.note ? (
@@ -411,12 +502,10 @@ export default function BehaviorCaptureScreen() {
 
         <View style={styles.preview}>
           {state.phase === 'permission_denied' ? (
-            <View style={styles.previewCenter}>
-              <Ionicons
-                name="videocam-off-outline"
-                size={48}
-                color={colors.textMuted}
-              />
+            <View style={styles.permissionCard}>
+              <View style={styles.permissionIconWrap}>
+                <Ionicons name="videocam-off-outline" size={28} color={colors.teal} />
+              </View>
               <Text style={styles.permissionTitle}>Serve la fotocamera</Text>
               <Text style={styles.permissionText}>
                 Per capire {dog.name} registro un breve video. Il microfono è
@@ -441,60 +530,60 @@ export default function BehaviorCaptureScreen() {
                 <CameraView
                   ref={cameraRef}
                   style={StyleSheet.absoluteFill}
-                  facing="back"
+                  facing={facing}
                   mode="video"
                   mute={!micGranted}
                   videoQuality="720p"
                   videoStabilizationMode="auto"
+                  enableTorch={torchOn && facing === 'back'}
                   active
                   onCameraReady={() => setCameraReady(true)}
                   onMountError={() => setCameraReady(false)}
                 />
               ) : (
                 <View style={styles.previewCenter}>
-                  <Ionicons name="paw" size={64} color={colors.textMuted} />
+                  <Ionicons name="paw" size={56} color={colors.iconMuted} />
                 </View>
               )}
-              {state.phase === 'recording' && (
-                <View style={styles.recordingChip}>
-                  <View style={styles.recordingDot} />
-                  <Text style={styles.recordingChipText}>
-                    {formatCaptureTimer(state.elapsedSeconds)} /{' '}
-                    {formatCaptureTimer(CAPTURE_MAX_SECONDS)}
-                  </Text>
-                </View>
-              )}
+              <View
+                style={[
+                  styles.timerPill,
+                  isRecording ? styles.timerPillRecording : styles.timerPillReady,
+                ]}
+              >
+                {isRecording ? (
+                  <Animated.View
+                    style={[styles.recordingDot, { opacity: pulseAnim }]}
+                  />
+                ) : (
+                  <View style={styles.readyDot} />
+                )}
+                <Text
+                  style={[
+                    styles.timerPillText,
+                    isRecording && styles.timerPillTextRecording,
+                  ]}
+                >
+                  {timerLabel}
+                </Text>
+              </View>
             </>
           )}
         </View>
 
         <View style={styles.controls}>
           {uploadError ? (
-            <Text style={styles.audioNote}>{uploadError}</Text>
+            <View style={styles.fallbackCard}>
+              <Text style={styles.fallbackText}>{uploadError}</Text>
+            </View>
           ) : null}
 
           {(state.phase === 'ready' || state.phase === 'recording') &&
             !uploading && (
             <>
-              {state.phase === 'recording' ? (
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${Math.min(100, progress * 100)}%` },
-                    ]}
-                  />
-                </View>
-              ) : (
-                <Text style={styles.hint}>
-                  {cameraReady
-                    ? `Inquadra tutto ${dog.name}, con buona luce e senza zoom. Tocca il pulsante rosso: registro da ${CAPTURE_MIN_SECONDS} a ${CAPTURE_MAX_SECONDS} secondi.`
-                    : 'Attendi, sto aprendo la fotocamera…'}
-                </Text>
-              )}
-              {state.phase === 'ready' && state.audioDegraded && (
-                <>
-                  <Text style={styles.audioNote}>
+              {state.phase === 'ready' && state.audioDegraded ? (
+                <View style={styles.fallbackCard}>
+                  <Text style={styles.fallbackText}>
                     Microfono non disponibile: analizzerò solo il video.
                   </Text>
                   <Button
@@ -511,9 +600,11 @@ export default function BehaviorCaptureScreen() {
                         await Linking.openSettings();
                       }
                     }}
+                    style={styles.micButton}
                   />
-                </>
-              )}
+                </View>
+              ) : null}
+
               {state.phase === 'ready' ? (
                 <Pressable
                   accessibilityRole="button"
@@ -522,13 +613,22 @@ export default function BehaviorCaptureScreen() {
                   onPress={() => void startRecording()}
                   hitSlop={16}
                   style={({ pressed }) => [
-                    styles.recordButton,
-                    !cameraReady && styles.recordButtonDisabled,
-                    pressed && styles.recordButtonPressed,
+                    styles.captureOuter,
+                    !cameraReady && styles.captureDisabled,
+                    pressed && styles.capturePressed,
                   ]}
                   testID="capture-start"
                 >
-                  <View style={styles.recordButtonInner} />
+                  <LinearGradient
+                    colors={[...RING_GRADIENT]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.captureRing}
+                  >
+                    <View style={styles.captureInner}>
+                      <View style={styles.captureLens} />
+                    </View>
+                  </LinearGradient>
                 </Pressable>
               ) : (
                 <Pressable
@@ -538,30 +638,43 @@ export default function BehaviorCaptureScreen() {
                   onPress={stopRecording}
                   hitSlop={16}
                   style={[
-                    styles.recordButton,
-                    styles.recordButtonActive,
-                    !canStop && styles.recordButtonDisabled,
+                    styles.captureOuter,
+                    !canStop && styles.captureDisabled,
                   ]}
                   testID="capture-stop"
                 >
-                  <View style={styles.stopButtonInner} />
+                  <LinearGradient
+                    colors={[...RING_GRADIENT]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.captureRing}
+                  >
+                    <View style={styles.captureInner}>
+                      <View style={styles.stopSquare} />
+                    </View>
+                  </LinearGradient>
                 </Pressable>
               )}
-              {state.phase === 'recording' ? (
-                <Text style={styles.hintSmall}>
-                  {canStop
-                    ? `Sto registrando. Tocca il quadratino per fermare, dopo almeno ${CAPTURE_MIN_SECONDS} secondi.`
-                    : 'Attendi: sto avviando la registrazione…'}
-                </Text>
-              ) : null}
+
+              <Text style={styles.hint}>
+                {state.phase === 'recording'
+                  ? canStop
+                    ? `Sto registrando. Tocca per fermare dopo almeno ${CAPTURE_MIN_SECONDS} secondi.`
+                    : 'Attendi: sto avviando la registrazione…'
+                  : cameraReady
+                    ? `Tieni inquadrato ${dog.name} per 5-15 secondi`
+                    : 'Attendi, sto aprendo la fotocamera…'}
+              </Text>
             </>
           )}
 
           {state.phase === 'too_short' && (
-            <>
-              <View style={styles.tooShortCard}>
-                <Ionicons name="time-outline" size={22} color={colors.warning} />
-                <Text style={styles.tooShortText}>
+            <View style={styles.fallbackCard}>
+              <View style={styles.tooShortRow}>
+                <View style={styles.tooShortIcon}>
+                  <Ionicons name="time-outline" size={20} color={colors.coral} />
+                </View>
+                <Text style={styles.fallbackText}>
                   Il video è troppo corto: mi servono almeno{' '}
                   {CAPTURE_MIN_SECONDS} secondi per osservare {dog.name}. Nessuna
                   analisi è stata usata.
@@ -571,18 +684,30 @@ export default function BehaviorCaptureScreen() {
                 title="Registra di nuovo"
                 onPress={retake}
                 testID="capture-retry"
+                style={styles.fullButton}
               />
-            </>
+            </View>
           )}
 
           {(state.phase === 'completed' || uploading) && !uploadError && (
-            <Text style={styles.hint}>Video pronto: lo sto inviando…</Text>
+            <View style={styles.fallbackCard}>
+              <Text style={styles.hint}>Video pronto: lo sto inviando…</Text>
+            </View>
           )}
 
           {uploadError ? (
-            <View style={{ gap: spacing.md, alignSelf: 'stretch' }}>
-              <Button title="Riprova invio" onPress={() => void retryUpload()} />
-              <Button title="Registra di nuovo" variant="outline" onPress={retake} />
+            <View style={styles.uploadActions}>
+              <Button
+                title="Riprova invio"
+                onPress={() => void retryUpload()}
+                style={styles.fullButton}
+              />
+              <Button
+                title="Registra di nuovo"
+                variant="outline"
+                onPress={retake}
+                style={styles.fullButton}
+              />
             </View>
           ) : null}
         </View>
@@ -592,37 +717,60 @@ export default function BehaviorCaptureScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
+  screenContent: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    paddingTop: spacing.xs,
   },
   topTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    fontWeight: typography.weight.bold,
+    color: TITLE_COLOR,
+    marginHorizontal: spacing.sm,
   },
-  topSpacer: {
-    width: 26,
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   careBanner: {
     marginBottom: spacing.md,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: HINT_COLOR,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 18,
   },
   preview: {
     flex: 1,
-    borderRadius: radius.lg,
-    backgroundColor: colors.text,
+    borderRadius: 24,
+    backgroundColor: '#0F172A',
     overflow: 'hidden',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    ...shadows.card,
   },
   previewCenter: {
     alignItems: 'center',
@@ -630,17 +778,36 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
+  permissionCard: {
+    margin: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    ...shadows.card,
+  },
+  permissionIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.tealSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   permissionTitle: {
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
-    color: colors.textOnPrimary,
+    color: TITLE_COLOR,
     textAlign: 'center',
   },
   permissionText: {
-    fontSize: typography.size.sm,
-    color: colors.textMuted,
+    fontSize: 13,
+    color: HINT_COLOR,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 20,
   },
   permissionButton: {
     alignSelf: 'stretch',
@@ -648,109 +815,135 @@ const styles = StyleSheet.create({
   permissionLink: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.primaryBright,
+    color: colors.teal,
   },
-  recordingChip: {
+  timerPill: {
     position: 'absolute',
     top: spacing.lg,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.overlayDark,
     borderRadius: radius.full,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  timerPillReady: {
+    backgroundColor: '#E0F7F6',
+  },
+  timerPillRecording: {
+    backgroundColor: '#FFF1EE',
+  },
+  readyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.teal,
   },
   recordingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.danger,
+    backgroundColor: '#EF4444',
   },
-  recordingChipText: {
-    fontSize: typography.size.sm,
+  timerPillText: {
+    fontSize: 13,
     fontWeight: typography.weight.semibold,
-    color: colors.textOnPrimary,
+    color: TITLE_COLOR,
+  },
+  timerPillTextRecording: {
+    color: '#C2410C',
   },
   controls: {
-    paddingVertical: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
     alignItems: 'center',
-    gap: spacing.lg,
-    minHeight: 180,
+    gap: spacing.md,
+    minHeight: 168,
   },
   hint: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: HINT_COLOR,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 18,
+    paddingHorizontal: spacing.md,
   },
-  hintSmall: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    textAlign: 'center',
+  captureOuter: {
+    ...shadows.raised,
   },
-  audioNote: {
-    fontSize: typography.size.xs,
-    color: colors.warning,
-    textAlign: 'center',
-  },
-  recordButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 5,
-    borderColor: colors.danger,
+  captureRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    padding: 5,
   },
-  recordButtonPressed: {
-    opacity: 0.85,
+  captureInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 37,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  recordButtonActive: {
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 6,
-    transform: [{ scale: 1.04 }],
-  },
-  recordButtonDisabled: {
-    opacity: 0.45,
-  },
-  recordButtonInner: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: colors.danger,
-  },
-  stopButtonInner: {
+  captureLens: {
     width: 28,
     height: 28,
-    borderRadius: radius.sm,
-    backgroundColor: colors.danger,
+    borderRadius: 14,
+    backgroundColor: colors.teal,
   },
-  progressTrack: {
+  stopSquare: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: colors.coral,
+  },
+  capturePressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+  },
+  captureDisabled: {
+    opacity: 0.45,
+  },
+  fallbackCard: {
     alignSelf: 'stretch',
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadows.card,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.danger,
+  fallbackText: {
+    flex: 1,
+    fontSize: 13,
+    color: HINT_COLOR,
+    lineHeight: 19,
+    textAlign: 'center',
   },
-  tooShortCard: {
+  tooShortRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
   },
-  tooShortText: {
-    flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.text,
-    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  tooShortIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.coralSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButton: {
+    alignSelf: 'stretch',
+  },
+  uploadActions: {
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+  },
+  fullButton: {
+    alignSelf: 'stretch',
   },
 });

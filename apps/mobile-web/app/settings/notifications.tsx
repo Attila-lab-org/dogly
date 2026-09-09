@@ -11,10 +11,13 @@ import {
 import { StackScreenHeader } from '@/features/secondary/components';
 import { FREQUENCY_OPTIONS } from '@/features/checkin/copy';
 import { setCheckInFrequency, useCheckIn } from '@/features/checkin/store';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, shadows, spacing, typography } from '@/theme/tokens';
 
 const OPTIONS: Array<{
   key: keyof NotificationPreferences;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
   title: string;
   description: string;
   /** true = la preferenza viene salvata, ma nessun invio la usa ancora */
@@ -22,34 +25,52 @@ const OPTIONS: Array<{
 }> = [
   {
     key: 'careReminders',
+    icon: 'calendar-outline',
+    iconBg: '#E0F2FE',
+    iconColor: '#0284C7',
     title: 'Agenda e appuntamenti',
     description: 'Vaccini, visite e altre scadenze.',
   },
   {
     key: 'resultReady',
+    icon: 'checkmark-circle-outline',
+    iconBg: colors.tealSoft,
+    iconColor: colors.teal,
     title: 'Risultati pronti',
     description: 'Quando termina una nuova analisi.',
     comingSoon: true,
   },
   {
     key: 'checkIn',
+    icon: 'heart-outline',
+    iconBg: '#E0F2FE',
+    iconColor: '#0284C7',
     title: 'Come sta oggi',
     description: 'Promemoria occasionali, senza messaggi ripetitivi.',
   },
   {
     key: 'newPattern',
+    icon: 'sparkles-outline',
+    iconBg: colors.tealSoft,
+    iconColor: colors.teal,
     title: 'Nuove abitudini',
     description: 'Quando emerge qualcosa di utile.',
     comingSoon: true,
   },
   {
     key: 'digestiveTrend',
+    icon: 'nutrition-outline',
+    iconBg: '#E0F2FE',
+    iconColor: '#0284C7',
     title: 'Cambiamenti digestivi',
     description: 'Quando notiamo una variazione importante.',
     comingSoon: true,
   },
   {
     key: 'weeklySummary',
+    icon: 'newspaper-outline',
+    iconBg: colors.tealSoft,
+    iconColor: colors.teal,
     title: 'Riepilogo settimanale',
     description: 'Un riepilogo della settimana.',
     comingSoon: true,
@@ -65,47 +86,56 @@ export default function NotificationSettingsScreen() {
   }, []);
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Preferenze notifiche" />
       <Text style={styles.intro}>
         Le modifiche vengono salvate subito.
       </Text>
 
       <Text style={styles.section}>Come sta oggi</Text>
-      <View style={styles.frequencyRow}>
-        {FREQUENCY_OPTIONS.map((option) => {
-          const selected = prefs.frequency === option.id;
-          return (
-            <Pressable
-              key={option.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => setCheckInFrequency(option.id)}
-              style={[
-                styles.frequencyChip,
-                selected && styles.frequencyChipSelected,
-              ]}
-            >
-              <Text
+      <Card style={styles.frequencyCard}>
+        <View style={styles.frequencyRow}>
+          {FREQUENCY_OPTIONS.map((option) => {
+            const selected = prefs.frequency === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setCheckInFrequency(option.id)}
                 style={[
-                  styles.frequencyText,
-                  selected && styles.frequencyTextSelected,
+                  styles.frequencyChip,
+                  selected && styles.frequencyChipSelected,
                 ]}
               >
-                {option.title}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <Text
+                  style={[
+                    styles.frequencyText,
+                    selected && styles.frequencyTextSelected,
+                  ]}
+                >
+                  {option.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Card>
 
       <Text style={styles.section}>Cosa ricevere</Text>
-      <Card style={styles.card}>
+      <Card noPadding style={styles.group}>
         {OPTIONS.map((option, index) => (
           <View
             key={option.key}
             style={[styles.row, index > 0 && styles.divider]}
           >
+            <View style={[styles.iconWrap, { backgroundColor: option.iconBg }]}>
+              <Ionicons
+                name={option.icon}
+                size={18}
+                color={option.iconColor}
+              />
+            </View>
             <View style={styles.copy}>
               <View style={styles.titleRow}>
                 <Text style={styles.title}>{option.title}</Text>
@@ -126,10 +156,8 @@ export default function NotificationSettingsScreen() {
               onValueChange={(value) =>
                 setNotificationPreference(option.key, value)
               }
-              trackColor={{ false: colors.border, true: colors.accentSoft }}
-              thumbColor={
-                preferences[option.key] ? colors.accent : colors.textMuted
-              }
+              trackColor={{ false: colors.border, true: colors.teal }}
+              thumbColor="#FFFFFF"
               accessibilityLabel={option.title}
             />
           </View>
@@ -137,11 +165,13 @@ export default function NotificationSettingsScreen() {
       </Card>
 
       <View style={styles.note}>
-        <Ionicons
-          name="phone-portrait-outline"
-          size={18}
-          color={colors.primary}
-        />
+        <View style={[styles.iconWrap, { backgroundColor: '#E0F2FE' }]}>
+          <Ionicons
+            name="phone-portrait-outline"
+            size={18}
+            color="#0284C7"
+          />
+        </View>
         <Text style={styles.noteText}>
           Il telefono chiede il permesso solo quando attivi il primo
           promemoria.
@@ -152,6 +182,9 @@ export default function NotificationSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
   intro: {
     marginBottom: spacing.md,
     color: colors.textSecondary,
@@ -159,28 +192,35 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: spacing.sm,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
+  },
+  frequencyCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    marginBottom: spacing.xl,
+    ...shadows.card,
   },
   frequencyRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.xl,
   },
   frequencyChip: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.full,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: '#EDF2F7',
+    backgroundColor: colors.surfaceMuted,
   },
   frequencyChipSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
+    borderColor: colors.teal,
+    backgroundColor: colors.tealSoft,
   },
   frequencyText: {
     color: colors.textSecondary,
@@ -188,21 +228,34 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
   },
   frequencyTextSelected: {
-    color: colors.textOnPrimary,
+    color: colors.teal,
   },
-  card: {
+  group: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
     marginBottom: spacing.lg,
+    ...shadows.card,
   },
   row: {
     minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
   },
   divider: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.surfaceMuted,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   copy: {
     flex: 1,
@@ -211,6 +264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   comingSoonNote: {
     marginTop: spacing.xxs,
@@ -219,9 +273,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   title: {
-    color: colors.text,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
+    color: '#1A2B48',
+    fontSize: 15,
+    fontWeight: typography.weight.medium,
   },
   description: {
     marginTop: spacing.xxs,
@@ -230,15 +284,18 @@ const styles = StyleSheet.create({
   },
   note: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
   },
   noteText: {
     flex: 1,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xs,
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },

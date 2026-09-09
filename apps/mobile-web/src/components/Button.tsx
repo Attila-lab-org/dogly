@@ -126,7 +126,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     overflow: 'hidden',
   },
   gradient: {
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    paddingVertical: 14,
     paddingHorizontal: spacing.xl,
   },
   inner: {
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    paddingVertical: 14,
     paddingHorizontal: spacing.xl,
   },
   label: {
@@ -153,30 +153,33 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
   },
   labelOutline: {
-    color: colors.accent,
+    color: colors.teal,
   },
   pressedPrimary: {
     opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
   secondary: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.teal,
   },
   secondaryPressed: {
-    backgroundColor: colors.accentPressed,
+    backgroundColor: '#269394',
+    transform: [{ scale: 0.98 }],
   },
   outline: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: colors.accent,
+    borderColor: colors.teal,
   },
   outlinePressed: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.tealSoft,
   },
   danger: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.coral,
   },
   dangerPressed: {
-    backgroundColor: colors.dangerPressed,
+    backgroundColor: '#E5735D',
+    transform: [{ scale: 0.98 }],
   },
   disabled: {
     opacity: 0.5,

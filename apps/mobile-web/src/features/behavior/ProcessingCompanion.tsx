@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { CuteIcon } from '../../components';
 import type { BehaviorEventStatus } from '../../contracts/types';
-import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 
 export function ProcessingCompanion({
   dogName,
@@ -71,17 +71,17 @@ export function ProcessingCompanion({
             detail: 'Non devi fare nulla e non userò un’altra analisi.',
           }
         : {
-            title: `Sto guardando ${dogName} con attenzione…`,
+            title: `Sto capendo cosa fa ${dogName}...`,
             detail: 'Osservo postura, movimento e contesto senza tirare conclusioni.',
           };
 
   const ringScale = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.88, 1.16],
+    outputRange: [0.92, 1.12],
   });
   const ringOpacity = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.42, 0.08],
+    outputRange: [0.55, 0.12],
   });
 
   return (
@@ -92,27 +92,15 @@ export function ProcessingCompanion({
     >
       <View style={styles.visual}>
         {!reduceMotion && !finishing ? (
-          <>
-            <Animated.View
-              style={[
-                styles.ring,
-                {
-                  opacity: ringOpacity,
-                  transform: [{ scale: ringScale }],
-                },
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.ring,
-                styles.ringInner,
-                {
-                  opacity: ringOpacity,
-                  transform: [{ scale: ringScale }],
-                },
-              ]}
-            />
-          </>
+          <Animated.View
+            style={[
+              styles.ring,
+              {
+                opacity: ringOpacity,
+                transform: [{ scale: ringScale }],
+              },
+            ]}
+          />
         ) : null}
         <View style={[styles.icon, finishing && styles.iconDone]}>
           <CuteIcon name={finishing ? 'play' : 'gaze'} size={54} />
@@ -127,51 +115,46 @@ export function ProcessingCompanion({
 const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   visual: {
-    width: 132,
-    height: 132,
+    width: 140,
+    height: 140,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   ring: {
     position: 'absolute',
-    width: 126,
-    height: 126,
-    borderRadius: radius.full,
-    borderWidth: 3,
-    borderColor: colors.accent,
-  },
-  ringInner: {
-    width: 100,
-    height: 100,
-    borderColor: colors.primary,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    backgroundColor: '#E0F2F7',
   },
   icon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
+    backgroundColor: '#E0F2F7',
   },
   iconDone: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: '#E0F7F6',
   },
   title: {
-    color: colors.text,
-    fontSize: typography.size.lg,
+    color: '#1A2B48',
+    fontSize: 22,
     fontWeight: typography.weight.bold,
     textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   detail: {
     maxWidth: 320,
     marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    color: '#64748B',
+    fontSize: 13,
+    lineHeight: 19,
     textAlign: 'center',
   },
 });

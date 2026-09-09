@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
   updateDogProfile,
@@ -229,9 +229,9 @@ export default function DogEditScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Modifica profilo" />
-      <Text style={styles.hint}>Profilo di {dog.name} · id {dogId}</Text>
+      <Text style={styles.hint}>Profilo di {dog.name}</Text>
 
       <Pressable
         accessibilityRole="button"
@@ -240,15 +240,17 @@ export default function DogEditScreen() {
         onPress={() => void selectAndUploadPhoto()}
         style={styles.avatarSection}
       >
-        <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
+        <View style={styles.avatarHalo}>
+          <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
+        </View>
         <View style={styles.photoBadge}>
-          <Ionicons name="camera" size={16} color={colors.primary} />
+          <Ionicons name="camera" size={16} color="#FFFFFF" />
         </View>
       </Pressable>
       <Text style={styles.photoStatus}>
         {uploadingPhoto
           ? 'Caricamento foto in corso…'
-          : 'Foto profilo · caricamento automatico attivo'}
+          : 'Tocca per cambiare la foto profilo'}
       </Text>
 
       <Text style={styles.label}>Nome</Text>
@@ -375,6 +377,7 @@ export default function DogEditScreen() {
 
       <Button
         title="Salva"
+        variant="secondary"
         loading={updateMutation.isPending || uploadingPhoto}
         disabled={uploadingPhoto}
         onPress={() => void save()}
@@ -384,51 +387,66 @@ export default function DogEditScreen() {
 }
 
 const styles = StyleSheet.create({
+  content: {
+    paddingBottom: spacing.xxxl,
+  },
   hint: {
     fontSize: typography.size.xs,
     color: colors.textMuted,
     marginBottom: spacing.lg,
+    textAlign: 'center',
   },
   avatarSection: {
     alignSelf: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  avatarHalo: {
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    borderRadius: 60,
+    ...shadows.card,
   },
   photoBadge: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
+    right: 2,
+    bottom: 2,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.teal,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.teal,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   photoStatus: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
-    marginTop: -spacing.md,
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
   label: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
+    color: '#1A2B48',
     marginBottom: spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    borderColor: '#EDF2F7',
+    borderRadius: 16,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
     fontSize: typography.size.md,
-    color: colors.text,
-    backgroundColor: colors.surface,
+    color: '#1A2B48',
+    backgroundColor: '#FFFFFF',
+    minHeight: 52,
   },
   breedField: {
     marginBottom: spacing.lg,
@@ -443,21 +461,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#F1F5F9',
     minHeight: 44,
     justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.teal,
   },
   chipText: {
     color: colors.textSecondary,
+    fontWeight: typography.weight.medium,
   },
   chipTextActive: {
-    color: colors.primary,
+    color: '#FFFFFF',
     fontWeight: typography.weight.semibold,
   },
   visibilityHint: {

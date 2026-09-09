@@ -10,11 +10,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button,
   Card,
-  DogIllustration,
   ErrorState,
   ScreenContainer,
 } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { fecalEventsMock } from '@/mocks/secondary';
 import {
   candidateText,
@@ -43,6 +42,25 @@ type Candidate = {
   coveredBy?: SafetyFlagCode;
 };
 
+type LocalFeedback = 'useful' | 'not_useful' | null;
+
+function statusPillFor(event: {
+  overallState?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT';
+  safetyFlags: SafetyFlagCode[];
+}): { label: string; bg: string; fg: string } {
+  const needsAttention =
+    event.safetyFlags.length > 0 ||
+    event.overallState === 'ATTENTION' ||
+    event.overallState === 'VET_CONTACT';
+  if (needsAttention) {
+    return { label: 'Attenzione', bg: '#FFF1EE', fg: colors.coral };
+  }
+  if (event.overallState === 'MONITOR') {
+    return { label: 'Variazione', bg: '#FFF1EE', fg: colors.coral };
+  }
+  return { label: 'Regolare', bg: '#E0F7F6', fg: colors.teal };
+}
+
 export default function DigestiveResultScreen() {
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
   const eventId = Array.isArray(params.eventId)
@@ -53,6 +71,7 @@ export default function DigestiveResultScreen() {
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [feedback, setFeedback] = useState<LocalFeedback>(null);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
   const query = useQuery({
@@ -90,7 +109,7 @@ export default function DigestiveResultScreen() {
 
   if (useApi && query.isLoading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <ErrorState title="Caricamento" message="Sto aprendo il risultato…" />
       </ScreenContainer>
     );
@@ -98,7 +117,7 @@ export default function DigestiveResultScreen() {
 
   if (stillProcessing) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <ErrorState
           title="Analisi in corso"
           message="Ti porto allo stato dell'analisi…"
@@ -109,8 +128,8 @@ export default function DigestiveResultScreen() {
 
   if (!event) {
     return (
-      <ScreenContainer>
-        <StackScreenHeader title="Digestione" />
+      <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
+        <StackScreenHeader title="Esito digestione" />
         <ErrorState
           title="Risultato non disponibile"
           message="Puoi ritrovare le osservazioni precedenti nel Diario."
@@ -128,8 +147,8 @@ export default function DigestiveResultScreen() {
     event.imageQuality === 'insufficient'
   ) {
     return (
-      <ScreenContainer scroll contentStyle={styles.content}>
-        <StackScreenHeader title="Digestione" />
+      <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
+        <StackScreenHeader title="Esito digestione" />
         <View style={styles.emptyVisual}>
           <View style={styles.warningIcon}>
             <Ionicons name="camera-outline" size={34} color={colors.warning} />
@@ -140,15 +159,15 @@ export default function DigestiveResultScreen() {
           </Text>
         </View>
 
-        <Card style={styles.improveCard}>
+        <View style={styles.whiteCard}>
           <Text style={styles.cardTitle}>Per migliorarla</Text>
           {event.qualityWarnings.map((warning) => (
             <View key={warning} style={styles.tipRow}>
-              <Ionicons name="checkmark" size={17} color={colors.accent} />
+              <Ionicons name="checkmark" size={17} color={colors.teal} />
               <Text style={styles.tipText}>{warning}</Text>
             </View>
           ))}
-        </Card>
+        </View>
 
         <Button
           title="Scatta di nuovo"
@@ -198,40 +217,17 @@ export default function DigestiveResultScreen() {
   const summary =
     event.consumerSummary ??
     event.baselineComparison.replace(/Rocky/g, dog.name);
+  const statusPill = statusPillFor(event);
 
   return (
-    <ScreenContainer scroll contentStyle={styles.content}>
-      <StackScreenHeader title="Digestione" />
+    <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
+      <StackScreenHeader title="Esito digestione" />
 
-      <View
-        style={[
-          styles.resultHero,
-          needsAttention ? styles.resultHeroAttention : styles.resultHeroRegular,
-        ]}
-      >
-        <DogIllustration
-          mood={needsAttention ? 'thinking' : 'welcome'}
-          size={180}
-        />
-        <View
-          style={[
-            styles.resultIcon,
-            needsAttention
-              ? styles.resultIconAttention
-              : styles.resultIconRegular,
-          ]}
-        >
-          <Ionicons
-            name={
-              needsAttention
-                ? 'alert-outline'
-                : event.overallState === 'MONITOR'
-                  ? 'eye-outline'
-                  : 'checkmark'
-            }
-            size={30}
-            color={needsAttention ? colors.danger : colors.accent}
-          />
+      <View style={styles.heroCard}>
+        <View style={[styles.statusPill, { backgroundColor: statusPill.bg }]}>
+          <Text style={[styles.statusPillText, { color: statusPill.fg }]}>
+            {statusPill.label}
+          </Text>
         </View>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
@@ -266,23 +262,23 @@ export default function DigestiveResultScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>Rispetto a {dog.name}</Text>
-      <Card style={styles.comparisonCard}>
-        <Ionicons name="git-compare-outline" size={22} color={colors.primary} />
+      <View style={styles.whiteCardRow}>
+        <Ionicons name="git-compare-outline" size={22} color={colors.teal} />
         <Text style={styles.comparisonText}>
           {event.baselineComparison.replace(/Rocky/g, dog.name)}
         </Text>
-      </Card>
+      </View>
 
       {(event.possibleAssociations?.length ?? 0) > 0 ? (
         <>
           <Text style={styles.sectionTitle}>Un elemento da considerare</Text>
-          <Card style={styles.contextCard}>
+          <View style={[styles.whiteCard, styles.contextCard]}>
             {event.possibleAssociations?.map((item) => (
               <Text key={item} style={styles.contextText}>
                 {item}
               </Text>
             ))}
-          </Card>
+          </View>
         </>
       ) : null}
 
@@ -306,7 +302,7 @@ export default function DigestiveResultScreen() {
             needsAttention
               ? colors.danger
               : event.overallState === 'ROUTINE'
-                ? colors.accent
+                ? colors.teal
                 : colors.warning
           }
         />
@@ -386,7 +382,7 @@ export default function DigestiveResultScreen() {
           {detailsOpen ? (
             <>
               {notableCandidates.length > 0 ? (
-                <Card style={styles.notableCard}>
+                <View style={styles.whiteCard}>
                   <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
                   {notableCandidates.map((candidate) => (
                     <View key={candidate.label} style={styles.notableRow}>
@@ -397,7 +393,7 @@ export default function DigestiveResultScreen() {
                       </Text>
                     </View>
                   ))}
-                </Card>
+                </View>
               ) : null}
 
               {event.activeFoodName ? (
@@ -406,7 +402,7 @@ export default function DigestiveResultScreen() {
                     <Ionicons
                       name="nutrition-outline"
                       size={20}
-                      color={colors.primary}
+                      color={colors.teal}
                     />
                   </View>
                   <View style={styles.foodCopy}>
@@ -417,7 +413,6 @@ export default function DigestiveResultScreen() {
                   </View>
                 </View>
               ) : null}
-
             </>
           ) : null}
         </>
@@ -434,10 +429,51 @@ export default function DigestiveResultScreen() {
         </View>
       </View>
 
-      <Button
-        title="Fatto"
-        onPress={() => router.replace('/(tabs)/home')}
-      />
+      <View style={styles.actionPills}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: feedback === 'useful' }}
+          onPress={() => setFeedback('useful')}
+          style={[
+            styles.feedbackPill,
+            styles.feedbackUseful,
+            feedback === 'useful' && styles.feedbackUsefulSelected,
+          ]}
+        >
+          <Ionicons name="thumbs-up-outline" size={18} color={colors.teal} />
+          <Text style={[styles.feedbackPillText, { color: colors.teal }]}>
+            Sembra corretto
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: feedback === 'not_useful' }}
+          onPress={() => setFeedback('not_useful')}
+          style={[
+            styles.feedbackPill,
+            styles.feedbackNotUseful,
+            feedback === 'not_useful' && styles.feedbackNotUsefulSelected,
+          ]}
+        >
+          <Ionicons name="thumbs-down-outline" size={18} color={colors.coral} />
+          <Text style={[styles.feedbackPillText, { color: colors.coral }]}>
+            Non convincente
+          </Text>
+        </Pressable>
+        <Button
+          title="Salva nel diario"
+          variant="outline"
+          icon={
+            <Ionicons name="bookmark-outline" size={18} color={colors.teal} />
+          }
+          onPress={() => router.replace('/(tabs)/diary')}
+          testID="digestive-save-diary"
+        />
+        <Button
+          title="Fatto"
+          onPress={() => router.replace('/(tabs)/home')}
+        />
+      </View>
     </ScreenContainer>
   );
 }
@@ -454,7 +490,7 @@ function MetricCard({
   return (
     <View style={styles.metricCard}>
       <View style={styles.metricIcon}>
-        <Ionicons name={icon} size={20} color={colors.accent} />
+        <Ionicons name={icon} size={20} color={colors.teal} />
       </View>
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue} numberOfLines={2}>
@@ -487,54 +523,51 @@ function digestiveHeadline(
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
   content: {
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
     paddingBottom: spacing.xxxl,
   },
-  resultHero: {
+  heroCard: {
     alignItems: 'center',
     padding: spacing.xl,
-    borderRadius: radius.lg,
+    borderRadius: 20,
     marginBottom: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    ...shadows.card,
   },
-  resultHeroRegular: {
-    backgroundColor: colors.accentSoft,
-  },
-  resultHeroAttention: {
-    backgroundColor: colors.dangerSoft,
-  },
-  resultIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+  statusPill: {
+    borderRadius: radius.full,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     marginBottom: spacing.md,
   },
-  resultIconRegular: {
-    backgroundColor: colors.surface,
-  },
-  resultIconAttention: {
-    backgroundColor: colors.surface,
+  statusPillText: {
+    fontSize: 13,
+    fontWeight: typography.weight.bold,
   },
   resultTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     textAlign: 'center',
   },
   resultSummary: {
     marginTop: spacing.sm,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     textAlign: 'center',
   },
   safetyCard: {
     padding: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: 20,
     backgroundColor: colors.dangerSoft,
     marginBottom: spacing.lg,
   },
@@ -564,7 +597,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: spacing.sm,
     marginBottom: spacing.md,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
@@ -573,21 +606,35 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.md,
   },
-  comparisonCard: {
+  whiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    ...shadows.card,
+  },
+  whiteCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: spacing.lg,
     marginBottom: spacing.lg,
+    ...shadows.card,
   },
   comparisonText: {
     flex: 1,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   contextCard: {
     gap: spacing.sm,
-    marginBottom: spacing.lg,
     backgroundColor: colors.primarySoft,
   },
   contextText: {
@@ -600,29 +647,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: 20,
     backgroundColor: colors.warningSoft,
     marginBottom: spacing.lg,
   },
   routineCard: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.tealSoft,
   },
   monitorCopy: {
     flex: 1,
   },
   monitorTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
   monitorText: {
     marginTop: spacing.xs,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   questionCard: {
     marginBottom: spacing.lg,
+    borderRadius: 20,
   },
   questionHeading: {
     flexDirection: 'row',
@@ -646,7 +694,7 @@ const styles = StyleSheet.create({
   },
   questionText: {
     marginTop: spacing.md,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.size.md * typography.lineHeight.normal,
@@ -662,15 +710,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.accent,
-    borderRadius: radius.md,
+    borderColor: colors.teal,
+    borderRadius: radius.full,
     backgroundColor: colors.surface,
   },
   answerButtonPressed: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.tealSoft,
   },
   answerButtonText: {
-    color: colors.accent,
+    color: colors.teal,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
@@ -685,12 +733,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
     marginBottom: spacing.lg,
   },
   detailsToggleText: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
   },
@@ -698,8 +748,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 132,
     padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    ...shadows.card,
   },
   metricIcon: {
     width: 38,
@@ -707,25 +760,22 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.tealSoft,
   },
   metricLabel: {
     marginTop: spacing.md,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: typography.size.xs,
   },
   metricValue: {
     marginTop: spacing.xs,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
-  notableCard: {
-    marginBottom: spacing.lg,
-  },
   cardTitle: {
     marginBottom: spacing.md,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
@@ -745,7 +795,7 @@ const styles = StyleSheet.create({
   },
   notableLabel: {
     flex: 1,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
   },
   notableValue: {
@@ -758,9 +808,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
     marginBottom: spacing.lg,
+    ...shadows.card,
   },
   foodIcon: {
     width: 44,
@@ -768,18 +821,18 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.tealSoft,
   },
   foodCopy: {
     flex: 1,
   },
   foodLabel: {
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: typography.size.xs,
   },
   foodValue: {
     marginTop: spacing.xs,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
@@ -801,6 +854,43 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
+  actionPills: {
+    gap: spacing.sm,
+  },
+  feedbackPill: {
+    height: 50,
+    borderRadius: radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0E2A47',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  feedbackUseful: {
+    borderColor: colors.teal,
+  },
+  feedbackNotUseful: {
+    borderColor: colors.coral,
+  },
+  feedbackUsefulSelected: {
+    backgroundColor: colors.tealSoft,
+    transform: [{ scale: 0.99 }],
+  },
+  feedbackNotUsefulSelected: {
+    backgroundColor: colors.coralSoft,
+    transform: [{ scale: 0.99 }],
+  },
+  feedbackPillText: {
+    fontSize: 15,
+    fontWeight: typography.weight.bold,
+  },
   secondaryAction: {
     marginTop: spacing.sm,
   },
@@ -818,18 +908,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   emptyTitle: {
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
   },
   emptySubtitle: {
     marginTop: spacing.sm,
-    color: colors.textSecondary,
+    color: '#64748B',
     fontSize: typography.size.sm,
     textAlign: 'center',
-  },
-  improveCard: {
-    marginBottom: spacing.lg,
   },
   tipRow: {
     flexDirection: 'row',
@@ -839,7 +926,7 @@ const styles = StyleSheet.create({
   },
   tipText: {
     flex: 1,
-    color: colors.text,
+    color: '#1A2B48',
     fontSize: typography.size.sm,
   },
 });

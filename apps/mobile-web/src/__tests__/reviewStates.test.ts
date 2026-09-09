@@ -54,7 +54,7 @@ describe('paywall entitlements centralizzati (sez. 4.1 / 21)', () => {
     const annual = paywallOfferingMock.plans[1];
     expect(monthly.price).toBe('€9,99');
     expect(annual.price).toBe('€89,99');
-    expect(annual.badge).toBe('Risparmia 25%');
+    expect(annual.badge).toBe('Consigliato');
   });
 
   it('NO unlimited: allowance dichiarata e piano Free sempre visibile', () => {
