@@ -126,10 +126,16 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
         return result
 
     @app.get("/tasks/cron/retention", dependencies=[Depends(cron_auth)])
-    async def run_retention_cron(request: Request) -> dict:
+    async def run_retention_cron(request: Request):
         """Vercel Cron GET ingress for expired raw media and storage orphans."""
+        from fastapi.responses import JSONResponse
+
         st: AppState = request.app.state.cbi
-        return await handlers.process_media_retention_cleanup(st)
+        result = await handlers.process_media_retention_cleanup(st)
+        status_code = int(result.get("http_status") or 200)
+        if status_code != 200:
+            return JSONResponse(status_code=status_code, content=result)
+        return result
 
     @app.get("/tasks/cron/care-reminders", dependencies=[Depends(cron_auth)])
     async def run_care_reminder_cron(request: Request) -> dict:
