@@ -268,8 +268,7 @@ export default function BehaviorCaptureScreen() {
 
     timerRef.current = setInterval(() => {
       elapsedRef.current += 1;
-      dispatch({ type: 'TICK' });
-      if (elapsedRef.current >= CAPTURE_MAX_SECONDS && canStopRef.current) {
+      if (elapsedRef.current >= CAPTURE_MAX_SECONDS) {
         if (Platform.OS === 'web') {
           webRecordingRef.current?.stop();
         } else {
@@ -279,7 +278,10 @@ export default function BehaviorCaptureScreen() {
             // noop
           }
         }
+        clearTimer();
+        return;
       }
+      dispatch({ type: 'TICK' });
     }, 1000);
 
     allowStopTimerRef.current = setTimeout(() => {
@@ -309,11 +311,14 @@ export default function BehaviorCaptureScreen() {
   }, [cameraReady, finishWithUri]);
 
   const stopRecording = useCallback(() => {
-    if (!canStopRef.current || !recordingPromiseRef.current) return;
+    if (!canStopRef.current) return;
     if (Platform.OS === 'web') {
-      webRecordingRef.current?.stop();
+      const session = webRecordingRef.current;
+      if (!session) return;
+      session.stop();
       return;
     }
+    if (!recordingPromiseRef.current) return;
     try {
       cameraRef.current?.stopRecording();
     } catch {
