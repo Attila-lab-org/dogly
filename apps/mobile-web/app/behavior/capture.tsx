@@ -139,12 +139,12 @@ export default function BehaviorCaptureScreen() {
         Animated.timing(pulseAnim, {
           toValue: 0.35,
           duration: 550,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 550,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
     );

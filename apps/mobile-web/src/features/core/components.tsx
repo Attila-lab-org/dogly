@@ -44,7 +44,9 @@ export function DogAvatar({
   dogName?: string;
   source?: any;
 }) {
-  const resolvedSource = source || (photoUri ? { uri: photoUri as string } : null);
+  const resolvedSource = photoUri
+    ? { uri: photoUri as string }
+    : source || null;
   const hasPhoto = Boolean(resolvedSource);
   return (
     <View

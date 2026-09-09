@@ -176,7 +176,7 @@ export default function HomeScreen() {
           >
             <DogAvatar
               size={112}
-              source={rockyAvatarSource}
+              source={dog.photoUri ? undefined : rockyAvatarSource}
               photoUri={dog.photoUri}
               dogName={dog.name}
             />

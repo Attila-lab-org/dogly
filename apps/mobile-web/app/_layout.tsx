@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Platform } from 'react-native';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -34,7 +35,50 @@ if (sentryDsn) {
  *   In __DEV__/Expo Go entrambe sono no-op: mock gate invariato, niente
  *   scheduling in dev.
  */
+/**
+ * Expo Router / RN Web marks off-screen stacks with aria-hidden while the
+ * tapped button can keep focus. Chrome then warns. On a hidden ancestor we
+ * blur; on a visible one we drop the incorrect aria-hidden.
+ */
+function repairWebAriaHiddenFocus() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || active === document.body) return;
+  let node: HTMLElement | null = active.parentElement;
+  while (node) {
+    if (node.getAttribute('aria-hidden') === 'true') {
+      if (window.getComputedStyle(node).display === 'none') {
+        active.blur();
+        return;
+      }
+      node.removeAttribute('aria-hidden');
+    }
+    node = node.parentElement;
+  }
+}
+
 function RootLayout() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    repairWebAriaHiddenFocus();
+  }, [pathname]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const observer = new MutationObserver(repairWebAriaHiddenFocus);
+    observer.observe(document.body, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['aria-hidden'],
+    });
+    document.addEventListener('focusin', repairWebAriaHiddenFocus, true);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('focusin', repairWebAriaHiddenFocus, true);
+    };
+  }, []);
+
   useEffect(() => {
     const setOnline = (state: {
       isConnected?: boolean | null;
@@ -71,6 +115,7 @@ function RootLayout() {
             <Stack
               screenOptions={{
                 headerShown: false,
+                freezeOnBlur: true,
                 contentStyle: { backgroundColor: colors.background },
               }}
             >
