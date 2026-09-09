@@ -55,7 +55,8 @@ Quattro pezzi deployati separatamente, più servizi esterni:
 - **Backend** (`api/index.py`): applicazione FastAPI rilevata dal preset Vercel,
   con public app (`backend/app/api/app.py`) e worker app
   (`backend/app/worker/main.py`) sullo stesso deployment. `vercel.json` dichiara
-  `framework: fastapi`; non contiene rewrite manuali né `maxDuration`.
+  `framework: fastapi` e imposta `maxDuration: 300` su `api/index.py` (tetto del
+  piano); non contiene rewrite manuali.
 - **Supabase**: Auth (JWT validato lato FastAPI), PostgreSQL (schema `public` + `internal`),
   Storage con bucket privati e object policy path-scoped.
 - **Async**: job durevoli via adapter `JobQueue` → Vercel Workflows (Amendment V1.1);

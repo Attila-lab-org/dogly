@@ -153,8 +153,10 @@ export interface BehaviorEventResult {
   dogId: string;
   status: BehaviorEventStatus;
   primary_intent: BehaviorIntent | null;
-  confidence_band: ConfidenceBand;
-  consumer_summary: string;
+  // FIX 3.9: nullable when the API omits them; the UI renders null gracefully
+  // instead of the mapper fabricating a value that masks a backend omission.
+  confidence_band: ConfidenceBand | null;
+  consumer_summary: string | null;
   evidence: EvidenceItem[];
   alternatives: AlternativeHypothesis[];
   feedback: FeedbackValue | null;
@@ -163,8 +165,8 @@ export interface BehaviorEventResult {
   context_question?: string | null;
   /** Versioni obbligatorie per audit e replay (sez. 16.3) */
   schema_version: string;
-  policy_version: string;
-  taxonomy_version: string;
+  policy_version: string | null;
+  taxonomy_version: string | null;
   created_at: string;
   completed_at: string | null;
   /** Composer V2: headline già personalizzata, o fallback locale. */

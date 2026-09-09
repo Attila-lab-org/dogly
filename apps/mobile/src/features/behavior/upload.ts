@@ -159,7 +159,39 @@ async function processPendingUploadInner(id: string): Promise<string | null> {
       if (expired) {
         throw new Error('URL upload scaduto');
       }
-      await putSignedUpload(item.uploadUrl, item.localUri, contentType);
+      // FIX 1.5: a previous PUT may have succeeded but the response was lost
+      // (network drop mid-flight). On retry, re-PUTting the same path can
+      // fail if the object already exists. Try the PUT; if it fails, attempt
+      // complete_capture directly — the backend verifies object_exists and
+      // will proceed if the bytes are already there.
+      try {
+        await putSignedUpload(item.uploadUrl, item.localUri, contentType);
+      } catch (putError) {
+        let captureId = item.captureId;
+        if (!captureId) {
+          // Should not happen in uploading state, but guard anyway.
+          throw putError;
+        }
+        try {
+          const complete = await completeBehaviorCapture(
+            captureId,
+            `${item.clientRequestId}:complete`,
+          );
+          // Object already existed: backend verified it. Skip to processing.
+          item = queue.transitionTo(id, 'uploaded', {
+            eventId: complete.event_id,
+          });
+          item = queue.transitionTo(id, 'processing', {
+            eventId: complete.event_id,
+          });
+          await deleteLocalIfExists(item.localUri);
+          return item.eventId;
+        } catch {
+          // complete failed too: the object really isn't there. Re-throw the
+          // original PUT error so the queue records a recoverable failure.
+          throw putError;
+        }
+      }
       item = queue.transitionTo(id, 'uploaded');
     }
 

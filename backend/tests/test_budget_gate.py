@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from app.config import Settings
+from app.contracts.errors import ApiError
 from app.providers import (
     gemini_observer,
     openai_digestive_vision,
@@ -232,3 +233,43 @@ async def test_reasoner_budget_exhaustion_is_terminal_without_raise(
     assert state.store.behavior_events[event_id].last_error_code == (
         "AI_BUDGET_EXCEEDED"
     )
+
+
+class _OperationCapturingReasoner:
+    """Records the operation passed to interpret so we can assert the
+    refine_context path gates against the right operation (FIX 2.2)."""
+
+    def __init__(self):
+        self.operations: list[str] = []
+
+    async def interpret(self, *, operation="reasoner.interpret", **kwargs):
+        del kwargs
+        self.operations.append(operation)
+        raise BudgetExceededError("reasoner", 50.0, 50.0)
+
+
+async def test_refine_context_gates_against_refine_operation(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    """FIX 2.2: refine_context is metered as reasoner.refine_context; the
+    budget gate must check the same operation, not reasoner.interpret."""
+    from app.contracts.taxonomy import ContextBucket
+    from app.worker.handlers import refine_behavior_event_context
+
+    event_id = await _queue_behavior_event(client, auth_headers, "crid-refine-0001")
+    # Drive the event to COMPLETED with a mock observer/reasoner so the
+    # observation checkpoint exists for refine to reuse.
+    result = await process_behavior_event(state, event_id=event_id)
+    assert result["status"] == "COMPLETED", result
+    event = state.store.behavior_events[event_id]
+    assert event.observation_json is not None
+
+    reasoner = _OperationCapturingReasoner()
+    state.reasoner = reasoner
+    try:
+        await refine_behavior_event_context(
+            state, event=event, context_bucket=ContextBucket.HOME
+        )
+    except ApiError:
+        pass  # BudgetExceededError surfaces as ApiError from the handler
+    assert reasoner.operations == ["reasoner.refine_context"]

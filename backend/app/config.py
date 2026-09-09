@@ -100,6 +100,16 @@ class Settings(BaseSettings):
     # --- Retention (sez. 23.2) ---
     raw_media_ttl_hours: int = 24
 
+    # --- CORS (sez. 9.1) ---
+    # Comma-separated list of allowed origins for the public API. The mobile
+    # web deployment (apps/mobile-web on Vercel) and local dev ports are
+    # allowed by default; staging/production add their Vercel deployment URLs
+    # via the CORS_ORIGINS env var.
+    cors_origins: str = (
+        "http://localhost:8083,http://127.0.0.1:8083,"
+        "http://localhost:8081,http://127.0.0.1:8081"
+    )
+
     @model_validator(mode="after")
     def _fail_fast_non_local(self) -> Settings:
         env = (self.app_env or "").strip().lower()

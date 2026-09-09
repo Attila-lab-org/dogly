@@ -161,7 +161,7 @@ export default function DigestiveResultScreen() {
         <Button
           title="Chiudi"
           variant="outline"
-          onPress={() => router.replace('/(tabs)/rocky')}
+          onPress={() => router.replace('/(tabs)/home')}
           style={styles.secondaryAction}
         />
       </ScreenContainer>
@@ -436,7 +436,7 @@ export default function DigestiveResultScreen() {
 
       <Button
         title="Fatto"
-        onPress={() => router.replace('/(tabs)/rocky')}
+        onPress={() => router.replace('/(tabs)/home')}
       />
     </ScreenContainer>
   );

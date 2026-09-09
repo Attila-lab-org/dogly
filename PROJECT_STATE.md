@@ -6,13 +6,14 @@ Ultimo aggiornamento: 2026-09-06 • Branch: `main`
 
 | Gate | Stato | Evidenza |
 | --- | --- | --- |
-| **G1 — Data/security contract** | ✅ **COMPLETATO** | Migrazioni `0001–0016` (Signals + write hardening); RLS; OpenAPI; pytest. |
+| **G1 — Data/security contract** | ✅ **COMPLETATO** | Migrazioni `0001–0048` (Signals + write hardening + retention quarantine); RLS; OpenAPI; pytest. |
 | **Amendment V1.1** | ✅ | Hosting Vercel + Workflows. |
 | **G0 — Platform spike (mobile)** | 🔶 **PARZIALE** | Expo SDK 57, pnpm, EAS preview APK Android; RevenueCat sandbox in checklist. |
 | **G4 — Consumer UX** | ✅ **UX V1 integrata** | Flussi Home/Diario/Digestione/API reali, Advice V2 e outcome, routine lifestyle progressiva, attesa accessibile e share card branded. Mock isolati nel solo demo gate. |
 | **GATE UX/SPEC (Stage 3)** | ✅ **PASS** (statico) | Non implica integrazioni reali complete. |
-| G2 — Async e2e | 🔶 Parziale | Retention TTL al completion + cleanup job; giro mobile→upload→worker da chiudere. |
-| G3, G5–G9 | ⬜ | Non avviati. |
+| G2 — Async e2e | 🔶 Parziale | Retention TTL al completion + cleanup job + sweep cron; giro mobile→upload→worker da chiudere. |
+| G3 — Provider AI reali | 🔶 Avviato | Factory/worker Gemini (observer) + OpenAI (reasoner/digestive vision) integrati; budget gate attivo. Restano indici/purge `ai_cost_events` (FIX 2.2). |
+| G5–G9 | ⬜ | Non avviati. |
 
 ## Deploy / tooling reali
 

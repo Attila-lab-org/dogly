@@ -148,8 +148,9 @@ export async function postBehaviorFeedback(
     clientRequestId?: string;
   },
 ): Promise<FeedbackResponse> {
-  const key =
-    extras?.clientRequestId ?? `fb-${eventId}-${value}-${Date.now()}`;
+  // FIX 3.4: deterministic key per (event, value) so a duplicate tap is a
+  // server-side no-op; a changed feedback (different value) is a new key.
+  const key = extras?.clientRequestId ?? `fb-${eventId}-${value}`;
   const body: Record<string, unknown> = {
     value,
     client_request_id: key,

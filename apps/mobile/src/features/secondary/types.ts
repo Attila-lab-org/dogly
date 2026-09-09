@@ -67,7 +67,7 @@ export interface FecalEventResult {
   bloodCandidate: CandidateLevel;
   melenaCandidate: CandidateLevel;
   foreignMaterialCandidate: CandidateLevel;
-  confidenceBand: ConfidenceBand;
+  confidenceBand: ConfidenceBand | null;
   safetyFlags: SafetyFlagCode[];
   /** Cibo attivo al momento dell'evento (link FeedingPeriod, sez. 19.2) */
   activeFoodName: string | null;

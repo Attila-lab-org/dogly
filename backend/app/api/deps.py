@@ -167,6 +167,9 @@ async def idempotency_guard(
     x_idempotency_key: Annotated[str | None, Header()] = None,
 ) -> IdempotencyGuard:
     import hashlib
+    from datetime import timedelta
+
+    from app.domains import idempotency_db
 
     payload_hash: str | None = None
     if request.method in ("POST", "PATCH"):
@@ -198,14 +201,28 @@ async def idempotency_guard(
                 "Idempotency key was reused with a different payload.",
             )
         elif existing.status_code != 200:
-            raise ApiError(
-                ErrorCode.RATE_LIMITED,
-                "This request is already being processed. Retry shortly.",
-                retryable=True,
+            # Reclaim stale in-flight claims (status_code=0) past the TTL: a
+            # crash before record() must not 429 the key forever (FIX 1.4).
+            stale = (
+                existing.status_code == 0
+                and existing.created_at is not None
+                and now_utc() - existing.created_at
+                > timedelta(minutes=idempotency_db.INFLIGHT_TTL_MINUTES)
             )
+            if stale:
+                state.store.idempotency[guard._scope] = IdempotencyRec(
+                    scope=guard._scope,
+                    status_code=0,
+                    response_body={},
+                    created_at=now_utc(),
+                )
+            else:
+                raise ApiError(
+                    ErrorCode.RATE_LIMITED,
+                    "This request is already being processed. Retry shortly.",
+                    retryable=True,
+                )
     if state.engine is not None and guard._scope:
-        from app.domains import idempotency_db
-
         cached = await idempotency_db.claim(
             state.engine, scope=guard._scope, payload_hash=payload_hash
         )

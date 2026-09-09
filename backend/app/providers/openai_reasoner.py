@@ -61,6 +61,7 @@ class OpenAIReasoner:
         knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
+        operation: str = "reasoner.interpret",
     ) -> tuple[InterpretationContract, ProviderUsage]:
         if self._settings.ai_kill_switch or self._settings.reasoner_kill_switch:
             raise ProviderDisabled("Reasoner kill switch is active")
@@ -68,7 +69,7 @@ class OpenAIReasoner:
             get_engine(self._settings),
             role="reasoner",
             budget_usd=self._settings.reasoner_budget_usd_per_day,
-            operation="reasoner.interpret",
+            operation=operation,
         )
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured")

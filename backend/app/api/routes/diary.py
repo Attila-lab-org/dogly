@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 def _public_digestive_diary_status(status: str) -> str:
-    if status in {"OBSERVING", "INTERPRETING", "FAILED_RETRYABLE"}:
+    if status in {"OBSERVING", "INTERPRETING", "QUEUED"}:
         return "PROCESSING"
     if status == "REJECTED_QUALITY":
         return "INSUFFICIENT_IMAGE"
@@ -105,11 +105,8 @@ async def get_diary(
         for e in store.fecal_events.values():
             if e.user_id != user_id or (dog_id and e.dog_id != dog_id):
                 continue
-            title = (
-                f"Punteggio fecale stimato {e.fecal_score_estimate}"
-                if e.fecal_score_estimate
-                else "Controllo digestione"
-            )
+            # ADR-015: fecal score is internal; the diary title must not surface it.
+            title = "Controllo digestione"
             entries.append(
                 _TimelineEntry(
                     e,

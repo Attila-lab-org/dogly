@@ -90,6 +90,10 @@ export const DIGESTIVE_IN_PROGRESS_STATUSES = [
   'UPLOADING',
   'QUEUED',
   'PROCESSING',
+  // FAILED_RETRYABLE is in-progress from the client's perspective: the
+  // platform retries with backoff. The processing screen shows a retry UI
+  // for this status (mirrors the behavior contract).
+  'FAILED_RETRYABLE',
 ];
 
 export function isTerminalDigestiveStatus(status: string): boolean {
@@ -100,4 +104,8 @@ export function isFailedDigestiveStatus(status: string): boolean {
   return (
     status === 'FAILED' || status === 'FAILED_TERMINAL' || status === 'CANCELLED'
   );
+}
+
+export function isRetryableDigestiveStatus(status: string): boolean {
+  return status === 'FAILED_RETRYABLE';
 }

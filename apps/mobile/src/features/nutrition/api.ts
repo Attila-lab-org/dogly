@@ -135,7 +135,9 @@ export async function activateFeedingPeriod(options: {
   dogId: string;
   foodId: string;
 }): Promise<ApiFeedingPeriod> {
-  const key = `feed-${options.foodId}-${Date.now()}`;
+  // FIX 3.4: deterministic key per food so a duplicate activation tap is a
+  // server-side no-op instead of creating a second feeding period.
+  const key = `feed-${options.foodId}`;
   return api.post<ApiFeedingPeriod>(
     '/v1/nutrition/feeding-periods',
     {

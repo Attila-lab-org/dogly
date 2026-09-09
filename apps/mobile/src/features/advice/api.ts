@@ -47,7 +47,9 @@ export async function saveAdviceOutcome(
   // devono essere caricati in contesti senza runtime nativo (es. Jest).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { api } = require('../../lib/apiClient') as typeof import('../../lib/apiClient');
-  const key = `advice-outcome-${eventId}-${adviceCode}-${Date.now()}`;
+  // FIX 3.4: deterministic key so retries of the same (event, advice, outcome)
+  // are deduped server-side instead of creating a new record per tap.
+  const key = `advice-outcome-${eventId}-${adviceCode}-${outcome}`;
   const res = await api.post<AdviceOutcomeResponse>(
     `/v1/behavior/events/${eventId}/advice-outcome`,
     { advice_code: adviceCode, outcome },

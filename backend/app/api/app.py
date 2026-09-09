@@ -31,6 +31,8 @@ from app.api.routes import (
 )
 from app.contracts.errors import ApiError, ErrorBody, ErrorCode
 from app.observability import init_sentry
+from app.observability.request_context import get_request_id
+from app.observability.request_id_asgi import RequestIdMiddleware
 
 
 def _map_database_error(exc: BaseException) -> ApiError | None:
@@ -56,19 +58,28 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "http://localhost:8083",
-            "http://127.0.0.1:8083",
-            "http://localhost:8081",
-            "http://127.0.0.1:8081",
+            origin.strip()
+            for origin in resolved.settings.cors_origins.split(",")
+            if origin.strip()
         ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # FIX 1.7: pure ASGI middleware (not BaseHTTPMiddleware) so background
+    # asyncio.create_task dispatchers are not forced to complete before the
+    # response returns.
+    app.add_middleware(RequestIdMiddleware)
 
     @app.exception_handler(ApiError)
     async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
-        return JSONResponse(status_code=exc.http_status, content=exc.to_body().model_dump(mode="json"))
+        # Use the request id as correlation_id when available (FIX 1.7);
+        # fall back to the exception's own id for non-request contexts.
+        rid = get_request_id()
+        body = exc.to_body()
+        if rid:
+            body = body.model_copy(update={"correlation_id": rid})
+        return JSONResponse(status_code=exc.http_status, content=body.model_dump(mode="json"))
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -76,7 +87,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
             code=ErrorCode.VALIDATION_FAILED,
             message="Request failed validation.",
             retryable=False,
-            correlation_id=uuid.uuid4().hex,
+            correlation_id=get_request_id() or uuid.uuid4().hex,
         )
         return JSONResponse(status_code=422, content=body.model_dump(mode="json"))
 
@@ -107,7 +118,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
             code=ErrorCode.INTERNAL_ERROR,
             message="An internal error occurred.",
             retryable=False,
-            correlation_id=uuid.uuid4().hex,
+            correlation_id=get_request_id() or uuid.uuid4().hex,
         )
         return JSONResponse(status_code=500, content=body.model_dump(mode="json"))
 

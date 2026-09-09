@@ -84,8 +84,15 @@ def _finalize_cleanup_counts(counts: dict[str, Any]) -> dict[str, Any]:
     else:
         counts["status"] = "ok"
         counts["http_status"] = 200
+    # FIX 1.7: include the request/run id so a support engineer can grep the
+    # cron run by correlation id (propagated from the worker middleware).
+    from app.observability.request_context import get_request_id
+
+    run_id = get_request_id() or "-"
+    counts["run_id"] = run_id
     logger.info(
-        "retention cleanup finished processed=%s failed=%s skipped=%s quarantined=%s",
+        "retention cleanup finished run_id=%s processed=%s failed=%s skipped=%s quarantined=%s",
+        run_id,
         counts["processed"],
         counts["failed"],
         counts["skipped"],

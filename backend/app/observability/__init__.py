@@ -1,4 +1,4 @@
-"""Observability helpers: Sentry bootstrap + structured correlation IDs."""
+"""Observability helpers: Sentry bootstrap + request-id propagation."""
 
 from __future__ import annotations
 

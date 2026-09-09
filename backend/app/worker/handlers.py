@@ -819,6 +819,7 @@ async def refine_behavior_event_context(
             knowledge_context=knowledge_context,
             dog_context=dog_context,
             deterministic_safety_flags=deterministic_flags,
+            operation="reasoner.refine_context",
         )
     except TimeoutError as exc:
         raise ApiError(
@@ -1128,10 +1129,25 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
 
 
 async def process_media_retention_cleanup(state: AppState, *, event_id: str | None = None) -> dict:
-    """Periodic cleanup of expired temporary raw media (IDs-only task)."""
+    """Periodic cleanup of expired temporary raw media (IDs-only task).
+
+    Also purges stale idempotency rows older than 7 days (FIX 1.4): a crash
+    before record() leaves status_code=0 rows that the per-claim TTL reclaims
+    on the next retry, and this sweep drops the long-tail completed cache.
+    """
     del event_id  # unused; cleanup scans the store
     if state.engine is not None:
-        return await cleanup_expired_raw_media_db(state.engine, storage=state.storage)
+        result = await cleanup_expired_raw_media_db(state.engine, storage=state.storage)
+        try:
+            from app.domains import idempotency_db
+
+            result["purged_idempotency_rows"] = await idempotency_db.purge_expired(
+                state.engine
+            )
+        except Exception:
+            logger.warning("idempotency purge failed", exc_info=True)
+            result["purged_idempotency_rows"] = 0
+        return result
     return await cleanup_expired_raw_media(state.store, storage=state.storage)
 
 

@@ -36,11 +36,14 @@ def test_newest_first_pagination_continues_toward_older_items():
 
 def test_digestive_worker_statuses_are_mapped_to_mobile_contract():
     assert _public_digestive_status("OBSERVING") == "PROCESSING"
-    assert _public_digestive_status("FAILED_RETRYABLE") == "PROCESSING"
+    assert _public_digestive_status("QUEUED") == "PROCESSING"
+    # FAILED_RETRYABLE is returned raw so the mobile can show a retry UI
+    # (same contract as behavior, which returns raw statuses).
+    assert _public_digestive_status("FAILED_RETRYABLE") == "FAILED_RETRYABLE"
     assert _public_digestive_status("REJECTED_QUALITY") == "INSUFFICIENT_IMAGE"
     assert _public_digestive_status("COMPLETED") == "COMPLETED"
     assert _public_digestive_status("FAILED_TERMINAL") == "FAILED_TERMINAL"
-    assert _public_digestive_diary_status("FAILED_RETRYABLE") == "PROCESSING"
+    assert _public_digestive_diary_status("QUEUED") == "PROCESSING"
     assert (
         _public_digestive_diary_status("REJECTED_QUALITY")
         == "INSUFFICIENT_IMAGE"

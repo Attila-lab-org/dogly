@@ -14,6 +14,7 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   getDigestiveEvent,
   isFailedDigestiveStatus,
+  isRetryableDigestiveStatus,
   isTerminalDigestiveStatus,
 } from '@/features/digestive/api';
 import { isApiConfigured } from '@/features/auth/env';
@@ -110,7 +111,7 @@ export default function DigestiveProcessingScreen() {
         />
         <Button
           title="Torna alla Home"
-          onPress={() => router.replace('/(tabs)/rocky')}
+          onPress={() => router.replace('/(tabs)/home')}
         />
       </ScreenContainer>
     );
@@ -125,7 +126,7 @@ export default function DigestiveProcessingScreen() {
         />
         <Button
           title="Torna alla Home"
-          onPress={() => router.replace('/(tabs)/rocky')}
+          onPress={() => router.replace('/(tabs)/home')}
         />
       </ScreenContainer>
     );
@@ -154,7 +155,44 @@ export default function DigestiveProcessingScreen() {
           <Button
             title="Torna alla Home"
             variant="outline"
-            onPress={() => router.replace('/(tabs)/rocky')}
+            onPress={() => router.replace('/(tabs)/home')}
+          />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (
+    useApi &&
+    query.data &&
+    isRetryableDigestiveStatus(query.data.status)
+  ) {
+    // FAILED_RETRYABLE: the platform is retrying with backoff. Show a retry
+    // UI so the owner can re-submit immediately instead of waiting.
+    return (
+      <ScreenContainer>
+        <View style={styles.failedPage}>
+          <View style={styles.failedIcon}>
+            <Ionicons
+              name="refresh-outline"
+              size={36}
+              color={colors.warning}
+            />
+          </View>
+          <Text style={styles.failedTitle}>Riprovo tra un momento</Text>
+          <Text style={styles.failedText}>
+            L'analisi non è partita al primo tentativo, ma ci sto riprovando in
+            background. Non è colpa della foto: non viene conteggiata. Puoi
+            aspettare o riprovare adesso.
+          </Text>
+          <Button
+            title="Riprova adesso"
+            onPress={() => router.replace('/digestive/capture')}
+          />
+          <Button
+            title="Torna alla Home"
+            variant="outline"
+            onPress={() => router.replace('/(tabs)/home')}
           />
         </View>
       </ScreenContainer>
@@ -185,7 +223,7 @@ export default function DigestiveProcessingScreen() {
           <Button
             title="Torna alla Home"
             variant="outline"
-            onPress={() => router.replace('/(tabs)/rocky')}
+            onPress={() => router.replace('/(tabs)/home')}
           />
         </View>
       </ScreenContainer>

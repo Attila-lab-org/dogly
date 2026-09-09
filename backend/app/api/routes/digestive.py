@@ -52,9 +52,13 @@ async def _ensure_digestive_intelligence(
 
 
 def _public_digestive_status(status: str) -> str:
-    """Keep worker internals separate from the stable mobile status contract."""
+    """Keep worker internals separate from the stable mobile status contract.
 
-    if status in {"OBSERVING", "INTERPRETING", "FAILED_RETRYABLE"}:
+    OBSERVING/INTERPRETING/QUEUED are worker-internal in-progress states that
+    the mobile client should not distinguish; they collapse to PROCESSING.
+    FAILED_RETRYABLE is returned raw so the mobile can show a retry UI (same
+    contract as behavior, which returns raw statuses)."""
+    if status in {"OBSERVING", "INTERPRETING", "QUEUED"}:
         return "PROCESSING"
     if status == "REJECTED_QUALITY":
         return "INSUFFICIENT_IMAGE"

@@ -1,6 +1,11 @@
 import { getAccessToken } from './secureStore';
 import { createRequestTimeout } from './requestTimeout';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
+import { ApiError, type ApiErrorBody } from './apiError';
+
+// Re-export for callers that import ApiError from the api client module.
+export { ApiError } from './apiError';
+export type { ApiErrorBody } from './apiError';
 
 /**
  * API client per il backend pubblico (FastAPI deployato su Vercel,
@@ -41,23 +46,6 @@ export function getApiBaseUrl(): string {
   return url.replace(/\/$/, '');
 }
 
-export interface ApiErrorBody {
-  code?: string;
-  message?: string;
-}
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-
-  constructor(status: number, code: string, message: string) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-  }
-}
-
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -68,9 +56,24 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Interno: marca un retry dopo refresh token (evita loop). */
   _isRetry?: boolean;
+  /** Caller-provided request id; echoed back by the server for correlation. */
+  requestId?: string;
 }
 
 export const DEFAULT_API_TIMEOUT_MS = 15_000;
+
+/** Generate a client-side request id (FIX 1.7) for X-Request-ID. */
+function _newClientRequestId(): string {
+  // crypto.randomUUID is available on React Native / Expo (Hermes / JSC).
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // fall through to manual generation
+  }
+  return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
 
 async function buildHeaders(
   skipAuth: boolean,
@@ -97,13 +100,22 @@ export async function apiRequest<T>(
     skipAuth,
     headers,
     timeoutMs = DEFAULT_API_TIMEOUT_MS,
+    requestId,
   } = options;
   const timeout = createRequestTimeout(timeoutMs);
   let response: Response;
   try {
+    const mergedHeaders = await buildHeaders(skipAuth ?? false, headers);
+    // FIX 1.7: send X-Request-ID so the server can correlate logs; generate
+    // one when the caller doesn't supply one.
+    if (requestId) {
+      mergedHeaders['X-Request-ID'] = requestId;
+    } else if (!mergedHeaders['X-Request-ID']) {
+      mergedHeaders['X-Request-ID'] = _newClientRequestId();
+    }
     response = await fetch(`${getApiBaseUrl()}${path}`, {
       method,
-      headers: await buildHeaders(skipAuth ?? false, headers),
+      headers: mergedHeaders,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: timeout.controller.signal,
     });
@@ -113,6 +125,7 @@ export async function apiRequest<T>(
         0,
         'REQUEST_TIMEOUT',
         'La richiesta sta impiegando troppo tempo. Riprova.',
+        true, // retryable: a timeout is worth retrying
       );
     }
     if (error instanceof ApiError) throw error;
@@ -120,6 +133,7 @@ export async function apiRequest<T>(
       0,
       'NETWORK_ERROR',
       'Non riesco a raggiungere Dogly. Controlla la connessione e riprova.',
+      true, // retryable: a transient network failure is worth retrying
     );
   } finally {
     timeout.clear();
@@ -141,14 +155,28 @@ export async function apiRequest<T>(
 
     let code = 'UNKNOWN';
     let message = `Errore API (${response.status})`;
+    let retryable = false;
+    let correlationId: string | null = null;
+    // FIX: keep retryable and correlation_id from the server body so the UI
+    // can show retry CTAs and support can correlate by request id.
     try {
       const errBody = (await response.json()) as ApiErrorBody;
       if (errBody.code) code = errBody.code;
       if (errBody.message) message = errBody.message;
+      if (typeof errBody.retryable === 'boolean') retryable = errBody.retryable;
+      if (errBody.correlation_id) correlationId = errBody.correlation_id;
     } catch {
       // body non JSON: mantieni il fallback
     }
-    throw new ApiError(response.status, code, message);
+    // The response header is the canonical request id (FIX 1.7); prefer it
+    // over the body's correlation_id when both are present.
+    const headerRid = response.headers.get('X-Request-ID');
+    if (headerRid) correlationId = headerRid;
+    // 429 / 5xx are retryable by convention when the body doesn't say.
+    if (!retryable && (response.status === 429 || response.status >= 500)) {
+      retryable = true;
+    }
+    throw new ApiError(response.status, code, message, retryable, correlationId);
   }
 
   if (response.status === 204) return undefined as T;

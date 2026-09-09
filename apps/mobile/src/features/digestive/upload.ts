@@ -126,7 +126,33 @@ export async function processPendingDigestiveUpload(
       if (expired) {
         throw new Error('URL upload scaduto');
       }
-      await putSignedUpload(item.uploadUrl, item.localUri, contentType);
+      // FIX 1.5: a previous PUT may have succeeded but the response was lost.
+      // On retry, try the PUT; if it fails, attempt complete directly — the
+      // backend verifies object_exists and will proceed if bytes are there.
+      try {
+        await putSignedUpload(item.uploadUrl, item.localUri, contentType);
+      } catch (putError) {
+        const eventId = item.eventId;
+        if (!eventId) {
+          throw putError;
+        }
+        try {
+          const complete = await completeFecalCapture(
+            eventId,
+            `${item.clientRequestId}:complete`,
+          );
+          item = queue.transitionTo(id, 'uploaded', {
+            eventId: complete.event_id,
+          });
+          item = queue.transitionTo(id, 'processing', {
+            eventId: complete.event_id,
+          });
+          await deleteLocalIfExists(item.localUri);
+          return item.eventId;
+        } catch {
+          throw putError;
+        }
+      }
       item = queue.transitionTo(id, 'uploaded');
     }
 

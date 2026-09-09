@@ -6,8 +6,8 @@ Esecutore: Cursor (+ MCP Supabase). Validatore: Kimi (questo piano è il contrat
 ## Stato di verifica su produzione (2026-09-08)
 
 - 0 eventi zombie, 0 quote riservate appese, 0 claim idempotency incompleti → i difetti sono **strutturali**, non incidenti in corso.
-- **Retention cron rotto in produzione**: `/tasks/cron/retention` = 1 invocation in 7 giorni, **status 500** (2026-09-08 03:15 UTC). Root cause: DELETE su Supabase Storage → 400 → `raise_for_status()` abortisce l'intero run; gli altri oggetti non vengono toccati. `CRON_SECRET` presente e auth funzionante (care-reminders: 14× 200, anche orari → piano non Hobby-daily).
-- DB: **12 media in `media_due_for_deletion`** (3 video, 9 foto), 0 mai cancellati; il più vecchio scaduto il 2026-09-06 02:00 UTC (>68h). La promessa "raw video 24h dal completion" è **già rotta, in piccolo**.
+- **Retention cron**: FIX 1.6 (isolamento per-oggetto) e FIX 1.1 (sweep cron) sono **ora implementati nel codice** — `retention.py` isola i fallimenti per-oggetto con quarantena, `vercel.json` schedula `/tasks/cron/sweep-stuck` ogni 15 min. L'invocation 500 del 2026-09-08 03:15 UTC (DELETE → 400 → `raise_for_status()`) è risolto: un 400 singolo non abortisce più il run. Da verificare in produzione dopo il deploy che i media arretrati vengano smaltiti.
+- DB: **12 media in `media_due_for_deletion`** (3 video, 9 foto), 0 mai cancellati; il più vecchio scaduto il 2026-09-06 02:00 UTC (>68h). La promessa "raw video 24h dal completion" era **rotta, in piccolo** — il fix per-oggetto è in codice; da smaltire dopo il deploy.
 - Criterio severità concordato: *se succede, l'utente se ne accorge e si riprende da solo → può scendere; se resta bloccato/spennato/GDPR senza che nessuno lo sappia → non scende, anche se raro oggi.*
 
 ## Regole globali per l'esecutore
@@ -26,7 +26,9 @@ Chiude tutti i casi in cui l'utente resta bloccato, paga, o perde dati senza che
 
 ### FIX 1.1 — Sweep schedulato per eventi stuck + rimborso quota
 **Problema** (confermato su codice; kill preciso identificato: `already_running` → HTTP 200 → step marcato riuscito → nessun retry futuro): eventi in `QUEUED`/`OBSERVING`/`INTERPRETING`/`FAILED_RETRYABLE` dopo crash restano non-terminali per sempre; quota `RESERVED` mai rimborsata.
-Evidenza: `backend/app/worker/handlers.py:124-163` e `:426-427`; `backend/app/worker/sweep.py` (solo CLI); non schedulato in `vercel.json`.
+Evidenza: `backend/app/worker/handlers.py:124-163` e `:426-427`; `backend/app/worker/sweep.py`.
+
+> ✅ **Risolto nel codice**: il cron `/tasks/cron/sweep-stuck` è schedulato in `vercel.json` ogni 15 min (`*/15 * * * *`); l'endpoint worker `GET /tasks/cron/sweep-stuck` (auth `cron_auth`) esegue `sweep_stuck_events` con `LIMIT` e soglia età. Il sweep non è più solo CLI. Da verificare in produzione dopo il deploy.
 
 **Cambiamenti**:
 1. Endpoint worker `POST /tasks/sweep-stuck` (auth HMAC come gli altri cron, pattern di `backend/app/worker/main.py`) che esegue la logica di `sweep.py` con `LIMIT` parametrico (default 50) e soglia età (default 15 min).
@@ -47,6 +49,8 @@ Evidenza: `apps/mobile/app/behavior/processing/[eventId].tsx:62-69`; `apps/mobil
 ### FIX 1.3 — Push anche su fallimento terminale
 **Problema** (confermato): notifica enqueued solo su `COMPLETED` (`handlers.py:662-667`); su `FAILED_TERMINAL` silenzio totale.
 
+> ✅ **Risolto nel codice**: il push di fallimento terminale è implementato per entrambi i domini (behavior e digestive) nella pipeline esistente (`handlers.py`).
+
 **Cambiamenti**: push "non siamo riusciti ad analizzare il video, nessun addebito" su `_fail` terminale e nel path sweep (1.1), riusando la pipeline esistente (`handlers.py:1016-1033`). Italiano, tono brand.
 
 **Accettazione**: pytest su enqueue push per fallimento behavior e digestive.
@@ -55,6 +59,8 @@ Evidenza: `apps/mobile/app/behavior/processing/[eventId].tsx:62-69`; `apps/mobil
 **Problema** (confermato su codice; 0 casi aperti oggi): riga `status_code=0` → 429 per sempre su quella chiave; il clip diventa incompletable.
 Evidenza: `backend/app/domains/idempotency_db.py:22-66`.
 
+> ✅ **Risolto nel codice**: `claim()` reclama atomicamente le righe `status_code=0` più vecchie di 10 min (TTL) prima dell'insert; il cron retention purge le righe >7 giorni (`purge_expired`). Test: `tests/test_idempotency.py::test_stale_inflight_idempotency_key_is_reclaimed`.
+
 **Cambiamenti**: righe `status_code=0` >10 min trattate come scadute (ri-claim atomico o delete); cleanup righe >7 giorni nel cron retention.
 
 **Accettazione**: pytest: chiave claimed-mai-completata invecchiata → retry riparte invece di 429.
@@ -62,6 +68,8 @@ Evidenza: `backend/app/domains/idempotency_db.py:22-66`.
 ### FIX 1.5 — Re-upload su oggetto esistente
 **Problema** (confermato): PUT riuscito ma risposta persa → retry ri-PUTta sullo stesso path → errore a ogni tentativo → `terminal_error`; l'utente deve ri-registrare (solo se ha quota libera).
 Evidenza: `apps/mobile/src/lib/signedUpload.ts:14-74`; `backend/app/providers/supabase_storage.py:37-67`.
+
+> ✅ **Risolto nel codice** (opzione A): su retry di un item in `uploading`, se il PUT fallisce il mobile tenta `complete_capture` direttamente; il backend verifica `object_exists` + match dei byte e procede se l'oggetto è già lì. Entrambi i domini (behavior e digestive) implementano il fallback in `upload.ts`.
 
 **Cambiamenti** (preferita la A):
 - A. Retry di item già in `uploading`: verifica `object_exists` + match dei byte dichiarati → salta il PUT, vai diretto a `complete_capture`.
@@ -74,6 +82,8 @@ Evidenza: `apps/mobile/src/lib/signedUpload.ts:14-74`; `backend/app/providers/su
 **Problema** (confermato in produzione 2026-09-08): un 400 sul DELETE di un oggetto → `raise_for_status()` abortisce il run intero; 12 media scaduti mai cancellati, il più vecchio da 68h. Promessa "raw 24h" già violata in piccolo.
 Evidenza: `backend/app/domains/retention.py:186-219`; invocation 500 del 2026-09-08 03:15 UTC.
 
+> ✅ **Risolto nel codice**: `_purge_due_media_rows` isola ogni DELETE in try/except; un fallimento viene loggato (con correlation-id, vedi 1.7) e registrato in `internal.media_retention_quarantine`; il run continua sugli altri oggetti. Status code 500 solo se **tutti** gli oggetti falliscono. Da verificare in produzione dopo il deploy che i 12 media arretrati vengano smaltiti.
+
 **Cambiamenti**:
 1. Try/except **per singolo oggetto**: un fallimento viene loggato (con correlation-id, vedi 1.7) e marcato, il run continua sugli altri.
 2. Contatore di fallimenti consecutivi per oggetto: oltre N tentativi (es. 3 run), l'oggetto va in una lista "quarantena" visibile (tabella o log strutturato) invece di ri-fallire in silenzio a ogni run.
@@ -85,6 +95,8 @@ Evidenza: `backend/app/domains/retention.py:186-219`; invocation 500 del 2026-09
 ### FIX 1.7 — Request-id / correlation-id end-to-end (ex 4.13)
 **Problema** (confermato e già morso): il 500 del retention cron è rimasto cieco — nessun id cercabile nei log. `correlation_id` è generato ex-novo a ogni errore, mai propagato né loggato: decorativo.
 Evidenza: `backend/app/api/app.py:79,110`; `backend/app/contracts/errors.py:94`; nessun middleware request-id; payload workflow = solo `event_id`.
+
+> ✅ **Risolto nel codice**: middleware ASGI puro (`RequestIdMiddleware`) propaga `X-Request-ID` via contextvar su public e worker app; il `correlation_id` dei corpi di errore = request-id della request; il cron retention logga `run_id`. Test: `tests/test_request_id.py`.
 
 **Cambiamenti**:
 1. Middleware che genera/propaga `X-Request-ID` (accetta quello in ingresso se presente) e lo rende disponibile a route, handler e logger (contextvar).
@@ -128,9 +140,13 @@ Lock per ruolo (non globale, correzione accettata) + SUM senza indice su `(opera
 Cambiamenti: migrazione con indice `(operation, created_at)`; gate e registrazione allineati sui nomi operation (prefisso per ruolo o normalizzazione); purge >90 giorni nel cron retention (verificare requisiti audit in `docs/SECURITY.md`; se serve storia, tabella `_archive`).
 **Accettazione**: MCP: indice presente, `EXPLAIN` della SUM lo usa; pytest sul gate che include `refine_context`.
 
+> ✅ **Parzialmente risolto**: il budget gate ora copre `reasoner.refine_context` — `interpret()` accetta un parametro `operation` e `refine_behavior_event_context` passa `operation="reasoner.refine_context"`. Test: `tests/test_budget_gate.py::test_refine_context_gates_against_refine_operation`. Restano aperti: indice `(operation, created_at)` e purge >90 giorni (richiedono migrazione SQL).
+
 ### FIX 2.3 — Paginazione SQL reale nel Diario (ex 3.2)
 `diary_db.py:66-123` carica tutta la storia e pagina in Python; idem `digestive_summary` (`digestive_db.py:781-796`). Cursor-based in SQL: `(occurred_at, id) < :cursor` per ramo + `LIMIT` per ramo; ricerca testuale con LIMIT.
 **Accettazione**: pytest 2 pagine senza duplicati/buchi; `EXPLAIN` usa `behavior_events_diary_cursor_idx`; shape risposta immutata.
+
+> ✅ **Risolto nel codice**: `diary_db.list_diary_page` spinge la paginazione in SQL (UNION ALL + `(created_at, id) < cursor` + `LIMIT`); la vecchia logica "carica tutto e pagina in Python" è rimossa. Shape risposta immutata. Restano aperti: test SQL su DB reale (richiede `DATABASE_URL` in CI) e `digestive_summary` in `digestive_db.py`.
 
 ### FIX 2.4 — Una connessione DB per request (ex 3.3)
 Oggi ~4 acquisizioni sequenziali per poll (`deps.py:110-114`, `routes/behavior.py:162-169`). Dependency FastAPI con connessione per request passata ai repository; attenzione alle semantics di commit separate (claim/enqueue). Incrementale: prima le route di polling.
@@ -161,12 +177,12 @@ Resta da validare: `APP_ENV` esplicito quando `VERCEL=1` (rifiuta boot se assent
 | 3.1 | Digestive: errori transitori OpenAI → `FAILED_RETRYABLE` come behavior | `handlers.py:917-935` | Utente può ritentare da solo |
 | 3.2 | Verificare risultato `quota.commit()`; se `NO_OP_*` → non marcare committed, allertare | `handlers.py:644-646` | Soldi, basso rischio (RPC idempotente) |
 | 3.3 | Webhook RevenueCat: non sovrascrivere `reset_at` con `period_end` | `billing_db.py:193-211` | Test a cavallo del mese |
-| 3.4 | Idempotency key deterministiche su advice-outcome/feedback (no `Date.now()`) | `advice/api.ts:50`; `behavior/api.ts:152` | |
+| 3.4 | Idempotency key deterministiche su advice-outcome/feedback (no `Date.now()`) | `advice/api.ts:50`; `behavior/api.ts:152` | ✅ Risolto: chiavi deterministiche per advice-outcome, feedback, feeding-period | |
 | 3.5 | Validazione server reale durata/size media (probe, non claim client) | `behavior_db.py:72-75` | |
 | 3.6 | Reminder: mark prima del send (o send idempotente su reminder-id) | `handlers.py:1076-1090` | Utente se ne accorge |
 | 3.7 | Rate limiter: cleanup ogni N hit o nel cron | `rate_limit_db.py:51-56` | |
 | 3.8 | Push Expo idempotenti; enqueue fallita → retry, non eccezione ingoiata | `handlers.py:662-667`; `expo_push.py` | |
-| 3.9 | Rimuovere fallback inventati nel mapping risultato | `apps/mobile/src/features/behavior/map.ts:33-66` | Errore onesto, non versioni fasulle |
+| 3.9 | Rimuovere fallback inventati nel mapping risultato | `apps/mobile/src/features/behavior/map.ts:33-66` | ✅ Risolto: summary/confidence/policy/taxonomy null quando l'API omette (behavior + digestive) |
 
 ---
 

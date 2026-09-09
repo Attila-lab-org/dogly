@@ -98,3 +98,62 @@ async def test_video_duration_limits(client: httpx.AsyncClient, auth_headers):
     too_long = _init_payload(dog_id, "crid-00000004") | {"duration_ms": 25_000}
     resp = await client.post("/v1/behavior/captures/init", json=too_long, headers=auth_headers)
     assert resp.json()["code"] == "VIDEO_TOO_LONG"
+
+
+async def test_stale_inflight_idempotency_key_is_reclaimed(client, auth_headers, state):
+    """FIX 1.4: an in-flight claim (status_code=0) that never reached record()
+    is reclaimed after the TTL instead of 429ing the key forever."""
+    from datetime import timedelta
+
+    import jwt as pyjwt
+
+    from app.domains.models import IdempotencyRec
+    from app.domains.repository import now_utc
+
+    dog_id = await create_dog(client, auth_headers)
+    token = auth_headers["Authorization"].split(" ", 1)[1]
+    sub = pyjwt.decode(token, options={"verify_signature": False})["sub"]
+    real_scope = f"{sub}:/v1/behavior/captures/init:idem-stale"
+    state.store.idempotency[real_scope] = IdempotencyRec(
+        scope=real_scope,
+        status_code=0,
+        response_body={},
+        created_at=now_utc() - timedelta(minutes=11),
+    )
+    # A fresh retry with the same key must now succeed (reclaim), not 429.
+    r = await client.post(
+        "/v1/behavior/captures/init",
+        json=_init_payload(dog_id, "crid-stale-0001"),
+        headers={**auth_headers, "X-Idempotency-Key": "idem-stale"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["capture_id"]
+
+
+async def test_fresh_inflight_idempotency_key_still_blocks(client, auth_headers, state):
+    """A recent in-flight claim (within the TTL) still 429s — the TTL only
+    reclaims stale claims, not live ones."""
+    from datetime import timedelta
+
+    import jwt as pyjwt
+
+    from app.domains.models import IdempotencyRec
+    from app.domains.repository import now_utc
+
+    dog_id = await create_dog(client, auth_headers)
+    token = auth_headers["Authorization"].split(" ", 1)[1]
+    sub = pyjwt.decode(token, options={"verify_signature": False})["sub"]
+    real_scope = f"{sub}:/v1/behavior/captures/init:idem-fresh"
+    state.store.idempotency[real_scope] = IdempotencyRec(
+        scope=real_scope,
+        status_code=0,
+        response_body={},
+        created_at=now_utc() - timedelta(seconds=30),
+    )
+    r = await client.post(
+        "/v1/behavior/captures/init",
+        json=_init_payload(dog_id, "crid-fresh-0001"),
+        headers={**auth_headers, "X-Idempotency-Key": "idem-fresh"},
+    )
+    assert r.status_code == 429
+    assert r.json()["code"] == "RATE_LIMITED"

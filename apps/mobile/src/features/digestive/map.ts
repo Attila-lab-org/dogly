@@ -136,7 +136,7 @@ export function mapApiDigestiveEventToResult(
     bloodCandidate: mapCandidate(event.fresh_blood_candidate),
     melenaCandidate: mapCandidate(event.melena_candidate),
     foreignMaterialCandidate: mapCandidate(event.foreign_material_candidate),
-    confidenceBand: event.confidence_band ?? 'LOW',
+    confidenceBand: event.confidence_band ?? null,
     safetyFlags: mapSafetyFlags(event.safety_flags),
     activeFoodName: event.active_food_name,
     baselineComparison: mapBaselineComparison(event.baseline_comparison),

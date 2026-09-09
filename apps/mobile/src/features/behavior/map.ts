@@ -1,5 +1,4 @@
 import {
-  BEHAVIOR_INTENT_LABELS,
   type BehaviorEventResult,
   type BehaviorIntent,
   type EvidenceItem,
@@ -30,28 +29,20 @@ function mapEvidence(items: ApiEvidenceItem[]): EvidenceItem[] {
   }));
 }
 
-function fallbackSummary(
-  intent: BehaviorIntent | null,
-  summary: string | null,
-): string {
-  if (summary) return summary;
-  if (!intent) {
-    return 'Non ci sono abbastanza segnali per una lettura affidabile.';
-  }
-  return BEHAVIOR_INTENT_LABELS[intent];
-}
-
 export function mapApiEventToResult(
   event: ApiBehaviorEvent,
 ): BehaviorEventResult {
   const intent = (event.primary_intent as BehaviorIntent | null) ?? null;
+  // FIX 3.9: do not invent summary, confidence, or policy/taxonomy versions
+  // when the API omits them. The UI renders null/empty gracefully; a
+  // fabricated value masks a real backend omission.
   return {
     eventId: event.id,
     dogId: event.dog_id,
     status: event.status,
     primary_intent: intent,
-    confidence_band: event.confidence_band ?? 'LOW',
-    consumer_summary: fallbackSummary(intent, event.summary),
+    confidence_band: event.confidence_band ?? null,
+    consumer_summary: event.summary ?? null,
     evidence: mapEvidence(event.evidence ?? []),
     alternatives: (event.alternatives ?? []).map((alt) => ({
       intent: alt.intent as BehaviorIntent,
@@ -62,8 +53,8 @@ export function mapApiEventToResult(
     needs_context: event.needs_context,
     context_question: event.context_question,
     schema_version: event.schema_version,
-    policy_version: event.policy_version ?? 'canine-interpretation/v0',
-    taxonomy_version: event.taxonomy_version ?? 'intent-taxonomy/v0',
+    policy_version: event.policy_version ?? null,
+    taxonomy_version: event.taxonomy_version ?? null,
     created_at: event.created_at,
     completed_at: event.completed_at,
     consumer_headline: event.consumer_headline ?? null,

@@ -22,9 +22,9 @@
       "env": {
         "APP_ENV": "staging",
         "EXPO_PUBLIC_APP_ENV": "staging",
-        "EXPO_PUBLIC_API_URL": "https://dogly-eight.vercel.app",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://zcnzkpxgpbdspfmselwz.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_PiOO12UvFge_Cpex5jrXMQ_BqcfAGuG"
+        "EXPO_PUBLIC_API_URL": "https://dogly-staging.vercel.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://dogly-staging.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_STAGING_REPLACE_ME"
       }
     },
     "preview": {

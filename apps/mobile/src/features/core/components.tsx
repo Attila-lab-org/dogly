@@ -529,8 +529,9 @@ export function BehaviorResultView({
 
 /* ------------------------------------------------------------------ */
 
-function personalizeCopy(copy: string, dogName: string): string {
-  return copy.replace(/Rocky/g, dogName);
+function personalizeCopy(copy: string | null | undefined, dogName: string): string {
+  // FIX 3.9: tolerate a null summary (API omitted it) without inventing one.
+  return (copy ?? '').replace(/Rocky/g, dogName);
 }
 
 const styles = StyleSheet.create({

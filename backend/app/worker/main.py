@@ -103,6 +103,11 @@ def create_worker_app(state: AppState | None = None) -> FastAPI:
 
         return JSONResponse(status_code=exc.http_status, content=exc.to_body().model_dump(mode="json"))
 
+    # FIX 1.7: pure ASGI middleware for X-Request-ID on the worker surface.
+    from app.observability.request_id_asgi import RequestIdMiddleware
+
+    app.add_middleware(RequestIdMiddleware)
+
     @app.post("/tasks/run", dependencies=[Depends(worker_auth)])
     async def run_task(envelope: TaskEnvelope, request: Request) -> dict:
         st: AppState = request.app.state.cbi
