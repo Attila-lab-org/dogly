@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { ApiError } from './apiClient';
+import { ApiError } from './apiError';
 
 /**
  * TanStack Query possiede la cache server/API (Spec V1 sez. 5.3).

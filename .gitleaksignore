@@ -1,7 +1,11 @@
 # Supabase publishable keys are intentionally public client identifiers.
-# Ignore only these two historical findings; service-role keys remain blocked.
+# Ignore known public client identifiers; service-role keys remain blocked.
 fa78e3a1cf39b7569bc7b89b866de0a02a8affa2:apps/mobile/eas.json:generic-api-key:26
 fa78e3a1cf39b7569bc7b89b866de0a02a8affa2:apps/mobile/eas.json:generic-api-key:44
 
 # AsyncStorage namespace, not a credential.
 7d3deb05078f74a95ba3d31637499bccb31ab70c:apps/mobile/src/features/privacy/consents.ts:generic-api-key:14
+bed82f747942dad3216a021835614f64dba165fc:apps/mobile-web/src/features/privacy/consents.ts:generic-api-key:12
+
+# Web client publishable key is the same public identifier as eas.json.
+eed8e3ca66ccbed92e9ce1a9be1653a57300c39d:apps/mobile-web/vercel.json:generic-api-key:9

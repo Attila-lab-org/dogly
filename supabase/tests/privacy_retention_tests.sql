@@ -53,6 +53,15 @@ select pg_temp.assert(
 -- =========================================================================
 -- 2. Explicit "keep clip" consent wins over TTL (Spec §23.1/§23.2)
 -- =========================================================================
+insert into public.user_consents (
+  user_id, consent_type, policy_version, granted, granted_at)
+values (
+  '11111111-1111-1111-1111-111111111111',
+  'MEDIA_RETENTION',
+  'privacy-beta/v1',
+  true,
+  now());
+
 select internal.mark_media_kept('behavior_captures',
   'cccc3333-3333-3333-3333-333333333333', false);
 
