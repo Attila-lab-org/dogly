@@ -16,6 +16,7 @@ import { processPendingDigestiveUpload } from '../digestive/upload';
 import { persistTodayVsUsual } from '../checkin/sync';
 import { getCheckInSnapshot } from '../checkin/store';
 import { putSignedUpload } from '../../lib/signedUpload';
+import { forgetWebClipBlob, peekWebClipBlob } from '../../lib/webClipBlob';
 import {
   activeUploadForUri,
   discardUploadsForUri,
@@ -44,6 +45,8 @@ function newId(prefix: string): string {
 }
 
 async function fileBytes(localUri: string): Promise<number> {
+  const held = peekWebClipBlob(localUri);
+  if (held) return Math.max(1, held.size);
   if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
     const response = await fetch(localUri);
     const blob = await response.blob();
@@ -63,6 +66,11 @@ async function fileBytes(localUri: string): Promise<number> {
 }
 
 async function detectVideoContentType(localUri: string): Promise<VideoContentType> {
+  const held = peekWebClipBlob(localUri);
+  if (held) {
+    const fromHeld = asVideoContentType(held.type);
+    if (fromHeld) return fromHeld;
+  }
   if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
     const response = await fetch(localUri);
     const fromBlob = asVideoContentType((await response.blob()).type);
@@ -72,6 +80,7 @@ async function detectVideoContentType(localUri: string): Promise<VideoContentTyp
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {
+  forgetWebClipBlob(uri);
   if (uri.startsWith('blob:')) {
     URL.revokeObjectURL(uri);
     return;

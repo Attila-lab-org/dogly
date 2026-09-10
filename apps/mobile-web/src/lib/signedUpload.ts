@@ -8,6 +8,7 @@ import {
 } from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { createRequestTimeout } from './requestTimeout';
+import { peekWebClipBlob } from './webClipBlob';
 
 export const SIGNED_UPLOAD_TIMEOUT_MS = 60_000;
 
@@ -20,10 +21,14 @@ export async function putSignedUpload(
   if (Platform.OS === 'web') {
     const timeout = createRequestTimeout(timeoutMs);
     try {
-      const fileResponse = await fetch(localUri, {
-        signal: timeout.controller.signal,
-      });
-      const body = await fileResponse.blob();
+      const held = peekWebClipBlob(localUri);
+      const body =
+        held ??
+        (await (
+          await fetch(localUri, {
+            signal: timeout.controller.signal,
+          })
+        ).blob());
       const response = await fetch(uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': contentType },

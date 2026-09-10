@@ -5,6 +5,7 @@
  * Non cloniamo e non stoppiamo i track della preview: fermarli spegne
  * la fotocamera, e su Safari i track clonati spesso non producono dati.
  */
+import { rememberWebClipBlob } from '../../lib/webClipBlob';
 
 export type WebVideoRecording = {
   finished: Promise<string | null>;
@@ -169,7 +170,13 @@ export async function startWebVideoRecording(
 
   const settleFromChunks = () => {
     const blob = blobFromChunks();
-    settle(blob ? URL.createObjectURL(blob) : null);
+    if (!blob) {
+      settle(null);
+      return;
+    }
+    const uri = URL.createObjectURL(blob);
+    rememberWebClipBlob(uri, blob);
+    settle(uri);
   };
 
   recorder.onstop = settleFromChunks;

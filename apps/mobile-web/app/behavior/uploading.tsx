@@ -85,7 +85,7 @@ export default function BehaviorUploadingScreen() {
 
   useEffect(() => {
     if (startedRef.current) return;
-    if (!usingMockGate && sessionLoading) return;
+    if (!usingMockGate && (sessionLoading || !userId)) return;
 
     const pending = peekPendingBehaviorUpload();
     if (!pending) {
@@ -108,7 +108,8 @@ export default function BehaviorUploadingScreen() {
         return;
       }
       if (!userId || !pending.dogId) {
-        throw new Error('Sessione non pronta');
+        startedRef.current = false;
+        return;
       }
       const { eventId } = await enqueueAndUploadBehaviorClip({
         userId,
@@ -122,6 +123,7 @@ export default function BehaviorUploadingScreen() {
       clearPendingBehaviorUpload();
       router.replace(`/behavior/processing/${eventId}`);
     } catch (err) {
+      console.error('Behavior upload failed', err);
       if (isQuotaExhaustedError(err)) {
         if (mountedRef.current) router.replace('/paywall');
         return;
@@ -298,7 +300,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.md,
     alignSelf: 'stretch',
-    ...(Platform.OS === 'web' ? { display: 'block' as const } : {}),
   },
   detail: {
     maxWidth: 320,
@@ -307,7 +308,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    ...(Platform.OS === 'web' ? { display: 'block' as const } : {}),
+    alignSelf: 'stretch',
   },
   waitRow: {
     marginTop: spacing.xl,
