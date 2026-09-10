@@ -113,61 +113,70 @@ export async function processPendingUpload(id: string): Promise<string | null> {
   }
 }
 
+async function initializeCapture(id: string): Promise<string> {
+  const queue = getUploadQueue();
+  let item = queue.get(id);
+  if (!item) throw new Error('Upload non trovato');
+  if (item.state === 'completed' || item.state === 'terminal_error') {
+    if (!item.eventId) throw new Error('Upload senza eventId');
+    return item.eventId;
+  }
+
+  if (item.state === 'recoverable_error') {
+    item = queue.transitionTo(id, 'upload_initializing');
+  } else if (item.state === 'local_pending') {
+    item = queue.transitionTo(id, 'upload_initializing');
+  }
+
+  item = queue.get(id)!;
+  const durationMs = item.durationMs ?? 8_000;
+  const hasAudio = item.hasAudio ?? true;
+  const contentType = (item.contentType ?? 'video/mp4') as VideoContentType;
+  const checkIn = getCheckInSnapshot().analysisContext;
+  if (checkIn?.dogId === item.dogId) {
+    void persistTodayVsUsual(item.dogId, checkIn, false).catch(() => {
+      // Offline: the local banner remains; the next upload retries.
+    });
+  }
+
+  if (
+    item.state === 'upload_initializing' ||
+    (item.state === 'uploading' && !item.uploadUrl)
+  ) {
+    if (item.state !== 'upload_initializing') {
+      item = queue.transitionTo(id, 'upload_initializing');
+    }
+    const bytes = await fileBytes(item.localUri);
+    const init = await initBehaviorCapture({
+      dog_id: item.dogId,
+      client_request_id: item.clientRequestId,
+      duration_ms: Math.max(1000, durationMs),
+      has_audio: hasAudio,
+      bytes,
+      content_type: contentType,
+      context_bucket: deriveContextBucketHint(),
+    });
+    item = queue.transitionTo(id, 'uploading', {
+      eventId: init.event_id,
+      uploadUrl: init.upload.url,
+      uploadUrlExpiresAt: init.upload.expires_at,
+      captureId: init.capture_id,
+    });
+  }
+
+  const eventId = queue.get(id)?.eventId;
+  if (!eventId) throw new Error('Init upload senza eventId');
+  return eventId;
+}
+
 async function processPendingUploadInner(id: string): Promise<string | null> {
   if (draining.has(id)) return null;
   draining.add(id);
   const queue = getUploadQueue();
 
   try {
-    let item = queue.get(id);
-    if (!item) return null;
-    if (item.state === 'completed' || item.state === 'terminal_error') {
-      return item.eventId;
-    }
-
-    if (item.state === 'recoverable_error') {
-      item = queue.transitionTo(id, 'upload_initializing');
-    } else if (item.state === 'local_pending') {
-      item = queue.transitionTo(id, 'upload_initializing');
-    }
-
-    item = queue.get(id)!;
-    const durationMs = item.durationMs ?? 8_000;
-    const hasAudio = item.hasAudio ?? true;
-    const contentType = (item.contentType ?? 'video/mp4') as VideoContentType;
-    const checkIn = getCheckInSnapshot().analysisContext;
-    if (checkIn?.dogId === item.dogId) {
-      void persistTodayVsUsual(item.dogId, checkIn, false).catch(() => {
-        // Offline: the local banner remains; the next upload retries.
-      });
-    }
-
-    if (
-      item.state === 'upload_initializing' ||
-      (item.state === 'uploading' && !item.uploadUrl)
-    ) {
-      if (item.state !== 'upload_initializing') {
-        item = queue.transitionTo(id, 'upload_initializing');
-      }
-      const bytes = await fileBytes(item.localUri);
-      const init = await initBehaviorCapture({
-        dog_id: item.dogId,
-        client_request_id: item.clientRequestId,
-        duration_ms: Math.max(1000, durationMs),
-        has_audio: hasAudio,
-        bytes,
-        content_type: contentType,
-        context_bucket: deriveContextBucketHint(),
-      });
-      item = queue.transitionTo(id, 'uploading', {
-        eventId: init.event_id,
-        uploadUrl: init.upload.url,
-        uploadUrlExpiresAt: init.upload.expires_at,
-        captureId: init.capture_id,
-      });
-    }
-
-    item = queue.get(id)!;
+    await initializeCapture(id);
+    let item = queue.get(id)!;
 
     if (item.state === 'uploading' && item.uploadUrl) {
       const expired =
@@ -176,17 +185,12 @@ async function processPendingUploadInner(id: string): Promise<string | null> {
       if (expired) {
         throw new Error('URL upload scaduto');
       }
-      // FIX 1.5: a previous PUT may have succeeded but the response was lost
-      // (network drop mid-flight). On retry, re-PUTting the same path can
-      // fail if the object already exists. Try the PUT; if it fails, attempt
-      // complete_capture directly — the backend verifies object_exists and
-      // will proceed if the bytes are already there.
+      const contentType = (item.contentType ?? 'video/mp4') as VideoContentType;
       try {
         await putSignedUpload(item.uploadUrl, item.localUri, contentType);
       } catch (putError) {
         let captureId = item.captureId;
         if (!captureId) {
-          // Should not happen in uploading state, but guard anyway.
           throw putError;
         }
         try {
@@ -194,7 +198,6 @@ async function processPendingUploadInner(id: string): Promise<string | null> {
             captureId,
             `${item.clientRequestId}:complete`,
           );
-          // Object already existed: backend verified it. Skip to processing.
           item = queue.transitionTo(id, 'uploaded', {
             eventId: complete.event_id,
           });
@@ -204,8 +207,6 @@ async function processPendingUploadInner(id: string): Promise<string | null> {
           await deleteLocalIfExists(item.localUri);
           return item.eventId;
         } catch {
-          // complete failed too: the object really isn't there. Re-throw the
-          // original PUT error so the queue records a recoverable failure.
           throw putError;
         }
       }
@@ -218,6 +219,9 @@ async function processPendingUploadInner(id: string): Promise<string | null> {
       let captureId = item.captureId;
       if (!captureId) {
         const bytes = await fileBytes(item.localUri);
+        const durationMs = item.durationMs ?? 8_000;
+        const hasAudio = item.hasAudio ?? true;
+        const contentType = (item.contentType ?? 'video/mp4') as VideoContentType;
         const init = await initBehaviorCapture({
           dog_id: item.dogId,
           client_request_id: item.clientRequestId,
@@ -272,6 +276,50 @@ export type EnqueueCaptureInput = {
   hasAudio: boolean;
   contentType?: string;
 };
+
+/**
+ * Crea la riga, chiede l'URL firmato e restituisce eventId SUBITO.
+ * Il PUT verso Storage continua in background: la pagina di invio
+ * non deve restare ferma per minuti.
+ */
+export async function enqueueAndInitBehaviorClip(
+  input: EnqueueCaptureInput,
+): Promise<{ uploadId: string; eventId: string }> {
+  const queue = getUploadQueue();
+  const existing = activeUploadForUri(
+    queue,
+    input.userId,
+    'BEHAVIOR',
+    input.localUri,
+  );
+  if (existing) {
+    const eventId =
+      existing.eventId ?? (await initializeCapture(existing.id));
+    void processPendingUpload(existing.id).catch(() => undefined);
+    return { uploadId: existing.id, eventId };
+  }
+
+  const uploadId = newId('upl');
+  const clientRequestId = newId('crid');
+  const contentType =
+    asVideoContentType(input.contentType) ??
+    (await detectVideoContentType(input.localUri));
+  queue.enqueue({
+    id: uploadId,
+    userId: input.userId,
+    dogId: input.dogId,
+    domain: 'BEHAVIOR',
+    localUri: input.localUri,
+    clientRequestId,
+    durationMs: input.durationMs,
+    hasAudio: input.hasAudio,
+    contentType,
+  });
+
+  const eventId = await initializeCapture(uploadId);
+  void processPendingUpload(uploadId).catch(() => undefined);
+  return { uploadId, eventId };
+}
 
 /**
  * Enqueue + process. Ritorna eventId quando l'upload è completo e verificato.

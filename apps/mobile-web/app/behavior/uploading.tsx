@@ -20,7 +20,7 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
 import {
   discardPendingBehaviorClip,
-  enqueueAndUploadBehaviorClip,
+  enqueueAndInitBehaviorClip,
 } from '@/features/behavior/upload';
 import {
   clearPendingBehaviorUpload,
@@ -111,7 +111,7 @@ export default function BehaviorUploadingScreen() {
         startedRef.current = false;
         return;
       }
-      const { eventId } = await enqueueAndUploadBehaviorClip({
+      const { eventId } = await enqueueAndInitBehaviorClip({
         userId,
         dogId: pending.dogId,
         localUri: pending.localUri,
