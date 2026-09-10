@@ -34,11 +34,8 @@ import {
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
 import { useSession } from '@/features/auth/SessionProvider';
-import {
-  discardPendingBehaviorClip,
-  enqueueAndUploadBehaviorClip,
-} from '@/features/behavior/upload';
-import { isQuotaExhaustedError } from '@/features/behavior/api';
+import { discardPendingBehaviorClip } from '@/features/behavior/upload';
+import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
 import {
   startWebVideoRecording,
   type WebVideoRecording,
@@ -52,7 +49,7 @@ const RING_GRADIENT = ['#0050D8', '#01AEC5'] as const;
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { loading: sessionLoading, userId, usingMockGate } = useSession();
+  const { userId } = useSession();
   const { analysisContext } = useCheckIn();
   const params = useLocalSearchParams<{ from?: string }>();
   const fromCheckIn =
@@ -64,7 +61,7 @@ export default function BehaviorCaptureScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [canStop, setCanStop] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [handedOff, setHandedOff] = useState(false);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [torchOn, setTorchOn] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -73,7 +70,6 @@ export default function BehaviorCaptureScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
   const pendingUriRef = useRef<string | null>(null);
-  const uploadStartedRef = useRef(false);
   const mountedRef = useRef(true);
   const permissionReadyRef = useRef(false);
   const recordingPromiseRef = useRef<Promise<{ uri?: string } | undefined> | null>(
@@ -224,17 +220,23 @@ export default function BehaviorCaptureScreen() {
       dispatch({ type: 'STOP' });
       return;
     }
-    pendingUriRef.current = uri;
-    uploadStartedRef.current = false;
-    dispatch({ type: 'RESET' });
-    dispatch({ type: 'START' });
-    for (let i = 0; i < Math.min(seconds, CAPTURE_MAX_SECONDS); i += 1) {
-      dispatch({ type: 'TICK' });
-    }
-    if (seconds < CAPTURE_MAX_SECONDS) {
-      dispatch({ type: 'STOP' });
-    }
-  }, []);
+    setHandedOff(true);
+    setPendingBehaviorUpload({
+      localUri: uri,
+      durationMs: Math.max(
+        CAPTURE_MIN_SECONDS * 1000,
+        Math.min(CAPTURE_MAX_SECONDS * 1000, seconds * 1000),
+      ),
+      hasAudio:
+        Platform.OS === 'web'
+          ? webHasAudioRef.current
+          : micGranted && !state.audioDegraded,
+      contentType:
+        Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
+      dogId: dog.id,
+    });
+    router.replace('/behavior/uploading');
+  }, [dog.id, micGranted, router, state.audioDegraded]);
 
   const startRecording = useCallback(async () => {
     if (recordingPromiseRef.current || startLockRef.current) return;
@@ -246,7 +248,6 @@ export default function BehaviorCaptureScreen() {
 
     setUploadError(null);
     pendingUriRef.current = null;
-    uploadStartedRef.current = false;
     canStopRef.current = false;
     setCanStop(false);
     elapsedRef.current = 0;
@@ -350,9 +351,8 @@ export default function BehaviorCaptureScreen() {
   const retake = useCallback(() => {
     const discardedUri = pendingUriRef.current;
     pendingUriRef.current = null;
-    uploadStartedRef.current = false;
     setUploadError(null);
-    setUploading(false);
+    setHandedOff(false);
     dispatch({ type: 'RESET' });
     // Il video scartato non deve restare in coda SQLite: il drain lo
     // riproverebbe a ogni resume anche se l'utente lo ha buttato.
@@ -361,110 +361,10 @@ export default function BehaviorCaptureScreen() {
     }
   }, [userId]);
 
-  // Upload dopo clip valida
-  useEffect(() => {
-    if (state.phase !== 'completed') return;
-    if (uploadStartedRef.current) return;
-    const uri = pendingUriRef.current;
-    if (!uri) return;
-    if (!usingMockGate && sessionLoading) return;
-
-    uploadStartedRef.current = true;
-    setUploading(true);
-    setUploadError(null);
-
-    (async () => {
-      try {
-        if (usingMockGate) {
-          router.replace('/behavior/processing/evt-processing');
-          return;
-        }
-        if (!userId || !dog.id) {
-          throw new Error('Sessione non pronta');
-        }
-        const durationMs = Math.max(
-          CAPTURE_MIN_SECONDS * 1000,
-          Math.min(CAPTURE_MAX_SECONDS * 1000, elapsedRef.current * 1000),
-        );
-        const { eventId } = await enqueueAndUploadBehaviorClip({
-          userId,
-          dogId: dog.id,
-          localUri: uri,
-          durationMs,
-          hasAudio:
-            Platform.OS === 'web'
-              ? webHasAudioRef.current
-              : micGranted && !state.audioDegraded,
-          contentType:
-            Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
-        });
-        router.replace(`/behavior/processing/${eventId}`);
-      } catch (err) {
-        if (isQuotaExhaustedError(err)) {
-          // Quota esaurita (402 QUOTA_EXHAUSTED): paywall, non errore generico.
-          router.replace('/paywall');
-          return;
-        }
-        uploadStartedRef.current = false;
-        setUploading(false);
-        setUploadError(
-          'Upload non riuscito. Il video resta in coda: puoi riprovare.',
-        );
-      }
-    })();
-  }, [
-    state.phase,
-    state.audioDegraded,
-    usingMockGate,
-    sessionLoading,
-    userId,
-    dog.id,
-    micGranted,
-    router,
-  ]);
-
-  const retryUpload = async () => {
-    const uri = pendingUriRef.current;
-    if (!uri) {
-      retake();
-      return;
-    }
-    if (!userId || !dog.id) {
-      setUploadError('Sessione non disponibile. Attendi e riprova.');
-      return;
-    }
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const durationMs = Math.max(
-        CAPTURE_MIN_SECONDS * 1000,
-        Math.min(CAPTURE_MAX_SECONDS * 1000, elapsedRef.current * 1000),
-      );
-      const { eventId } = await enqueueAndUploadBehaviorClip({
-        userId,
-        dogId: dog.id,
-        localUri: uri,
-        durationMs,
-        hasAudio:
-          Platform.OS === 'web'
-            ? webHasAudioRef.current
-            : micGranted && !state.audioDegraded,
-        contentType:
-          Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
-      });
-      router.replace(`/behavior/processing/${eventId}`);
-    } catch (err) {
-      if (isQuotaExhaustedError(err)) {
-        router.replace('/paywall');
-        return;
-      }
-      setUploading(false);
-      setUploadError('Upload non riuscito. Riprova.');
-    }
-  };
-
   const showCamera =
-    state.phase !== 'permission_denied' && Boolean(cameraPermission?.granted);
+    !handedOff &&
+    state.phase !== 'permission_denied' &&
+    Boolean(cameraPermission?.granted);
 
   const timerLabel =
     state.phase === 'recording'
@@ -572,7 +472,7 @@ export default function BehaviorCaptureScreen() {
                   videoQuality="720p"
                   videoStabilizationMode="auto"
                   enableTorch={torchOn && facing === 'back'}
-                  active
+                  active={state.phase === 'ready' || state.phase === 'recording'}
                   onCameraReady={() => setCameraReady(true)}
                   onMountError={() => setCameraReady(false)}
                 />
@@ -614,8 +514,7 @@ export default function BehaviorCaptureScreen() {
             </View>
           ) : null}
 
-          {(state.phase === 'ready' || state.phase === 'recording') &&
-            !uploading && (
+          {(state.phase === 'ready' || state.phase === 'recording') && (
             <>
               {state.phase === 'ready' && state.audioDegraded ? (
                 <View style={styles.fallbackCard}>
@@ -725,19 +624,10 @@ export default function BehaviorCaptureScreen() {
             </View>
           )}
 
-          {(state.phase === 'completed' || uploading) && !uploadError && (
-            <View style={styles.fallbackCard}>
-              <Text style={styles.hint}>Video pronto: lo sto inviando…</Text>
-            </View>
-          )}
-
-          {uploadError ? (
+          {uploadError &&
+          state.phase !== 'too_short' &&
+          state.phase !== 'recording' ? (
             <View style={styles.uploadActions}>
-              <Button
-                title="Riprova invio"
-                onPress={() => void retryUpload()}
-                style={styles.fullButton}
-              />
               <Button
                 title="Registra di nuovo"
                 variant="outline"
