@@ -242,6 +242,60 @@ def test_alias_normalization_roundtrip_through_contract():
     assert obs.vocalization.type_candidates == [VocalizationType.GROWL]
 
 
+def test_normalization_accepts_gemini_creative_payload():
+    """Payload reale da produzione: alias di qualità, chiavi extra, bool."""
+    raw = {
+        "capture_quality": {
+            "framing": "medium",
+            "lighting": "dim",
+            "motion_blur": "low",
+            "audio_quality": "clear",
+            "overall_quality": "adequate",
+        },
+        "scene": {
+            "environment": "indoor",
+            "human_present": True,
+            "dogs_present_count": 0,
+            "human_interaction": "none",
+        },
+        "body": {"rigidity_candidate": False},
+        "head_face": {
+            "gaze_direction": "towards_human",
+            "mouth": "closed",
+        },
+        "timeline": [
+            {
+                "start_ms": 0,
+                "end_ms": 2000,
+                "description": "Dog steps toward seated person.",
+            }
+        ],
+        "invented_top_level": "drop-me",
+    }
+    obs = ObservationContract.model_validate(
+        {
+            **normalize_observation_dict(raw),
+            "observer_meta": {
+                "provider": "gemini",
+                "model": "test",
+                "request_id": "req-prod",
+            },
+        }
+    )
+    assert obs.capture_quality.framing.value == "degraded"
+    assert obs.capture_quality.lighting.value == "degraded"
+    assert obs.capture_quality.motion_blur.value == "degraded"
+    assert obs.capture_quality.audio_quality == "good"
+    assert obs.capture_quality.overall_quality.value == "degraded"
+    assert obs.scene.environment_class == "indoor"
+    assert obs.scene.human_count == 1
+    assert obs.scene.dog_count == 0
+    assert obs.body.rigidity_candidate.value == "no"
+    assert obs.head_face.gaze_target == "towards_human"
+    assert obs.head_face.mouth_state == "closed"
+    assert obs.timeline[0].observed_changes == ["Dog steps toward seated person."]
+
+
 # ---------------------------------------------------------------------------
 # Task 2 — prompt Gemini con vocabolario chiuso
 # ---------------------------------------------------------------------------
@@ -412,6 +466,60 @@ async def test_gemini_failed_file_is_deleted_before_returning(monkeypatch):
     assert deleted == [
         "https://generativelanguage.googleapis.com/v1beta/files/failed-video"
     ]
+
+
+async def test_gemini_observe_falls_back_to_inline_when_files_api_rejects(
+    monkeypatch,
+):
+    from app.config import Settings
+    from app.providers import gemini_observer
+
+    captured: list[dict] = []
+    observation_text = json.dumps(
+        {
+            "body": {"approach_withdrawal_freeze": "Retreating"},
+            "tail": {"movement": "wag"},
+        }
+    )
+
+    class RejectThenGenerateClient(_FakeGeminiClient):
+        async def post(self, url, params=None, json=None, headers=None, content=None):
+            if url == "https://upload.test/session":
+                return _FakeGeminiResponse(
+                    {
+                        "file": {
+                            "name": "files/failed-video",
+                            "uri": "https://generativelanguage.googleapis.com/v1beta/files/failed-video",
+                            "state": "FAILED",
+                        }
+                    }
+                )
+            return await super().post(
+                url,
+                params=params,
+                json=json,
+                headers=headers,
+                content=content,
+            )
+
+    fake_client = RejectThenGenerateClient(_gemini_payload(observation_text), captured)
+    monkeypatch.setattr(
+        gemini_observer.httpx, "AsyncClient", lambda *a, **k: fake_client
+    )
+    observer = gemini_observer.GeminiVideoObserver(
+        Settings(app_env="local", gemini_api_key="test-key")
+    )
+    contract, _usage = await observer.observe(
+        video_ref="https://example.test/clip.webm",
+        content_type="video/webm",
+        policy_version="policy-v1",
+        duration_ms=8000,
+    )
+    assert contract.tail.movement is TailMovement.WAGGING
+    assert "inline_data" in captured[0]["contents"][0]["parts"][0]
+    assert captured[0]["contents"][0]["parts"][0]["inline_data"]["mime_type"] == (
+        "video/webm"
+    )
 
 
 # ---------------------------------------------------------------------------

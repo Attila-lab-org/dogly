@@ -354,13 +354,209 @@ def _canonical_enum_value(enum: type[StrEnum], raw: object) -> str:
     return _ENUM_ALIASES.get(enum, {}).get(key, enum.UNKNOWN.value)
 
 
+_QUALITY_ALIASES: dict[str, str] = {
+    "good": "good",
+    "degraded": "degraded",
+    "insufficient": "insufficient",
+    "unknown": "unknown",
+    "absent": "absent",
+    "clear": "good",
+    "bright": "good",
+    "excellent": "good",
+    "high": "good",
+    "sharp": "good",
+    "ok": "degraded",
+    "okay": "degraded",
+    "fair": "degraded",
+    "medium": "degraded",
+    "average": "degraded",
+    "adequate": "degraded",
+    "usable": "degraded",
+    "dim": "degraded",
+    "low": "degraded",
+    "dark": "degraded",
+    "poor": "insufficient",
+    "bad": "insufficient",
+    "none": "insufficient",
+    "blurry": "degraded",
+    "motion": "degraded",
+}
+
+_TRISTATE_ALIASES: dict[str, str] = {
+    "yes": "yes",
+    "true": "yes",
+    "present": "yes",
+    "1": "yes",
+    "no": "no",
+    "false": "no",
+    "absent": "no",
+    "0": "no",
+    "unknown": "unknown",
+}
+
+_SECTION_KEY_ALIASES: dict[str, dict[str, str]] = {
+    "scene": {
+        "location": "environment_class",
+        "environment": "environment_class",
+        "indoor_outdoor": "environment_class",
+        "setting": "environment_class",
+        "flooring": "environment_class",
+        "dogs_present_count": "dog_count",
+        "humans_present_count": "human_count",
+    },
+    "head_face": {
+        "gaze_direction": "gaze_target",
+        "gaze": "gaze_target",
+        "mouth": "mouth_state",
+    },
+}
+
+_QUALITY_FIELDS: dict[str, tuple[str, ...]] = {
+    "capture_quality": (
+        "framing",
+        "lighting",
+        "motion_blur",
+        "audio_quality",
+        "overall_quality",
+        "eye_visibility",
+        "facial_visibility",
+    ),
+    "head_face": ("eye_visibility", "facial_visibility"),
+}
+
+_TRISTATE_FIELDS: dict[str, tuple[str, ...]] = {
+    "body": ("rigidity_candidate",),
+    "head_face": ("lip_lick_candidate", "yawn_candidate"),
+    "ears": ("visible",),
+    "tail": ("visible",),
+    "vocalization": ("present",),
+}
+
+_NESTED_MODELS: dict[str, type[BaseModel]] = {
+    "capture_quality": CaptureQuality,
+    "scene": Scene,
+    "body": Body,
+    "head_face": HeadFace,
+    "ears": Ears,
+    "tail": Tail,
+    "vocalization": Vocalization,
+    "observer_meta": ObserverMeta,
+}
+
+
+def _canonical_quality(
+    raw: object,
+    *,
+    allow_absent: bool = False,
+    overall: bool = False,
+) -> str:
+    if isinstance(raw, bool):
+        return "good" if raw else "insufficient"
+    if not isinstance(raw, str):
+        return "insufficient" if overall else "unknown"
+    mapped = _QUALITY_ALIASES.get(_alias_key(raw))
+    if mapped == "absent" and allow_absent:
+        return "absent"
+    if mapped in {"good", "degraded", "insufficient"}:
+        return mapped
+    if mapped == "unknown" and not overall:
+        return "unknown"
+    return "insufficient" if overall else "unknown"
+
+
+def _canonical_tristate(raw: object) -> str:
+    if raw is True:
+        return TriState.YES.value
+    if raw is False:
+        return TriState.NO.value
+    if isinstance(raw, (int, float)) and raw in (0, 1):
+        return TriState.YES.value if raw else TriState.NO.value
+    if not isinstance(raw, str):
+        return TriState.UNKNOWN.value
+    return _TRISTATE_ALIASES.get(_alias_key(raw), TriState.UNKNOWN.value)
+
+
+def _coerce_ms(raw: object) -> int:
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+    return max(0, value)
+
+
+def _remap_section_keys(section: dict, aliases: dict[str, str]) -> dict:
+    remapped: dict[str, object] = {}
+    for key, value in section.items():
+        dest = aliases.get(key, key)
+        if dest not in remapped or remapped[dest] in (None, "", "unknown", []):
+            remapped[dest] = value
+    if section.get("human_present") is True and not remapped.get("human_count"):
+        remapped["human_count"] = 1
+    if section.get("human_present") is False and remapped.get("human_count") is None:
+        remapped["human_count"] = 0
+    return remapped
+
+
+def _keep_model_fields(section: dict, model: type[BaseModel]) -> dict:
+    allowed = set(model.model_fields)
+    return {key: value for key, value in section.items() if key in allowed}
+
+
+def _normalize_timeline(raw: object) -> list[dict]:
+    if not isinstance(raw, list):
+        return []
+    segments: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        changes = [
+            str(change)
+            for change in (item.get("observed_changes") or [])
+            if change not in (None, "")
+        ]
+        for extra_key in ("description", "event", "note", "summary"):
+            extra = item.get(extra_key)
+            if extra not in (None, ""):
+                changes.append(str(extra))
+        start_ms = _coerce_ms(item.get("start_ms"))
+        end_ms = max(_coerce_ms(item.get("end_ms", start_ms)), start_ms)
+        segments.append(
+            {
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "observed_changes": changes,
+            }
+        )
+    return segments
+
+
 def normalize_observation_dict(raw: dict) -> dict:
     """Normalizza un payload grezzo del provider PRIMA della validazione pydantic.
 
     Campi chiusi: alias/sinonimi -> valore canonico, valori non riconosciuti
-    -> "unknown". Non tocca gli altri campi; non solleva mai eccezioni.
+    -> "unknown". Chiavi extra e alias di campo vengono rimappati o scartati
+    così un JSON Gemini "creativo" non fa fallire l'analisi.
     """
     normalized = dict(raw)
+    for section_name, model in _NESTED_MODELS.items():
+        section = normalized.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        section = _remap_section_keys(
+            section, _SECTION_KEY_ALIASES.get(section_name, {})
+        )
+        for field_name in _QUALITY_FIELDS.get(section_name, ()):
+            if field_name in section:
+                section[field_name] = _canonical_quality(
+                    section[field_name],
+                    allow_absent=field_name == "audio_quality",
+                    overall=field_name == "overall_quality",
+                )
+        for field_name in _TRISTATE_FIELDS.get(section_name, ()):
+            if field_name in section:
+                section[field_name] = _canonical_tristate(section[field_name])
+        normalized[section_name] = _keep_model_fields(section, model)
+
     for (section, field_name), enum in _SCALAR_ENUM_FIELDS:
         section_data = normalized.get(section)
         if isinstance(section_data, dict) and field_name in section_data:
@@ -379,4 +575,6 @@ def normalize_observation_dict(raw: dict) -> dict:
             else candidates
         )
         normalized["vocalization"] = vocalization
-    return normalized
+    if "timeline" in normalized:
+        normalized["timeline"] = _normalize_timeline(normalized.get("timeline"))
+    return _keep_model_fields(normalized, ObservationContract)

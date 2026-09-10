@@ -384,8 +384,8 @@ export default function BehaviorProcessingScreen() {
         <View style={styles.retryBanner}>
           <Ionicons name="refresh" size={16} color={colors.coral} />
           <Text style={styles.retryText}>
-            Connessione instabile: ci riprovo automaticamente, senza usare
-            altre analisi.
+            Sto facendo un altro tentativo. Il video è già arrivato e non uso
+            un’altra analisi.
           </Text>
         </View>
       )}

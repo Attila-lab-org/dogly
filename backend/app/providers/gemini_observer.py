@@ -7,6 +7,7 @@ Model ID comes exclusively from Settings.observer_model.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import time
 import uuid
@@ -33,11 +34,16 @@ from app.domains.db import get_engine
 from app.providers.base import ProviderRateLimitError, ProviderUsage
 from app.providers.budget import check_daily_budget
 
+_INLINE_VIDEO_MAX_BYTES = 18_000_000
 _OBSERVER_SYSTEM = """You are a canine behavior video observer.
 Describe ONLY observable facts visible/audible in the clip.
 Do NOT infer intent, emotion labels as conclusions, or advice.
 If something is not clearly visible, use unknown/not_visible values.
 Return JSON matching the ObservationContract schema exactly.
+Do not add extra keys. Do not invent field names.
+Quality fields (framing, lighting, motion_blur, audio_quality, overall_quality)
+must be exactly: good, degraded, insufficient, unknown, or absent for audio_quality.
+Tri-state fields must be exactly: yes, no, or unknown — never booleans.
 Fields documented with a list of strings are CLOSED vocabularies:
 use exactly one of the listed values, lowercase, never an alias or synonym.
 """
@@ -95,28 +101,38 @@ class GeminiVideoObserver:
 
         # Gemini file_data does not accept an arbitrary Supabase signed URL.
         # Import the clip into the Gemini Files API first, wait until ACTIVE,
-        # and always delete the provider copy after inference.
-        file_name, file_uri, media_bytes = await self._upload_video_file(
-            video_ref=video_ref,
-            content_type=content_type,
-            request_id=request_id,
-        )
-        file_part: dict[str, Any] = {
-            "file_data": {
-                "file_uri": file_uri,
-                "mime_type": content_type,
+        # and always delete the provider copy after inference. If Files API
+        # rejects the container (common for browser webm), fall back to inline.
+        file_name: str | None = None
+        try:
+            file_name, file_uri, media_bytes = await self._upload_video_file(
+                video_ref=video_ref,
+                content_type=content_type,
+                request_id=request_id,
+            )
+            file_part: dict[str, Any] = {
+                "file_data": {
+                    "file_uri": file_uri,
+                    "mime_type": content_type,
+                }
             }
-        }
+        except RuntimeError as exc:
+            if "rejected" not in str(exc).lower():
+                raise
+            media_bytes, file_part = await self._inline_video_part(
+                video_ref=video_ref,
+                content_type=content_type,
+            )
 
         schema_hint = {
             "schema_version": "observation.v0",
             "capture_quality": {
                 "dog_visible_fraction": 0.0,
-                "framing": "unknown",
-                "lighting": "unknown",
-                "motion_blur": "unknown",
-                "audio_quality": "unknown",
-                "overall_quality": "insufficient",
+                "framing": ["good", "degraded", "insufficient", "unknown"],
+                "lighting": ["good", "degraded", "insufficient", "unknown"],
+                "motion_blur": ["good", "degraded", "insufficient", "unknown"],
+                "audio_quality": ["good", "degraded", "insufficient", "unknown", "absent"],
+                "overall_quality": ["good", "degraded", "insufficient"],
                 "warnings": [],
             },
             "scene": {},
@@ -203,7 +219,8 @@ class GeminiVideoObserver:
                     normalize_observation_dict(repaired)
                 )
         finally:
-            await self._delete_video_file(file_name)
+            if file_name:
+                await self._delete_video_file(file_name)
 
         usage_meta = payload.get("usageMetadata") or {}
         usage = ProviderUsage(
@@ -283,7 +300,10 @@ class GeminiVideoObserver:
                     ready = True
                     return name, uri, len(media)
                 if state == "FAILED":
-                    raise RuntimeError("Gemini rejected the uploaded behavior video")
+                    error = file_data.get("error") or file_data.get("errorMessage") or {}
+                    raise RuntimeError(
+                        f"Gemini rejected the uploaded behavior video: {error}"
+                    )
                 await asyncio.sleep(1)
                 status = await self._client.get(
                     f"{_GEMINI_API_ROOT}/{name}",
@@ -297,6 +317,26 @@ class GeminiVideoObserver:
             if not ready:
                 # A provider copy must not survive a failed/aborted readiness poll.
                 await asyncio.shield(self._delete_video_file(name))
+
+    async def _inline_video_part(
+        self,
+        *,
+        video_ref: str,
+        content_type: str,
+    ) -> tuple[int, dict[str, Any]]:
+        downloaded = await self._client.get(video_ref)
+        downloaded.raise_for_status()
+        media = downloaded.content
+        if not media:
+            raise RuntimeError("Downloaded behavior video is empty")
+        if len(media) > _INLINE_VIDEO_MAX_BYTES:
+            raise RuntimeError("Gemini rejected the uploaded behavior video")
+        return len(media), {
+            "inline_data": {
+                "mime_type": content_type,
+                "data": base64.b64encode(media).decode("ascii"),
+            }
+        }
 
     async def _delete_video_file(self, name: str) -> None:
         try:
