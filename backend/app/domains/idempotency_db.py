@@ -35,7 +35,7 @@ async def claim(
                 delete from internal.api_idempotency
                 where scope = :scope
                   and status_code = 0
-                  and created_at < now() - (:ttl || ' minutes')::interval
+                  and created_at < now() - (:ttl * interval '1 minute')
                 """
             ),
             {"scope": scope, "ttl": INFLIGHT_TTL_MINUTES},
@@ -154,7 +154,7 @@ async def purge_expired(engine: AsyncEngine, *, max_age_days: int = 7) -> int:
             text(
                 """
                 delete from internal.api_idempotency
-                where created_at < now() - (:max_age || ' days')::interval
+                where created_at < now() - (:max_age * interval '1 day')
                 """
             ),
             {"max_age": max_age_days},

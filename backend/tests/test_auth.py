@@ -3,9 +3,9 @@
 import httpx
 import jwt as pyjwt
 
-from app.api.auth import validate_supabase_jwt
+from app.api.auth import HttpJwksProvider, validate_supabase_jwt
 from app.api.deps import AppState
-from app.contracts.errors import ApiError
+from app.contracts.errors import ApiError, ErrorCode
 from tests.conftest import ISSUER, make_token
 
 
@@ -45,6 +45,28 @@ async def test_hs256_rejected_when_secret_disabled(state: AppState):
         raise AssertionError("expected ApiError")
     except ApiError as exc:
         assert exc.code.value == "AUTH_REQUIRED"
+
+
+async def test_jwks_timeout_without_cache_is_retryable(monkeypatch):
+    provider = HttpJwksProvider("https://example.supabase.co/auth/v1/.well-known/jwks.json")
+
+    class _FailingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url):
+            raise httpx.ReadTimeout("jwks timed out")
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: _FailingClient())
+    try:
+        await provider.get_signing_key("kid")
+        raise AssertionError("expected ApiError")
+    except ApiError as exc:
+        assert exc.code == ErrorCode.PROCESSING_FAILED
+        assert exc.retryable is True
 
 
 async def test_protected_route_requires_bearer(client: httpx.AsyncClient):

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -12,6 +13,7 @@ from app.api.routes.diary import _public_digestive_diary_status
 from app.api.routes.digestive import _public_digestive_status
 from app.contracts.api import BehaviorCaptureInitRequest, FecalInitRequest
 from app.contracts.errors import ErrorCode
+from app.domains import idempotency_db
 from app.domains.billing_db import _webhook_status_to_db
 from app.providers.billing import map_revenuecat_event
 
@@ -109,6 +111,14 @@ def test_capture_contracts_allow_webm_and_reject_unsupported_media():
             bytes=1_000,
             content_type="application/pdf",
         )
+
+
+def test_idempotency_interval_sql_binds_integers_for_asyncpg():
+    source = Path(idempotency_db.__file__).read_text(encoding="utf-8")
+    assert "|| ' minutes'" not in source
+    assert "|| ' days'" not in source
+    assert "* interval '1 minute'" in source
+    assert "* interval '1 day'" in source
 
 
 def test_map_database_error_recognizes_postgres_uuid_syntax():

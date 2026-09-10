@@ -47,9 +47,18 @@ class HttpJwksProvider:
         now = time.monotonic()
         if self._cached is not None and now - self._fetched_at < self._ttl:
             return self._cached
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(self._url)
-            resp.raise_for_status()
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(self._url)
+                resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            if self._cached is not None:
+                return self._cached
+            raise ApiError(
+                ErrorCode.PROCESSING_FAILED,
+                "Authentication is temporarily unavailable. Retry shortly.",
+                retryable=True,
+            ) from exc
         self._cached = jwt.PyJWKSet.from_dict(resp.json())
         self._fetched_at = now
         return self._cached
