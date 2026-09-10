@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -9,6 +10,9 @@ from urllib.parse import quote
 import httpx
 
 from app.config import Settings
+from app.contracts.errors import ApiError, ErrorCode
+
+logger = logging.getLogger("dogly.storage")
 
 
 class SupabaseStorageProvider:
@@ -44,7 +48,19 @@ class SupabaseStorageProvider:
             headers={**self._headers(), "Content-Type": "application/json"},
             json={},
         )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            logger.error(
+                "signed upload failed bucket=%s path=%s status=%s body=%s",
+                bucket,
+                path,
+                response.status_code,
+                response.text[:500],
+            )
+            raise ApiError(
+                ErrorCode.PROCESSING_FAILED,
+                "Could not prepare the upload. Retry in a moment.",
+                retryable=True,
+            )
         data = response.json()
         signed_value = data.get("signedURL") or data.get("signedUrl") or data.get("url")
         token = data.get("token")

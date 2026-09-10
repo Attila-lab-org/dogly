@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import FastAPI, Request
@@ -34,10 +35,12 @@ from app.observability import init_sentry
 from app.observability.request_context import get_request_id
 from app.observability.request_id_asgi import RequestIdMiddleware
 
+logger = logging.getLogger("dogly.api")
+
 
 def _map_database_error(exc: BaseException) -> ApiError | None:
     message = str(getattr(exc, "orig", exc)).lower()
-    if "invalid uuid" in message or (
+    if "invalid uuid" in message or "invalid input syntax for type uuid" in message or (
         "invalid input for query argument" in message and "uuid" in message
     ):
         return ApiError(ErrorCode.NOT_FOUND, "Resource not found")
@@ -114,6 +117,13 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @app.exception_handler(Exception)
     async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
         # Never expose provider/internal stack traces (sez. 9.1 / 24.1).
+        logger.exception("Unhandled API error")
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_exception(exc)
+        except ImportError:
+            logger.debug("sentry-sdk not installed; skipping capture")
         body = ErrorBody(
             code=ErrorCode.INTERNAL_ERROR,
             message="An internal error occurred.",

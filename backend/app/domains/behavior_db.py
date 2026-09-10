@@ -49,6 +49,10 @@ def _capture_from_row(row: Any) -> BehaviorCaptureRec:
     data = dict(row)
     for key in ("id", "dog_id", "user_id"):
         data[key] = _as_str(data[key])
+    if not data.get("context_bucket"):
+        data["context_bucket"] = "UNKNOWN"
+    if data.get("storage_path") is None:
+        data["storage_path"] = ""
     return BehaviorCaptureRec.model_validate(data)
 
 
@@ -56,6 +60,8 @@ def _event_from_row(row: Any) -> BehaviorEventRec:
     data = dict(row)
     for key in ("id", "capture_id", "dog_id", "user_id"):
         data[key] = _as_str(data[key])
+    if data.get("knowledge_card_ids") is None:
+        data["knowledge_card_ids"] = []
     return BehaviorEventRec.model_validate(data)
 
 
