@@ -20,7 +20,7 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
 import {
   discardPendingBehaviorClip,
-  enqueueAndInitBehaviorClip,
+  enqueueAndUploadBehaviorClip,
 } from '@/features/behavior/upload';
 import {
   clearPendingBehaviorUpload,
@@ -111,7 +111,11 @@ export default function BehaviorUploadingScreen() {
         startedRef.current = false;
         return;
       }
-      const { eventId } = await enqueueAndInitBehaviorClip({
+      // Non aprire la pagina di analisi finché il PUT su Storage e il
+      // complete backend non hanno confermato che il video è arrivato.
+      // Su web la coda è in memoria: navigare prima lascia un evento
+      // incompleto se il browser viene ricaricato o perde la pagina.
+      const { eventId } = await enqueueAndUploadBehaviorClip({
         userId,
         dogId: pending.dogId,
         localUri: pending.localUri,

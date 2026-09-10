@@ -278,50 +278,6 @@ export type EnqueueCaptureInput = {
 };
 
 /**
- * Crea la riga, chiede l'URL firmato e restituisce eventId SUBITO.
- * Il PUT verso Storage continua in background: la pagina di invio
- * non deve restare ferma per minuti.
- */
-export async function enqueueAndInitBehaviorClip(
-  input: EnqueueCaptureInput,
-): Promise<{ uploadId: string; eventId: string }> {
-  const queue = getUploadQueue();
-  const existing = activeUploadForUri(
-    queue,
-    input.userId,
-    'BEHAVIOR',
-    input.localUri,
-  );
-  if (existing) {
-    const eventId =
-      existing.eventId ?? (await initializeCapture(existing.id));
-    void processPendingUpload(existing.id).catch(() => undefined);
-    return { uploadId: existing.id, eventId };
-  }
-
-  const uploadId = newId('upl');
-  const clientRequestId = newId('crid');
-  const contentType =
-    asVideoContentType(input.contentType) ??
-    (await detectVideoContentType(input.localUri));
-  queue.enqueue({
-    id: uploadId,
-    userId: input.userId,
-    dogId: input.dogId,
-    domain: 'BEHAVIOR',
-    localUri: input.localUri,
-    clientRequestId,
-    durationMs: input.durationMs,
-    hasAudio: input.hasAudio,
-    contentType,
-  });
-
-  const eventId = await initializeCapture(uploadId);
-  void processPendingUpload(uploadId).catch(() => undefined);
-  return { uploadId, eventId };
-}
-
-/**
  * Enqueue + process. Ritorna eventId quando l'upload è completo e verificato.
  */
 export async function enqueueAndUploadBehaviorClip(
