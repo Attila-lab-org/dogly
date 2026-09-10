@@ -137,7 +137,7 @@ async function processPendingUploadInner(id: string): Promise<string | null> {
     const contentType = (item.contentType ?? 'video/mp4') as VideoContentType;
     const checkIn = getCheckInSnapshot().analysisContext;
     if (checkIn?.dogId === item.dogId) {
-      await persistTodayVsUsual(item.dogId, checkIn, false).catch(() => {
+      void persistTodayVsUsual(item.dogId, checkIn, false).catch(() => {
         // Offline: the local banner remains; the next upload retries.
       });
     }

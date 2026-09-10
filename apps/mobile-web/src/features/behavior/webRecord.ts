@@ -71,6 +71,48 @@ function containerMime(value: string | undefined): string {
   return type || 'video/webm';
 }
 
+/** ~1.2 Mbps video + 48 kbps audio: 15s restano pochi MB, abbastanza per l'analisi. */
+const RECORD_VIDEO_BPS = 1_200_000;
+const RECORD_AUDIO_BPS = 48_000;
+
+async function limitVideoTrack(track: MediaStreamTrack): Promise<void> {
+  try {
+    await track.applyConstraints({
+      width: { ideal: 1280, max: 1280 },
+      height: { ideal: 720, max: 720 },
+      frameRate: { ideal: 24, max: 24 },
+    });
+  } catch {
+    // Safari può rifiutare i vincoli: registriamo comunque.
+  }
+}
+
+function createRecorder(stream: MediaStream, mimeType?: string): MediaRecorder {
+  const attempts: MediaRecorderOptions[] = [];
+  if (mimeType) {
+    attempts.push({
+      mimeType,
+      videoBitsPerSecond: RECORD_VIDEO_BPS,
+      audioBitsPerSecond: RECORD_AUDIO_BPS,
+    });
+    attempts.push({ mimeType, bitsPerSecond: RECORD_VIDEO_BPS + RECORD_AUDIO_BPS });
+    attempts.push({ mimeType });
+  } else {
+    attempts.push({
+      videoBitsPerSecond: RECORD_VIDEO_BPS,
+      audioBitsPerSecond: RECORD_AUDIO_BPS,
+    });
+  }
+  for (const options of attempts) {
+    try {
+      return new MediaRecorder(stream, options);
+    } catch {
+      // Prova la combinazione successiva.
+    }
+  }
+  return new MediaRecorder(stream);
+}
+
 async function attachMicrophone(stream: MediaStream): Promise<MediaStreamTrack[]> {
   if (stream.getAudioTracks().some((track) => track.readyState === 'live')) {
     return [];
@@ -112,6 +154,7 @@ export async function startWebVideoRecording(
   for (const track of preview.getVideoTracks()) {
     if (track.readyState === 'live') {
       stream.addTrack(track);
+      await limitVideoTrack(track);
     }
   }
   if (stream.getVideoTracks().length === 0) {
@@ -126,10 +169,7 @@ export async function startWebVideoRecording(
     .getAudioTracks()
     .some((track) => track.readyState === 'live');
   const mimeType = pickMimeType(hasAudio);
-  const recorder = new MediaRecorder(
-    stream,
-    mimeType ? { mimeType } : undefined,
-  );
+  const recorder = createRecorder(stream, mimeType);
   const chunks: Blob[] = [];
   recorder.ondataavailable = (event) => {
     if (event.data && event.data.size > 0) {
