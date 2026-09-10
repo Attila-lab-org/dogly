@@ -33,16 +33,24 @@ export default function DigestiveCaptureScreen() {
     params.from === 'checkin' || analysisContext?.concern === 'off';
   const [phase, setPhase] = useState<Phase>('ready');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [pickerError, setPickerError] = useState<string | null>(null);
 
   const takePhoto = async () => {
     // "Rifai la foto": la foto scartata non resta in coda upload.
     if (photoUri && userId) {
       void discardPendingDigestivePhoto(userId, photoUri);
     }
-    const uri = await takeDigestivePhoto();
-    if (!uri) return;
-    setPhotoUri(uri);
-    setPhase('preview');
+    setPickerError(null);
+    try {
+      const uri = await takeDigestivePhoto();
+      if (!uri) return;
+      setPhotoUri(uri);
+      setPhase('preview');
+    } catch {
+      setPickerError(
+        'Non sono riuscito ad aprire la fotocamera. Tocca di nuovo e consenti l’accesso.',
+      );
+    }
   };
 
   const analyzePhoto = async () => {
@@ -121,6 +129,13 @@ export default function DigestiveCaptureScreen() {
           </Text>
         </View>
       )}
+
+      {pickerError ? (
+        <View style={styles.error}>
+          <Ionicons name="camera-outline" size={20} color={colors.danger} />
+          <Text style={styles.errorText}>{pickerError}</Text>
+        </View>
+      ) : null}
 
       {phase === 'upload_failed' ? (
         <View style={styles.error}>

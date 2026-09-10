@@ -15,7 +15,7 @@ import {
   markUploadsCompletedForEvent,
   recordUploadFailure,
 } from '../../lib/uploadQueue';
-import { contentTypeFromUri } from '../dogs/photoUri';
+import { detectImageContentType } from '../dogs/photoUri';
 
 const draining = new Set<string>();
 
@@ -92,7 +92,7 @@ export async function processPendingDigestiveUpload(
       item = queue.transitionTo(id, 'upload_initializing');
     }
 
-    const contentType = contentTypeFromUri(item.localUri);
+    const contentType = await detectImageContentType(item.localUri);
 
     if (
       item.state === 'upload_initializing' ||

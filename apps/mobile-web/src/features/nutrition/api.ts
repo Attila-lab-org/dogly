@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 import { api } from '../../lib/apiClient';
 import { putSignedUpload } from '../../lib/signedUpload';
-import { contentTypeFromUri } from '../dogs/photoUri';
+import { detectImageContentType } from '../dogs/photoUri';
 
 export type ApiFoodProduct = {
   id: string;
@@ -78,7 +78,7 @@ export async function scanAndUploadFoodLabel(options: {
   dogId: string;
   localUri: string;
 }): Promise<string> {
-  const contentType = contentTypeFromUri(options.localUri);
+  const contentType = await detectImageContentType(options.localUri);
   const bytes = await fileBytes(options.localUri);
   const clientRequestId = newId('food');
   const init = await api.post<{

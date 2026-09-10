@@ -1,8 +1,15 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+
+import { pickWebImage } from '../photos/webPickImage';
 
 /** Apre la fotocamera solo dopo un gesto esplicito dell’utente. */
 export async function takeDigestivePhoto(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const picked = await pickWebImage({ capture: true });
+    return picked?.uri ?? null;
+  }
+
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     Alert.alert(

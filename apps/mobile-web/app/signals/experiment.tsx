@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text as RNText,
@@ -14,6 +15,10 @@ import {
   type StyleProp,
   type TextStyle,
 } from 'react-native';
+import {
+  startWebVideoRecording,
+  type WebVideoRecording,
+} from '../../src/features/behavior/webRecord';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../src/components';
@@ -52,6 +57,7 @@ export default function SignalExperimentScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
   const recordingRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
+  const webRecordingRef = useRef<WebVideoRecording | null>(null);
   const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalStartedAtRef = useRef<number | null>(null);
@@ -74,22 +80,35 @@ export default function SignalExperimentScreen() {
   const removeRecording = async () => {
     try {
       const recording = await recordingRef.current;
-      if (recording?.uri) await deleteAsync(recording.uri, { idempotent: true });
+      if (recording?.uri?.startsWith('blob:')) {
+        URL.revokeObjectURL(recording.uri);
+      } else if (recording?.uri) {
+        await deleteAsync(recording.uri, { idempotent: true });
+      }
     } catch {
       // The cache may already have been cleared by the OS.
     } finally {
       recordingRef.current = null;
+      webRecordingRef.current = null;
+    }
+  };
+
+  const stopHardwareRecording = () => {
+    if (Platform.OS === 'web') {
+      webRecordingRef.current?.stop();
+      return;
+    }
+    try {
+      cameraRef.current?.stopRecording();
+    } catch {
+      // No active recording.
     }
   };
 
   const stopCapture = async () => {
     clearTimers();
     player.pause();
-    try {
-      cameraRef.current?.stopRecording();
-    } catch {
-      // No active recording.
-    }
+    stopHardwareRecording();
     await removeRecording();
   };
 
@@ -113,7 +132,7 @@ export default function SignalExperimentScreen() {
     clearTimers();
     player.pause();
     try {
-      cameraRef.current?.stopRecording();
+      stopHardwareRecording();
       await removeRecording();
       if (mountedRef.current) setPhase('annotating');
     } catch {
@@ -159,18 +178,29 @@ export default function SignalExperimentScreen() {
     }
 
     try {
-      await setAudioModeAsync({
-        allowsRecording: false,
-        playsInSilentMode: true,
-        interruptionMode: 'doNotMix',
-      });
+      if (Platform.OS !== 'web') {
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+          interruptionMode: 'doNotMix',
+        });
+      }
       setReactionLatencyMs(null);
       setSelected([]);
       setCountdown(3);
       setPhase('baseline');
-      const recording = cameraRef.current.recordAsync({
-        maxDuration: SIGNAL_TOTAL_SECONDS,
-      });
+      let recording: Promise<{ uri: string } | undefined>;
+      if (Platform.OS === 'web') {
+        const session = await startWebVideoRecording({ includeAudio: false });
+        webRecordingRef.current = session;
+        recording = session.finished.then((uri) =>
+          uri ? { uri } : undefined,
+        );
+      } else {
+        recording = cameraRef.current.recordAsync({
+          maxDuration: SIGNAL_TOTAL_SECONDS,
+        });
+      }
       recordingRef.current = recording;
       void recording.catch(async () => {
         recordingRef.current = null;

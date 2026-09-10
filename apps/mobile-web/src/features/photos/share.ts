@@ -3,8 +3,13 @@ import * as Sharing from 'expo-sharing';
 import { Share, Alert, Platform } from 'react-native';
 import { PHOTO_COPY } from './copy';
 import type { AlbumPhoto, SharePhotoPayload } from './types';
+import { pickWebImage } from './webPickImage';
 
 export async function pickAlbumPhoto(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const picked = await pickWebImage();
+    return picked?.uri ?? null;
+  }
   // Android usa il Photo Picker di sistema e non richiede accesso generale
   // alla libreria. Chiedere prima il permesso può bloccare definitivamente la
   // selezione dopo un rifiuto, senza neppure aprire il picker.
@@ -40,6 +45,10 @@ export async function pickAlbumPhoto(): Promise<string | null> {
 
 /** Scatto fotocamera per storie. */
 export async function takeStoryPhoto(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const picked = await pickWebImage({ capture: true });
+    return picked?.uri ?? null;
+  }
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     Alert.alert(

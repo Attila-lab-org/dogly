@@ -5,7 +5,7 @@
 import { apiRequest, getApiBaseUrl } from '../../lib/apiClient';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import { putSignedUpload } from '../../lib/signedUpload';
-import { contentTypeFromUri } from '../dogs/photoUri';
+import { detectImageContentType } from '../dogs/photoUri';
 import { albumById, albumsMock, photosForAlbum } from '../../mocks/photos';
 import type { AlbumPhoto, PhotoAlbum } from './types';
 
@@ -140,7 +140,7 @@ export async function uploadAlbumPhoto(
       'Non riesco a leggere la foto sul dispositivo. Sceglila di nuovo.',
     );
   }
-  const contentType = contentTypeFromUri(localUri);
+  const contentType = await detectImageContentType(localUri);
   const created = await apiRequest<{
     photo: GalleryPhotoDto;
     upload: { url: string };

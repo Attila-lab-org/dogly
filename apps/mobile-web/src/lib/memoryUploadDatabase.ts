@@ -14,10 +14,13 @@ export function createMemoryUploadDatabase(): UploadQueueDatabase {
           domain,
           local_uri,
           client_request_id,
+          duration_ms,
+          has_audio,
+          content_type,
           created_at,
           updated_at,
-        ] = params as string[];
-        rows.set(id, {
+        ] = params;
+        rows.set(String(id), {
           id,
           user_id,
           dog_id,
@@ -28,6 +31,10 @@ export function createMemoryUploadDatabase(): UploadQueueDatabase {
           event_id: null,
           upload_url: null,
           upload_url_expires_at: null,
+          duration_ms,
+          has_audio,
+          content_type,
+          capture_id: null,
           retry_count: 0,
           last_error: null,
           created_at,
@@ -63,11 +70,13 @@ export function createMemoryUploadDatabase(): UploadQueueDatabase {
           event_id,
           upload_url,
           upload_url_expires_at,
+          capture_id,
           last_error,
           updated_at,
           id,
         ] = params as [
           string,
+          string | null,
           string | null,
           string | null,
           string | null,
@@ -82,6 +91,7 @@ export function createMemoryUploadDatabase(): UploadQueueDatabase {
           event_id,
           upload_url,
           upload_url_expires_at,
+          capture_id,
           last_error,
           updated_at,
         });

@@ -83,6 +83,8 @@ export default function BehaviorCaptureScreen() {
   const allowStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webRecordingRef = useRef<WebVideoRecording | null>(null);
   const webHasAudioRef = useRef(false);
+  const webMimeTypeRef = useRef<string | null>(null);
+  const startLockRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const micGranted = Boolean(micPermission?.granted);
@@ -203,7 +205,15 @@ export default function BehaviorCaptureScreen() {
 
   const finishWithUri = useCallback((uri: string | null, seconds: number) => {
     clearTimer();
-    if (!uri || seconds < CAPTURE_MIN_SECONDS) {
+    if (!uri) {
+      pendingUriRef.current = null;
+      dispatch({ type: 'RESET' });
+      setUploadError(
+        'La registrazione non ha prodotto un video. Riprova e tieni premuto Stop fino alla fine.',
+      );
+      return;
+    }
+    if (seconds < CAPTURE_MIN_SECONDS) {
       pendingUriRef.current = null;
       dispatch({ type: 'RESET' });
       // Force too_short UI
@@ -227,11 +237,12 @@ export default function BehaviorCaptureScreen() {
   }, []);
 
   const startRecording = useCallback(async () => {
-    if (recordingPromiseRef.current) return;
+    if (recordingPromiseRef.current || startLockRef.current) return;
     if (!cameraReady || (Platform.OS !== 'web' && !cameraRef.current)) {
       setUploadError('Fotocamera non pronta. Aspetta un attimo e riprova.');
       return;
     }
+    startLockRef.current = true;
 
     setUploadError(null);
     pendingUriRef.current = null;
@@ -250,6 +261,7 @@ export default function BehaviorCaptureScreen() {
         });
         webRecordingRef.current = session;
         webHasAudioRef.current = session.hasAudio;
+        webMimeTypeRef.current = session.mimeType;
         if (!session.hasAudio && !state.audioDegraded) {
           dispatch({ type: 'PERMISSION_GRANTED', micGranted: false });
         }
@@ -257,6 +269,7 @@ export default function BehaviorCaptureScreen() {
           uri ? { uri } : { uri: undefined },
         );
       } catch (error) {
+        startLockRef.current = false;
         setUploadError(
           error instanceof Error
             ? error.message
@@ -309,6 +322,7 @@ export default function BehaviorCaptureScreen() {
         dispatch({ type: 'RESET' });
       }
     } finally {
+      startLockRef.current = false;
       recordingPromiseRef.current = null;
       webRecordingRef.current = null;
       canStopRef.current = false;
@@ -381,6 +395,8 @@ export default function BehaviorCaptureScreen() {
             Platform.OS === 'web'
               ? webHasAudioRef.current
               : micGranted && !state.audioDegraded,
+          contentType:
+            Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
         });
         router.replace(`/behavior/processing/${eventId}`);
       } catch (err) {
@@ -433,6 +449,8 @@ export default function BehaviorCaptureScreen() {
           Platform.OS === 'web'
             ? webHasAudioRef.current
             : micGranted && !state.audioDegraded,
+        contentType:
+          Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
       });
       router.replace(`/behavior/processing/${eventId}`);
     } catch (err) {

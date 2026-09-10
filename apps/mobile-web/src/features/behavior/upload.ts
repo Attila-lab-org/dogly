@@ -31,6 +31,14 @@ let recoverStarted = false;
 
 type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm';
 
+function asVideoContentType(value?: string | null): VideoContentType | null {
+  const type = (value ?? '').split(';', 1)[0].toLowerCase();
+  if (type === 'video/webm' || type === 'video/quicktime' || type === 'video/mp4') {
+    return type;
+  }
+  return null;
+}
+
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -57,8 +65,8 @@ async function fileBytes(localUri: string): Promise<number> {
 async function detectVideoContentType(localUri: string): Promise<VideoContentType> {
   if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
     const response = await fetch(localUri);
-    const type = (await response.blob()).type.split(';', 1)[0].toLowerCase();
-    if (type === 'video/webm' || type === 'video/quicktime') return type;
+    const fromBlob = asVideoContentType((await response.blob()).type);
+    if (fromBlob) return fromBlob;
   }
   return 'video/mp4';
 }
@@ -253,6 +261,7 @@ export type EnqueueCaptureInput = {
   localUri: string;
   durationMs: number;
   hasAudio: boolean;
+  contentType?: string;
 };
 
 /**
@@ -276,7 +285,9 @@ export async function enqueueAndUploadBehaviorClip(
 
   const uploadId = newId('upl');
   const clientRequestId = newId('crid');
-  const contentType = await detectVideoContentType(input.localUri);
+  const contentType =
+    asVideoContentType(input.contentType) ??
+    (await detectVideoContentType(input.localUri));
   queue.enqueue({
     id: uploadId,
     userId: input.userId,

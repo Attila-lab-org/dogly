@@ -5,11 +5,20 @@ import { getInfoAsync } from 'expo-file-system/legacy';
 
 import { putSignedUpload } from '../../lib/signedUpload';
 import { completeDogAvatar, initDogAvatar } from './api';
-import { contentTypeFromUri } from './photoUri';
+import { detectImageContentType } from './photoUri';
 
 export { contentTypeFromUri, isLocalPhotoUri } from './photoUri';
 
 async function localBytes(localUri: string): Promise<number | undefined> {
+  if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
+    try {
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      return Math.max(1, blob.size);
+    } catch {
+      return undefined;
+    }
+  }
   try {
     const info = await getInfoAsync(localUri);
     if (info.exists && 'size' in info && typeof info.size === 'number') {
@@ -26,7 +35,7 @@ export async function persistDogAvatar(
   dogId: string,
   localUri: string,
 ): Promise<string | null> {
-  const contentType = contentTypeFromUri(localUri);
+  const contentType = await detectImageContentType(localUri);
   const bytes = await localBytes(localUri);
   const init = await initDogAvatar(dogId, {
     content_type: contentType,
