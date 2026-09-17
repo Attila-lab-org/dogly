@@ -18,7 +18,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v1"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v2"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v1"
 
 
@@ -77,6 +77,36 @@ class DigestiveIntelligenceResult(BaseModel):
 
 def _candidate(observation: dict[str, Any], field: str) -> str:
     return str(observation.get(field) or "unknown").lower()
+
+
+def _observation_summary(observation: dict[str, Any]) -> str:
+    consistency = {
+        "hard": "dura",
+        "formed": "ben formata",
+        "soft": "morbida",
+        "unformed": "poco formata",
+        "watery": "liquida",
+    }.get(str(observation.get("consistency") or "").lower())
+    color = {
+        "brown": "marrone",
+        "dark brown": "marrone scuro",
+        "light brown": "marrone chiaro",
+        "brown-green": "marrone-verde",
+        "green": "verde",
+        "yellow": "giallo",
+        "orange": "arancione",
+        "black": "nero",
+        "red": "rossastro",
+        "gray": "grigio",
+        "grey": "grigio",
+    }.get(str(observation.get("color") or "").lower())
+    if consistency and color:
+        return f"La consistenza appare {consistency} e il colore {color}."
+    if consistency:
+        return f"La consistenza appare {consistency}."
+    if color:
+        return f"Il colore appare {color}."
+    return "La foto permette un confronto con le osservazioni precedenti."
 
 
 def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
@@ -161,6 +191,7 @@ def build_digestive_intelligence(
     score_raw = observation.get("fecal_score_estimate")
     score = int(score_raw) if isinstance(score_raw, int | float) else None
     consistency = str(observation.get("consistency") or "unknown").lower()
+    observed_summary = _observation_summary(observation)
     baseline_code, baseline_text = _baseline(context, score)
     safety = _safety_state(observation, context)
 
@@ -176,54 +207,74 @@ def build_digestive_intelligence(
         next_step = "Controlla come sta e registra la prossima evacuazione."
     elif baseline_code == "ABOVE_USUAL":
         state = DigestiveState.MONITOR
-        headline = f"Oggi sembrano più morbide del solito di {context.dog_name}"
-        summary = "Il cambiamento è utile da monitorare, senza attribuirgli una causa."
-        next_step = "Controlla la prossima evacuazione."
+        headline = f"Le feci di {context.dog_name} sembrano più morbide del suo solito"
+        summary = (
+            f"{observed_summary} Rispetto alle osservazioni recenti sono più morbide: "
+            "una singola foto non basta a indicarne il motivo."
+        )
+        next_step = "Osserva la prossima evacuazione e verifica se il cambiamento si ripete."
     elif baseline_code == "BELOW_USUAL":
         state = DigestiveState.MONITOR
-        headline = f"Oggi sembrano più compatte del solito di {context.dog_name}"
-        summary = "Il cambiamento è utile da monitorare nel tempo."
-        next_step = "Controlla la prossima evacuazione."
+        headline = f"Le feci di {context.dog_name} sembrano più compatte del suo solito"
+        summary = (
+            f"{observed_summary} Rispetto alle osservazioni recenti sono più compatte: "
+            "vale la pena vedere se succede ancora."
+        )
+        next_step = "Osserva la prossima evacuazione; per ora non serve cambiare nulla."
     elif baseline_code == "NEAR_USUAL":
         state = DigestiveState.ROUTINE
-        headline = f"Oggi sono simili al solito di {context.dog_name}"
-        summary = baseline_text
-        next_step = "Continua a osservare normalmente."
+        headline = f"Per {context.dog_name}, questa osservazione è in linea con il suo solito"
+        summary = f"{observed_summary} È simile alle osservazioni recenti."
+        next_step = "Non emerge un cambiamento da seguire in modo particolare."
     elif baseline_code == "INSUFFICIENT" and consistency == "formed":
         state = DigestiveState.ROUTINE
-        headline = f"Questa osservazione di {context.dog_name} sembra formata"
-        summary = baseline_text
-        next_step = "Continua a registrare le prossime osservazioni."
+        headline = f"Le feci di {context.dog_name} appaiono ben formate"
+        summary = (
+            f"{observed_summary} Servono ancora alcune osservazioni per conoscere "
+            "il suo andamento abituale."
+        )
+        next_step = "Continua a osservare senza modificare la sua routine per questa sola foto."
     elif consistency in {"soft", "unformed", "watery"} or (score is not None and score >= 4):
         state = DigestiveState.MONITOR
-        headline = f"Oggi le feci di {context.dog_name} sembrano più morbide"
-        summary = baseline_text
-        next_step = "Controlla la prossima evacuazione."
+        headline = f"Le feci di {context.dog_name} appaiono più morbide"
+        summary = f"{observed_summary} {baseline_text}"
+        next_step = "Osserva la prossima evacuazione e nota come sta nel frattempo."
     else:
         state = DigestiveState.ROUTINE
-        headline = f"Oggi sono simili al solito di {context.dog_name}"
-        summary = baseline_text
-        next_step = "Continua a osservare normalmente."
+        headline = f"Questa osservazione di {context.dog_name} non mostra cambiamenti evidenti"
+        summary = f"{observed_summary} {baseline_text}"
+        next_step = "Non emerge qualcosa da cambiare sulla base di questa sola foto."
 
     relevant_context: list[str] = []
     associations: list[str] = []
     if context.active_food_name:
         relevant_context.append(f"Alimento registrato: {context.active_food_name}.")
     if (
-        context.food_started_days_ago is not None
+        context.active_food_name
+        and context.food_started_days_ago is not None
         and context.food_started_days_ago <= 7
     ):
+        when = (
+            "oggi"
+            if context.food_started_days_ago == 0
+            else (
+                "ieri"
+                if context.food_started_days_ago == 1
+                else f"{context.food_started_days_ago} giorni fa"
+            )
+        )
         associations.append(
-            f"L’alimento è stato iniziato {context.food_started_days_ago} giorni fa: "
-            "la vicinanza temporale è utile da monitorare, ma non indica una causa."
+            f"Hai indicato che il passaggio a {context.active_food_name} è iniziato "
+            f"{when}. È un’informazione utile da seguire, ma non dimostra che "
+            "l’alimento abbia causato questo cambiamento."
         )
         if state not in {
             DigestiveState.ATTENTION,
             DigestiveState.VET_CONTACT,
         }:
             next_step = (
-                "Se il cambio è ancora in corso, procedi gradualmente nell’arco "
-                "di circa una settimana e annota anche quantità e snack."
+                "Se il cambio è ancora in corso, prosegui gradualmente e annota "
+                "anche quantità, premi e altri alimenti."
             )
     if context.unusual_food_48h is True:
         associations.append(

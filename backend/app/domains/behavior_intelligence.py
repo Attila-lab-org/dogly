@@ -227,10 +227,22 @@ def build_behavior_consumer(
         None,
         IntentCode.INSUFFICIENT,
     }
+    observed_evidence_count = sum(
+        item.source.value == "observation" for item in interpretation.evidence
+    )
+    partial_but_useful = (
+        insufficient
+        and observed_evidence_count >= 2
+        and bool(interpretation.alternatives)
+    )
     headline = (
         _headline(dog_name, interpretation.primary_intent, safety)
-        if safety is not None or insufficient
-        else interpretation.consumer_headline
+        if safety is not None
+        else (
+            interpretation.consumer_headline
+            if not insufficient or partial_but_useful
+            else _headline(dog_name, interpretation.primary_intent, safety)
+        )
     )
     if safety is not None:
         dog_voice = {
@@ -238,13 +250,13 @@ def build_behavior_consumer(
             SAFE_DISTRESS_001: "«Qualcosa mi mette in difficoltà: aiutami a fare una pausa.»",
             SAFE_PAIN_001: "«Potrei non stare bene: osservami con attenzione.»",
         }.get(safety.code, "«Dammi spazio e osserva come sto.»")
-    elif insufficient:
+    elif insufficient and not partial_but_useful:
         dog_voice = "«Non si vede abbastanza per parlare al posto mio.»"
     else:
         dog_voice = interpretation.dog_voice
     comparison, baseline_note = _baseline(dog_name, interpretation, dog_context)
     next_step = safety.action if safety is not None else (advice.action if advice else None)
-    if insufficient and next_step is None:
+    if insufficient and not partial_but_useful and next_step is None:
         next_step = (
             "Prova un altro breve video, con il corpo intero visibile e un po’ più di contesto."
         )

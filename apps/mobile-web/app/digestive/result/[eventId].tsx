@@ -56,7 +56,7 @@ function statusPillFor(event: {
     return { label: 'Attenzione', bg: '#FFF1EE', fg: colors.coral };
   }
   if (event.overallState === 'MONITOR') {
-    return { label: 'Variazione', bg: '#FFF1EE', fg: colors.coral };
+    return { label: 'Da osservare', bg: '#FFF7D6', fg: '#9A6700' };
   }
   return { label: 'Regolare', bg: '#E0F7F6', fg: colors.teal };
 }
@@ -216,6 +216,10 @@ export default function DigestiveResultScreen() {
       coveredBy: 'MELENA_CANDIDATE',
     },
     { label: 'Possibile materiale estraneo', level: event.foreignMaterialCandidate },
+    {
+      label: 'Possibili residui di alimento',
+      level: event.undigestedFoodCandidate ?? 'unknown',
+    },
   ];
   const notableCandidates = candidates.filter(
     ({ level, coveredBy }) =>
@@ -276,7 +280,7 @@ export default function DigestiveResultScreen() {
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Rispetto a {dog.name}</Text>
+      <Text style={styles.sectionTitle}>Rispetto al suo solito</Text>
       <View style={styles.whiteCardRow}>
         <Ionicons name="git-compare-outline" size={22} color={colors.teal} />
         <Text style={styles.comparisonText}>
@@ -286,7 +290,7 @@ export default function DigestiveResultScreen() {
 
       {(event.possibleAssociations?.length ?? 0) > 0 ? (
         <>
-          <Text style={styles.sectionTitle}>Un elemento da considerare</Text>
+          <Text style={styles.sectionTitle}>Contesto utile</Text>
           <View style={[styles.whiteCard, styles.contextCard]}>
             {event.possibleAssociations?.map((item) => (
               <Text key={item} style={styles.contextText}>
@@ -297,7 +301,7 @@ export default function DigestiveResultScreen() {
         </>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Cosa fare</Text>
+      <Text style={styles.sectionTitle}>Cosa puoi fare</Text>
       <View
         style={[
           styles.monitorCard,

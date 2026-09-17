@@ -197,6 +197,10 @@ export default function DigestiveResultScreen() {
       coveredBy: 'MELENA_CANDIDATE',
     },
     { label: 'Possibile materiale estraneo', level: event.foreignMaterialCandidate },
+    {
+      label: 'Possibili residui di alimento',
+      level: event.undigestedFoodCandidate ?? 'unknown',
+    },
   ];
   const notableCandidates = candidates.filter(
     ({ level, coveredBy }) =>
@@ -280,7 +284,7 @@ export default function DigestiveResultScreen() {
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Rispetto a {dog.name}</Text>
+      <Text style={styles.sectionTitle}>Rispetto al suo solito</Text>
       <Card style={styles.comparisonCard}>
         <Ionicons name="git-compare-outline" size={22} color={colors.primary} />
         <Text style={styles.comparisonText}>
@@ -290,7 +294,7 @@ export default function DigestiveResultScreen() {
 
       {(event.possibleAssociations?.length ?? 0) > 0 ? (
         <>
-          <Text style={styles.sectionTitle}>Un elemento da considerare</Text>
+          <Text style={styles.sectionTitle}>Contesto utile</Text>
           <Card style={styles.contextCard}>
             {event.possibleAssociations?.map((item) => (
               <Text key={item} style={styles.contextText}>
@@ -301,7 +305,7 @@ export default function DigestiveResultScreen() {
         </>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Cosa fare</Text>
+      <Text style={styles.sectionTitle}>Cosa puoi fare</Text>
       <View
         style={[
           styles.monitorCard,

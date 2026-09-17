@@ -38,6 +38,13 @@ _INLINE_VIDEO_MAX_BYTES = 18_000_000
 _OBSERVER_SYSTEM = """You are a canine behavior video observer.
 Describe ONLY observable facts visible/audible in the clip.
 Do NOT infer intent, emotion labels as conclusions, or advice.
+Inspect the whole clip for visual behavior and dog-produced sound separately.
+For audio: distinguish dog vocalizations from human speech and background noise.
+If a dog vocalization is audible, set vocalization.present=yes, include the
+closest type candidate (or unknown), and describe timing, intensity and rhythm
+when observable. If audio is usable and no dog vocalization is heard, set
+present=no. Do not leave present=unknown merely because the meaning of a clearly
+audible bark, growl, whine, whimper or howl is uncertain.
 If something is not clearly visible, use unknown/not_visible values.
 Return JSON matching the ObservationContract schema exactly.
 Do not add extra keys. Do not invent field names.
@@ -135,24 +142,53 @@ class GeminiVideoObserver:
                 "overall_quality": ["good", "degraded", "insufficient"],
                 "warnings": [],
             },
-            "scene": {},
+            "scene": {
+                "environment_class": "unknown",
+                "human_count": None,
+                "dog_count": None,
+                "visible_objects": [],
+                "spatial_relations": [],
+            },
             "body": {
                 "body_height": _enum_values(BodyHeight),
                 "posture": _enum_values(Posture),
                 "rigidity_candidate": ["yes", "no", "unknown"],
+                "weight_shift": ["forward", "backward", "neutral", "unknown"],
+                "orientation_target": "unknown",
                 "locomotion": _enum_values(Locomotion),
                 "approach_withdrawal_freeze": _enum_values(ApproachWithdrawalFreeze),
             },
-            "head_face": {},
+            "head_face": {
+                "head_orientation": "unknown",
+                "gaze_target": "unknown",
+                "eye_visibility": ["good", "degraded", "insufficient", "unknown"],
+                "mouth_state": ["closed", "open_relaxed", "open_tense", "unknown"],
+                "lip_lick_candidate": ["yes", "no", "unknown"],
+                "yawn_candidate": ["yes", "no", "unknown"],
+                "facial_visibility": ["good", "degraded", "insufficient", "unknown"],
+            },
             "ears": {
+                "visible": ["yes", "no", "unknown"],
                 "position": _enum_values(EarPosition),
+                "change": "unknown",
+                "uncertainty": "unknown",
             },
             "tail": {
+                "visible": ["yes", "no", "unknown"],
                 "neutral_relative_height": _enum_values(TailHeight),
                 "movement": _enum_values(TailMovement),
+                "speed_amp_qualitative": "unknown",
+                "uncertainty": "unknown",
             },
             "vocalization": {
+                "present": ["yes", "no", "unknown"],
                 "type_candidates": _enum_values(VocalizationType),
+                "count": None,
+                "relative_pitch": "unknown",
+                "intensity": "unknown",
+                "rhythm": "unknown",
+                "interval_pattern": "unknown",
+                "timing": "unknown",
             },
             "timeline": [],
             "unknowns": [],

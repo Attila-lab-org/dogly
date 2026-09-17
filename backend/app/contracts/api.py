@@ -693,6 +693,7 @@ class DigestiveEventOut(BaseModel):
     fresh_blood_candidate: str = "unknown"
     melena_candidate: str = "unknown"
     foreign_material_candidate: str = "unknown"
+    undigested_food_candidate: str = "unknown"
     confidence_band: ConfidenceBand | None = None
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
     summary: str | None = None

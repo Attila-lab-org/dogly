@@ -16,7 +16,10 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, idempotency_db
-from app.domains.digestive_intelligence import build_digestive_intelligence
+from app.domains.digestive_intelligence import (
+    DIGESTIVE_REASONING_VERSION,
+    build_digestive_intelligence,
+)
 from app.domains.models import FecalEventRec
 
 router = APIRouter()
@@ -25,11 +28,15 @@ router = APIRouter()
 async def _ensure_digestive_intelligence(
     event: FecalEventRec, state: AppState
 ) -> FecalEventRec:
-    """Build consumer intelligence for completed events that predate V2."""
+    """Build or refresh deterministic consumer intelligence."""
     if (
         event.status != "COMPLETED"
-        or event.intelligence_json
         or not event.observation_json
+        or (
+            event.intelligence_json
+            and event.intelligence_json.get("reasoning_version")
+            == DIGESTIVE_REASONING_VERSION
+        )
     ):
         return event
     if state.engine is not None:
@@ -186,6 +193,9 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         melena_candidate=observation.get("melena_candidate", "unknown"),
         foreign_material_candidate=observation.get(
             "foreign_material_candidate", "unknown"
+        ),
+        undigested_food_candidate=observation.get(
+            "undigested_food_candidate", "unknown"
         ),
         confidence_band=e.confidence_band,
         safety_flags=e.safety_flags,

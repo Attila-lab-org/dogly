@@ -569,11 +569,24 @@ def normalize_observation_dict(raw: dict) -> dict:
     if isinstance(vocalization, dict) and "type_candidates" in vocalization:
         candidates = vocalization["type_candidates"]
         vocalization = dict(vocalization)
-        vocalization["type_candidates"] = (
+        normalized_candidates = (
             [_canonical_enum_value(VocalizationType, item) for item in candidates]
             if isinstance(candidates, list)
             else candidates
         )
+        vocalization["type_candidates"] = normalized_candidates
+        # A concrete acoustic candidate means that a vocalization was heard.
+        # Providers sometimes return an inconsistent ``present`` value while
+        # still identifying a bark/growl, hiding audio and safety evidence.
+        if (
+            isinstance(normalized_candidates, list)
+            and any(
+                candidate != VocalizationType.UNKNOWN.value
+                for candidate in normalized_candidates
+            )
+            and vocalization.get("present") != "yes"
+        ):
+            vocalization["present"] = "yes"
         normalized["vocalization"] = vocalization
     if "timeline" in normalized:
         normalized["timeline"] = _normalize_timeline(normalized.get("timeline"))

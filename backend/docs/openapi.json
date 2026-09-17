@@ -5354,6 +5354,11 @@
             "title": "Foreign Material Candidate",
             "default": "unknown"
           },
+          "undigested_food_candidate": {
+            "type": "string",
+            "title": "Undigested Food Candidate",
+            "default": "unknown"
+          },
           "confidence_band": {
             "anyOf": [
               {

@@ -172,4 +172,29 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
     expect(result.color).toBe('olive brown');
     expect(result.status).toBe('COMPLETED');
   });
+
+  it('traduce i colori restituiti dal servizio', () => {
+    const event: ApiDigestiveEvent = {
+      id: 'evt-color',
+      dog_id: 'dog-real',
+      status: 'COMPLETED',
+      fecal_score_estimate: 3,
+      consistency: 'FORMED',
+      color: 'dark brown',
+      image_quality: 'sufficient',
+      quality_warnings: [],
+      mucus_candidate: 'none_observed',
+      fresh_blood_candidate: 'none_observed',
+      melena_candidate: 'none_observed',
+      foreign_material_candidate: 'none_observed',
+      confidence_band: 'MEDIUM',
+      safety_flags: [],
+      summary: null,
+      active_food_name: null,
+      baseline_comparison: 'BELOW_USUAL',
+      created_at: '2026-09-17T19:35:52Z',
+    };
+
+    expect(mapApiDigestiveEventToResult(event).color).toBe('marrone scuro');
+  });
 });

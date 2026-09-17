@@ -71,9 +71,9 @@ function containerMime(value: string | undefined): string {
   return type || 'video/webm';
 }
 
-/** ~1.2 Mbps video + 48 kbps audio: 15s restano pochi MB, abbastanza per l'analisi. */
+/** Video leggero e audio ambientale nitido: 15 secondi restano pochi MB. */
 const RECORD_VIDEO_BPS = 1_200_000;
-const RECORD_AUDIO_BPS = 48_000;
+const RECORD_AUDIO_BPS = 96_000;
 
 async function limitVideoTrack(track: MediaStreamTrack): Promise<void> {
   try {
@@ -122,7 +122,12 @@ async function attachMicrophone(stream: MediaStream): Promise<MediaStreamTrack[]
   }
   try {
     const mic = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
+      // I filtri delle chiamate possono attenuare abbai, ringhi e guaiti.
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
       video: false,
     });
     const added: MediaStreamTrack[] = [];
@@ -167,7 +172,10 @@ export async function startWebVideoRecording(
 
   const hasAudio = stream
     .getAudioTracks()
-    .some((track) => track.readyState === 'live');
+    .some(
+      (track) =>
+        track.readyState === 'live' && track.enabled && !track.muted,
+    );
   const mimeType = pickMimeType(hasAudio);
   const recorder = createRecorder(stream, mimeType);
   const chunks: Blob[] = [];

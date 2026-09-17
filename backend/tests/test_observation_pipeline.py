@@ -203,6 +203,7 @@ def test_normalization_maps_aliases_to_canonical_values():
         "whimper",
         "bark",
     ]
+    assert normalized["vocalization"]["present"] == "yes"
 
 
 def test_normalization_garbage_becomes_unknown():
@@ -215,6 +216,7 @@ def test_normalization_garbage_becomes_unknown():
     assert normalized["body"]["body_height"] == "unknown"
     assert normalized["tail"]["movement"] == "unknown"
     assert normalized["vocalization"]["type_candidates"] == ["unknown", "bark"]
+    assert normalized["vocalization"]["present"] == "yes"
 
 
 def test_normalization_does_not_mutate_input_and_validates():

@@ -142,7 +142,7 @@ def build_inmemory_digestive_context(
         active_food_name=active_food.name if active_food else None,
         food_started_days_ago=(
             max(0, (event.created_at - active_period.start_at).days)
-            if active_period
+            if active_period and (active_period.transition_notes or "").strip()
             else None
         ),
         current_food_prior_scores=[

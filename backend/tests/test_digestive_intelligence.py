@@ -79,7 +79,7 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
 
     assert result.baseline_comparison == "INSUFFICIENT"
     assert "simili al solito" not in result.consumer_headline
-    assert "sto ancora costruendo" in result.consumer_summary.lower()
+    assert "servono ancora" in result.consumer_summary.lower()
 
 
 def test_possible_foreign_material_requires_attention():
@@ -101,6 +101,25 @@ def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
     assert "più morbide" in result.consumer_headline
 
 
+def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
+    result = build_digestive_intelligence(
+        observation(
+            consistency="formed",
+            color="dark brown",
+            fecal_score_estimate=3,
+        ),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+
+    assert (
+        result.consumer_headline
+        == "Le feci di Rocky sembrano più compatte del suo solito"
+    )
+    assert "ben formata" in result.consumer_summary
+    assert "marrone scuro" in result.consumer_summary
+    assert "per ora non serve cambiare nulla" in result.recommended_next_step
+
+
 def test_recent_food_change_is_context_not_a_causal_claim():
     result = build_digestive_intelligence(
         observation(),
@@ -112,7 +131,7 @@ def test_recent_food_change_is_context_not_a_causal_claim():
     )
 
     assert result.possible_associations
-    assert "non indica una causa" in result.possible_associations[0]
+    assert "non dimostra" in result.possible_associations[0]
     assert any(
         item.publisher == "World Small Animal Veterinary Association"
         for item in result.knowledge_references
@@ -122,6 +141,16 @@ def test_recent_food_change_is_context_not_a_causal_claim():
         for item in result.knowledge_references
     )
     assert "gradualmente" in result.recommended_next_step
+
+
+def test_missing_active_food_never_becomes_a_food_change_today():
+    result = build_digestive_intelligence(
+        observation(consistency="formed", fecal_score_estimate=3),
+        context(food_started_days_ago=0),
+    )
+
+    assert result.possible_associations == []
+    assert "cambio" not in result.recommended_next_step.lower()
 
 
 def test_repeated_food_association_requires_both_periods_and_stays_cautious():

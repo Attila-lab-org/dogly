@@ -21,6 +21,7 @@ export type ApiDigestiveEvent = {
   fresh_blood_candidate: string;
   melena_candidate: string;
   foreign_material_candidate: string;
+  undigested_food_candidate?: string;
   confidence_band: ConfidenceBand | null;
   safety_flags: Array<ApiSafetyFlag | string>;
   summary: string | null;
@@ -73,6 +74,25 @@ const CONSISTENCY_FROM_API: Record<string, Consistency> = {
 
 function mapConsistency(value: string | null): Consistency {
   return CONSISTENCY_FROM_API[(value ?? '').toLowerCase()] ?? 'sconosciuta';
+}
+
+function mapColor(value: string | null): string {
+  const normalized = (value ?? '').trim().toLowerCase();
+  return (
+    {
+      brown: 'marrone',
+      'dark brown': 'marrone scuro',
+      'light brown': 'marrone chiaro',
+      'brown-green': 'marrone-verde',
+      green: 'verde',
+      yellow: 'giallo',
+      orange: 'arancione',
+      black: 'nero',
+      red: 'rossastro',
+      gray: 'grigio',
+      grey: 'grigio',
+    }[normalized] ?? (normalized || 'non determinato')
+  );
 }
 
 function mapSafetyFlags(
@@ -131,11 +151,12 @@ export function mapApiDigestiveEventToResult(
     qualityWarnings: event.quality_warnings ?? [],
     fecalScoreEstimate: event.fecal_score_estimate,
     consistency: mapConsistency(event.consistency),
-    color: event.color ?? 'non determinato',
+    color: mapColor(event.color),
     mucusCandidate: mapCandidate(event.mucus_candidate),
     bloodCandidate: mapCandidate(event.fresh_blood_candidate),
     melenaCandidate: mapCandidate(event.melena_candidate),
     foreignMaterialCandidate: mapCandidate(event.foreign_material_candidate),
+    undigestedFoodCandidate: mapCandidate(event.undigested_food_candidate),
     confidenceBand: event.confidence_band ?? null,
     safetyFlags: mapSafetyFlags(event.safety_flags),
     activeFoodName: event.active_food_name,

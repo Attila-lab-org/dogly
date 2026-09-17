@@ -24,6 +24,22 @@ from app.knowledge.models import AdviceOutcomeValue
 router = APIRouter()
 
 
+def _partial_reading_is_useful(interp: dict, consumer: dict) -> bool:
+    """Keep grounded partial readings created before the latest composer."""
+    observed = sum(
+        isinstance(item, dict) and item.get("source") == "observation"
+        for item in interp.get("evidence", [])
+    )
+    return (
+        interp.get("primary_intent") in {None, "INSUFFICIENT"}
+        and observed >= 2
+        and bool(interp.get("alternatives"))
+        and bool(interp.get("consumer_headline"))
+        and bool(interp.get("dog_voice"))
+        and not consumer.get("safety")
+    )
+
+
 def event_out(
     event: BehaviorEventRec,
     feedback: FeedbackValue | None = None,
@@ -31,6 +47,7 @@ def event_out(
 ) -> BehaviorEventOut:
     interp = event.interpretation_json or {}
     consumer = interp.get("consumer") or {}
+    partial_but_useful = _partial_reading_is_useful(interp, consumer)
     return BehaviorEventOut(
         id=event.id,
         dog_id=event.dog_id,
@@ -46,17 +63,29 @@ def event_out(
         context_question=interp.get("context_question"),
         context_options=interp.get("context_options", []),
         context_effect=interp.get("context_effect"),
-        dog_voice=consumer.get("dog_voice") or interp.get("dog_voice"),
+        dog_voice=(
+            interp.get("dog_voice")
+            if partial_but_useful
+            else consumer.get("dog_voice") or interp.get("dog_voice")
+        ),
         sound_note=interp.get("sound_note"),
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
         feedback=feedback,
         advice=event.advice_json or interp.get("advice"),
         advice_outcome=advice_outcome,
-        consumer_headline=consumer.get("consumer_headline"),
+        consumer_headline=(
+            interp.get("consumer_headline")
+            if partial_but_useful
+            else consumer.get("consumer_headline")
+        ),
         baseline_comparison=consumer.get("baseline_comparison"),
         baseline_note=consumer.get("baseline_note"),
-        recommended_next_step=consumer.get("recommended_next_step"),
+        recommended_next_step=(
+            None
+            if partial_but_useful and interp.get("needs_context")
+            else consumer.get("recommended_next_step")
+        ),
         what_to_watch=consumer.get("what_to_watch"),
         safety=consumer.get("safety"),
         personal_memory_used=consumer.get("personal_memory_used")

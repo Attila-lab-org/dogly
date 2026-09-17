@@ -485,14 +485,18 @@ async def load_digestive_context(
                     select d.name, d.age_stage, d.size, d.weight_kg,
                            food.id as active_food_product_id,
                            food.name as active_food_name,
-                           greatest(
-                             0,
-                             floor(extract(epoch from (event.created_at - period.start_at)) / 86400)
-                           )::integer as food_started_days_ago
+                           case
+                             when nullif(trim(period.transition_notes), '') is null
+                               then null
+                             else greatest(
+                               0,
+                               floor(extract(epoch from (event.created_at - period.start_at)) / 86400)
+                             )::integer
+                           end as food_started_days_ago
                     from public.fecal_events event
                     join public.dogs d on d.id = event.dog_id
                     left join lateral (
-                      select fp.food_product_id, fp.start_at
+                      select fp.food_product_id, fp.start_at, fp.transition_notes
                       from public.feeding_periods fp
                       where fp.dog_id = event.dog_id
                         and fp.start_at <= event.created_at

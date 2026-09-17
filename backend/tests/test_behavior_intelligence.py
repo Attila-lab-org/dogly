@@ -2,7 +2,9 @@
 
 from datetime import UTC, datetime
 
+from app.api.routes.behavior import event_out
 from app.contracts.interpretation import (
+    AlternativeIntent,
     EvidenceItem,
     InterpretationContract,
     PersonalMemoryUsed,
@@ -14,7 +16,7 @@ from app.domains.behavior_intelligence import (
     build_behavior_consumer,
 )
 from app.domains.dog_context import build_dog_context
-from app.domains.models import DogRec
+from app.domains.models import BehaviorEventRec, DogRec
 from app.knowledge.models import AdviceItem
 from app.knowledge.safety import SAFE_ESCALATION_001
 
@@ -203,3 +205,100 @@ def test_insufficient_result_gives_a_concrete_retry_action():
         == "Non ho abbastanza elementi per capirlo bene"
     )
     assert "altro breve video" in (result.recommended_next_step or "")
+
+
+def test_partial_reading_keeps_useful_signals_instead_of_generic_abstention():
+    result = build_behavior_consumer(
+        _interpretation(
+            primary_intent=IntentCode.INSUFFICIENT,
+            confidence_band=ConfidenceBand.LOW,
+            consumer_headline=(
+                "Rocky appare teso e molto attento a qualcosa fuori campo"
+            ),
+            dog_voice="«Potrei aver bisogno di osservare prima di avvicinarmi.»",
+            consumer_summary=(
+                "Il corpo è rigido, resta fermo e tiene la coda alta. "
+                "Non vediamo che cosa stia osservando."
+            ),
+            evidence=[
+                EvidenceItem(
+                    source="observation",
+                    description="Il corpo resta rigido.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    description="Resta fermo con la coda alta.",
+                ),
+            ],
+            alternatives=[
+                AlternativeIntent(
+                    intent=IntentCode.ALERT_VIGILANCE,
+                    rationale="La postura ferma è compatibile con molta attenzione.",
+                )
+            ],
+        ),
+        dog_name="Rocky",
+        dog_context=build_dog_context(_dog()),
+    )
+
+    assert result.consumer_headline.startswith("Rocky appare teso")
+    assert "osservare" in result.dog_voice
+    assert result.recommended_next_step is None
+
+
+def test_recent_partial_result_is_repaired_when_read_from_the_api():
+    interpretation = _interpretation(
+        primary_intent=IntentCode.INSUFFICIENT,
+        confidence_band=ConfidenceBand.LOW,
+        consumer_headline="Rocky appare teso e osserva qualcosa fuori campo",
+        dog_voice="«Potrei essere molto attento e un po’ agitato.»",
+        evidence=[
+            EvidenceItem(
+                source="observation",
+                description="Il corpo resta rigido.",
+            ),
+            EvidenceItem(
+                source="observation",
+                description="Resta fermo con la coda alta.",
+            ),
+        ],
+        alternatives=[
+            AlternativeIntent(
+                intent=IntentCode.ALERT_VIGILANCE,
+                rationale="La postura ferma è compatibile con molta attenzione.",
+            )
+        ],
+        needs_context=True,
+        context_question="C’era qualcuno vicino a Rocky?",
+        context_options=[
+            {"id": "person", "label": "Sì, una persona"},
+            {"id": "nobody", "label": "No, nessuno"},
+        ],
+    )
+    payload = interpretation.model_dump(mode="json")
+    payload["consumer"] = {
+        "consumer_headline": "Non ho abbastanza elementi per capirlo bene",
+        "dog_voice": "«Non si vede abbastanza per parlare al posto mio.»",
+        "recommended_next_step": "Registra un altro video.",
+    }
+    now = datetime.now(UTC)
+
+    result = event_out(
+        BehaviorEventRec(
+            id="event-1",
+            capture_id="capture-1",
+            dog_id="dog-1",
+            user_id="user-1",
+            status="COMPLETED",
+            primary_intent=IntentCode.INSUFFICIENT,
+            confidence_band=ConfidenceBand.LOW,
+            summary=interpretation.consumer_summary,
+            interpretation_json=payload,
+            created_at=now,
+            completed_at=now,
+        )
+    )
+
+    assert result.consumer_headline.startswith("Rocky appare teso")
+    assert "agitato" in (result.dog_voice or "")
+    assert result.recommended_next_step is None
