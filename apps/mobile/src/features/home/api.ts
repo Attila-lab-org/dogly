@@ -11,6 +11,7 @@
  */
 import type { BehaviorEventStatus } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
+import { sanitizeOwnerCopy } from '../core/copy';
 import type { DiaryDomain, DiaryEntry, LastInsight, UsageSummary } from '../core/types';
 
 export type ApiDiaryDomain = 'BEHAVIOR' | 'DIGESTIVE' | 'FOOD_LABEL';
@@ -102,13 +103,13 @@ const NON_COMPLETED_LABELS: Record<string, string> = {
   DRAFT: 'Bozza',
   UPLOADING: 'Caricamento in corso',
   QUEUED: 'In coda',
-  OBSERVING: 'Analisi in corso',
-  INTERPRETING: 'Analisi in corso',
+  OBSERVING: 'Sto osservando il video',
+  INTERPRETING: 'Sto osservando il video',
   FAILED_RETRYABLE: 'Nuovo tentativo in corso',
-  PROCESSING: 'Controllo digestivo in corso',
+  PROCESSING: 'Sto osservando la foto',
   REJECTED_QUALITY: 'Video non adatto',
   INSUFFICIENT_IMAGE: 'Foto non abbastanza chiara',
-  FAILED_TERMINAL: 'Analisi non riuscita',
+  FAILED_TERMINAL: 'Non sono riuscito a leggere il momento',
   CANCELLED: 'Annullata',
 };
 
@@ -123,12 +124,23 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
   const subtitle =
     item.status === 'COMPLETED'
       ? item.summary
+        ? sanitizeOwnerCopy(item.summary)
+        : null
       : (NON_COMPLETED_LABELS[item.status] ?? item.summary);
+  const title =
+    item.domain === 'BEHAVIOR'
+      ? item.status === 'COMPLETED'
+        ? probabilisticInsightLabel(item.title)
+        : 'Momento video'
+      : item.title === 'Controllo digestione'
+        ? 'Osservazione digestiva'
+        : item.title;
   return {
     id: item.id,
     domain: item.domain,
-    title: item.title,
+    title,
     subtitle,
+    status: item.status,
     occurredAt: item.created_at,
     mediaDeleted,
     refId: item.id,
@@ -153,6 +165,9 @@ export function probabilisticInsightLabel(title: string): string {
     ] ?? normalized;
   if (!taxonomyLabel || taxonomyLabel === 'Analisi comportamento') {
     return 'Sembra un comportamento da approfondire';
+  }
+  if (/^(sembra|potrebbe|forse|oggi|non ci)\b/i.test(taxonomyLabel)) {
+    return taxonomyLabel;
   }
   return `Sembra ${taxonomyLabel.charAt(0).toLowerCase()}${taxonomyLabel.slice(1)}`;
 }

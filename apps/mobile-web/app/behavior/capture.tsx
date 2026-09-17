@@ -444,9 +444,8 @@ export default function BehaviorCaptureScreen() {
               </View>
               <Text style={styles.permissionTitle}>Serve la fotocamera</Text>
               <Text style={styles.permissionText}>
-                Per capire {dog.name} registro un breve video. Il microfono è
-                facoltativo: senza audio l'analisi funziona comunque, con meno
-                segnali.
+                Per osservare un breve momento di {dog.name}. Il suono è
+                facoltativo.
               </Text>
               <Button
                 title="Abilita fotocamera"
@@ -519,7 +518,8 @@ export default function BehaviorCaptureScreen() {
               {state.phase === 'ready' && state.audioDegraded ? (
                 <View style={styles.fallbackCard}>
                   <Text style={styles.fallbackText}>
-                    Microfono non disponibile: analizzerò solo il video.
+                    Il suono non è disponibile. Posso osservare comunque il
+                    video.
                   </Text>
                   <Button
                     title="Abilita microfono"
@@ -610,9 +610,9 @@ export default function BehaviorCaptureScreen() {
                   <Ionicons name="time-outline" size={20} color={colors.coral} />
                 </View>
                 <Text style={styles.fallbackText}>
-                  Il video è troppo corto: mi servono almeno{' '}
-                  {CAPTURE_MIN_SECONDS} secondi per osservare {dog.name}. Nessuna
-                  analisi è stata usata.
+                  Il video è troppo breve per capire il momento. Riprova
+                  tenendo {dog.name} inquadrato per almeno {CAPTURE_MIN_SECONDS}{' '}
+                  secondi.
                 </Text>
               </View>
               <Button

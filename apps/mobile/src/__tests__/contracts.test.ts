@@ -77,6 +77,14 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
       safety_flags: [{ code: 'SAFE_TEST', severity: 'info' }],
       needs_context: true,
       context_question: 'Cosa è successo prima?',
+      context_options: [
+        {
+          id: 'already_playing',
+          label: 'Stavamo già giocando',
+        },
+      ],
+      dog_voice: '«Forse cercavo proprio te.»',
+      sound_note: 'Si sente un abbaio breve, letto insieme alla postura.',
       policy_version: 'policy.v1',
       taxonomy_version: 'intent-taxonomy/v0',
       feedback: null,
@@ -93,6 +101,9 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
     expect(result.safety_flags).toEqual(event.safety_flags);
     expect(result.needs_context).toBe(true);
     expect(result.context_question).toBe('Cosa è successo prima?');
+    expect(result.context_options?.[0].id).toBe('already_playing');
+    expect(result.dog_voice).toBe('«Forse cercavo proprio te.»');
+    expect(result.sound_note).toContain('abbaio breve');
     expect(result.baseline_note).toBeNull();
   });
 

@@ -58,6 +58,10 @@ import {
   type OwnerFact,
   type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
+import {
+  listFeedingPeriods,
+  listFoods,
+} from '@/features/nutrition/api';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -97,6 +101,29 @@ export default function DogProfileTabScreen() {
     queryFn: () => getDigestiveSummary(dog.id),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
+  const foodsQuery = useQuery({
+    queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
+    queryFn: () => listFoods(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
+  });
+  const feedingPeriodsQuery = useQuery({
+    queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
+    queryFn: () => listFeedingPeriods(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
+  });
+  const activeRealPeriod = feedingPeriodsQuery.data?.find(
+    (period) => period.end_at == null,
+  );
+  const activeRealFood = foodsQuery.data?.find(
+    (food) => food.id === activeRealPeriod?.food_product_id,
+  );
+  const activeFoodLabel = (
+    useDemoData
+      ? [activeFood?.brand, activeFood?.name]
+      : [activeRealFood?.brand, activeRealFood?.name]
+  )
+    .filter(Boolean)
+    .join(' ');
   const previewPhotos = useDemoData
     ? photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3)
     : (photosQuery.data ?? []).slice(0, 3);
@@ -128,14 +155,14 @@ export default function DogProfileTabScreen() {
       await storiesQuery.refetch();
       setEditingStoryId(null);
     } catch {
-      setStoryError('Non sono riuscito a salvare la nota.');
+      setStoryError('Non sono riuscito a salvare il ricordo.');
     } finally {
       setSavingStory(false);
     }
   };
   const confirmStoryDelete = (storyId: string) => {
     Alert.alert(
-      'Eliminare questa nota?',
+      'Eliminare questo ricordo?',
       'Dogly non la userà più per conoscere il tuo cane.',
       [
         { text: 'Annulla', style: 'cancel' },
@@ -152,7 +179,7 @@ export default function DogProfileTabScreen() {
                   });
                 }
               })
-              .catch(() => setStoryError('Non sono riuscito a eliminare la nota.'));
+              .catch(() => setStoryError('Non sono riuscito a eliminare il ricordo.'));
           },
         },
       ],
@@ -231,20 +258,6 @@ export default function DogProfileTabScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Card style={styles.quickActions}>
-          <QuickAction
-            icon="chatbubble-ellipses-outline"
-            label="Racconta"
-            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
-          />
-          <View style={styles.actionDivider} />
-          <QuickAction
-            icon="images-outline"
-            label="Album"
-            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-          />
-        </Card>
-
         {previewPhotos.length > 0 ? (
           <>
             <View style={styles.sectionHeader}>
@@ -300,8 +313,8 @@ export default function DogProfileTabScreen() {
             iconBackground={colors.primarySoft}
             label="Alimentazione"
             value={
-              activeFood?.brand ??
-              lifestyle.profile?.feedingLabel ??
+              activeFoodLabel ||
+              lifestyle.profile?.feedingLabel ||
               'Aggiungi cibo'
             }
             onPress={() => router.push('/nutrition/foods')}
@@ -341,23 +354,23 @@ export default function DogProfileTabScreen() {
         </Pressable>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Note personali</Text>
+          <Text style={styles.sectionTitle}>Ricordi di {dog.name}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
             onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
             hitSlop={8}
           >
-            <Text style={styles.seeAll}>Racconta</Text>
+            <Text style={styles.seeAll}>Aggiungi</Text>
           </Pressable>
         </View>
         {!useDemoData && storiesQuery.isLoading ? (
-          <Text style={styles.notesEmpty}>Carico le note confermate…</Text>
+          <Text style={styles.notesEmpty}>Carico i ricordi confermati…</Text>
         ) : null}
         {!useDemoData && storiesQuery.isError ? (
           <View style={styles.notesErrorRow}>
             <Text style={styles.noteError}>
-              Non riesco a caricare le note.
+              Non riesco a caricare i ricordi.
             </Text>
             <Pressable onPress={() => void storiesQuery.refetch()}>
               <Text style={styles.noteActionPrimary}>Riprova</Text>
@@ -413,7 +426,7 @@ export default function DogProfileTabScreen() {
             ) : (
               <>
                 <Text style={styles.noteMeta}>
-                  Detto da te ·{' '}
+                  Dal tuo racconto ·{' '}
                   {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
                 </Text>
                 {story.facts.map((fact) => (
@@ -424,14 +437,14 @@ export default function DogProfileTabScreen() {
                 <View style={styles.noteActions}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Elimina nota"
+                    accessibilityLabel="Elimina ricordo"
                     onPress={() => confirmStoryDelete(story.id)}
                   >
                     <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Modifica nota"
+                    accessibilityLabel="Modifica ricordo"
                     onPress={() => beginStoryEdit(story)}
                   >
                     <Text style={styles.noteActionPrimary}>Modifica</Text>
@@ -480,30 +493,6 @@ function MetaPill({ icon, label }: { icon: IconName; label: string }) {
       <Ionicons name={icon} size={13} color={colors.textOnPrimary} />
       <Text style={styles.metaLabel}>{label}</Text>
     </View>
-  );
-}
-
-function QuickAction({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
-    >
-      <View style={styles.quickIcon}>
-        <Ionicons name={icon} size={22} color={colors.primary} />
-      </View>
-      <Text style={styles.quickLabel}>{label}</Text>
-    </Pressable>
   );
 }
 

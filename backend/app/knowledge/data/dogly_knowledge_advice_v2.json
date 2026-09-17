@@ -1,8 +1,8 @@
 {
   "metadata": {
     "product": "Dogly",
-    "version": "2.0",
-    "date": "2026-09-06",
+    "version": "2.1",
+    "date": "2026-09-17",
     "status": "implementation_spec_ready_for_cursor",
     "primary_principle": "Scientific KB + personal baseline + age/life-stage + lifestyle + current observation; general model knowledge is fallback hypothesis only.",
     "current_intent_taxonomy": "Use repository IntentCode from backend/app/contracts/taxonomy.py as source of truth."
@@ -295,6 +295,46 @@
       "citation": "The Science and Social Validity of Companion Animal Welfare (2023).",
       "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10251938/",
       "use": "Learning, sniffing, play and species-appropriate enrichment can support welfare; recommendations must still be individualized."
+    },
+    {
+      "id": "S37",
+      "type": "peer_reviewed_systematic_review",
+      "quality": "A",
+      "citation": "Finka L.R. et al. (2024). Observational behaviors and emotions to assess welfare of dogs: A systematic review. Journal of Veterinary Behavior.",
+      "url": "https://doi.org/10.1016/j.jveb.2023.12.007",
+      "use": "No single observable has a universally validated emotional meaning; combine posture, movement, vocalization, interaction and context."
+    },
+    {
+      "id": "S38",
+      "type": "peer_reviewed_review",
+      "quality": "A",
+      "citation": "Ravignani A. et al. (2024). Why do dogs wag their tails? Biology Letters 20:20230407.",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10792393/",
+      "use": "Tail wagging remains under-studied and must be described by height, amplitude, speed, rigidity and context rather than equated with happiness."
+    },
+    {
+      "id": "S39",
+      "type": "peer_reviewed_experiment",
+      "quality": "A",
+      "citation": "Molinaro H., Wynne C.D.L. (2025). Barking Up the Wrong Tree: Human Perception of Dog Emotions Is Influenced by Extraneous Factors. Anthrozoös.",
+      "url": "https://doi.org/10.1080/08927936.2025.2469400",
+      "use": "Situational context can bias human emotion judgments; owner context must be explicit and weighed without overriding the dog's visible behavior."
+    },
+    {
+      "id": "S40",
+      "type": "peer_reviewed_experiment",
+      "quality": "A",
+      "citation": "Guo K. et al. (2024). Category-dependent contribution of dog facial and bodily cues in human perception of dog emotions. Applied Animal Behaviour Science 281:106427.",
+      "url": "https://doi.org/10.1016/j.applanim.2024.106427",
+      "use": "Body and face contribute differently by category; full-body, multimodal evidence is preferable to isolated facial interpretation."
+    },
+    {
+      "id": "S41",
+      "type": "peer_reviewed_experiment",
+      "quality": "B",
+      "citation": "Byosiere S.E. et al. (2016). Investigating the Function of Play Bows in Dog and Wolf Puppies. PLOS ONE 11:e0168570.",
+      "url": "https://doi.org/10.1371/journal.pone.0168570",
+      "use": "Play bows often initiate or re-initiate play, but their function depends on the surrounding sequence and the partner's response."
     }
   ],
   "base_knowledge_cards": [
@@ -321,7 +361,8 @@
       "sources": [
         "S01",
         "S10",
-        "S09"
+        "S09",
+        "S37"
       ]
     },
     {
@@ -394,7 +435,9 @@
       "evidence": "B",
       "consensus": "alto",
       "sources": [
-        "S01"
+        "S01",
+        "S37",
+        "S41"
       ]
     },
     {
@@ -517,7 +560,9 @@
       "consensus": "alto",
       "sources": [
         "S01",
-        "S09"
+        "S09",
+        "S37",
+        "S38"
       ]
     },
     {
@@ -543,7 +588,9 @@
       "sources": [
         "S03",
         "S04",
-        "S10"
+        "S10",
+        "S37",
+        "S40"
       ]
     },
     {
@@ -860,7 +907,9 @@
       "consensus": "alto",
       "sources": [
         "S03",
-        "S01"
+        "S01",
+        "S39",
+        "S40"
       ]
     },
     {
@@ -1145,7 +1194,9 @@
       "consensus": "non_negoziabile",
       "sources": [
         "S05",
-        "S09"
+        "S09",
+        "S37",
+        "S39"
       ]
     }
   ],
@@ -1335,6 +1386,35 @@
       "risk": "LOW"
     },
     {
+      "code": "ADVICE_RESPOND_TO_PLAY",
+      "category": "ENRICHMENT",
+      "action": "If the moment is safe and welcome, respond with a short, gentle play interaction and offer natural pauses so the dog can choose whether to continue.",
+      "applies_to_intents": [
+        "PLAY_INTERACTION"
+      ],
+      "life_stage": [
+        "PUPPY",
+        "YOUNG_ADULT",
+        "MATURE_ADULT",
+        "SENIOR",
+        "UNKNOWN"
+      ],
+      "requires": [
+        "no_urgent_safety_flag"
+      ],
+      "contraindications": [
+        "severe_pain_possible",
+        "immediate_danger"
+      ],
+      "follow_up": "During a pause, observe whether the dog freely re-initiates with loose movement or chooses to disengage.",
+      "sources": [
+        "S01",
+        "S36",
+        "S41"
+      ],
+      "risk": "LOW"
+    },
+    {
       "code": "ADVICE_REWARD_BASED_REDIRECT",
       "category": "TRAINING",
       "action": "Use a reward-based alternative behavior or redirect; avoid punishment, intimidation or physical correction.",
@@ -1348,7 +1428,8 @@
         "PUPPY",
         "YOUNG_ADULT",
         "MATURE_ADULT",
-        "SENIOR"
+        "SENIOR",
+        "UNKNOWN"
       ],
       "requires": [
         "no_urgent_safety_flag"

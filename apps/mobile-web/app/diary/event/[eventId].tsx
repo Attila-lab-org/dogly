@@ -278,7 +278,6 @@ const styles = StyleSheet.create({
   date: {
     fontSize: typography.size.sm,
     color: colors.textSecondary,
-    textTransform: 'capitalize',
     marginBottom: spacing.md,
   },
   deletedBanner: {

@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 from app.config import Settings
 from app.contracts.digestive import StoolObservationContract
-from app.contracts.interpretation import InterpretationContract, SafetyFlag
+from app.contracts.interpretation import (
+    InterpretationContract,
+    OwnerContextAnswer,
+    SafetyFlag,
+)
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
 from app.knowledge.models import DogContextSnapshot, KnowledgeContext
@@ -92,6 +96,8 @@ class MockReasoner:
         eligible_memory: list[EligiblePatternSummary],
         knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
+        dog_name: str = "il cane",
+        owner_context_answer: OwnerContextAnswer | None = None,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
         operation: str = "reasoner.interpret",
     ) -> tuple[InterpretationContract, ProviderUsage]:
@@ -100,6 +106,17 @@ class MockReasoner:
         raw = load_fixture("interpretation.fixture.json")
         raw["policy_version"] = policy_version
         raw["context_bucket"] = context_bucket.value
+        raw["consumer_headline"] = raw["consumer_headline"].replace(
+            "Rocky", dog_name
+        )
+        if owner_context_answer is not None:
+            raw["needs_context"] = False
+            raw["context_question"] = None
+            raw["context_options"] = []
+            raw["context_effect"] = (
+                f"Ho aggiornato la lettura con la tua risposta: "
+                f"{owner_context_answer.label}."
+            )
         if observation.capture_quality.dog_visible_fraction == 0.0:
             raw["primary_intent"] = "INSUFFICIENT"
             raw["confidence_band"] = "LOW"

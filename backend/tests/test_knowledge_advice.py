@@ -48,6 +48,8 @@ def _interpretation(
     return InterpretationContract(
         primary_intent=intent,
         confidence_band=ConfidenceBand.MEDIUM,
+        consumer_headline="Luna mostra segnali da osservare insieme",
+        dog_voice="«Guarda cosa sto facendo, senza darlo per certo.»",
         consumer_summary="Possibile interpretazione prudente.",
         evidence=evidence,
         safety_flags=flags or [],
@@ -76,6 +78,24 @@ def test_known_observation_retrieves_bounded_scientific_cards():
     assert len(result.cards) <= 6
 
 
+def test_play_bow_in_timeline_retrieves_play_evidence():
+    raw = load_fixture("observation.fixture.json")
+    raw["body"]["posture"] = "loose"
+    raw["timeline"] = [
+        {
+            "start_ms": 0,
+            "end_ms": 2000,
+            "observed_changes": ["Dog holds a play bow and pauses."],
+        }
+    ]
+    result = retrieve_evidence(
+        ObservationContract.model_validate(raw),
+        ContextBucket.PLAY,
+        build_dog_context(_dog()),
+    )
+    assert "OBS_BODY_004" in {card.card_id for card in result.cards}
+
+
 def test_no_matching_card_has_low_coverage():
     observation = ObservationContract.model_validate(
         {
@@ -94,6 +114,42 @@ def test_no_matching_card_has_low_coverage():
     )
     assert result.coverage == "LOW"
     assert result.cards == []
+
+
+def test_play_advice_matches_the_observed_moment():
+    raw = load_fixture("observation.fixture.json")
+    raw["body"]["posture"] = "play_bow"
+    observation = ObservationContract.model_validate(raw)
+    context = build_dog_context(_dog())
+    knowledge = KnowledgeContext(registry_version="2.1", coverage="HIGH")
+
+    ordinary_play = build_advice(
+        _interpretation(IntentCode.PLAY_INTERACTION),
+        context,
+        knowledge,
+        observation=observation,
+    )
+    assert ordinary_play is not None
+    assert ordinary_play.code == "ADVICE_RESPOND_TO_PLAY"
+    assert "gioco breve" in ordinary_play.action
+
+    raw["timeline"] = [
+        {
+            "start_ms": 0,
+            "end_ms": 2000,
+            "observed_changes": ["mordicchia e tira la calza"],
+        }
+    ]
+    sock_play = build_advice(
+        _interpretation(IntentCode.PLAY_INTERACTION),
+        context,
+        knowledge,
+        observation=ObservationContract.model_validate(raw),
+    )
+    assert sock_play is not None
+    assert sock_play.code == "ADVICE_REWARD_BASED_REDIRECT"
+    assert "gioco che può mordicchiare" in sock_play.action
+    assert "corpo resta sciolto" in sock_play.follow_up
 
 
 def test_life_stage_derivation_and_unknown_fallback():

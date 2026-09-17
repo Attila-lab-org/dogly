@@ -56,3 +56,39 @@ async def test_food_scan_verify_and_list(client: httpx.AsyncClient, auth_headers
     )
     assert periods.status_code == 200
     assert periods.json()[0]["quantity_per_day"] == "200g"
+
+
+async def test_owner_can_add_food_without_scanning_a_label(
+    client: httpx.AsyncClient, auth_headers
+):
+    dog_id = await create_dog(client, auth_headers)
+    created = await client.post(
+        "/v1/nutrition/foods/manual",
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "manual-food-0001",
+            "brand": None,
+            "name": "Pasto casalingo al pollo",
+            "guaranteed_analysis": {},
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "manual-food-0001"},
+    )
+
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["name"] == "Pasto casalingo al pollo"
+    assert body["verified_at"] is not None
+
+    repeated = await client.post(
+        "/v1/nutrition/foods/manual",
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "manual-food-0001",
+            "brand": None,
+            "name": "Pasto casalingo al pollo",
+            "guaranteed_analysis": {},
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "manual-food-0001"},
+    )
+    assert repeated.status_code == 201
+    assert repeated.json()["id"] == body["id"]

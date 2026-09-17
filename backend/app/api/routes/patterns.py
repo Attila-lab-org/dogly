@@ -19,6 +19,7 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import ELIGIBLE_PATTERN_STATES, PatternState
 from app.domains import dogs_db, patterns_db
 from app.domains.dogs import get_owned_dog
+from app.domains.personal_engine import derive_pattern_state
 from app.domains.repository import now_utc
 
 router = APIRouter()
@@ -72,6 +73,11 @@ async def review_pattern(
         pattern.state = PatternState.ARCHIVED
     elif payload.action == "confirm":
         pattern.confirm_count += 1
+        promoted = derive_pattern_state(
+            pattern.support_count, pattern.confirm_count
+        )
+        if promoted is not None:
+            pattern.state = promoted
     elif payload.action == "correct_context":
         # Context correction is stored as metadata; no state change.
         pattern.version += 1

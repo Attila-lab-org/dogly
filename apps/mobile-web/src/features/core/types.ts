@@ -69,6 +69,8 @@ export interface DiaryEntry {
   title: string;
   /** Sottotitolo (es. band, safety flag, stato) */
   subtitle: string | null;
+  /** Stato server; opzionale soltanto per vecchie fixture locali. */
+  status?: string;
   /** ISO timestamp dell'evento */
   occurredAt: string;
   /** Media cancellato dalla retention (sez. 6 Diario: "deleted media") */

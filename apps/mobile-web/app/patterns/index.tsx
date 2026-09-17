@@ -40,32 +40,31 @@ export default function PatternsScreen() {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <StackScreenHeader title="Pattern appresi" />
+      <StackScreenHeader title={`Come conosco ${dog.name}`} />
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Nuovi pattern appresi</Text>
-        <Ionicons name="bulb-outline" size={20} color="#F59E0B" />
+        <Text style={styles.sectionTitle}>Abitudini che sto imparando</Text>
+        <Ionicons name="heart-outline" size={20} color="#F59E0B" />
       </View>
       <Text style={styles.intro}>
-        Questi sono i comportamenti che sto imparando su {dog.name}. Ogni
-        pattern nasce da eventi reali e dai tuoi feedback.
+        Qui trovi soltanto ciò che è comparso più volte nei momenti di{' '}
+        {dog.name}. Il tuo parere mi aiuta a non dare nulla per scontato.
       </Text>
 
       {patternsQuery.live && patternsQuery.isLoading ? (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Carico i pattern di {dog.name}…</Text>
+          <Text style={styles.emptyText}>Sto raccogliendo i momenti di {dog.name}…</Text>
         </View>
       ) : patternsQuery.live && patternsQuery.isError ? (
         <ErrorState
-          title="Pattern non disponibili"
+          title="Abitudini non disponibili"
           message="Non riesco a caricarli. Controlla la connessione e riprova."
           onRetry={() => void patternsQuery.refetch()}
         />
       ) : patterns.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>
-            Nessun pattern ancora. Continua ad analizzare i video di{' '}
-            {dog.name}: quando vedrò comportamenti ripetuti, te li mostrerò
-            qui.
+            Sto ancora conoscendo {dog.name}. Quando un comportamento si
+            ripeterà in momenti diversi, potrai ritrovarlo qui.
           </Text>
         </View>
       ) : (
@@ -97,9 +96,10 @@ export default function PatternsScreen() {
                     <ConfidenceBandPill band={pattern.reliabilityBand} />
                   </View>
                   <Text style={styles.statText}>
-                    {pattern.supportCount} osservazioni a supporto
+                    Visto {pattern.supportCount}{' '}
+                    {pattern.supportCount === 1 ? 'volta' : 'volte'}
                     {pattern.contradictCount > 0
-                      ? ` · ${pattern.contradictCount} in contraddizione`
+                      ? ` · ${pattern.contradictCount} volte è andata diversamente`
                       : ''}
                   </Text>
                 </View>
@@ -117,10 +117,8 @@ export default function PatternsScreen() {
       <SectionHeader title="Come funziona" />
       <View style={styles.howCard}>
         <Text style={styles.howText}>
-          Un pattern diventa affidabile solo con evidenze ripetute e
-          indipendenti. Le previsioni del modello da sole non bastano mai:
-          contano anche i tuoi feedback e ciò che osserviamo dopo. Puoi
-          contestare o archiviare qualsiasi pattern.
+          Mostro un’abitudine soltanto dopo momenti ripetuti. Puoi sempre
+          confermarla, indicare che non ti ritrovi oppure non mostrarla più.
         </Text>
       </View>
     </ScreenContainer>

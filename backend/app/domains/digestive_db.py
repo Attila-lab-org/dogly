@@ -13,6 +13,7 @@ from app.config import Settings
 from app.contracts.api import (
     FecalInitRequest,
     FeedingPeriodCreate,
+    FoodManualCreateRequest,
     FoodScanInitRequest,
     FoodVerifyRequest,
 )
@@ -34,6 +35,16 @@ DIGESTIVE_BUCKET = "digestive-raw"
 FOOD_BUCKET = "food-labels"
 
 
+def _digestive_period_label(month: int) -> tuple[str, str]:
+    if month in {12, 1, 2}:
+        return "winter", "inverno"
+    if month in {3, 4, 5}:
+        return "spring", "primavera"
+    if month in {6, 7, 8}:
+        return "summer", "estate"
+    return "autumn", "autunno"
+
+
 def _uuid_id() -> str:
     value = new_id()
     if len(value) == 32:
@@ -51,6 +62,9 @@ def _record(row: Mapping[str, Any]) -> dict[str, Any]:
 
 def _fecal_from_row(row: Mapping[str, Any]) -> FecalEventRec:
     data = _record(row)
+    # Retention intentionally clears the private storage path while preserving
+    # the observation and its owner-facing result in the diary.
+    data["image_path"] = data.get("image_path") or ""
     if data.get("safety_flags") is None:
         data["safety_flags"] = []
     if data.get("consistency") is not None:
@@ -469,6 +483,7 @@ async def load_digestive_context(
                 text(
                     """
                     select d.name, d.age_stage, d.size, d.weight_kg,
+                           food.id as active_food_product_id,
                            food.name as active_food_name,
                            greatest(
                              0,
@@ -485,7 +500,9 @@ async def load_digestive_context(
                       order by fp.start_at desc, fp.id desc
                       limit 1
                     ) period on true
-                    left join public.food_products food on food.id = period.food_product_id
+                    left join public.food_products food
+                      on food.id = period.food_product_id
+                     and food.verified_at is not null
                     where event.id = cast(:event_id as uuid)
                     """
                 ),
@@ -496,14 +513,28 @@ async def load_digestive_context(
             await conn.execute(
                 text(
                     """
-                    select fecal_score_estimate, consistency, created_at
-                    from public.fecal_events
-                    where dog_id = cast(:dog_id as uuid)
-                      and status = 'COMPLETED'
-                      and id <> cast(:event_id as uuid)
-                      and created_at < :created_at
-                    order by created_at desc, id desc
-                    limit 12
+                    select prior.fecal_score_estimate,
+                           prior.consistency,
+                           prior.created_at,
+                           (
+                             select fp.food_product_id
+                             from public.feeding_periods fp
+                             join public.food_products food
+                               on food.id = fp.food_product_id
+                              and food.verified_at is not null
+                             where fp.dog_id = prior.dog_id
+                               and fp.start_at <= prior.created_at
+                               and (fp.end_at is null or fp.end_at >= prior.created_at)
+                             order by fp.start_at desc, fp.id desc
+                             limit 1
+                           ) as food_product_id
+                    from public.fecal_events prior
+                    where prior.dog_id = cast(:dog_id as uuid)
+                      and prior.status = 'COMPLETED'
+                      and prior.id <> cast(:event_id as uuid)
+                      and prior.created_at < :created_at
+                    order by prior.created_at desc, prior.id desc
+                    limit 36
                     """
                 ),
                 {
@@ -515,6 +546,9 @@ async def load_digestive_context(
         ).mappings().all()
     ordered = list(reversed(prior))
     answers = event.owner_context_json
+    active_food_id = profile["active_food_product_id"]
+    season_key, season_label = _digestive_period_label(event.created_at.month)
+    scored = [row for row in ordered if row["fecal_score_estimate"] is not None]
     return DigestiveContext(
         dog_name=profile["name"],
         age_stage=profile["age_stage"],
@@ -522,10 +556,33 @@ async def load_digestive_context(
         weight_kg=profile["weight_kg"],
         active_food_name=profile["active_food_name"],
         food_started_days_ago=profile["food_started_days_ago"],
+        current_food_prior_scores=[
+            int(row["fecal_score_estimate"])
+            for row in scored
+            if active_food_id is not None
+            and row["food_product_id"] == active_food_id
+        ],
+        previous_food_scores=[
+            int(row["fecal_score_estimate"])
+            for row in scored
+            if active_food_id is not None
+            and row["food_product_id"] is not None
+            and row["food_product_id"] != active_food_id
+        ],
+        season_label=season_label,
+        same_season_prior_scores=[
+            int(row["fecal_score_estimate"])
+            for row in scored
+            if _digestive_period_label(row["created_at"].month)[0] == season_key
+        ],
+        other_season_scores=[
+            int(row["fecal_score_estimate"])
+            for row in scored
+            if _digestive_period_label(row["created_at"].month)[0] != season_key
+        ],
         prior_scores=[
             int(row["fecal_score_estimate"])
-            for row in ordered
-            if row["fecal_score_estimate"] is not None
+            for row in scored
         ],
         prior_consistencies=[
             str(row["consistency"]).lower()
@@ -717,6 +774,51 @@ async def verify_food_product(
             ),
             {"food_id": food_id},
         )
+    return _food_from_row(row)
+
+
+async def create_manual_food_product(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    payload: FoodManualCreateRequest,
+) -> FoodProductRec:
+    """Create a verified food from owner-entered details, without media."""
+    dog = await dogs_db.get_owned_dog(
+        engine, user_id=user_id, dog_id=payload.dog_id
+    )
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    insert into public.food_products (
+                      owner_id, dog_id, client_request_id, brand, name,
+                      ingredients_raw, guaranteed_analysis, calories,
+                      feeding_directions, verified_at
+                    ) values (
+                      :owner_id, :dog_id, :client_request_id, :brand, :name,
+                      :ingredients_raw, cast(:guaranteed_analysis as jsonb),
+                      :calories, :feeding_directions, now()
+                    )
+                    on conflict (owner_id, client_request_id) do update
+                    set updated_at = public.food_products.updated_at
+                    returning *
+                    """
+                ),
+                {
+                    "owner_id": user_id,
+                    "dog_id": dog.id,
+                    "client_request_id": payload.client_request_id,
+                    "brand": payload.brand,
+                    "name": payload.name,
+                    "ingredients_raw": payload.ingredients_raw,
+                    "guaranteed_analysis": payload.guaranteed_analysis.model_dump_json(),
+                    "calories": payload.guaranteed_analysis.calories,
+                    "feeding_directions": payload.feeding_directions,
+                },
+            )
+        ).mappings().one()
     return _food_from_row(row)
 
 

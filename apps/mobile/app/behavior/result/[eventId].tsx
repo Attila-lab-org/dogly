@@ -19,7 +19,6 @@ import {
   mapApiEventToResult,
   postBehaviorContext,
 } from '@/features/behavior/api';
-import { contextAnswersForQuestion } from '@/features/behavior/contextQuestion';
 import { isApiConfigured } from '@/features/auth/env';
 import { AdviceCard } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
@@ -61,10 +60,9 @@ export default function BehaviorResultScreen() {
   );
   const [savingFeedback, setSavingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
-  const [refiningContext, setRefiningContext] = useState(false);
+  const [refiningAnswerId, setRefiningAnswerId] = useState<string | null>(null);
   const [contextError, setContextError] = useState<string | null>(null);
-  const [contextDismissed, setContextDismissed] = useState(false);
-  const contextAnswers = contextAnswersForQuestion(result?.context_question);
+  const contextAnswers = result?.context_options ?? [];
 
   useEffect(() => {
     if (result?.feedback) setFeedback(result.feedback);
@@ -132,23 +130,17 @@ export default function BehaviorResultScreen() {
       setSavingFeedback(false);
     }
   };
-  const handleContext = async (
-    contextBucket: (typeof contextAnswers)[number]['contextBucket'],
-  ) => {
-    if (contextBucket == null) {
-      setContextDismissed(true);
-      return;
-    }
-    if (!useApi || refiningContext) return;
-    setRefiningContext(true);
+  const handleContext = async (answerId: string) => {
+    if (!useApi || refiningAnswerId) return;
+    setRefiningAnswerId(answerId);
     setContextError(null);
     try {
-      await postBehaviorContext(result.eventId, contextBucket);
+      await postBehaviorContext(result.eventId, answerId);
       await query.refetch();
     } catch {
       setContextError('Non sono riuscito ad aggiornare la lettura. Riprova.');
     } finally {
-      setRefiningContext(false);
+      setRefiningAnswerId(null);
     }
   };
 
@@ -189,25 +181,21 @@ export default function BehaviorResultScreen() {
             result.needs_context &&
             result.context_question &&
             contextAnswers.length > 0 &&
-            !contextDismissed ? (
+            !result.context_effect ? (
               <Card style={styles.contextCard} testID="behavior-context-question">
-                <Text style={styles.contextKicker}>Una cosa può aiutarmi</Text>
+                <Text style={styles.contextKicker}>Mi aiuti a capirlo meglio?</Text>
                 <Text style={styles.contextQuestion}>
                   {result.context_question}
                 </Text>
                 <View style={styles.contextAnswers}>
                   {contextAnswers.map((answer) => (
                     <Button
-                      key={answer.label}
+                      key={answer.id}
                       title={answer.label}
-                      variant={
-                        answer.contextBucket == null ? 'outline' : 'secondary'
-                      }
-                      disabled={refiningContext}
-                      loading={
-                        refiningContext && answer.contextBucket != null
-                      }
-                      onPress={() => void handleContext(answer.contextBucket)}
+                      variant="secondary"
+                      disabled={refiningAnswerId !== null}
+                      loading={refiningAnswerId === answer.id}
+                      onPress={() => void handleContext(answer.id)}
                       style={styles.contextAnswer}
                     />
                   ))}
@@ -215,6 +203,11 @@ export default function BehaviorResultScreen() {
                 {contextError ? (
                   <Text style={styles.contextError}>{contextError}</Text>
                 ) : null}
+              </Card>
+            ) : result.context_effect ? (
+              <Card style={styles.contextCard} testID="behavior-context-effect">
+                <Text style={styles.contextKicker}>Grazie, ora è più chiaro</Text>
+                <Text style={styles.contextQuestion}>{result.context_effect}</Text>
               </Card>
             ) : null
           }
@@ -279,11 +272,10 @@ const styles = StyleSheet.create({
   },
   contextAnswers: {
     marginTop: spacing.md,
-    flexDirection: 'row',
     gap: spacing.sm,
   },
   contextAnswer: {
-    flex: 1,
+    alignSelf: 'stretch',
   },
   contextError: {
     marginTop: spacing.sm,

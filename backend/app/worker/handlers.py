@@ -21,7 +21,12 @@ from sqlalchemy import text
 
 from app.api.deps import AppState
 from app.contracts.errors import ApiError, ErrorCode
-from app.contracts.interpretation import InterpretationContract, PersonalMemoryUsed
+from app.contracts.interpretation import (
+    ContextOption,
+    InterpretationContract,
+    OwnerContextAnswer,
+    PersonalMemoryUsed,
+)
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import (
     BEHAVIOR_EVENT_TRANSITIONS,
@@ -775,6 +780,8 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             eligible_memory=eligible_memory,
             knowledge_context=knowledge_context,
             dog_context=dog_context,
+            dog_name=dog.name,
+            owner_context_answer=None,
             deterministic_safety_flags=det_flags,
         )
         interpretation = _ground_personal_memory(
@@ -785,7 +792,8 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             update={
                 "safety_flags": merge_safety_flags(
                     interpretation.safety_flags, det_flags
-                )
+                ),
+                "context_effect": None,
             }
         )
         confidence = _calibrated_confidence(
@@ -823,7 +831,9 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     # INTERPRETING -> COMPLETED: persist event + finalize quota (sez. 7.2).
     transition(event, BehaviorEventStatus.COMPLETED)
     try:
-        advice = build_advice(interpretation, dog_context, knowledge_context)
+        advice = build_advice(
+            interpretation, dog_context, knowledge_context, observation=observation
+        )
     except Exception:  # noqa: BLE001 -- advice failure must not discard interpretation
         advice = None
     interpretation_json = interpretation.model_dump(mode="json")
@@ -892,24 +902,32 @@ async def refine_behavior_event_context(
     state: AppState,
     *,
     event: BehaviorEventRec,
-    context_bucket: ContextBucket,
+    answer_id: str | None = None,
+    legacy_context_bucket: ContextBucket | None = None,
+    context_bucket: ContextBucket | None = None,
 ) -> BehaviorEventRec:
-    """Re-run only the reasoning/composer stage after one owner context answer.
+    """Refine reasoning with the exact answer shown to and selected by the owner.
 
     The video observation is reused, so Gemini and the user's analysis quota
-    are not charged again. The reasoner call remains budget-metered.
+    are not charged again. Older clients may still send a context bucket, but
+    new clients resolve a server-stored option id to the exact visible answer.
     """
     if event.status != BehaviorEventStatus.COMPLETED or not event.observation_json:
         raise ApiError(
             ErrorCode.VALIDATION_FAILED,
             "Context can only refine a completed behavior event.",
         )
-    if context_bucket == ContextBucket.UNKNOWN:
-        raise ApiError(
-            ErrorCode.VALIDATION_FAILED,
-            "A concrete context answer is required.",
-        )
-
+    interp = event.interpretation_json or {}
+    if answer_id is not None:
+        previous = interp.get("context_response")
+        if isinstance(previous, dict):
+            if previous.get("answer_id") == answer_id:
+                # A network retry must not trigger or bill a second reasoner call.
+                return event
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Hai già risposto a questa domanda.",
+            )
     if state.engine is not None:
         capture = await behavior_db.load_capture(
             state.engine, capture_id=event.capture_id
@@ -918,6 +936,46 @@ async def refine_behavior_event_context(
         capture = state.store.captures.get(event.capture_id)
     if capture is None or capture.user_id != event.user_id:
         raise ApiError(ErrorCode.NOT_FOUND, "Capture not found")
+
+    legacy_context_bucket = legacy_context_bucket or context_bucket
+    owner_answer: OwnerContextAnswer | None = None
+    if answer_id is not None:
+        try:
+            options = [
+                ContextOption.model_validate(item)
+                for item in interp.get("context_options", [])
+            ]
+        except Exception as exc:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Questa domanda non è più disponibile. Riapri il risultato.",
+            ) from exc
+        selected = next((item for item in options if item.id == answer_id), None)
+        question = interp.get("context_question")
+        if selected is None or not isinstance(question, str) or not question:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "La risposta scelta non appartiene a questa domanda.",
+            )
+        owner_answer = OwnerContextAnswer(
+            question=question,
+            answer_id=selected.id,
+            label=selected.label,
+        )
+        raw_bucket = interp.get("context_bucket") or capture.context_bucket
+        try:
+            context_bucket = ContextBucket(
+                raw_bucket.value if hasattr(raw_bucket, "value") else raw_bucket
+            )
+        except (TypeError, ValueError):
+            context_bucket = ContextBucket.UNKNOWN
+    else:
+        context_bucket = legacy_context_bucket or ContextBucket.UNKNOWN
+        if context_bucket == ContextBucket.UNKNOWN:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "A concrete context answer is required.",
+            )
 
     observation = ObservationContract.model_validate(event.observation_json)
     dog, dog_context, _lifestyle_dump = await _dog_context(state, event)
@@ -934,6 +992,8 @@ async def refine_behavior_event_context(
             eligible_memory=await _eligible_memory(state, event.dog_id),
             knowledge_context=knowledge_context,
             dog_context=dog_context,
+            dog_name=dog.name,
+            owner_context_answer=owner_answer,
             deterministic_safety_flags=deterministic_flags,
             operation="reasoner.refine_context",
         )
@@ -949,14 +1009,23 @@ async def refine_behavior_event_context(
             "Context refinement is temporarily unavailable.",
         ) from exc
 
-    interpretation = interpretation.model_copy(
-        update={
-            "safety_flags": merge_safety_flags(
-                interpretation.safety_flags, deterministic_flags
-            ),
-            "context_bucket": context_bucket,
-        }
-    )
+    refinement_update = {
+        "safety_flags": merge_safety_flags(
+            interpretation.safety_flags, deterministic_flags
+        ),
+        "context_bucket": context_bucket,
+    }
+    if owner_answer is not None:
+        refinement_update.update(
+            {
+                "needs_context": False,
+                "context_question": None,
+                "context_options": [],
+                "context_effect": interpretation.context_effect
+                or f"Ho aggiornato la lettura con la tua risposta: {owner_answer.label}.",
+            }
+        )
+    interpretation = interpretation.model_copy(update=refinement_update)
     if (
         knowledge_context.coverage == "LOW"
         and interpretation.confidence_band != ConfidenceBand.LOW
@@ -973,7 +1042,9 @@ async def refine_behavior_event_context(
         user_id=event.user_id,
     )
     try:
-        advice = build_advice(interpretation, dog_context, knowledge_context)
+        advice = build_advice(
+            interpretation, dog_context, knowledge_context, observation=observation
+        )
     except Exception:  # noqa: BLE001 -- advice cannot discard a valid refinement
         advice = None
     consumer = build_behavior_consumer(
@@ -992,6 +1063,10 @@ async def refine_behavior_event_context(
         advice.model_dump(mode="json") if advice is not None else None
     )
     interpretation_json["consumer"] = consumer.model_dump(mode="json")
+    if owner_answer is not None:
+        interpretation_json["context_response"] = owner_answer.model_dump(
+            mode="json"
+        )
 
     capture.context_bucket = context_bucket
     event.interpretation_json = interpretation_json

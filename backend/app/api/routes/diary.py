@@ -80,7 +80,13 @@ async def get_diary(
         for e in store.behavior_events.values():
             if e.user_id != user_id or (dog_id and e.dog_id != dog_id):
                 continue
-            title = e.primary_intent.value if e.primary_intent else "Analisi comportamento"
+            interpretation = e.interpretation_json or {}
+            consumer = interpretation.get("consumer") or {}
+            title = (
+                interpretation.get("consumer_headline")
+                or consumer.get("consumer_headline")
+                or "Momento da osservare"
+            )
             capture = store.captures.get(e.capture_id)
             retention = (
                 capture.retention_state if capture is not None else RetentionState.TEMPORARY
@@ -105,8 +111,11 @@ async def get_diary(
         for e in store.fecal_events.values():
             if e.user_id != user_id or (dog_id and e.dog_id != dog_id):
                 continue
-            # ADR-015: fecal score is internal; the diary title must not surface it.
-            title = "Controllo digestione"
+            intelligence = e.intelligence_json or {}
+            title = (
+                intelligence.get("consumer_headline")
+                or "Osservazione digestiva"
+            )
             entries.append(
                 _TimelineEntry(
                     e,

@@ -44,6 +44,10 @@ def event_out(
         safety_flags=interp.get("safety_flags", []),
         needs_context=interp.get("needs_context", False),
         context_question=interp.get("context_question"),
+        context_options=interp.get("context_options", []),
+        context_effect=interp.get("context_effect"),
+        dog_voice=consumer.get("dog_voice") or interp.get("dog_voice"),
+        sound_note=interp.get("sound_note"),
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
         feedback=feedback,
@@ -204,7 +208,8 @@ async def update_behavior_context(
     event = await refine_behavior_event_context(
         state,
         event=event,
-        context_bucket=payload.context_bucket,
+        answer_id=payload.answer_id,
+        legacy_context_bucket=payload.context_bucket,
     )
     return event_out(event)
 

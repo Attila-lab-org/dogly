@@ -1,24 +1,6 @@
 /**
- * Tab Home — versione web (apps/mobile-web).
- * Replica esatta del mockup ufficiale:
- *  - Simulated iOS status bar (9:41, Dynamic Island, status icons)
- *  - Header: saluto "Ciao! 👋" + "Pronto a capire meglio Rocky?" + campanella con badge
- *  - Dog Profile Card:
- *      - Avatar circolare di Rocky
- *      - Rocky + cuore corallo in pill circolare
- *      - 3 righe meta con icone teal: "4 anni", "Taglia media", "Labrador"
- *      - NESSUNA sezione "Quanto conosco Rocky" (twist esplicito)
- *  - CTA dominante "CAPISCI ROCKY":
- *      - Gradiente blu reale → ciano brillante (#0050d8 → #01aec5)
- *      - Equalizzatore waveform audio a sinistra + swoosh d'onda in basso a destra
- *      - Titolo "CAPISCI ROCKY" + sottotitolo "Premi e analizza audio + video"
- *      - Due pulsanti circolari bianchi:
- *          - Mic verde smeraldo
- *          - Videocamera azzurro brillante
- *  - Card "Ultima analisi":
- *      - Cerchio verde menta con icona faccina sorridente verde
- *      - "Ultima analisi", "sembra rilassato", "Oggi, 09:30"
- *      - Freccia chevron destra
+ * Home Dogly: identità del cane, un unico invito a comprenderlo e l'ultimo
+ * momento utile. La complessità dei servizi resta fuori dalla superficie.
  */
 import React from 'react';
 import {
@@ -43,8 +25,6 @@ import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { DoglyLogo } from '@/features/brand/DoglyLogo';
 import { StoriesRail } from '@/features/stories/StoriesRail';
 import { useStories } from '@/features/stories/data';
-
-const rockyAvatarSource = require('../../assets/images/rocky-avatar.png');
 
 function CakeIcon() {
   return (
@@ -143,7 +123,6 @@ export default function HomeScreen() {
               style={styles.bellButton}
             >
               <Ionicons name="notifications-outline" size={26} color="#0E2A47" />
-              <View style={styles.bellBadge} />
             </Pressable>
           </View>
 
@@ -163,7 +142,6 @@ export default function HomeScreen() {
           >
             <DogAvatar
               size={112}
-              source={dog.photoUri ? undefined : rockyAvatarSource}
               photoUri={dog.photoUri}
               dogName={dog.name}
             />
@@ -219,7 +197,7 @@ export default function HomeScreen() {
           {error && !offline ? (
             <View style={styles.statusBanner} accessibilityLiveRegion="assertive">
               <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
-              <Text style={styles.statusText}>Non sono riuscito a caricare quota e analisi.</Text>
+              <Text style={styles.statusText}>Non sono riuscito ad aggiornare la Home.</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Riprova a caricare i dati"
@@ -239,7 +217,7 @@ export default function HomeScreen() {
               style={styles.processingBanner}
             >
               <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
-              <Text style={styles.processingText}>Un'analisi è in corso: ti avviso quando è pronta</Text>
+              <Text style={styles.processingText}>Sto osservando il video: ti avviso quando è pronto</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </Pressable>
           )}
@@ -282,33 +260,41 @@ export default function HomeScreen() {
               </View>
 
               <Text style={styles.ctaTitle}>CAPISCI {dog.name.toUpperCase()}</Text>
-              <Text style={styles.ctaSubtitle}>Premi e analizza audio + video</Text>
+              <Text style={styles.ctaSubtitle}>
+                Mostrami un momento oppure raccontami cosa hai notato
+              </Text>
 
               <View style={styles.ctaButtons}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Registra audio per raccontarmi di ${dog.name}`}
-                  onPress={startAudioTell}
-                  style={({ pressed }) => [
-                    styles.ctaCircle,
-                    pressed && styles.buttonPressed,
-                  ]}
-                >
-                  <Ionicons name="mic" size={30} color="#10B981" />
-                </Pressable>
+                <View style={styles.ctaAction}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Parla di ${dog.name}`}
+                    onPress={startAudioTell}
+                    style={({ pressed }) => [
+                      styles.ctaCircle,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Ionicons name="mic" size={30} color="#10B981" />
+                  </Pressable>
+                  <Text style={styles.ctaActionLabel}>Parla</Text>
+                </View>
 
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Registra un video di ${dog.name}`}
-                  onPress={startVideoCapture}
-                  disabled={!dog.id || loading}
-                  style={({ pressed }) => [
-                    styles.ctaCircle,
-                    pressed && styles.buttonPressed,
-                  ]}
-                >
-                  <Ionicons name="videocam" size={30} color="#0284C7" />
-                </Pressable>
+                <View style={styles.ctaAction}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Registra un video di ${dog.name}`}
+                    onPress={startVideoCapture}
+                    disabled={!dog.id || loading}
+                    style={({ pressed }) => [
+                      styles.ctaCircle,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Ionicons name="videocam" size={30} color="#0284C7" />
+                  </Pressable>
+                  <Text style={styles.ctaActionLabel}>Video</Text>
+                </View>
               </View>
             </LinearGradient>
           </View>
@@ -317,7 +303,7 @@ export default function HomeScreen() {
           {displayInsight ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Apri l'ultima analisi: ${displayInsight.label}`}
+              accessibilityLabel={`Apri l'ultima lettura: ${displayInsight.label}`}
               onPress={openLastInsight}
               style={styles.lastInsightRow}
             >
@@ -325,7 +311,7 @@ export default function HomeScreen() {
                 <Ionicons name="happy-outline" size={24} color="#10B981" />
               </View>
               <View style={styles.lastInsightText}>
-                <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
+                <Text style={styles.lastInsightLabel}>Ultima lettura</Text>
                 <Text style={styles.lastInsightValue}>{displayInsight.label}</Text>
                 <Text style={styles.lastInsightTime}>{displayInsight.timestampLabel}</Text>
               </View>
@@ -338,7 +324,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.lastInsightText}>
                 <Text style={styles.lastInsightLabel}>Le vostre traduzioni</Text>
-                <Text style={styles.lastInsightValue}>Ancora nessuna analisi</Text>
+                <Text style={styles.lastInsightValue}>Ancora nessun momento</Text>
                 <Text style={styles.lastInsightTime}>
                   Registra un video per iniziare a capire i suoi segnali.
                 </Text>
@@ -385,15 +371,6 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  bellBadge: {
-    position: 'absolute',
-    top: 7,
-    right: 7,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
   },
   dogCard: {
     flexDirection: 'row',
@@ -519,6 +496,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 32,
     marginTop: 32,
+  },
+  ctaAction: {
+    alignItems: 'center',
+    gap: 7,
+  },
+  ctaActionLabel: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   ctaCircle: {
     width: 76,

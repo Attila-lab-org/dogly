@@ -50,6 +50,7 @@ def test_watery_observation_asks_only_the_high_value_missing_question():
     assert {item.publisher for item in result.knowledge_references} == {
         "Merck Veterinary Manual",
         "VCA Animal Hospitals",
+        "Journal of Small Animal Practice",
     }
     assert "REPEATED_WATERY" not in {
         item["code"]
@@ -116,6 +117,51 @@ def test_recent_food_change_is_context_not_a_causal_claim():
         item.publisher == "World Small Animal Veterinary Association"
         for item in result.knowledge_references
     )
+    assert any(
+        item.publisher == "American Animal Hospital Association"
+        for item in result.knowledge_references
+    )
+    assert "gradualmente" in result.recommended_next_step
+
+
+def test_repeated_food_association_requires_both_periods_and_stays_cautious():
+    result = build_digestive_intelligence(
+        observation(fecal_score_estimate=5),
+        context(
+            prior_scores=[2, 2, 2, 5, 5],
+            active_food_name="Salmone",
+            current_food_prior_scores=[5, 5],
+            previous_food_scores=[2, 2, 2],
+        ),
+    )
+
+    assert any("Salmone" in item for item in result.possible_associations)
+    assert any(
+        "non dimostra" in item for item in result.possible_associations
+    )
+
+
+def test_season_is_not_mentioned_until_there_are_repeated_comparisons():
+    sparse = build_digestive_intelligence(
+        observation(fecal_score_estimate=5),
+        context(
+            season_label="estate",
+            same_season_prior_scores=[5],
+            other_season_scores=[2, 2, 2],
+        ),
+    )
+    repeated = build_digestive_intelligence(
+        observation(fecal_score_estimate=5),
+        context(
+            season_label="estate",
+            same_season_prior_scores=[5, 5],
+            other_season_scores=[2, 2, 2],
+        ),
+    )
+
+    assert not any("estate" in item for item in sparse.possible_associations)
+    assert any("estate" in item for item in repeated.possible_associations)
+    assert any("non una causa" in item for item in repeated.possible_associations)
 
 
 def test_clear_blood_candidate_cannot_be_downgraded_by_baseline():

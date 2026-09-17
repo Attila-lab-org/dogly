@@ -1808,6 +1808,75 @@
         }
       }
     },
+    "/v1/behavior/events/{event_id}/context": {
+      "post": {
+        "tags": [
+          "behavior"
+        ],
+        "summary": "Update Behavior Context",
+        "description": "Save one owner answer and refine without observing the video again.",
+        "operationId": "update_behavior_context_v1_behavior_events__event_id__context_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BehaviorContextUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehaviorEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/behavior/events/{event_id}/feedback": {
       "post": {
         "tags": [
@@ -1958,6 +2027,23 @@
                 }
               ],
               "title": "Dog Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           },
           {
@@ -2659,6 +2745,64 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/owner-stories": {
+      "get": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "List Owner Stories",
+        "operationId": "list_owner_stories_v1_dogs__dog_id__owner_stories_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/dogs/{dog_id}/owner-stories/prepare": {
       "post": {
         "tags": [
@@ -2758,6 +2902,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
             }
           }
         ],
@@ -2872,6 +3032,396 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/owner-stories/{observation_id}": {
+      "patch": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Update Owner Story",
+        "operationId": "update_owner_story_v1_dogs__dog_id__owner_stories__observation_id__patch",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerStoryUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerStoryObservationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "owner-stories"
+        ],
+        "summary": "Delete Owner Story",
+        "operationId": "delete_owner_story_v1_dogs__dog_id__owner_stories__observation_id__delete",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nutrition/foods": {
+      "get": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "List Foods",
+        "operationId": "list_foods_v1_nutrition_foods_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FoodProductOut"
+                  },
+                  "title": "Response List Foods V1 Nutrition Foods Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nutrition/foods/{food_id}": {
+      "get": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Get Food",
+        "operationId": "get_food_v1_nutrition_foods__food_id__get",
+        "parameters": [
+          {
+            "name": "food_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Food Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodProductOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nutrition/feeding-periods": {
+      "get": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "List Feeding Periods",
+        "operationId": "list_feeding_periods_v1_nutrition_feeding_periods_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeedingPeriodOut"
+                  },
+                  "title": "Response List Feeding Periods V1 Nutrition Feeding Periods Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Create Feeding Period",
+        "operationId": "create_feeding_period_v1_nutrition_feeding_periods_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedingPeriodCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedingPeriodOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/nutrition/foods/scan/init": {
       "post": {
         "tags": [
@@ -2930,6 +3480,81 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FoodScanInitResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nutrition/foods/manual": {
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Create Manual Food",
+        "operationId": "create_manual_food_v1_nutrition_foods_manual_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoodManualCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodProductOut"
                 }
               }
             }
@@ -3014,81 +3639,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FoodProductOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/nutrition/feeding-periods": {
-      "post": {
-        "tags": [
-          "nutrition"
-        ],
-        "summary": "Create Feeding Period",
-        "operationId": "create_feeding_period_v1_nutrition_feeding_periods_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "name": "x-idempotency-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FeedingPeriodCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeedingPeriodOut"
                 }
               }
             }
@@ -3723,6 +4273,37 @@
         ],
         "title": "BehaviorCaptureInitResponse"
       },
+      "BehaviorContextUpdateRequest": {
+        "properties": {
+          "answer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": "^[a-z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Id"
+          },
+          "context_bucket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "BehaviorContextUpdateRequest",
+        "description": "One owner answer that can materially refine a behavior result."
+      },
       "BehaviorEventOut": {
         "properties": {
           "id": {
@@ -3808,6 +4389,46 @@
             ],
             "title": "Context Question"
           },
+          "context_options": {
+            "items": {
+              "$ref": "#/components/schemas/ContextOption"
+            },
+            "type": "array",
+            "title": "Context Options"
+          },
+          "context_effect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Effect"
+          },
+          "dog_voice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dog Voice"
+          },
+          "sound_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sound Note"
+          },
           "policy_version": {
             "anyOf": [
               {
@@ -3854,6 +4475,91 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/AdviceOutcomeValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consumer_headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Headline"
+          },
+          "baseline_comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Comparison"
+          },
+          "baseline_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Note"
+          },
+          "recommended_next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Next Step"
+          },
+          "what_to_watch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What To Watch"
+          },
+          "safety": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety"
+          },
+          "personal_memory_used": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Personal Memory Used"
+          },
+          "context_bucket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextBucket"
               },
               {
                 "type": "null"
@@ -4366,6 +5072,31 @@
         ],
         "title": "ContextBucket",
         "description": "Context buckets V0 (sez. 33.7)."
+      },
+      "ContextOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[a-z0-9_]+$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ContextOption",
+        "description": "One plain-language answer that really answers ``context_question``.\n\nThe client sends only ``id``. The server resolves the exact label already\nshown to the owner, so arbitrary or hidden client text never enters the\nreasoner."
       },
       "DeleteAccountRequest": {
         "properties": {
@@ -6129,6 +6860,17 @@
               }
             ],
             "title": "End At"
+          },
+          "quantity_per_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity Per Day"
           }
         },
         "type": "object",
@@ -6140,11 +6882,87 @@
         ],
         "title": "FeedingPeriodOut"
       },
+      "FoodManualCreateRequest": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "client_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Client Request Id"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "ingredients_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients Raw"
+          },
+          "guaranteed_analysis": {
+            "$ref": "#/components/schemas/GuaranteedAnalysis"
+          },
+          "feeding_directions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feeding Directions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "client_request_id",
+          "name"
+        ],
+        "title": "FoodManualCreateRequest",
+        "description": "Owner-entered food, confirmed at creation without a label photo."
+      },
       "FoodProductOut": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "dog_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dog Id"
           },
           "brand": {
             "anyOf": [
@@ -6167,6 +6985,22 @@
               }
             ],
             "title": "Name"
+          },
+          "ingredients_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients Raw"
+          },
+          "guaranteed_analysis": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Guaranteed Analysis"
           },
           "verified_at": {
             "anyOf": [
@@ -6751,6 +7585,16 @@
               }
             ],
             "title": "Recent Changes"
+          },
+          "today_vs_usual": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TodayVsUsual"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -6957,6 +7801,54 @@
         ],
         "title": "OwnerStoryDraftOut"
       },
+      "OwnerStoryListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerStoryObservationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "OwnerStoryListOut"
+      },
+      "OwnerStoryObservationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Confirmed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dog_id",
+          "facts",
+          "confirmed_at"
+        ],
+        "title": "OwnerStoryObservationOut"
+      },
       "OwnerStoryPrepareRequest": {
         "properties": {
           "text": {
@@ -6971,6 +7863,24 @@
           "text"
         ],
         "title": "OwnerStoryPrepareRequest"
+      },
+      "OwnerStoryUpdateRequest": {
+        "properties": {
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerReportedFact"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Facts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facts"
+        ],
+        "title": "OwnerStoryUpdateRequest"
       },
       "PatternListResponse": {
         "properties": {
@@ -7671,6 +8581,49 @@
           "limits"
         ],
         "title": "SubscriptionStatusResponse"
+      },
+      "TodayVsUsual": {
+        "properties": {
+          "concern": {
+            "type": "string",
+            "enum": [
+              "soft",
+              "off"
+            ],
+            "title": "Concern"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "concern"
+        ],
+        "title": "TodayVsUsual",
+        "description": "Owner-reported daily check-in: today compared with this dog's usual.\n\n`off` is a high-value OWNER-REPORTED CHANGE for the reasoner. `soft`\nclears a previous off-day so yesterday's concern does not linger."
       },
       "UsageDomain": {
         "properties": {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Linking,
   Platform,
@@ -25,7 +25,6 @@ import Svg, { Rect } from 'react-native-svg';
 import {
   Button,
   Card,
-  DogIllustration,
   ScreenContainer,
 } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -82,6 +81,12 @@ export default function TellDogScreen() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const useMock = usingMockGate;
+
+  useEffect(() => {
+    if (phase !== 'saved') return;
+    const timer = setTimeout(() => router.replace('/(tabs)/home'), 1400);
+    return () => clearTimeout(timer);
+  }, [phase, router]);
 
   const applyDraft = (draft: {
     draft_id: string;
@@ -217,18 +222,15 @@ export default function TellDogScreen() {
   if (phase === 'saved') {
     return (
       <ScreenContainer contentStyle={styles.savedPage}>
-        <DogIllustration mood="resting" size={210} />
-        <Text style={styles.savedTitle}>Grazie, lo terrò a mente</Text>
+        <View style={styles.savedIcon} accessibilityLiveRegion="polite">
+          <Ionicons name="checkmark" size={34} color="#FFFFFF" />
+        </View>
+        <Text style={styles.savedTitle}>Salvato per {dog.name}</Text>
         <Text style={styles.savedText}>
           {useMock
             ? 'Questa è un’anteprima: il racconto non viene conservato.'
-            : `Ho salvato solo ciò che hai confermato su ${dog.name}.`}
+            : `Le informazioni che hai confermato sono state salvate correttamente.`}
         </Text>
-        <Button
-          title="Torna alla Home"
-          variant="secondary"
-          onPress={() => router.replace('/(tabs)/home')}
-        />
       </ScreenContainer>
     );
   }
@@ -238,8 +240,8 @@ export default function TellDogScreen() {
       <StackScreenHeader
         title={
           phase === 'compose'
-            ? `Raccontami di ${dog.name}`
-            : 'Controlla il racconto'
+            ? `Parla di ${dog.name}`
+            : 'Cosa vuoi che ricordi?'
         }
       />
 
@@ -248,7 +250,7 @@ export default function TellDogScreen() {
           <View style={styles.heroCard}>
             <Text style={styles.heroTitle}>Dimmi cosa hai notato</Text>
             <Text style={styles.heroSubtitle}>
-              Parla oppure scrivi. Prima di salvare ti mostro ciò che ho capito.
+              Parla oppure scrivi. Salverò soltanto ciò che confermi.
             </Text>
             <View style={styles.waveWrap}>
               <VoiceWave active={recorderState.isRecording} />
@@ -307,17 +309,17 @@ export default function TellDogScreen() {
         </>
       ) : (
         <>
-          <Text style={styles.title}>È questo che volevi dirmi?</Text>
+          <Text style={styles.title}>Cosa vuoi che ricordi?</Text>
           <Text style={styles.subtitle}>
-            Puoi correggere o eliminare ogni informazione. Nulla è ancora
-            salvato.
+            Controlla le informazioni, correggile oppure elimina quelle che non
+            vuoi conservare.
           </Text>
           {facts.map((fact) => (
             <Card key={fact.id} style={styles.factCard}>
               <View style={styles.factTop}>
                 <View style={styles.sourcePill}>
                   <Ionicons name="person" size={13} color={colors.teal} />
-                  <Text style={styles.sourceText}>Detto da te</Text>
+                  <Text style={styles.sourceText}>Dal tuo racconto</Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -367,7 +369,7 @@ export default function TellDogScreen() {
             </View>
           ) : null}
           <Button
-            title="Conferma e salva"
+            title={`Salva per ${dog.name}`}
             variant="secondary"
             loading={working}
             disabled={
@@ -386,8 +388,8 @@ export default function TellDogScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Text style={styles.privacy}>
-        L’audio viene usato solo per la trascrizione e non diventa una memoria
-        permanente.
+        La registrazione serve solo a capire il tuo racconto. Conservo
+        esclusivamente le informazioni che scegli di salvare.
       </Text>
     </ScreenContainer>
   );
@@ -559,6 +561,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
+  },
+  savedIcon: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 36,
+    backgroundColor: colors.teal,
   },
   savedTitle: {
     color: '#1A2B48',

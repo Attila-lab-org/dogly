@@ -9,7 +9,7 @@ from pathlib import Path
 from app.knowledge.models import KnowledgeRegistryDocument
 
 DATA_PATH = Path(__file__).parent / "data" / "dogly_knowledge_advice_v2.json"
-EXPECTED_VERSION = "2.0"
+EXPECTED_VERSION = "2.1"
 
 
 @lru_cache(maxsize=1)

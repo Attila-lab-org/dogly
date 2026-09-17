@@ -12,7 +12,11 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from app.contracts.digestive import StoolObservationContract
-from app.contracts.interpretation import InterpretationContract, SafetyFlag
+from app.contracts.interpretation import (
+    InterpretationContract,
+    OwnerContextAnswer,
+    SafetyFlag,
+)
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
 from app.knowledge.models import DogContextSnapshot, KnowledgeContext
@@ -75,6 +79,8 @@ class Reasoner(Protocol):
         eligible_memory: list[EligiblePatternSummary],
         knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
+        dog_name: str = "il cane",
+        owner_context_answer: OwnerContextAnswer | None = None,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]: ...
 

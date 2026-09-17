@@ -11,6 +11,7 @@ from app.config import Settings
 from app.contracts.api import (
     FecalInitRequest,
     FeedingPeriodCreate,
+    FoodManualCreateRequest,
     FoodScanInitRequest,
     FoodVerifyRequest,
 )
@@ -38,6 +39,16 @@ SAFETY_FLAG_RULES: dict[str, str] = {
     "melena_candidate": "MELENA_CANDIDATE",
     "foreign_material_candidate": "FOREIGN_MATERIAL_CANDIDATE",
 }
+
+
+def digestive_period_label(month: int) -> tuple[str, str]:
+    if month in {12, 1, 2}:
+        return "winter", "inverno"
+    if month in {3, 4, 5}:
+        return "spring", "primavera"
+    if month in {6, 7, 8}:
+        return "summer", "estate"
+    return "autumn", "autunno"
 
 
 def deterministic_safety_flags(observation: dict) -> list[dict]:
@@ -83,7 +94,7 @@ def build_inmemory_digestive_context(
             and item.created_at < event.created_at
         ),
         key=lambda item: item.created_at,
-    )[-12:]
+    )[-36:]
     active_periods = [
         item
         for item in store.feeding_periods.values()
@@ -101,6 +112,28 @@ def build_inmemory_digestive_context(
         if active_period
         else None
     )
+    if active_food is not None and active_food.verified_at is None:
+        active_food = None
+    season_key, season_label = digestive_period_label(event.created_at.month)
+
+    def food_id_at(item: FecalEventRec) -> str | None:
+        matches = [
+            period
+            for period in store.feeding_periods.values()
+            if period.dog_id == item.dog_id
+            and period.start_at <= item.created_at
+            and (period.end_at is None or period.end_at >= item.created_at)
+        ]
+        if not matches:
+            return None
+        food_id = max(matches, key=lambda period: period.start_at).food_product_id
+        food = store.food_products.get(food_id)
+        return food_id if food is not None and food.verified_at is not None else None
+
+    scored_prior = [
+        item for item in prior_events if item.fecal_score_estimate is not None
+    ]
+    active_food_id = active_food.id if active_food else None
     return DigestiveContext(
         dog_name=dog.name,
         age_stage=dog.age_stage,
@@ -112,10 +145,32 @@ def build_inmemory_digestive_context(
             if active_period
             else None
         ),
+        current_food_prior_scores=[
+            int(item.fecal_score_estimate)
+            for item in scored_prior
+            if active_food_id is not None and food_id_at(item) == active_food_id
+        ],
+        previous_food_scores=[
+            int(item.fecal_score_estimate)
+            for item in scored_prior
+            if active_food_id is not None
+            and food_id_at(item) is not None
+            and food_id_at(item) != active_food_id
+        ],
+        season_label=season_label,
+        same_season_prior_scores=[
+            int(item.fecal_score_estimate)
+            for item in scored_prior
+            if digestive_period_label(item.created_at.month)[0] == season_key
+        ],
+        other_season_scores=[
+            int(item.fecal_score_estimate)
+            for item in scored_prior
+            if digestive_period_label(item.created_at.month)[0] != season_key
+        ],
         prior_scores=[
             item.fecal_score_estimate
-            for item in prior_events
-            if item.fecal_score_estimate is not None
+            for item in scored_prior
         ],
         prior_consistencies=[
             item.consistency for item in prior_events if item.consistency
@@ -303,6 +358,37 @@ def verify_food_product(
     )
     store.food_products[food_id] = updated
     return updated
+
+
+def create_manual_food_product(
+    store: InMemoryStore,
+    *,
+    user_id: str,
+    payload: FoodManualCreateRequest,
+) -> FoodProductRec:
+    """Persist only the food details the owner explicitly entered."""
+    dog = get_owned_dog(store, user_id=user_id, dog_id=payload.dog_id)
+    existing_id = store.food_by_client_request.get(
+        (user_id, payload.client_request_id)
+    )
+    if existing_id:
+        return store.food_products[existing_id]
+    product = FoodProductRec(
+        id=new_id(),
+        owner_id=user_id,
+        dog_id=dog.id,
+        client_request_id=payload.client_request_id,
+        brand=payload.brand,
+        name=payload.name,
+        ingredients_raw=payload.ingredients_raw,
+        guaranteed_analysis=payload.guaranteed_analysis.model_dump(),
+        feeding_directions=payload.feeding_directions,
+        verified_at=now_utc(),
+        created_at=now_utc(),
+    )
+    store.food_products[product.id] = product
+    store.food_by_client_request[(user_id, payload.client_request_id)] = product.id
+    return product
 
 
 def create_feeding_period(

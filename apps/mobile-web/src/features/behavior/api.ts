@@ -37,6 +37,11 @@ export type ApiAlternative = {
   rationale: string;
 };
 
+export type ApiContextOption = {
+  id: string;
+  label: string;
+};
+
 export type ApiBehaviorEvent = {
   id: string;
   dog_id: string;
@@ -50,6 +55,10 @@ export type ApiBehaviorEvent = {
   safety_flags: Array<{ code: string; severity: string }>;
   needs_context: boolean;
   context_question: string | null;
+  context_options?: ApiContextOption[];
+  context_effect?: string | null;
+  dog_voice?: string | null;
+  sound_note?: string | null;
   policy_version: string | null;
   taxonomy_version: string | null;
   feedback?: FeedbackValue | null;
@@ -132,11 +141,11 @@ export async function getBehaviorEvent(eventId: string): Promise<ApiBehaviorEven
 
 export async function postBehaviorContext(
   eventId: string,
-  contextBucket: ContextBucket,
+  answerId: string,
 ): Promise<ApiBehaviorEvent> {
   return api.post<ApiBehaviorEvent>(
     `/v1/behavior/events/${eventId}/context`,
-    { context_bucket: contextBucket },
+    { answer_id: answerId },
   );
 }
 

@@ -49,15 +49,41 @@ WSAVA_NUTRITION = DigestiveKnowledgeReference(
     supports="Diet history, activity, weight and gastrointestinal signs belong in context.",
 )
 
+AAHA_DIET_TRANSITION = DigestiveKnowledgeReference(
+    reference_id="aaha-diet-transition-2021/v1",
+    title="2021 AAHA Nutrition and Weight Management Guidelines",
+    publisher="American Animal Hospital Association",
+    url=(
+        "https://www.aaha.org/resources/2021-aaha-nutrition-and-weight-"
+        "management-guidelines/feeding-plans-for-healthy-appropriate-"
+        "weight-cats-and-dogs/"
+    ),
+    supports=(
+        "Gradual diet adjustments over four to seven days may reduce "
+        "negative gastrointestinal responses."
+    ),
+)
+
+FECAL_SCORE_AGREEMENT = DigestiveKnowledgeReference(
+    reference_id="jsap-fecal-score-agreement-2021/v1",
+    title="Consistency of faecal scoring using two canine faecal scoring systems",
+    publisher="Journal of Small Animal Practice",
+    url="https://pubmed.ncbi.nlm.nih.gov/33491796/",
+    supports=(
+        "Visual fecal scores are descriptive monitoring tools with variable "
+        "agreement, especially between lay people and veterinarians."
+    ),
+)
+
 
 def retrieve_digestive_knowledge(
     *,
     has_food_context: bool,
     needs_clinical_context: bool,
 ) -> list[DigestiveKnowledgeReference]:
-    references = [MERCK_GROSS_FECAL]
+    references = [MERCK_GROSS_FECAL, FECAL_SCORE_AGREEMENT]
     if needs_clinical_context:
         references.append(VCA_DIARRHEA_CONTEXT)
     if has_food_context:
-        references.append(WSAVA_NUTRITION)
+        references.extend([WSAVA_NUTRITION, AAHA_DIET_TRANSITION])
     return references

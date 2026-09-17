@@ -49,6 +49,8 @@ describe('Advice Engine consumer surfaces', () => {
         {
           ...result,
           safety: {
+            code: 'SAFE_TEST',
+            severity: 'info',
             title: 'Spazio',
             message: 'Lascia distanza.',
             action: 'Aumenta lo spazio.',

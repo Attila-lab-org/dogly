@@ -3497,6 +3497,81 @@
         }
       }
     },
+    "/v1/nutrition/foods/manual": {
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Create Manual Food",
+        "operationId": "create_manual_food_v1_nutrition_foods_manual_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoodManualCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodProductOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/nutrition/foods/{food_id}/verify": {
       "patch": {
         "tags": [
@@ -4200,14 +4275,32 @@
       },
       "BehaviorContextUpdateRequest": {
         "properties": {
+          "answer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": "^[a-z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Id"
+          },
           "context_bucket": {
-            "$ref": "#/components/schemas/ContextBucket"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextBucket"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
-        "required": [
-          "context_bucket"
-        ],
         "title": "BehaviorContextUpdateRequest",
         "description": "One owner answer that can materially refine a behavior result."
       },
@@ -4295,6 +4388,46 @@
               }
             ],
             "title": "Context Question"
+          },
+          "context_options": {
+            "items": {
+              "$ref": "#/components/schemas/ContextOption"
+            },
+            "type": "array",
+            "title": "Context Options"
+          },
+          "context_effect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Effect"
+          },
+          "dog_voice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dog Voice"
+          },
+          "sound_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sound Note"
           },
           "policy_version": {
             "anyOf": [
@@ -4939,6 +5072,31 @@
         ],
         "title": "ContextBucket",
         "description": "Context buckets V0 (sez. 33.7)."
+      },
+      "ContextOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[a-z0-9_]+$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ContextOption",
+        "description": "One plain-language answer that really answers ``context_question``.\n\nThe client sends only ``id``. The server resolves the exact label already\nshown to the owner, so arbitrary or hidden client text never enters the\nreasoner."
       },
       "DeleteAccountRequest": {
         "properties": {
@@ -6723,6 +6881,71 @@
           "start_at"
         ],
         "title": "FeedingPeriodOut"
+      },
+      "FoodManualCreateRequest": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "client_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Client Request Id"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "ingredients_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients Raw"
+          },
+          "guaranteed_analysis": {
+            "$ref": "#/components/schemas/GuaranteedAnalysis"
+          },
+          "feeding_directions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feeding Directions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "client_request_id",
+          "name"
+        ],
+        "title": "FoodManualCreateRequest",
+        "description": "Owner-entered food, confirmed at creation without a label photo."
       },
       "FoodProductOut": {
         "properties": {

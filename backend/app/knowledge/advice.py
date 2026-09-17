@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from app.contracts.interpretation import InterpretationContract, SafetyFlag
+from app.contracts.observation import ObservationContract
+from app.contracts.taxonomy import IntentCode
 from app.knowledge.models import AdviceItem, DogContextSnapshot, KnowledgeContext
 from app.knowledge.registry import get_registry
 
@@ -27,6 +29,10 @@ _ITALIAN_COPY: dict[str, tuple[str, str]] = {
         "Proponi un comportamento alternativo e premialo; evita punizioni, intimidazioni o correzioni fisiche.",
         "Osserva se riesce a tornare calmo e se il comportamento diminuisce senza aumentare la tensione.",
     ),
+    "ADVICE_RESPOND_TO_PLAY": (
+        "Se il momento è sicuro e ti va, accogli l’invito con un gioco breve e morbido. Fai piccole pause e lascia che sia libero di continuare o fermarsi.",
+        "Durante una pausa, osserva se torna spontaneamente al gioco con un corpo sciolto oppure sceglie di fare altro.",
+    ),
     "ADVICE_SNIFF_EXPLORATION": (
         "Se salute e ambiente lo consentono, proponi un’attività calma di fiuto ed esplorazione invece di aumentare soltanto l’intensità.",
         "Confronta quanto facilmente si rilassa dopo l’attività rispetto al suo solito.",
@@ -44,12 +50,53 @@ _ITALIAN_COPY: dict[str, tuple[str, str]] = {
         "Contattalo prima se il cambiamento è improvviso, marcato o accompagnato da altri segnali fisici.",
     ),
     "ADVICE_MONITOR_BASELINE_CHANGE": (
-        "Registra l’episodio e confronta frequenza, durata e contesto con il suo solito prima di trarre conclusioni forti.",
-        "Usa le prossime osservazioni per capire se è una ricorrenza personale o un cambiamento nuovo.",
+        (
+            "Se ricapita, registra un altro breve momento e nota cosa stava "
+            "succedendo poco prima."
+        ),
+        (
+            "Confronta i prossimi momenti con il suo solito: ti aiuterà a capire "
+            "se è una sua abitudine o qualcosa di nuovo."
+        ),
     ),
     "ADVICE_NO_GENERIC_EXERCISE_DOSE": (
         "Non definire minuti di esercizio soltanto da età o razza: adatta l’attività a salute, temperamento, fase di vita, ambiente e abitudini.",
         "Se salute o mobilità possono limitare l’attività, confrontati con il veterinario.",
+    ),
+}
+
+_RATIONALE_COPY: dict[str, str] = {
+    "ADVICE_DISTANCE_CHOICE": (
+        "Più distanza riduce la pressione e gli lascia una scelta: puoi così "
+        "vedere se il corpo torna gradualmente più morbido."
+    ),
+    "ADVICE_REWARD_BASED_REDIRECT": (
+        "Mostrargli con calma cosa può fare al posto di ciò che sta facendo è "
+        "più chiaro e rispettoso che correggerlo fisicamente."
+    ),
+    "ADVICE_RESPOND_TO_PLAY": (
+        "Le piccole pause rendono il gioco più leggibile: se riparte spontaneamente, "
+        "l’invito al gioco diventa più plausibile."
+    ),
+    "ADVICE_SNIFF_EXPLORATION": (
+        "Il fiuto può offrire un’attività coinvolgente senza aumentare ancora "
+        "l’intensità del momento."
+    ),
+    "ADVICE_RESTORE_FAMILIAR_ROUTINE": (
+        "Una situazione familiare aiuta a capire se il cambiamento dipendeva "
+        "davvero da una giornata diversa dal solito."
+    ),
+    "ADVICE_PUPPY_SAFE_EXPOSURE": (
+        "Procedere per piccoli passi permette al cucciolo di esplorare senza "
+        "essere spinto oltre ciò che riesce a gestire."
+    ),
+    "ADVICE_SENIOR_CHANGE_VET": (
+        "Un cambiamento nuovo in un cane anziano può avere molte cause: parlarne "
+        "con il veterinario evita di attribuirlo automaticamente all’età."
+    ),
+    "ADVICE_MONITOR_BASELINE_CHANGE": (
+        "Confrontare più episodi aiuta a distinguere un momento isolato da un "
+        "cambiamento reale nelle sue abitudini."
     ),
 }
 
@@ -86,6 +133,8 @@ def build_advice(
     interpretation: InterpretationContract,
     dog_context: DogContextSnapshot,
     knowledge_context: KnowledgeContext,
+    *,
+    observation: ObservationContract | None = None,
 ) -> AdviceItem | None:
     flags = interpretation.safety_flags
     if _has_urgent_safety(flags):
@@ -112,15 +161,73 @@ def build_advice(
     if not candidates:
         return None
 
-    selected = min(candidates, key=lambda item: (_PRIORITY.get(item.category, 98), item.code))
+    selected = None
+    object_mouthing = False
+    if intent == IntentCode.PLAY_INTERACTION:
+        observed_text = ""
+        if observation is not None:
+            observed_text = " ".join(
+                [
+                    *observation.scene.visible_objects,
+                    *observation.scene.spatial_relations,
+                    *[
+                        change
+                        for segment in observation.timeline
+                        for change in segment.observed_changes
+                    ],
+                ]
+            ).lower()
+        object_mouthing = any(
+            marker in observed_text
+            for marker in (
+                "sock",
+                "calza",
+                "shoe",
+                "scarpa",
+                "clothing",
+                "vestit",
+                "mord",
+                "bite",
+                "mouth",
+                "tirare",
+                "pull",
+            )
+        )
+        preferred = (
+            "ADVICE_REWARD_BASED_REDIRECT"
+            if object_mouthing
+            else "ADVICE_RESPOND_TO_PLAY"
+        )
+        selected = next((item for item in candidates if item.code == preferred), None)
+    selected = selected or min(
+        candidates, key=lambda item: (_PRIORITY.get(item.category, 98), item.code)
+    )
     action, follow_up = _ITALIAN_COPY.get(
         selected.code,
         (selected.action, selected.follow_up),
     )
-    rationale = (
-        "Azione prudente del catalogo Dogly, compatibile con questa possibile "
-        "lettura, il contesto disponibile e la fase di vita."
+    rationale = _RATIONALE_COPY.get(
+        selected.code,
+        "È un passo semplice e prudente mentre osservi come evolve la situazione.",
     )
+    if (
+        intent == IntentCode.PLAY_INTERACTION
+        and selected.code == "ADVICE_REWARD_BASED_REDIRECT"
+        and object_mouthing
+    ):
+        action = (
+            "Invitalo a lasciare l’oggetto e offrigli un gioco che può "
+            "mordicchiare. Quando lo sceglie, premialo con voce calma o con "
+            "qualcosa che apprezza."
+        )
+        rationale = (
+            "Così non spegni il suo invito: gli mostri con chiarezza con cosa "
+            "può continuare a giocare."
+        )
+        follow_up = (
+            "Osserva se passa volentieri al suo gioco e se il corpo resta "
+            "sciolto durante lo scambio."
+        )
     return AdviceItem(
         code=selected.code,
         category=selected.category,

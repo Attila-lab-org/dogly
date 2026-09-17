@@ -813,6 +813,8 @@ def _interpretation(intent: IntentCode, flags: list[SafetyFlag]) -> Interpretati
     return InterpretationContract(
         primary_intent=intent,
         confidence_band=ConfidenceBand.MEDIUM,
+        consumer_headline="Una lettura prudente del momento",
+        dog_voice="«Potrei star cercando di dirti qualcosa.»",
         consumer_summary="Sintesi prudente.",
         evidence=[
             EvidenceItem(source="observation", description=f"ev {i}") for i in range(3)

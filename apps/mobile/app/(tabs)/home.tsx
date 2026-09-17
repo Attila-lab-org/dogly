@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, CuteIcon } from '@/components';
+import { Card } from '@/components';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -40,15 +40,12 @@ import {
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
-import { CheckInModal } from '@/features/checkin/CheckInModal';
-import { useSession } from '@/features/auth/SessionProvider';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
   const stories = useStories(dog.id, dog.name);
   const birthdayToday = isBirthdayToday(dog.birthDate);
   const {
@@ -92,6 +89,11 @@ export default function HomeScreen() {
     router.push('/behavior/capture');
   };
 
+  const startConversation = () => {
+    if (!dog.id) return;
+    router.push(`/dogs/${dog.id}/tell` as never);
+  };
+
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
@@ -122,7 +124,7 @@ export default function HomeScreen() {
                   ? `Buon compleanno, ${dog.name}! 🎉`
                   : 'Ciao!'}
               </Text>
-              <Text style={styles.tagline}>Sempre al fianco di {dog.name}</Text>
+              <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
             </View>
             <View style={styles.headerActions}>
               <Pressable
@@ -227,7 +229,7 @@ export default function HomeScreen() {
             <View style={styles.offlineBanner} accessibilityLiveRegion="assertive">
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={styles.offlineText}>
-                Non sono riuscito a caricare quota e analisi.
+                Non sono riuscito ad aggiornare la Home.
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -240,42 +242,55 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* CTA dominante: osservazione video dei segnali */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Scopri i segnali di ${dog.name}: registra un momento`}
-            onPress={startCapture}
-            disabled={!dog.id || loading}
+          <LinearGradient
+            colors={[...gradients.cta]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cta}
           >
-            <LinearGradient
-              colors={[...gradients.cta]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.cta}
-            >
-              <View style={styles.ctaIcon}>
-                <Ionicons name="videocam" size={26} color={colors.textOnPrimary} />
+            <Text style={styles.ctaTitle}>
+              CAPISCI {dog.name.toUpperCase()}
+            </Text>
+            <Text style={styles.ctaSubtitle}>
+              Mostrami un momento oppure raccontami cosa hai notato
+            </Text>
+            <View style={styles.ctaActions}>
+              <View style={styles.ctaAction}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Parla di ${dog.name}`}
+                  onPress={startConversation}
+                  style={({ pressed }) => [
+                    styles.ctaCircle,
+                    pressed && styles.ctaCirclePressed,
+                  ]}
+                >
+                  <Ionicons name="mic" size={27} color={colors.accent} />
+                </Pressable>
+                <Text style={styles.ctaActionLabel}>Parla</Text>
               </View>
-              <View style={styles.ctaCopy}>
-                <Text style={styles.ctaTitle}>
-                  CAPISCI {dog.name.toUpperCase()}
-                </Text>
-                <Text style={styles.ctaSubtitle}>
-                  Mostrami cosa sta facendo
-                </Text>
+              <View style={styles.ctaAction}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Registra un video di ${dog.name}`}
+                  onPress={startCapture}
+                  disabled={!dog.id || loading}
+                  style={({ pressed }) => [
+                    styles.ctaCircle,
+                    pressed && styles.ctaCirclePressed,
+                  ]}
+                >
+                  <Ionicons name="videocam" size={27} color={colors.primary} />
+                </Pressable>
+                <Text style={styles.ctaActionLabel}>Video</Text>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={21}
-                color={colors.textOnPrimary}
-              />
-            </LinearGradient>
-          </Pressable>
+            </View>
+          </LinearGradient>
 
           {lastInsight && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Apri l'ultima analisi: ${lastInsight.label}`}
+              accessibilityLabel={`Apri l'ultima lettura: ${lastInsight.label}`}
               onPress={() => {
                 router.push(`/behavior/result/${lastInsight.eventId}`);
               }}
@@ -285,7 +300,7 @@ export default function HomeScreen() {
                   <Ionicons name="happy-outline" size={22} color={colors.accent} />
                 </View>
                 <View style={styles.lastInsightText}>
-                  <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
+                  <Text style={styles.lastInsightLabel}>Ultima lettura</Text>
                   <Text style={styles.lastInsightValue}>{lastInsight.label}</Text>
                   <Text style={styles.lastInsightTime}>
                     {lastInsight.timestampLabel}
@@ -305,31 +320,11 @@ export default function HomeScreen() {
             >
               <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
               <Text style={styles.processingText}>
-                Un'analisi è in corso: ti avviso quando è pronta
+                Sto osservando il video: ti avviso quando è pronto
               </Text>
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </Pressable>
           )}
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Raccontami di ${dog.name}`}
-            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
-            style={({ pressed }) => [
-              styles.tellCard,
-              pressed && styles.tellCardPressed,
-            ]}
-          >
-            <View style={styles.tellIcon}>
-              <CuteIcon name="voice" size={25} color={colors.primary} />
-            </View>
-            <View style={styles.tellCopy}>
-              <Text style={styles.tellEyebrow}>UNA COSA IMPORTANTE</Text>
-              <Text style={styles.tellTitle}>Raccontami di {dog.name}</Text>
-              <Text style={styles.tellHint}>Parla oppure scrivi</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={19} color={colors.primary} />
-          </Pressable>
 
           {/* Capacità secondaria: digestione (UX LOCK: non una tab) */}
           <Pressable
@@ -392,27 +387,22 @@ export default function HomeScreen() {
               onPress={() => router.push('/paywall')}
             >
               <Text style={styles.quotaExhausted}>
-                Analisi comportamentali esaurite per questo mese. Scopri il piano
-                per continuare.
+                Hai usato tutti i video disponibili questo mese. Scopri il
+                piano per continuare.
               </Text>
             </Pressable>
           ) : (
             <Text style={styles.quota}>
               {behaviorRemaining}{' '}
               {behaviorRemaining === 1
-                ? 'analisi comportamentale rimasta'
-                : 'analisi comportamentali rimaste'}{' '}
+                ? 'video disponibile'
+                : 'video disponibili'}{' '}
               questo mese
             </Text>
           )}
 
         </ScrollView>
       </SafeAreaView>
-      <CheckInModal
-        dogId={dog.id}
-        dogName={dog.name}
-        mockGate={usingMockGate}
-      />
     </View>
   );
 }
@@ -574,37 +564,55 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
   },
   cta: {
-    minHeight: 88,
-    flexDirection: 'row',
+    minHeight: 210,
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    gap: spacing.md,
-    ...shadows.raised,
-  },
-  ctaIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
+    padding: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.overlayLight,
-  },
-  ctaCopy: {
-    flex: 1,
+    ...shadows.raised,
   },
   ctaTitle: {
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
     color: colors.textOnPrimary,
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   ctaSubtitle: {
     marginTop: spacing.xs,
     fontSize: typography.size.sm,
     color: colors.textOnPrimary,
     opacity: 0.9,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    textAlign: 'center',
+  },
+  ctaActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xxl,
+    marginTop: spacing.lg,
+  },
+  ctaAction: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  ctaCircle: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  ctaCirclePressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.97 }],
+  },
+  ctaActionLabel: {
+    color: colors.textOnPrimary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
   },
   quota: {
     marginTop: spacing.md,
@@ -618,49 +626,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: typography.weight.medium,
     textAlign: 'center',
-  },
-  tellCard: {
-    minHeight: 84,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.primary,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
-  },
-  tellCardPressed: {
-    opacity: 0.78,
-  },
-  tellIcon: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  tellCopy: {
-    flex: 1,
-  },
-  tellEyebrow: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: typography.weight.bold,
-    letterSpacing: 0.8,
-  },
-  tellTitle: {
-    marginTop: 2,
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-  },
-  tellHint: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
   },
   digestiveCta: {
     minHeight: 72,

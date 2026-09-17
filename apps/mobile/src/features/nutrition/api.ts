@@ -131,9 +131,36 @@ export async function verifyFood(options: {
   );
 }
 
+export async function createManualFood(options: {
+  dogId: string;
+  brand?: string;
+  name: string;
+  ingredientsRaw?: string;
+  calories?: string;
+}): Promise<ApiFoodProduct> {
+  const clientRequestId = newId('manual-food');
+  return api.post<ApiFoodProduct>(
+    '/v1/nutrition/foods/manual',
+    {
+      dog_id: options.dogId,
+      client_request_id: clientRequestId,
+      brand: options.brand?.trim() || null,
+      name: options.name.trim(),
+      ingredients_raw: options.ingredientsRaw?.trim() || null,
+      guaranteed_analysis: {
+        calories: options.calories?.trim() || null,
+      },
+    },
+    { headers: { 'X-Idempotency-Key': clientRequestId } },
+  );
+}
+
 export async function activateFeedingPeriod(options: {
   dogId: string;
   foodId: string;
+  quantityPerDay?: string;
+  treatsNotes?: string;
+  transitionNotes?: string;
 }): Promise<ApiFeedingPeriod> {
   // FIX 3.4: deterministic key per food so a duplicate activation tap is a
   // server-side no-op instead of creating a second feeding period.
@@ -144,6 +171,9 @@ export async function activateFeedingPeriod(options: {
       dog_id: options.dogId,
       food_product_id: options.foodId,
       start_at: new Date().toISOString(),
+      quantity_per_day: options.quantityPerDay?.trim() || null,
+      treats_notes: options.treatsNotes?.trim() || null,
+      transition_notes: options.transitionNotes?.trim() || null,
     },
     { headers: { 'X-Idempotency-Key': key } },
   );

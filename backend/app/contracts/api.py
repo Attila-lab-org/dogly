@@ -11,7 +11,12 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.contracts.interpretation import AlternativeIntent, EvidenceItem, SafetyFlag
+from app.contracts.interpretation import (
+    AlternativeIntent,
+    ContextOption,
+    EvidenceItem,
+    SafetyFlag,
+)
 from app.contracts.taxonomy import (
     AnalysisDomain,
     BehaviorEventStatus,
@@ -487,6 +492,10 @@ class BehaviorEventOut(BaseModel):
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
     needs_context: bool = False
     context_question: str | None = None
+    context_options: list[ContextOption] = Field(default_factory=list)
+    context_effect: str | None = None
+    dog_voice: str | None = None
+    sound_note: str | None = None
     policy_version: str | None = None
     taxonomy_version: str | None = None
     feedback: FeedbackValue | None = None
@@ -520,7 +529,18 @@ class BehaviorFeedbackResponse(BaseModel):
 class BehaviorContextUpdateRequest(BaseModel):
     """One owner answer that can materially refine a behavior result."""
 
-    context_bucket: ContextBucket
+    answer_id: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[a-z0-9_]+$"
+    )
+    # Compatibility for older clients. New clients submit an option id so the
+    # answer always has the exact meaning shown to the owner.
+    context_bucket: ContextBucket | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_answer(self) -> BehaviorContextUpdateRequest:
+        if (self.answer_id is None) == (self.context_bucket is None):
+            raise ValueError("provide exactly one of answer_id or context_bucket")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -727,6 +747,18 @@ class FoodVerifyRequest(BaseModel):
     """Only user-verified fields become durable data (sez. 20.1)."""
 
     brand: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=200)
+    ingredients_raw: str | None = None
+    guaranteed_analysis: GuaranteedAnalysis = Field(default_factory=GuaranteedAnalysis)
+    feeding_directions: str | None = None
+
+
+class FoodManualCreateRequest(BaseModel):
+    """Owner-entered food, confirmed at creation without a label photo."""
+
+    dog_id: str
+    client_request_id: str = Field(min_length=8, max_length=128)
+    brand: str | None = Field(default=None, max_length=120)
     name: str = Field(min_length=1, max_length=200)
     ingredients_raw: str | None = None
     guaranteed_analysis: GuaranteedAnalysis = Field(default_factory=GuaranteedAnalysis)

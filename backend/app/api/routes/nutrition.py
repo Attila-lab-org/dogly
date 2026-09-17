@@ -10,6 +10,7 @@ from app.api.deps import IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
     FeedingPeriodCreate,
     FeedingPeriodOut,
+    FoodManualCreateRequest,
     FoodProductOut,
     FoodScanInitRequest,
     FoodScanInitResponse,
@@ -139,6 +140,32 @@ async def init_food_scan(
     )
     await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp
+
+
+@router.post(
+    "/nutrition/foods/manual",
+    response_model=FoodProductOut,
+    status_code=201,
+)
+async def create_manual_food(
+    payload: FoodManualCreateRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
+) -> FoodProductOut:
+    if cached := guard.lookup():
+        return FoodProductOut.model_validate(cached)
+    if state.engine is not None:
+        product = await digestive_db.create_manual_food_product(
+            state.engine, user_id=user_id, payload=payload
+        )
+    else:
+        product = digestive_domain.create_manual_food_product(
+            state.store, user_id=user_id, payload=payload
+        )
+    response = _food_out(product)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.patch("/nutrition/foods/{food_id}/verify", response_model=FoodProductOut)

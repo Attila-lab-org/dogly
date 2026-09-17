@@ -67,7 +67,7 @@ describe('mapDiaryItemToEntry', () => {
   it('stato non completato → sottotitolo di stato onesto', () => {
     expect(
       mapDiaryItemToEntry(diaryItem({ status: 'OBSERVING' }))?.subtitle,
-    ).toBe('Analisi in corso');
+    ).toBe('Sto osservando il video');
     expect(
       mapDiaryItemToEntry(
         diaryItem({ domain: 'DIGESTIVE', status: 'INSUFFICIENT_IMAGE' }),

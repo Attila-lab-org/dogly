@@ -1,6 +1,9 @@
 {
   "primary_intent": "PLAY_INTERACTION",
   "confidence_band": "HIGH",
+  "consumer_headline": "Rocky ti sta proponendo un momento di gioco",
+  "dog_voice": "«Ti va di giocare un po’ con me?»",
+  "sound_note": "Si sente un abbaio breve: insieme al corpo sciolto, rende più plausibile un invito all’interazione.",
   "consumer_summary": "Rocky sembra voler giocare: il corpo è sciolto, la coda si muove velocemente e si avvicina verso di te.",
   "alternatives": [
     {
@@ -17,6 +20,8 @@
   "personal_memory_used": [],
   "needs_context": false,
   "context_question": null,
+  "context_options": [],
+  "context_effect": null,
   "safety_flags": [],
   "context_bucket": "HOME",
   "schema_version": "interpretation.v0",

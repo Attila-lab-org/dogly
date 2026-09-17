@@ -22,6 +22,7 @@ import {
   CONFIDENCE_BAND_LABELS,
   dogVoiceLine,
   intentHeadline,
+  sanitizeOwnerCopy,
 } from './copy';
 import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
@@ -368,9 +369,13 @@ export function BehaviorResultView({
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
   const isAmbiguous = result.primary_intent === 'AMBIGUOUS';
-  const headline = personalizeCopy(
+  const ownerCopy = (value: string) =>
+    sanitizeOwnerCopy(personalizeCopy(value, dogName))
+      .replace(/\bdel (?:tuo )?cane\b/gi, `di ${dogName}`)
+      .replace(/\bal (?:tuo )?cane\b/gi, `a ${dogName}`)
+      .replace(/\b(?:il|un) (?:tuo )?cane\b/gi, dogName);
+  const headline = ownerCopy(
     result.consumer_headline || intentHeadline(dogName, result.primary_intent),
-    dogName,
   );
   const safety = result.safety;
   const celebrate = !safety && !isInsufficient && !isAmbiguous;
@@ -437,10 +442,10 @@ export function BehaviorResultView({
         </View>
         <View style={styles.translationBlock}>
           <Text style={styles.translationKicker}>
-            In parole umane, potrebbe essere
+            Cosa potrebbe volerti comunicare
           </Text>
           <Text style={styles.translationText}>
-            {dogVoiceLine(result.primary_intent)}
+            {ownerCopy(result.dog_voice || dogVoiceLine(result.primary_intent))}
           </Text>
         </View>
 
@@ -448,8 +453,20 @@ export function BehaviorResultView({
 
         {result.consumer_summary ? (
           <Text style={styles.summary}>
-            {personalizeCopy(result.consumer_summary, dogName)}
+            {ownerCopy(result.consumer_summary)}
           </Text>
+        ) : null}
+
+        {result.sound_note ? (
+          <View style={styles.soundNote}>
+            <Ionicons name="volume-medium-outline" size={18} color={colors.accent} />
+            <View style={styles.soundNoteCopy}>
+              <Text style={styles.soundNoteTitle}>Cosa ho sentito</Text>
+              <Text style={styles.soundNoteText}>
+                {ownerCopy(result.sound_note)}
+              </Text>
+            </View>
+          </View>
         ) : null}
       </View>
 
@@ -457,7 +474,7 @@ export function BehaviorResultView({
         <View style={styles.baselineCard} testID="per-rocky">
           <Text style={styles.baselineKicker}>Per {dogName}</Text>
           <Text style={styles.baselineNote}>
-            {personalizeCopy(result.baseline_note, dogName)}
+            {ownerCopy(result.baseline_note)}
           </Text>
         </View>
       ) : null}
@@ -488,14 +505,14 @@ export function BehaviorResultView({
         <View style={styles.nextStepCard} testID="recommended-next-step">
           <Text style={styles.nextStepTitle}>Prova così</Text>
           <Text style={styles.nextStepText}>
-            {personalizeCopy(result.recommended_next_step, dogName)}
+            {ownerCopy(result.recommended_next_step)}
           </Text>
         </View>
       ) : null}
 
       {result.what_to_watch && !primaryAdvice ? (
         <Text style={styles.watchLine} testID="what-to-watch">
-          Da osservare: {personalizeCopy(result.what_to_watch, dogName)}
+          Da osservare: {ownerCopy(result.what_to_watch)}
         </Text>
       ) : null}
 
@@ -525,7 +542,7 @@ export function BehaviorResultView({
                       key={`${item.label}-${index}`}
                       item={{
                         ...item,
-                        label: personalizeCopy(item.label, dogName),
+                        label: ownerCopy(item.label),
                       }}
                     />
                   ))}
@@ -554,7 +571,7 @@ export function BehaviorResultView({
                         {BEHAVIOR_INTENT_LABELS[alt.intent]}
                       </Text>
                       <Text style={styles.alternativeRationale}>
-                        {personalizeCopy(alt.rationale, dogName)}
+                        {ownerCopy(alt.rationale)}
                       </Text>
                     </View>
                   ))}
@@ -836,6 +853,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14 * typography.lineHeight.relaxed,
     paddingHorizontal: spacing.sm,
+  },
+  soundNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  soundNoteCopy: {
+    flex: 1,
+  },
+  soundNoteTitle: {
+    color: colors.accent,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    textTransform: 'uppercase',
+  },
+  soundNoteText: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   careCard: {
     flexDirection: 'row',

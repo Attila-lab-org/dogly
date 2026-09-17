@@ -40,7 +40,7 @@ export default function FoodsScreen() {
         <StackScreenHeader title="Alimentazione" />
         <ErrorState
           title="Non riesco a caricare i cibi"
-          message="Controlla la connessione e riprova. Nessun dato simulato verrà mostrato."
+          message="Controlla la connessione e riprova."
           onRetry={() => {
             void foodsQuery.refetch();
             void periodsQuery.refetch();
@@ -74,14 +74,14 @@ export default function FoodsScreen() {
     <ScreenContainer scroll>
       <StackScreenHeader title={`Cibo di ${dog.name}`} />
       <Text style={styles.intro}>
-        Il cibo attivo viene collegato a ogni osservazione digestiva, così
-        possiamo notare cambiamenti quando cambi alimentazione.
+        Qui puoi indicare cosa mangia {dog.name}. Nel tempo confronterò queste
+        informazioni con le sue osservazioni digestive.
       </Text>
 
       {foods.length === 0 && (
         <Text style={styles.intro}>
-          Nessun alimento salvato. Scansiona un’etichetta per iniziare: i
-          campi vanno confermati da te prima di diventare definitivi.
+          Non hai ancora salvato alimenti. Puoi inserirne uno in pochi passaggi
+          oppure fotografare l’etichetta.
         </Text>
       )}
 
@@ -141,7 +141,12 @@ export default function FoodsScreen() {
       })}
 
       <Button
-        title="Scansiona una nuova etichetta"
+        title="Aggiungi un alimento"
+        icon={<Ionicons name="add" size={20} color={colors.textOnPrimary} />}
+        onPress={() => router.push('/nutrition/foods/new' as never)}
+      />
+      <Button
+        title="Fotografa un’etichetta"
         variant="outline"
         icon={<Ionicons name="scan-outline" size={18} color={colors.accent} />}
         onPress={() => router.push('/nutrition/foods/scan')}

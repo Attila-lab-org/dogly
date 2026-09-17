@@ -32,6 +32,8 @@ def _interpretation(**updates) -> InterpretationContract:
     payload = {
         "primary_intent": IntentCode.ATTENTION_REQUEST,
         "confidence_band": ConfidenceBand.MEDIUM,
+        "consumer_headline": "Rocky cerca il tuo sguardo",
+        "dog_voice": "«Mi dedichi un momento?»",
         "consumer_summary": "Ti guarda e torna verso di te più volte.",
         "evidence": [
             EvidenceItem(source="observation", description=f"segno {index}")
@@ -52,7 +54,7 @@ def test_new_dog_says_still_learning():
     )
     assert result.baseline_comparison is BaselineComparison.LEARNING
     assert "imparando" in result.baseline_note
-    assert "Rocky sembra voler attirare la tua attenzione" == result.consumer_headline
+    assert "Rocky cerca il tuo sguardo" == result.consumer_headline
     assert result.safety is None
 
 

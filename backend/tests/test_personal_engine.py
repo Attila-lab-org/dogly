@@ -1,7 +1,9 @@
 """Personal Engine: patterns need repeated evidence; knowledge score is derived."""
 
 from app.contracts.taxonomy import PatternState
+from app.domains.models import PersonalPatternRec
 from app.domains.personal_engine import derive_pattern_state
+from app.domains.repository import new_id, now_utc
 from tests.conftest import create_dog
 
 
@@ -54,7 +56,7 @@ async def test_two_completed_events_create_candidate_pattern(
     assert len(patterns) == 1
     assert patterns[0].state == PatternState.CANDIDATE
     assert patterns[0].support_count == 2
-    assert patterns[0].title.startswith("Ricorrenza:")
+    assert patterns[0].title == "Cerca spesso il gioco"
 
     score = await client.get(
         f"/v1/dogs/{dog_id}/knowledge-score", headers=auth_headers
@@ -94,3 +96,31 @@ async def test_single_completion_does_not_create_pattern(
         headers={"x-internal-token": "test-internal-token"},
     )
     assert not any(p.dog_id == dog_id for p in state.store.patterns.values())
+
+
+async def test_owner_confirmation_promotes_supported_pattern(
+    client, auth_headers, state
+):
+    dog_id = await create_dog(client, auth_headers)
+    pattern_id = new_id()
+    state.store.patterns[pattern_id] = PersonalPatternRec(
+        id=pattern_id,
+        dog_id=dog_id,
+        title="Cerca spesso il gioco",
+        state=PatternState.PRELIMINARY,
+        support_count=8,
+        confirm_count=0,
+        reliability_band="medium",
+        first_seen=now_utc(),
+        last_seen=now_utc(),
+    )
+
+    response = await client.post(
+        f"/v1/patterns/{pattern_id}/review",
+        json={"action": "confirm"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == PatternState.ESTABLISHED
+    assert state.store.patterns[pattern_id].confirm_count == 1

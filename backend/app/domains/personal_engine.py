@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api.deps import AppState
-from app.contracts.taxonomy import PatternState
+from app.contracts.taxonomy import IntentCode, PatternState
 from app.domains.models import BehaviorEventRec, PersonalPatternRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
 
@@ -25,7 +25,19 @@ KNOWLEDGE_SCORE_VERSION = "v1"
 
 
 def pattern_title_for_intent(intent: str) -> str:
-    return f"Ricorrenza: {intent}"
+    titles = {
+        IntentCode.PLAY_INTERACTION.value: "Cerca spesso il gioco",
+        IntentCode.ATTENTION_REQUEST.value: "Cerca spesso il tuo coinvolgimento",
+        IntentCode.OUTSIDE_REQUEST.value: "Ti segnala spesso che vuole uscire",
+        IntentCode.ALERT_VIGILANCE.value: "Si mette spesso in ascolto e osservazione",
+        IntentCode.DISCOMFORT_AVOIDANCE.value: "In alcuni momenti preferisce prendere distanza",
+        IntentCode.FEAR_INSECURITY.value: "In alcune situazioni cerca più sicurezza",
+        IntentCode.HIGH_AROUSAL.value: "In alcune situazioni si attiva molto",
+        IntentCode.FRUSTRATION.value: "In alcune situazioni fatica ad aspettare",
+        IntentCode.RELAX_REST.value: "Si rilassa spesso in momenti simili",
+        IntentCode.RESOURCE_TENSION.value: "Con alcune risorse mostra più tensione",
+    }
+    return titles.get(intent, "Un comportamento che si ripete")
 
 
 def derive_pattern_state(support_count: int, confirm_count: int) -> PatternState | None:
@@ -61,6 +73,11 @@ async def on_behavior_completed(state: AppState, event: BehaviorEventRec) -> Non
     if intent is None:
         return
     intent_value = intent.value if hasattr(intent, "value") else str(intent)
+    if intent_value in {
+        IntentCode.AMBIGUOUS.value,
+        IntentCode.INSUFFICIENT.value,
+    }:
+        return
     try:
         if state.engine is not None:
             await upsert_intent_pattern_db(
@@ -102,7 +119,9 @@ def upsert_intent_pattern_memory(
         (
             pattern
             for pattern in store.patterns.values()
-            if pattern.dog_id == dog_id and pattern.title == pattern_title_for_intent(intent)
+            if pattern.dog_id == dog_id
+            and pattern.title
+            in {pattern_title_for_intent(intent), f"Ricorrenza: {intent}"}
         ),
         None,
     )
@@ -127,6 +146,7 @@ def upsert_intent_pattern_memory(
         )
         store.patterns[existing.id] = existing
     else:
+        existing.title = pattern_title_for_intent(intent)
         existing.support_count = support
         existing.state = state
         existing.reliability_band = reliability_for(state)
@@ -219,11 +239,15 @@ async def upsert_intent_pattern_db(
                     """
                     select id, confirm_count
                     from public.personal_patterns
-                    where dog_id = cast(:dog_id as uuid) and title = :title
+                    where dog_id = cast(:dog_id as uuid)
+                      and title = any(cast(:titles as text[]))
                     for update
                     """
                 ),
-                {"dog_id": dog_id, "title": title},
+                {
+                    "dog_id": dog_id,
+                    "titles": [title, f"Ricorrenza: {intent}"],
+                },
             )
         ).mappings().first()
         confirm = int(existing["confirm_count"]) if existing else 0
@@ -262,7 +286,8 @@ async def upsert_intent_pattern_db(
                 text(
                     """
                     update public.personal_patterns
-                    set state = :state,
+                    set title = :title,
+                        state = :state,
                         support_count = :support,
                         reliability_band = :reliability,
                         last_seen = now(),
@@ -273,6 +298,7 @@ async def upsert_intent_pattern_db(
                 ),
                 {
                     "id": pattern_id,
+                    "title": title,
                     "state": state.value,
                     "support": int(support),
                     "reliability": reliability_for(state).upper(),

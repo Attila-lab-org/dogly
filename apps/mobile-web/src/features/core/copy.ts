@@ -56,6 +56,30 @@ export function dogVoiceLine(intent: BehaviorIntent | null): string {
   return DOG_VOICE_LINES[intent ?? 'INSUFFICIENT'];
 }
 
+/** Ripulisce anche i risultati storici creati prima del copy consumer. */
+export function sanitizeOwnerCopy(value: string): string {
+  return value
+    .replace(/\bplay bow\b/gi, 'inchino di gioco')
+    .replace(/\barousal\b/gi, 'attivazione')
+    .replace(/\bconfidenza\s+(?:bassa|media|alta)\s*[;,.]?\s*/gi, '')
+    .replace(/\bPLAY_INTERACTION\b/g, 'invito al gioco')
+    .replace(/\bATTENTION_REQUEST\b/g, 'richiesta di attenzione')
+    .replace(/\bRELAX_REST\b/g, 'momento di relax')
+    .replace(
+      /richiesta di attenzione\/gioco/gi,
+      'richiesta di attenzione o invito al gioco',
+    )
+    .replace(/dettagli contestuali/gi, 'qualche dettaglio in più')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/^([a-zà-ù])/, (letter) => letter.toLocaleUpperCase('it-IT'))
+    .replace(
+      /([.!?]\s+)([a-zà-ù])/g,
+      (_, separator: string, letter: string) =>
+        `${separator}${letter.toLocaleUpperCase('it-IT')}`,
+    );
+}
+
 export interface ProcessingStep {
   id: 'analyze' | 'signals' | 'personal' | 'answer';
   status: BehaviorEventStatus;
@@ -69,13 +93,13 @@ export function processingStepsFor(dogName: string): ProcessingStep[] {
     {
       id: 'analyze',
       status: 'QUEUED',
-      title: 'Analizzo il video',
+      title: 'Guardo il momento',
       description: `Sto guardando ${dogName}.`,
     },
     {
       id: 'signals',
       status: 'OBSERVING',
-      title: 'Riconosco i segnali principali',
+      title: 'Osservo i segnali principali',
       description: `Cerco ciò che può aiutarmi a capire ${dogName}.`,
     },
     {

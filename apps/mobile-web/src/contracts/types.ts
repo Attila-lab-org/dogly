@@ -163,6 +163,13 @@ export interface BehaviorEventResult {
   safety_flags?: Array<{ code: string; severity: string }>;
   needs_context?: boolean;
   context_question?: string | null;
+  context_options?: Array<{
+    id: string;
+    label: string;
+  }>;
+  context_effect?: string | null;
+  dog_voice?: string | null;
+  sound_note?: string | null;
   /** Versioni obbligatorie per audit e replay (sez. 16.3) */
   schema_version: string;
   policy_version: string | null;

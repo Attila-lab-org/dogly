@@ -418,6 +418,70 @@ async def test_owner_context_refines_without_observing_video_again(
     )
 
 
+async def test_owner_selects_the_exact_answer_shown_in_the_question(
+    client: httpx.AsyncClient,
+    worker_client: httpx.AsyncClient,
+    auth_headers,
+    state,
+):
+    event_id = await _queue_behavior_event(
+        client, auth_headers, "crid-semantic-context"
+    )
+    processed = await worker_client.post(
+        "/tasks/run",
+        json={"task_type": "behavior_analysis", "event_id": event_id},
+        headers={"x-internal-token": "test-internal-token"},
+    )
+    assert processed.status_code == 200
+
+    event = state.store.behavior_events[event_id]
+    event.interpretation_json["needs_context"] = True
+    event.interpretation_json["context_question"] = (
+        "Stavi cercando di togliere la calza?"
+    )
+    event.interpretation_json["context_options"] = [
+        {
+            "id": "removing_sock",
+            "label": "Sì, la stavo togliendo",
+        },
+        {
+            "id": "already_playing",
+            "label": "No, stavamo giocando",
+        },
+    ]
+
+    refined = await client.post(
+        f"/v1/behavior/events/{event_id}/context",
+        json={"answer_id": "removing_sock"},
+        headers=auth_headers,
+    )
+
+    assert refined.status_code == 200, refined.text
+    body = refined.json()
+    assert body["needs_context"] is False
+    assert body["context_options"] == []
+    assert "Sì, la stavo togliendo" in body["context_effect"]
+    stored = state.store.behavior_events[event_id].interpretation_json
+    assert stored["context_response"]["label"] == "Sì, la stavo togliendo"
+
+    repeated = await client.post(
+        f"/v1/behavior/events/{event_id}/context",
+        json={"answer_id": "removing_sock"},
+        headers=auth_headers,
+    )
+    assert repeated.status_code == 200
+    assert (
+        len(
+            [
+                record
+                for record in state.cost_meter.records
+                if record["operation"] == "reasoner.refine_context"
+            ]
+        )
+        == 1
+    )
+
+
 async def test_feedback_correction_research_eligibility_follows_server_consent(
     client: httpx.AsyncClient,
     worker_client: httpx.AsyncClient,

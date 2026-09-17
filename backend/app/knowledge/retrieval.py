@@ -42,7 +42,15 @@ def _candidate_ids(
             "withdrawal": ["OBS_BODY_006"],
         }.get(movement, [])
     )
-    if body.posture == Posture.PLAY_BOW:
+    timeline_text = " ".join(
+        change
+        for segment in observation.timeline
+        for change in segment.observed_changes
+    ).lower()
+    if body.posture == Posture.PLAY_BOW or any(
+        marker in timeline_text
+        for marker in ("play bow", "play_bow", "inchino di gioco")
+    ):
         ids.append("OBS_BODY_004")
 
     tail = observation.tail

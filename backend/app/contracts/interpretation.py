@@ -5,6 +5,7 @@ band-only (no numeric %, O-07); consumer wording is probabilistic (sez. 16.1).
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -64,6 +65,30 @@ class SafetyFlag(BaseModel):
     severity: str = "info"
 
 
+class ContextOption(BaseModel):
+    """One plain-language answer that really answers ``context_question``.
+
+    The client sends only ``id``. The server resolves the exact label already
+    shown to the owner, so arbitrary or hidden client text never enters the
+    reasoner.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=32, pattern=r"^[a-z0-9_]+$")
+    label: str = Field(min_length=1, max_length=60)
+
+
+class OwnerContextAnswer(BaseModel):
+    """A server-resolved answer selected by the owner."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str
+    answer_id: str
+    label: str
+
+
 class InterpretationContract(BaseModel):
     """InterpretationContract V0 root (sez. 16.3)."""
 
@@ -74,6 +99,12 @@ class InterpretationContract(BaseModel):
     confidence_band: ConfidenceBand
     # Short, cautious, localizable consumer string ("sembra / probabilmente / possibile").
     consumer_summary: str
+    # Clip-specific consumer copy. Safety copy can still override the headline.
+    consumer_headline: str = Field(min_length=3, max_length=100)
+    dog_voice: str = Field(min_length=3, max_length=110)
+    # Plain-language acoustic observation. This explains what was heard and
+    # how it contributes in context; it is never a literal bark translation.
+    sound_note: str | None = Field(default=None, max_length=220)
     # 0-2 plausible alternatives with rationale.
     alternatives: list[AlternativeIntent] = Field(default_factory=list, max_length=2)
     # Sez. 6.1: 3-5 evidence bullets when a primary intent is present.
@@ -85,6 +116,11 @@ class InterpretationContract(BaseModel):
     needs_context: bool = False
     # At most one simple question if the result materially improves.
     context_question: str | None = None
+    # 2-4 answers authored together with the question. Never inferred from
+    # keywords on the client.
+    context_options: list[ContextOption] = Field(default_factory=list, max_length=4)
+    # Present only after an owner answer has refined the reading.
+    context_effect: str | None = Field(default=None, max_length=240)
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
     # Current capture context bucket (sez. 33.7).
     context_bucket: ContextBucket = ContextBucket.UNKNOWN
@@ -106,4 +142,60 @@ class InterpretationContract(BaseModel):
                 "evidence must contain 3-5 items when primary_intent is present "
                 f"(sez. 6.1); got {len(self.evidence)} for {self.primary_intent.value}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _context_question_has_matching_answers(self) -> InterpretationContract:
+        if self.needs_context:
+            if not self.context_question:
+                raise ValueError("needs_context requires one context_question")
+            if not 2 <= len(self.context_options) <= 4:
+                raise ValueError("needs_context requires 2-4 context_options")
+            if len({option.id for option in self.context_options}) != len(
+                self.context_options
+            ):
+                raise ValueError("context option ids must be unique")
+        elif self.context_question is not None or self.context_options:
+            raise ValueError(
+                "context_question/options must be empty when needs_context is false"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _owner_copy_never_leaks_internal_language(self) -> InterpretationContract:
+        owner_copy = [
+            self.consumer_headline,
+            self.dog_voice,
+            self.consumer_summary,
+            self.sound_note or "",
+            self.context_question or "",
+            self.context_effect or "",
+            *self.contradictions,
+            *[item.description for item in self.evidence],
+            *[item.rationale for item in self.alternatives],
+            *[
+                option.label
+                for option in self.context_options
+            ],
+        ]
+        joined = " ".join(owner_copy).casefold()
+        forbidden = {
+            "safe_",
+            "advice_",
+            "confidence band",
+            "confidenza ",
+            "play bow",
+            "arousal",
+            "context bucket",
+            "baseline",
+            "schema",
+            "tassonomia",
+            "taxonomy",
+            "retrieval",
+            *[intent.value.casefold() for intent in IntentCode],
+        }
+        leaked = next((term for term in forbidden if term in joined), None)
+        internal_name = re.search(r"\b(?:rag|llm|openai|gemini)\b", joined)
+        if leaked or internal_name or re.search(r"\b\d{1,3}\s*%", joined):
+            raise ValueError("owner-facing copy contains internal or false-precision language")
         return self

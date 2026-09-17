@@ -92,7 +92,24 @@ async def list_diary_page(
                              e.dog_id,
                              e.created_at,
                              'BEHAVIOR'::text as domain,
-                             coalesce(e.primary_intent::text, 'Analisi comportamento') as title,
+                             coalesce(
+                               e.interpretation_json->>'consumer_headline',
+                               e.interpretation_json->'consumer'->>'consumer_headline',
+                               case e.primary_intent
+                                 when 'PLAY_INTERACTION' then 'Potrebbe cercare il gioco'
+                                 when 'ATTENTION_REQUEST' then 'Potrebbe cercare il tuo coinvolgimento'
+                                 when 'OUTSIDE_REQUEST' then 'Potrebbe voler uscire'
+                                 when 'ALERT_VIGILANCE' then 'Sembra molto attento a ciò che accade'
+                                 when 'DISCOMFORT_AVOIDANCE' then 'Potrebbe preferire un po’ di distanza'
+                                 when 'FEAR_INSECURITY' then 'Potrebbe cercare più sicurezza'
+                                 when 'HIGH_AROUSAL' then 'Sembra molto attivato'
+                                 when 'FRUSTRATION' then 'Potrebbe faticare ad aspettare'
+                                 when 'RELAX_REST' then 'Sembra rilassato'
+                                 when 'RESOURCE_TENSION' then 'Potrebbe essere teso vicino a una risorsa'
+                                 else null
+                               end,
+                               'Momento da osservare'
+                             ) as title,
                              e.summary,
                              e.status::text as status,
                              coalesce(c.retention_state::text, 'TEMPORARY') as retention_state,
@@ -107,7 +124,10 @@ async def list_diary_page(
                              f.dog_id,
                              f.created_at,
                              'DIGESTIVE'::text as domain,
-                             'Controllo digestione' as title,
+                             coalesce(
+                               f.intelligence_json->>'consumer_headline',
+                               'Osservazione digestiva'
+                             ) as title,
                              f.summary,
                              case
                                when f.status in ('OBSERVING', 'INTERPRETING', 'QUEUED')

@@ -13,6 +13,7 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import ELIGIBLE_PATTERN_STATES, PatternState
 from app.domains import dogs_db
 from app.domains.models import PersonalPatternRec
+from app.domains.personal_engine import derive_pattern_state
 from app.providers.base import EligiblePatternSummary
 
 
@@ -89,7 +90,13 @@ async def review_pattern(
             version_increment = 0
             confirm_increment = 0
         elif payload.action == "confirm":
-            next_state = str(row["state"])
+            promoted = derive_pattern_state(
+                int(row["support_count"]),
+                int(row["confirm_count"]) + 1,
+            )
+            next_state = (
+                promoted.value if promoted is not None else str(row["state"])
+            )
             version_increment = 0
             confirm_increment = 1
         else:

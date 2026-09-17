@@ -419,9 +419,8 @@ export default function BehaviorCaptureScreen() {
               />
               <Text style={styles.permissionTitle}>Serve la fotocamera</Text>
               <Text style={styles.permissionText}>
-                Per capire {dog.name} registro un breve video. Il microfono è
-                facoltativo: senza audio l'analisi funziona comunque, con meno
-                segnali.
+                Per osservare un breve momento di {dog.name}. Il suono è
+                facoltativo.
               </Text>
               <Button
                 title="Abilita fotocamera"
@@ -488,14 +487,15 @@ export default function BehaviorCaptureScreen() {
               ) : (
                 <Text style={styles.hint}>
                   {cameraReady
-                    ? `Inquadra tutto ${dog.name}, con buona luce e senza zoom. Tocca il pulsante rosso: registro da ${CAPTURE_MIN_SECONDS} a ${CAPTURE_MAX_SECONDS} secondi.`
+                    ? `Tieni inquadrato ${dog.name} per ${CAPTURE_MIN_SECONDS}-${CAPTURE_MAX_SECONDS} secondi`
                     : 'Attendi, sto aprendo la fotocamera…'}
                 </Text>
               )}
               {state.phase === 'ready' && state.audioDegraded && (
                 <>
                   <Text style={styles.audioNote}>
-                    Microfono non disponibile: analizzerò solo il video.
+                    Il suono non è disponibile. Posso osservare comunque il
+                    video.
                   </Text>
                   <Button
                     title="Abilita microfono"
@@ -550,7 +550,7 @@ export default function BehaviorCaptureScreen() {
               {state.phase === 'recording' ? (
                 <Text style={styles.hintSmall}>
                   {canStop
-                    ? `Sto registrando. Tocca il quadratino per fermare, dopo almeno ${CAPTURE_MIN_SECONDS} secondi.`
+                    ? 'Tocca il quadratino quando hai ripreso il momento.'
                     : 'Attendi: sto avviando la registrazione…'}
                 </Text>
               ) : null}
@@ -562,9 +562,9 @@ export default function BehaviorCaptureScreen() {
               <View style={styles.tooShortCard}>
                 <Ionicons name="time-outline" size={22} color={colors.warning} />
                 <Text style={styles.tooShortText}>
-                  Il video è troppo corto: mi servono almeno{' '}
-                  {CAPTURE_MIN_SECONDS} secondi per osservare {dog.name}. Nessuna
-                  analisi è stata usata.
+                  Il video è troppo breve per capire il momento. Riprova
+                  tenendo {dog.name} inquadrato per almeno {CAPTURE_MIN_SECONDS}{' '}
+                  secondi.
                 </Text>
               </View>
               <Button

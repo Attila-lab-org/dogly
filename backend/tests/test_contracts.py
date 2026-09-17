@@ -74,3 +74,44 @@ def test_evidence_empty_allowed_for_abstention_null_intent():
     data["alternatives"] = []
     interp = InterpretationContract.model_validate(data)
     assert interp.primary_intent is None
+
+
+def test_context_question_requires_answers_authored_with_it():
+    data = _interpretation_payload()
+    data["needs_context"] = True
+    data["context_question"] = "Stavi cercando di togliere la calza?"
+    with pytest.raises(ValidationError):
+        InterpretationContract.model_validate(data)
+
+    data["context_options"] = [
+        {
+            "id": "removing",
+            "label": "Sì, la stavo togliendo",
+        },
+        {
+            "id": "playing",
+            "label": "No, stavamo giocando",
+        },
+        {
+            "id": "unsure",
+            "label": "Non ricordo",
+        },
+    ]
+    interp = InterpretationContract.model_validate(data)
+    assert interp.context_options[0].label == "Sì, la stavo togliendo"
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "Intent rilevato: PLAY_INTERACTION",
+        "Confidenza media",
+        "Probabilità 82%",
+        "Lo schema RAG suggerisce gioco",
+    ],
+)
+def test_owner_copy_rejects_internal_or_false_precision_language(leak: str):
+    data = _interpretation_payload()
+    data["consumer_summary"] = leak
+    with pytest.raises(ValidationError):
+        InterpretationContract.model_validate(data)

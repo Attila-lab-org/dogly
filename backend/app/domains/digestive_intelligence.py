@@ -38,6 +38,11 @@ class DigestiveContext(BaseModel):
     weight_kg: float | None = None
     active_food_name: str | None = None
     food_started_days_ago: int | None = Field(default=None, ge=0)
+    current_food_prior_scores: list[int] = Field(default_factory=list)
+    previous_food_scores: list[int] = Field(default_factory=list)
+    season_label: str | None = None
+    same_season_prior_scores: list[int] = Field(default_factory=list)
+    other_season_scores: list[int] = Field(default_factory=list)
     prior_scores: list[int] = Field(default_factory=list)
     prior_consistencies: list[str] = Field(default_factory=list)
     recent_episode_count_24h: int = Field(default=0, ge=0)
@@ -95,6 +100,24 @@ def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
         "NEAR_USUAL",
         f"È simile alle osservazioni recenti di {context.dog_name}.",
     )
+
+
+def _directional_association(
+    current: list[int],
+    comparison: list[int],
+    *,
+    softer: str,
+    firmer: str,
+) -> str | None:
+    """Describe a repeated difference without promoting correlation to cause."""
+    if len(current) < 3 or len(comparison) < 3:
+        return None
+    delta = (sum(current) / len(current)) - (sum(comparison) / len(comparison))
+    if delta >= 0.75:
+        return softer
+    if delta <= -0.75:
+        return firmer
+    return None
 
 
 def _safety_state(
@@ -194,11 +217,53 @@ def build_digestive_intelligence(
             f"L’alimento è stato iniziato {context.food_started_days_ago} giorni fa: "
             "la vicinanza temporale è utile da monitorare, ma non indica una causa."
         )
+        if state not in {
+            DigestiveState.ATTENTION,
+            DigestiveState.VET_CONTACT,
+        }:
+            next_step = (
+                "Se il cambio è ancora in corso, procedi gradualmente nell’arco "
+                "di circa una settimana e annota anche quantità e snack."
+            )
     if context.unusual_food_48h is True:
         associations.append(
             "Hai segnalato qualcosa di insolito mangiato nelle ultime 48 ore. "
             "È un contesto utile, non una causa accertata."
         )
+    if score is not None and context.active_food_name:
+        food_association = _directional_association(
+            [*context.current_food_prior_scores, score],
+            context.previous_food_scores,
+            softer=(
+                f"Con {context.active_food_name}, le osservazioni registrate finora "
+                "sono state spesso più morbide rispetto al periodo precedente. "
+                "La coincidenza merita attenzione, ma non dimostra che sia la causa."
+            ),
+            firmer=(
+                f"Con {context.active_food_name}, le osservazioni registrate finora "
+                "sono state spesso più compatte rispetto al periodo precedente. "
+                "La coincidenza merita attenzione, ma non dimostra che sia la causa."
+            ),
+        )
+        if food_association:
+            associations.append(food_association)
+    if score is not None and context.season_label:
+        season_association = _directional_association(
+            [*context.same_season_prior_scores, score],
+            context.other_season_scores,
+            softer=(
+                f"Nel periodo {context.season_label}, le osservazioni raccolte sono "
+                "state spesso più morbide rispetto agli altri periodi dell’anno. "
+                "È un andamento da continuare a osservare, non una causa."
+            ),
+            firmer=(
+                f"Nel periodo {context.season_label}, le osservazioni raccolte sono "
+                "state spesso più compatte rispetto agli altri periodi dell’anno. "
+                "È un andamento da continuare a osservare, non una causa."
+            ),
+        )
+        if season_association:
+            associations.append(season_association)
 
     limitations = observation.get("warnings") or []
     reliability = (

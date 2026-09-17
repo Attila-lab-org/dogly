@@ -49,22 +49,14 @@ import {
   type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
 import { usePersonalPatterns } from '@/features/patterns/api';
+import {
+  listFeedingPeriods,
+  listFoods,
+} from '@/features/nutrition/api';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-const rockyAvatarSource = require('../../assets/images/rocky-avatar.png');
-
 const AVATAR_SIZE = 104;
-
-const FREQUENT_STATES: Array<{
-  label: string;
-  backgroundColor: string;
-  color: string;
-}> = [
-  { label: 'Relax', backgroundColor: '#E0F7F6', color: '#0D9488' },
-  { label: 'Gioco', backgroundColor: '#EEF2FF', color: '#4F46E5' },
-  { label: 'Attenzione', backgroundColor: '#FFF1EE', color: '#EA580C' },
-];
 
 const PATTERN_ICONS: Record<string, IconName> = {
   'pattern-porta': 'exit-outline',
@@ -82,9 +74,9 @@ export default function DogProfileTabScreen() {
   const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor((contentWidth - 40 - 16) / 3);
 
-  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel) || '4 anni';
-  const sizeLabel = dog.sizeLabel || 'Taglia media';
-  const breedLabel = dog.breedLabel || 'Labrador';
+  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel);
+  const sizeLabel = dog.sizeLabel;
+  const breedLabel = dog.breedLabel;
 
   const activePeriod = useDemoData
     ? feedingPeriodsMock.find((period) => period.endedAt === null)
@@ -108,6 +100,29 @@ export default function DogProfileTabScreen() {
     queryFn: () => getDigestiveSummary(dog.id),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
+  const foodsQuery = useQuery({
+    queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
+    queryFn: () => listFoods(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
+  });
+  const feedingPeriodsQuery = useQuery({
+    queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
+    queryFn: () => listFeedingPeriods(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id),
+  });
+  const activeRealPeriod = feedingPeriodsQuery.data?.find(
+    (period) => period.end_at == null,
+  );
+  const activeRealFood = foodsQuery.data?.find(
+    (food) => food.id === activeRealPeriod?.food_product_id,
+  );
+  const activeFoodLabel = (
+    useDemoData
+      ? [activeFood?.brand, activeFood?.name]
+      : [activeRealFood?.brand, activeRealFood?.name]
+  )
+    .filter(Boolean)
+    .join(' ');
   const previewPhotos = useDemoData
     ? photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3)
     : (photosQuery.data ?? []).slice(0, 3);
@@ -147,14 +162,14 @@ export default function DogProfileTabScreen() {
       await storiesQuery.refetch();
       setEditingStoryId(null);
     } catch {
-      setStoryError('Non sono riuscito a salvare la nota.');
+      setStoryError('Non sono riuscito a salvare il ricordo.');
     } finally {
       setSavingStory(false);
     }
   };
   const confirmStoryDelete = (storyId: string) => {
     Alert.alert(
-      'Eliminare questa nota?',
+      'Eliminare questo ricordo?',
       'Dogly non la userà più per conoscere il tuo cane.',
       [
         { text: 'Annulla', style: 'cancel' },
@@ -172,7 +187,7 @@ export default function DogProfileTabScreen() {
                 }
               })
               .catch(() =>
-                setStoryError('Non sono riuscito a eliminare la nota.'),
+                setStoryError('Non sono riuscito a eliminare il ricordo.'),
               );
           },
         },
@@ -208,7 +223,6 @@ export default function DogProfileTabScreen() {
               <View style={styles.avatarHalo}>
                 <DogAvatar
                   size={AVATAR_SIZE}
-                  source={dog.photoUri ? undefined : rockyAvatarSource}
                   photoUri={dog.photoUri}
                   dogName={dog.name}
                 />
@@ -223,31 +237,30 @@ export default function DogProfileTabScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.name}>{dog.name || 'Rocky'}</Text>
+            <Text style={styles.name}>{dog.name || 'Il tuo cane'}</Text>
 
             <View style={styles.metaRow}>
-              <MetaItem icon="calendar-outline" label={ageLabel} />
-              <MetaItem icon="resize-outline" label={sizeLabel} />
-              <MetaItem icon="paw" label={breedLabel} />
+              {ageLabel ? <MetaItem icon="calendar-outline" label={ageLabel} /> : null}
+              {sizeLabel ? <MetaItem icon="resize-outline" label={sizeLabel} /> : null}
+              {breedLabel ? <MetaItem icon="paw" label={breedLabel} /> : null}
             </View>
           </View>
 
-          {/* Nuovi pattern appresi */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nuovi pattern appresi</Text>
-            <Ionicons name="bulb-outline" size={20} color="#F59E0B" />
+            <Text style={styles.sectionTitle}>Quello che sto imparando</Text>
+            <Ionicons name="heart-outline" size={20} color="#F59E0B" />
           </View>
           <View style={styles.card}>
             {learnedPatterns.length === 0 ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Vedi i pattern"
+                accessibilityLabel={`Scopri cosa sto imparando su ${dog.name}`}
                 onPress={() => router.push('/patterns')}
                 style={styles.patternEmpty}
               >
                 <Text style={styles.patternEmptyText}>
-                  Continua ad analizzare i video di {dog.name}: i pattern
-                  appariranno qui.
+                  Con ogni momento condiviso posso comprendere meglio le
+                  abitudini di {dog.name}.
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </Pressable>
@@ -284,54 +297,6 @@ export default function DogProfileTabScreen() {
               ))
             )}
           </View>
-
-          {/* Stati frequenti */}
-          <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
-            Stati frequenti
-          </Text>
-          <View style={styles.card}>
-            <View style={styles.pillRow}>
-              {FREQUENT_STATES.map((state) => (
-                <View
-                  key={state.label}
-                  style={[
-                    styles.statePill,
-                    { backgroundColor: state.backgroundColor },
-                  ]}
-                >
-                  <Text style={[styles.statePillText, { color: state.color }]}>
-                    {state.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Agenda cura */}
-          <Text style={[styles.secondaryTitle, styles.sectionTitleSpaced]}>
-            Agenda
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Apri agenda di cura"
-            onPress={() => router.push('/care' as never)}
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-          >
-            <View style={styles.linkRow}>
-              <View style={[styles.linkIcon, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="calendar-outline" size={20} color="#D97706" />
-              </View>
-              <View style={styles.linkBody}>
-                <Text style={styles.linkTitle}>Prossimo promemoria</Text>
-                <Text style={styles.linkSubtitle}>
-                  {nextCare
-                    ? relativeCareDate(nextCare.scheduledAt)
-                    : 'Aggiungi promemoria'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </View>
-          </Pressable>
 
           {/* Album preview */}
           <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
@@ -428,9 +393,32 @@ export default function DogProfileTabScreen() {
               <View style={styles.linkBody}>
                 <Text style={styles.linkTitle}>Alimentazione</Text>
                 <Text style={styles.linkSubtitle} numberOfLines={1}>
-                  {activeFood?.brand ??
-                    lifestyle.profile?.feedingLabel ??
+                  {activeFoodLabel ||
+                    lifestyle.profile?.feedingLabel ||
                     'Aggiungi cibo'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+            <View style={styles.divider} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Agenda"
+              onPress={() => router.push('/care' as never)}
+              style={({ pressed }) => [
+                styles.patternRow,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={[styles.patternIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="calendar-outline" size={18} color="#D97706" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>Agenda</Text>
+                <Text style={styles.linkSubtitle}>
+                  {nextCare
+                    ? relativeCareDate(nextCare.scheduledAt)
+                    : 'Aggiungi promemoria'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -464,9 +452,9 @@ export default function DogProfileTabScreen() {
             </View>
           </Pressable>
 
-          {/* Note personali */}
+          {/* Ricordi confermati dal proprietario */}
           <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
-            <Text style={styles.secondaryTitle}>Note personali</Text>
+            <Text style={styles.secondaryTitle}>Ricordi di {dog.name}</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
@@ -474,16 +462,16 @@ export default function DogProfileTabScreen() {
               hitSlop={8}
               style={styles.pillButton}
             >
-              <Text style={styles.pillButtonText}>Racconta</Text>
+              <Text style={styles.pillButtonText}>Aggiungi</Text>
             </Pressable>
           </View>
           {!useDemoData && storiesQuery.isLoading ? (
-            <Text style={styles.notesEmpty}>Carico le note confermate…</Text>
+            <Text style={styles.notesEmpty}>Carico i ricordi confermati…</Text>
           ) : null}
           {!useDemoData && storiesQuery.isError ? (
             <View style={styles.notesErrorRow}>
               <Text style={styles.noteError}>
-                Non riesco a caricare le note.
+                Non riesco a caricare i ricordi.
               </Text>
               <Pressable onPress={() => void storiesQuery.refetch()}>
                 <Text style={styles.noteActionPrimary}>Riprova</Text>
@@ -539,7 +527,7 @@ export default function DogProfileTabScreen() {
               ) : (
                 <>
                   <Text style={styles.noteMeta}>
-                    Detto da te ·{' '}
+                    Dal tuo racconto ·{' '}
                     {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
                   </Text>
                   {story.facts.map((fact) => (
@@ -550,7 +538,7 @@ export default function DogProfileTabScreen() {
                   <View style={styles.noteActions}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Elimina nota"
+                      accessibilityLabel="Elimina ricordo"
                       onPress={() => confirmStoryDelete(story.id)}
                     >
                       <Ionicons
@@ -561,7 +549,7 @@ export default function DogProfileTabScreen() {
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Modifica nota"
+                      accessibilityLabel="Modifica ricordo"
                       onPress={() => beginStoryEdit(story)}
                     >
                       <Text style={styles.noteActionPrimary}>Modifica</Text>

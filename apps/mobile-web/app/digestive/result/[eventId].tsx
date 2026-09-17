@@ -115,6 +115,20 @@ export default function DigestiveResultScreen() {
     );
   }
 
+  if (useApi && query.isError) {
+    return (
+      <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
+        <StackScreenHeader title={`Digestione di ${dog.name}`} />
+        <ErrorState
+          title="Non riesco ad aprire questo momento"
+          message="Controlla la connessione e riprova."
+          retryLabel="Riprova"
+          onRetry={() => void query.refetch()}
+        />
+      </ScreenContainer>
+    );
+  }
+
   if (stillProcessing) {
     return (
       <ScreenContainer style={styles.screen}>
@@ -129,7 +143,7 @@ export default function DigestiveResultScreen() {
   if (!event) {
     return (
       <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
-        <StackScreenHeader title="Esito digestione" />
+        <StackScreenHeader title={`Digestione di ${dog.name}`} />
         <ErrorState
           title="Risultato non disponibile"
           message="Puoi ritrovare le osservazioni precedenti nel Diario."
@@ -148,7 +162,7 @@ export default function DigestiveResultScreen() {
   ) {
     return (
       <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
-        <StackScreenHeader title="Esito digestione" />
+        <StackScreenHeader title={`Digestione di ${dog.name}`} />
         <View style={styles.emptyVisual}>
           <View style={styles.warningIcon}>
             <Ionicons name="camera-outline" size={34} color={colors.warning} />
@@ -222,7 +236,7 @@ export default function DigestiveResultScreen() {
 
   return (
     <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
-      <StackScreenHeader title="Esito digestione" />
+      <StackScreenHeader title={`Digestione di ${dog.name}`} />
 
       <View style={styles.heroCard}>
         <View style={[styles.statusPill, { backgroundColor: statusPill.bg }]}>
@@ -325,7 +339,7 @@ export default function DigestiveResultScreen() {
         <Card style={styles.questionCard}>
           <View style={styles.questionHeading}>
             <View style={styles.questionIcon}>
-              <Ionicons name="sparkles" size={18} color={colors.primary} />
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
             </View>
             <Text style={styles.questionEyebrow}>Un dettaglio utile</Text>
           </View>
@@ -443,7 +457,7 @@ export default function DigestiveResultScreen() {
         >
           <Ionicons name="thumbs-up-outline" size={18} color={colors.teal} />
           <Text style={[styles.feedbackPillText, { color: colors.teal }]}>
-            Sembra corretto
+            Mi è stato utile
           </Text>
         </Pressable>
         <Pressable
@@ -458,18 +472,9 @@ export default function DigestiveResultScreen() {
         >
           <Ionicons name="thumbs-down-outline" size={18} color={colors.coral} />
           <Text style={[styles.feedbackPillText, { color: colors.coral }]}>
-            Non convincente
+            Non mi aiuta
           </Text>
         </Pressable>
-        <Button
-          title="Salva nel diario"
-          variant="outline"
-          icon={
-            <Ionicons name="bookmark-outline" size={18} color={colors.teal} />
-          }
-          onPress={() => router.replace('/(tabs)/diary')}
-          testID="digestive-save-diary"
-        />
         <Button
           title="Fatto"
           onPress={() => router.replace('/(tabs)/home')}

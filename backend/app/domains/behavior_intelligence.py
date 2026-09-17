@@ -61,6 +61,7 @@ class BehaviorConsumerResult(BaseModel):
 
     schema_version: str = "behavior_consumer.v1"
     consumer_headline: str
+    dog_voice: str
     consumer_summary: str
     baseline_comparison: BaselineComparison
     baseline_note: str | None = None
@@ -222,12 +223,26 @@ def build_behavior_consumer(
     advice: AdviceItem | None = None,
 ) -> BehaviorConsumerResult:
     safety = _pick_safety(interpretation.safety_flags)
-    headline = _headline(dog_name, interpretation.primary_intent, safety)
-    comparison, baseline_note = _baseline(dog_name, interpretation, dog_context)
     insufficient = interpretation.primary_intent in {
         None,
         IntentCode.INSUFFICIENT,
     }
+    headline = (
+        _headline(dog_name, interpretation.primary_intent, safety)
+        if safety is not None or insufficient
+        else interpretation.consumer_headline
+    )
+    if safety is not None:
+        dog_voice = {
+            SAFE_ESCALATION_001: "«Ho bisogno di più spazio, senza essere forzato.»",
+            SAFE_DISTRESS_001: "«Qualcosa mi mette in difficoltà: aiutami a fare una pausa.»",
+            SAFE_PAIN_001: "«Potrei non stare bene: osservami con attenzione.»",
+        }.get(safety.code, "«Dammi spazio e osserva come sto.»")
+    elif insufficient:
+        dog_voice = "«Non si vede abbastanza per parlare al posto mio.»"
+    else:
+        dog_voice = interpretation.dog_voice
+    comparison, baseline_note = _baseline(dog_name, interpretation, dog_context)
     next_step = safety.action if safety is not None else (advice.action if advice else None)
     if insufficient and next_step is None:
         next_step = (
@@ -238,6 +253,7 @@ def build_behavior_consumer(
         what_to_watch = "Se la tensione resta o aumenta, interrompi e dai spazio."
     return BehaviorConsumerResult(
         consumer_headline=headline,
+        dog_voice=dog_voice,
         consumer_summary=interpretation.consumer_summary,
         baseline_comparison=comparison,
         baseline_note=baseline_note,

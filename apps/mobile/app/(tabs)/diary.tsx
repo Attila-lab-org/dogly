@@ -54,7 +54,7 @@ type TimelineItem =
 const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'ALL', label: 'Tutti' },
   { key: 'BEHAVIOR', label: 'Comportamento' },
-  { key: 'DIGESTIVE', label: 'Salute' },
+  { key: 'DIGESTIVE', label: 'Digestione' },
 ];
 
 const DOMAIN_ICONS: Record<DiaryDomain, keyof typeof Ionicons.glyphMap> = {
@@ -122,7 +122,7 @@ function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }
         {entry.mediaDeleted && (
           <View style={styles.deletedRow}>
             <Ionicons name="trash-bin-outline" size={12} color={colors.textMuted} />
-            <Text style={styles.deletedText}>Video eliminato (privacy)</Text>
+            <Text style={styles.deletedText}>Video non più disponibile</Text>
           </View>
         )}
       </View>
@@ -206,21 +206,63 @@ export default function DiaryScreen() {
     });
     return items;
   }, [groups]);
+  const completedEntries = entries.filter(
+    (entry) => entry.status == null || entry.status === 'COMPLETED',
+  );
+  const recentBehaviorCount = completedEntries.filter(
+    (entry) => entry.domain === 'BEHAVIOR',
+  ).length;
+  const recentDigestiveCount = completedEntries.length - recentBehaviorCount;
+  const latestMeaningfulEntry = completedEntries[0];
+  const showMemorySummary =
+    filter === 'ALL' &&
+    search.trim().length === 0 &&
+    completedEntries.length > 0;
 
   return (
     <ScreenContainer>
-      <Text style={styles.title}>Le analisi di {dog.name}</Text>
+      <Text style={styles.title}>Il diario di {dog.name}</Text>
       <Text style={styles.subtitle}>
-        Tutto quello che ho osservato di {dog.name}, giorno per giorno.
+        I momenti che aiutano a comprendere come cambia nel tempo.
       </Text>
+      {showMemorySummary ? (
+        <View style={styles.memorySummary}>
+          <View style={styles.memorySummaryIcon}>
+            <Ionicons name="paw" size={18} color={colors.accent} />
+          </View>
+          <View style={styles.memorySummaryCopy}>
+            <Text style={styles.memorySummaryTitle}>
+              I momenti recenti di {dog.name}
+            </Text>
+            <Text style={styles.memorySummaryText}>
+              {recentBehaviorCount > 0
+                ? `${recentBehaviorCount} ${
+                    recentBehaviorCount === 1 ? 'lettura' : 'letture'
+                  } del comportamento`
+                : ''}
+              {recentBehaviorCount > 0 && recentDigestiveCount > 0 ? ' · ' : ''}
+              {recentDigestiveCount > 0
+                ? `${recentDigestiveCount} ${
+                    recentDigestiveCount === 1
+                      ? 'osservazione digestiva'
+                      : 'osservazioni digestive'
+                  }`
+                : ''}
+            </Text>
+            <Text style={styles.memorySummaryLatest} numberOfLines={2}>
+              L’ultimo momento: {latestMeaningfulEntry?.title}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
-          accessibilityLabel="Cerca nelle analisi"
+          accessibilityLabel="Cerca nel diario"
           value={search}
           onChangeText={setSearch}
-          placeholder="Cerca nelle analisi…"
+          placeholder="Cerca un momento…"
           placeholderTextColor={colors.textMuted}
           style={styles.searchInput}
           returnKeyType="search"
@@ -275,7 +317,7 @@ export default function DiaryScreen() {
               ? 'Il diario è ancora vuoto'
               : 'Nessun evento in questo filtro'
           }
-          message={`Registra il primo video di ${dog.name}: le analisi appariranno qui, insieme ai controlli digestivi.`}
+          message={`Registra il primo video di ${dog.name}: i suoi momenti appariranno qui, insieme alle osservazioni digestive.`}
           icon={<Ionicons name="calendar-outline" size={40} color={colors.textMuted} />}
           actionLabel={`Scopri i segnali di ${dog.name}`}
           onAction={() => router.push('/behavior/capture')}
@@ -372,6 +414,40 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.textSecondary,
     marginBottom: spacing.lg,
+  },
+  memorySummary: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentSoft,
+  },
+  memorySummaryIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+  },
+  memorySummaryCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  memorySummaryTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+  },
+  memorySummaryText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+  },
+  memorySummaryLatest: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.sm,
   },
   monthLabel: {
     marginBottom: spacing.sm,

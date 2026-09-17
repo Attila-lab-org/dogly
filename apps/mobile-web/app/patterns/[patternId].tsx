@@ -31,11 +31,11 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 const reviewCopy: Record<ReviewAction, string> = {
   CONFIRM:
-    "Grazie! Il tuo feedback rafforza la qualità dell'evidenza di questo pattern.",
+    'Grazie, terrò conto della tua conferma nei prossimi momenti.',
   CONTEST:
-    'Segnalato: nuove evidenze in conflitto ridurranno il peso di questo pattern finché non sarà chiaro.',
+    'Grazie, da ora considererò questa abitudine ancora da capire.',
   ARCHIVE:
-    'Pattern archiviato: non verrà più usato nelle interpretazioni né mostrato nel profilo.',
+    'Non mostrerò più questa abitudine nel profilo.',
 };
 
 function patternIcon(title: string): IconName {
@@ -65,7 +65,7 @@ export default function PatternDetailScreen() {
   if (live && patternsQuery.isLoading) {
     return (
       <ScreenContainer>
-        <StackScreenHeader title="Pattern" />
+        <StackScreenHeader title="Un’abitudine" />
         <View style={styles.card}>
           <Text style={styles.bodyText}>Caricamento…</Text>
         </View>
@@ -76,9 +76,9 @@ export default function PatternDetailScreen() {
   if (live && patternsQuery.isError) {
     return (
       <ScreenContainer>
-        <StackScreenHeader title="Pattern" />
+        <StackScreenHeader title="Un’abitudine" />
         <ErrorState
-          title="Pattern non disponibile"
+          title="Abitudine non disponibile"
           message="Non riesco a caricarlo. Controlla la connessione e riprova."
           onRetry={() => void patternsQuery.refetch()}
         />
@@ -89,11 +89,11 @@ export default function PatternDetailScreen() {
   if (!pattern) {
     return (
       <ScreenContainer>
-        <StackScreenHeader title="Pattern" />
+        <StackScreenHeader title="Un’abitudine" />
         <View style={styles.card}>
           <Text style={styles.bodyText}>
-            Questo pattern non è più disponibile: potrebbe essere stato
-            archiviato.
+            Questa abitudine non è più disponibile oppure hai scelto di non
+            mostrarla.
           </Text>
         </View>
       </ScreenContainer>
@@ -136,13 +136,13 @@ export default function PatternDetailScreen() {
     },
     demo: {
       icon: 'information-circle-outline',
-      text: 'Demo: il tuo parere non è stato inviato al server e nulla viene salvato. Con il backend collegato, Contesta e Archivia vengono registrati davvero.',
+      text: 'Questa anteprima non conserva la tua scelta.',
     },
   };
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <StackScreenHeader title="Pattern" />
+      <StackScreenHeader title="Un’abitudine" />
 
       <View style={styles.card}>
         <View style={styles.titleRow}>
@@ -163,8 +163,8 @@ export default function PatternDetailScreen() {
           <View style={styles.contestedBanner}>
             <Ionicons name="warning-outline" size={16} color={colors.warning} />
             <Text style={styles.contestedText}>
-              Nuove evidenze sembrano in conflitto con questo pattern: il tuo
-              parere ci aiuta a capire.
+              Alcuni momenti sono andati diversamente: il tuo parere mi aiuta
+              a capire meglio.
             </Text>
           </View>
         )}
@@ -181,7 +181,7 @@ export default function PatternDetailScreen() {
         <View style={styles.countsRow}>
           <View style={styles.countItem}>
             <Text style={styles.countValue}>{pattern.supportCount}</Text>
-            <Text style={styles.countLabel}>A supporto</Text>
+            <Text style={styles.countLabel}>Volte osservata</Text>
           </View>
           <View style={styles.countItem}>
             <Text style={styles.countValue}>{pattern.confirmCount}</Text>
@@ -196,7 +196,7 @@ export default function PatternDetailScreen() {
             >
               {pattern.contradictCount}
             </Text>
-            <Text style={styles.countLabel}>In contraddizione</Text>
+            <Text style={styles.countLabel}>Volte diversa</Text>
           </View>
         </View>
         <Text style={styles.note}>
@@ -218,7 +218,7 @@ export default function PatternDetailScreen() {
             <Text style={styles.bodyText}>{outcomeCopy[outcome].text}</Text>
           </View>
           <Button
-            title="Torna ai pattern"
+            title="Torna alle abitudini"
             variant="outline"
             onPress={() => router.back()}
             style={styles.backButton}
@@ -226,10 +226,10 @@ export default function PatternDetailScreen() {
         </View>
       ) : (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Questo pattern è corretto?</Text>
+          <Text style={styles.sectionTitle}>Ti ritrovi in questa abitudine?</Text>
           <Text style={styles.bodyText}>
-            Il tuo parere conta come evidenza, ma nessun pattern cambia solo
-            per un singolo feedback.
+            Il tuo parere mi aiuta a capire meglio {dog.name}, senza trasformare
+            un singolo momento in una regola.
           </Text>
           {reviewError ? (
             <View style={styles.errorBanner} accessibilityLiveRegion="polite">
@@ -239,8 +239,8 @@ export default function PatternDetailScreen() {
                 color={colors.danger}
               />
               <Text style={styles.errorText}>
-                Review non salvata: controlla la connessione e riprova. Nulla è
-                stato registrato.
+                Non sono riuscito a salvare la tua scelta. Controlla la
+                connessione e riprova.
               </Text>
             </View>
           ) : null}
