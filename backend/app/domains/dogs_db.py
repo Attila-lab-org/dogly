@@ -15,6 +15,7 @@ from app.domains.age_stage import normalize_age_stage
 from app.domains.billing import max_active_dogs
 from app.domains.ids import require_uuid
 from app.domains.models import DogRec
+from app.domains.sex import normalize_sex
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
                     "size": _normalize_size(payload.size),
                     "breed_label": payload.breed_label,
                     "is_mix": payload.is_mix,
-                    "sex": payload.sex,
+                    "sex": normalize_sex(payload.sex),
                     "weight_kg": payload.weight_kg,
                 },
             )
@@ -193,6 +194,8 @@ async def update_dog(
         requested["size"] = _normalize_size(requested["size"])
     if "age_stage" in requested:
         requested["age_stage"] = normalize_age_stage(requested["age_stage"])
+    if "sex" in requested:
+        requested["sex"] = normalize_sex(requested["sex"])
 
     async with engine.begin() as conn:
         current_row = (

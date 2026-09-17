@@ -59,6 +59,7 @@ function emptyDog(): DogProfile {
     birthDate: null,
     sizeLabel: 'Taglia media',
     weightKg: null,
+    sex: null,
     breedLabel: null,
     isMix: false,
     photoUri: null,
@@ -139,7 +140,7 @@ export function getDogProfileSnapshot(): DogProfileState {
 export function profileToCreateBody(
   profile: Pick<
     DogProfile,
-    'name' | 'birthDate' | 'sizeLabel' | 'weightKg' | 'breedLabel' | 'isMix'
+    'name' | 'birthDate' | 'sizeLabel' | 'weightKg' | 'sex' | 'breedLabel' | 'isMix'
   > & { ageLabel?: string },
   clientRequestId?: string,
 ): DogCreateBody {
@@ -149,6 +150,7 @@ export function profileToCreateBody(
     age_stage: ageStageToApi(profile.ageLabel),
     size: sizeToApi(profile.sizeLabel),
     weight_kg: profile.weightKg,
+    sex: profile.sex,
     breed_label: profile.breedLabel,
     is_mix: profile.isMix,
     client_request_id: clientRequestId ?? null,

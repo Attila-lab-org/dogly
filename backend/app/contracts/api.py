@@ -65,9 +65,30 @@ class UsageLedger(BaseModel):
 
 class ProfileOut(BaseModel):
     user_id: str
+    display_name: str | None = None
     locale: str | None = None
     timezone: str | None = None
     created_at: datetime
+
+
+class ProfilePatch(BaseModel):
+    display_name: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_display_name(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "display_name" in data and isinstance(data["display_name"], str):
+            trimmed = data["display_name"].strip()
+            data = {**data, "display_name": trimmed or None}
+        return data
+
+    @model_validator(mode="after")
+    def require_a_change(self) -> ProfilePatch:
+        if "display_name" not in self.model_fields_set:
+            raise ValueError("At least one profile field is required")
+        return self
 
 
 class PlanOut(BaseModel):

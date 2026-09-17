@@ -31,6 +31,7 @@ from app.contracts.taxonomy import (
 
 class ProfileRec(BaseModel):
     user_id: str
+    display_name: str | None = None
     locale: str | None = None
     timezone: str | None = None
     created_at: datetime

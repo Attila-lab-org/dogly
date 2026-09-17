@@ -40,6 +40,7 @@ import {
   ageYearsFromLabel,
 } from '@/features/dogs/profileDates';
 import { dogsQueryKey } from '@/features/dogs/api';
+import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
 import { setProfileVisibility as apiSetVisibility } from '@/features/photos/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
@@ -54,6 +55,7 @@ export default function DogEditScreen() {
   const dogId = routeDogId ?? dog.id;
   const updateMutation = useUpdateDogMutation(dogId);
   const [name, setName] = useState(dog.name);
+  const [sex, setSex] = useState<DogSex | null>(dog.sex);
   const [ageYears, setAgeYears] = useState<number | null>(
     dog.birthDate
       ? ageFromBirthDate(dog.birthDate)
@@ -165,6 +167,7 @@ export default function DogEditScreen() {
       if (dogId) {
         const profilePatch = profileChangesToUpdateBody(dog, {
           name: name.trim(),
+          sex,
           ageLabel,
           birthDate,
           sizeLabel,
@@ -228,6 +231,28 @@ export default function DogEditScreen() {
         style={styles.input}
         placeholderTextColor={colors.textMuted}
       />
+
+      <Text style={styles.label}>Sesso</Text>
+      <View style={styles.chips}>
+        {SEX_OPTIONS.map((option) => (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sex === option.value }}
+            onPress={() => setSex(option.value)}
+            style={[styles.chip, sex === option.value && styles.chipActive]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                sex === option.value && styles.chipTextActive,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Text style={styles.label}>Età</Text>
       <View style={styles.profileField}>

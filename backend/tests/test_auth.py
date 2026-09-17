@@ -83,7 +83,30 @@ async def test_me_with_valid_token(client: httpx.AsyncClient, auth_headers, user
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["profile"]["user_id"] == user_id
+    assert body["profile"]["display_name"] is None
     assert "plan" in body and "usage" in body
+
+
+async def test_me_display_name_roundtrip(client: httpx.AsyncClient, auth_headers, user_id):
+    created = await client.patch(
+        "/v1/me",
+        headers=auth_headers,
+        json={"display_name": "  Attila  "},
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["profile"]["display_name"] == "Attila"
+    assert created.json()["profile"]["user_id"] == user_id
+
+    fetched = await client.get("/v1/me", headers=auth_headers)
+    assert fetched.json()["profile"]["display_name"] == "Attila"
+
+    cleared = await client.patch(
+        "/v1/me",
+        headers=auth_headers,
+        json={"display_name": "   "},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["profile"]["display_name"] is None
 
 
 async def test_consents_default_off_and_append_changes(client: httpx.AsyncClient, auth_headers):

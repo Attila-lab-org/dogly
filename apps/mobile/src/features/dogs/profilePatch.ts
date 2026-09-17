@@ -19,6 +19,7 @@ export function profileToUpdateBody(
           ? sizeToApi(profile.sizeLabel)
           : null,
     weight_kg: profile.weightKg,
+    sex: profile.sex,
     breed_label: profile.breedLabel,
     is_mix: profile.isMix,
   };

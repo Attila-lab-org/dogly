@@ -8,6 +8,7 @@ const current: DogProfile = {
   birthDate: '2022-05-18',
   sizeLabel: 'Taglia media',
   weightKg: 12.5,
+  sex: null,
   breedLabel: 'Mix',
   isMix: true,
   photoUri: null,
@@ -23,6 +24,7 @@ describe('dog profile semantic PATCH', () => {
         birthDate: '2022-05-18',
         sizeLabel: 'Taglia media',
         weightKg: 12.5,
+        sex: null,
         breedLabel: 'Mix',
         isMix: true,
       }),
@@ -40,6 +42,12 @@ describe('dog profile semantic PATCH', () => {
       birth_date: null,
       weight_kg: null,
       breed_label: null,
+    });
+  });
+
+  it('include il sesso solo quando cambia', () => {
+    expect(profileChangesToUpdateBody(current, { sex: 'MALE' })).toEqual({
+      sex: 'MALE',
     });
   });
 });

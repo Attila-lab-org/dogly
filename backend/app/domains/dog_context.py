@@ -108,7 +108,12 @@ def _active_today_vs_usual(
     return values
 
 
-def build_dog_context(dog: DogRec, lifestyle: dict[str, Any] | None = None) -> DogContextSnapshot:
+def build_dog_context(
+    dog: DogRec,
+    lifestyle: dict[str, Any] | None = None,
+    *,
+    owner_display_name: str | None = None,
+) -> DogContextSnapshot:
     lifestyle = lifestyle or {}
     routine_raw = dict(lifestyle.get("routine") or {})
     preferences_raw = dict(lifestyle.get("preferences") or {})
@@ -125,13 +130,21 @@ def build_dog_context(dog: DogRec, lifestyle: dict[str, Any] | None = None) -> D
         for fact in _facts(routine_raw, provenance, confirmed)
     }
     age_months, life_stage = derive_life_stage(dog)
+    owner_name = (
+        owner_display_name.strip()
+        if isinstance(owner_display_name, str) and owner_display_name.strip()
+        else None
+    )
     return DogContextSnapshot(
         dog_id=dog.id,
+        name=dog.name,
+        sex=dog.sex,
         age_months=age_months,
         life_stage=life_stage,
         size=dog.size,
         breed_label=dog.breed_label,
         is_mix=dog.is_mix,
+        owner_display_name=owner_name,
         routine=routine,
         today_vs_usual=_facts(today_vs_usual, provenance, confirmed),
         recent_changes=_facts(recent_changes, provenance, confirmed),

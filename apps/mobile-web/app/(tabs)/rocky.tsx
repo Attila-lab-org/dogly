@@ -20,6 +20,7 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
 import { fetchDogPhotos } from '@/features/photos/api';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
+import { sexLabel } from '@/features/dogs/map';
 import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
@@ -66,6 +67,7 @@ export default function DogProfileTabScreen() {
   const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel);
   const sizeLabel = dog.sizeLabel;
   const breedLabel = dog.breedLabel;
+  const genderLabel = sexLabel(dog.sex);
 
   const activePeriod = useDemoData
     ? feedingPeriodsMock.find((period) => period.endedAt === null)
@@ -166,6 +168,7 @@ export default function DogProfileTabScreen() {
             <Text style={styles.name}>{dog.name || 'Il tuo cane'}</Text>
 
             <View style={styles.metaRow}>
+              {genderLabel ? <MetaItem icon="male-female-outline" label={genderLabel} /> : null}
               {ageLabel ? <MetaItem icon="calendar-outline" label={ageLabel} /> : null}
               {sizeLabel ? <MetaItem icon="resize-outline" label={sizeLabel} /> : null}
               {breedLabel ? <MetaItem icon="paw" label={breedLabel} /> : null}

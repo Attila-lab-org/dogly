@@ -29,6 +29,31 @@ async def test_dog_profile_returns_birthday_and_mix(
     assert listed.json()["items"][0]["birth_date"] == "2022-05-18"
 
 
+async def test_dog_sex_persists_on_create_and_patch(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    created = await client.post(
+        "/v1/dogs",
+        headers=auth_headers,
+        json={"name": "Rocky", "sex": "maschio"},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["sex"] == "MALE"
+
+    patched = await client.patch(
+        f"/v1/dogs/{created.json()['id']}",
+        headers=auth_headers,
+        json={"sex": "FEMALE"},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["sex"] == "FEMALE"
+
+    listed = await client.get("/v1/dogs", headers=auth_headers)
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["items"][0]["sex"] == "FEMALE"
+
+
 async def test_dog_patch_clears_nullable_fields_and_skips_noop_versions(
     client: httpx.AsyncClient,
     auth_headers: dict[str, str],

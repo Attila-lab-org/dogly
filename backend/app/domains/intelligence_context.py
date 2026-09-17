@@ -20,6 +20,11 @@ class DogIntelligenceContext(BaseModel):
     version: str = "intelligence/v3"
     dog_id: str
     dog_name: str
+    sex: str | None = None
+    age_months: int | None = None
+    size: str | None = None
+    owner_display_name: str | None = None
+    breed_label: str | None = None
     breed: BreedResolution
     claims: list[ClaimSummary] = Field(default_factory=list)
     flags: dict[str, bool] = Field(default_factory=dict)
@@ -35,6 +40,14 @@ class DogIntelligenceContext(BaseModel):
         payload: dict[str, Any] = {
             "version": self.version,
             "domain": self.domain,
+            "identity": {
+                "name": self.dog_name,
+                "sex": self.sex,
+                "age_months": self.age_months,
+                "size": self.size,
+                "breed": self.breed_label,
+                "owner_display_name": self.owner_display_name,
+            },
             "breed_status": self.breed.status,
             "prior_eligible": self.breed.prior_eligible,
             "functional_group": (
@@ -47,6 +60,7 @@ class DogIntelligenceContext(BaseModel):
                 "Pretraining is language, not a scientific source.",
                 "Mix and unknown have no named-breed prior.",
                 "Never infer aggression from breed or mix.",
+                "Sex and owner name are identity facts, not behavioral verdicts.",
                 "Owner facts stay owner-reported.",
             ],
         }
@@ -97,10 +111,24 @@ def build_dog_intelligence_context(
     extra_when: list[str] = []
     if breed.status == "NAMED":
         extra_when.append("named_breed")
+    age_months = dog_context.age_months if dog_context is not None else None
+    size = dog_context.size if dog_context is not None else dog.size
+    sex = dog_context.sex if dog_context is not None else dog.sex
+    owner_display_name = (
+        dog_context.owner_display_name if dog_context is not None else None
+    )
+    breed_label = (
+        dog_context.breed_label if dog_context is not None else dog.breed_label
+    )
     return DogIntelligenceContext(
         domain=domain,
         dog_id=dog.id,
         dog_name=dog.name,
+        sex=sex,
+        age_months=age_months,
+        size=size,
+        owner_display_name=owner_display_name,
+        breed_label=breed_label,
         breed=breed,
         claims=select_claims(domain=domain, flags=flags, extra_when=extra_when),
         flags=flags,

@@ -243,7 +243,7 @@ async def export_expires_at(engine: AsyncEngine) -> datetime:
 async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str, Any]:
     """Collect user data for export without raw media bytes."""
     queries = {
-        "profiles": "select user_id, locale, timezone, created_at, deleted_at from public.profiles where user_id = :uid",
+        "profiles": "select user_id, display_name, locale, timezone, created_at, deleted_at from public.profiles where user_id = :uid",
         "dogs": "select * from public.dogs where owner_id = :uid order by created_at, id",
         "behavior_events": """
             select id, capture_id, dog_id, status, primary_intent, confidence_band, summary,

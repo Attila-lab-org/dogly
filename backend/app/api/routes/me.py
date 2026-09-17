@@ -5,10 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
-from app.contracts.api import MeResponse, UserConsentsPatch, UserConsentsResponse
+from app.contracts.api import MeResponse, ProfilePatch, UserConsentsPatch, UserConsentsResponse
 from app.domains import billing_db, consents_db, profiles_db
 from app.domains import consents as consents_domain
+from app.domains import profiles as profiles_domain
 from app.domains.billing import plan_limits
+from app.domains.models import ProfileRec, SubscriptionRec, UsageLedgerRec
 
 router = APIRouter()
 
@@ -31,6 +33,25 @@ async def patch_consents(
 
 @router.get("/me", response_model=MeResponse)
 async def get_me(state: StateDep, user_id: UserIdDep) -> MeResponse:
+    profile, sub, ledger = await _load_me(state, user_id)
+    return _me_response(profile, sub, ledger)
+
+
+@router.patch("/me", response_model=MeResponse)
+async def patch_me(
+    payload: ProfilePatch, state: StateDep, user_id: UserIdDep
+) -> MeResponse:
+    if state.engine is not None:
+        await profiles_db.update_profile(state.engine, user_id, payload)
+    else:
+        profiles_domain.update_profile(state.store, user_id, payload)
+    profile, sub, ledger = await _load_me(state, user_id)
+    return _me_response(profile, sub, ledger)
+
+
+async def _load_me(
+    state: StateDep, user_id: str
+) -> tuple[ProfileRec, SubscriptionRec, UsageLedgerRec]:
     if state.engine is not None:
         profile = await profiles_db.get_or_create_profile(state.engine, user_id)
         sub = await billing_db.get_subscription(state.engine, user_id)
@@ -40,11 +61,18 @@ async def get_me(state: StateDep, user_id: UserIdDep) -> MeResponse:
         profile = store.ensure_profile(user_id)
         sub = store.ensure_subscription(user_id)
         ledger = store.ensure_ledger(user_id)
+    return profile, sub, ledger
+
+
+def _me_response(
+    profile: ProfileRec, sub: SubscriptionRec, ledger: UsageLedgerRec
+) -> MeResponse:
     limits = plan_limits(sub.plan)
     premium = sub.plan != "FREE" and sub.status == "active"
     return MeResponse(
         profile={
             "user_id": profile.user_id,
+            "display_name": profile.display_name,
             "locale": profile.locale,
             "timezone": profile.timezone,
             "created_at": profile.created_at,

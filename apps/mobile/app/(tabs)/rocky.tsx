@@ -34,6 +34,7 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
 import { fetchDogPhotos } from '@/features/photos/api';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
+import { sexLabel } from '@/features/dogs/map';
 import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useLifestyle } from '@/features/lifestyle/api';
@@ -164,6 +165,9 @@ export default function DogProfileTabScreen() {
             </View>
             <Text style={styles.name}>{dog.name}</Text>
             <View style={styles.metaRow}>
+              {sexLabel(dog.sex) ? (
+                <MetaPill icon="male-female-outline" label={sexLabel(dog.sex)!} />
+              ) : null}
               <MetaPill
                 icon="calendar-outline"
                 label={currentAgeLabel(dog.birthDate, dog.ageLabel)}

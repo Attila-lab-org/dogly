@@ -9,6 +9,7 @@ from app.config import Settings
 from app.contracts.api import DogAvatarInitRequest, DogCreate, DogUpdate, SignedUpload
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains.age_stage import normalize_age_stage
+from app.domains.sex import normalize_sex
 from app.domains.billing import max_active_dogs
 from app.domains.ids import require_uuid
 from app.domains.models import DogRec
@@ -46,7 +47,7 @@ def create_dog(store: InMemoryStore, *, user_id: str, payload: DogCreate) -> Dog
         size=payload.size,
         breed_label=payload.breed_label,
         is_mix=payload.is_mix,
-        sex=payload.sex,
+        sex=normalize_sex(payload.sex),
         weight_kg=payload.weight_kg,
         created_at=now_utc(),
     )
@@ -73,6 +74,8 @@ def update_dog(store: InMemoryStore, *, user_id: str, dog_id: str, payload: DogU
     requested = payload.model_dump(exclude_unset=True)
     if "age_stage" in requested:
         requested["age_stage"] = normalize_age_stage(requested["age_stage"])
+    if "sex" in requested:
+        requested["sex"] = normalize_sex(requested["sex"])
     changed = {
         key: value
         for key, value in requested.items()

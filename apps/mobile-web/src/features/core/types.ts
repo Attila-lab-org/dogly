@@ -17,6 +17,8 @@ export interface DogProfile {
   sizeLabel: string;
   /** Peso corrente in chilogrammi, facoltativo. */
   weightKg: number | null;
+  /** Sesso: MALE / FEMALE / UNKNOWN, o null se non ancora indicato. */
+  sex: 'MALE' | 'FEMALE' | 'UNKNOWN' | null;
   /** Razza, "Mix" o null se sconosciuta (unknown breed ammesso, sez. 6) */
   breedLabel: string | null;
   isMix: boolean;

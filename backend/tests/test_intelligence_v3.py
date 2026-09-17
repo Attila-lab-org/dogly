@@ -204,6 +204,39 @@ def test_flagged_claims_require_their_feature_flag():
     assert "DIGEST_LONGITUDINAL_001" not in {claim.claim_id for claim in intel.claims}
 
 
+def test_dog_identity_reaches_context_and_reasoner_payload():
+    dog = _dog(
+        sex="MALE",
+        size="LARGE",
+        breed_label="Labrador Retriever",
+    ).model_copy(update={"name": "Rocky"})
+    context = build_dog_context(dog, owner_display_name="  Attila  ")
+    assert context.name == "Rocky"
+    assert context.sex == "MALE"
+    assert context.size == "LARGE"
+    assert context.breed_label == "Labrador Retriever"
+    assert context.owner_display_name == "Attila"
+
+    intel = build_dog_intelligence_context(
+        dog,
+        context,
+        domain="behavior",
+        settings=_settings(breed_intelligence_v1=True),
+    )
+    identity = intel.reasoner_payload()["identity"]
+    assert identity == {
+        "name": "Rocky",
+        "sex": "MALE",
+        "age_months": context.age_months,
+        "size": "LARGE",
+        "breed": "Labrador Retriever",
+        "owner_display_name": "Attila",
+    }
+    assert "identity facts, not behavioral verdicts" in " ".join(
+        intel.reasoner_payload()["rules"]
+    )
+
+
 def test_observer_payload_never_includes_breed_name():
     intel = build_dog_intelligence_context(
         _dog(breed_label="Greyhound"),

@@ -45,6 +45,27 @@ export function sizeFromApi(size: string | null): string {
   }
 }
 
+export type DogSex = 'MALE' | 'FEMALE' | 'UNKNOWN';
+
+export const SEX_OPTIONS: Array<{ value: DogSex; label: string }> = [
+  { value: 'MALE', label: 'Maschio' },
+  { value: 'FEMALE', label: 'Femmina' },
+  { value: 'UNKNOWN', label: 'Non so' },
+];
+
+export function sexFromApi(sex: string | null | undefined): DogSex | null {
+  if (!sex) return null;
+  const key = sex.trim().toUpperCase();
+  if (key === 'MALE' || key === 'FEMALE' || key === 'UNKNOWN') return key;
+  return 'UNKNOWN';
+}
+
+export function sexLabel(sex: DogSex | null | undefined): string | null {
+  if (sex === 'MALE') return 'Maschio';
+  if (sex === 'FEMALE') return 'Femmina';
+  return null;
+}
+
 const AGE_STAGE_TO_LABEL: Record<string, string> = {
   PUPPY: 'Cucciolo',
   ADOLESCENT: 'Giovane',
@@ -93,6 +114,7 @@ export function mapApiDogToProfile(dog: ApiDog): DogProfile {
     birthDate,
     sizeLabel: sizeFromApi(dog.size),
     weightKg: dog.weight_kg,
+    sex: sexFromApi(dog.sex),
     breedLabel: dog.breed_label,
     isMix: dog.is_mix,
     photoUri: dog.photo_url ?? null,

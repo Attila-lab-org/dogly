@@ -1310,11 +1310,14 @@
     "fields": {
       "identity": [
         "dog_id",
+        "name",
+        "sex",
         "age_months",
         "life_stage",
         "size",
         "breed_label",
-        "is_mix"
+        "is_mix",
+        "owner_display_name"
       ],
       "routine": [
         "typical_activity_level",

@@ -44,6 +44,7 @@ import {
   ageFromBirthDate,
   ageLabelFromYears,
 } from '@/features/dogs/profileDates';
+import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
 
 const SIZES = ['Piccola', 'Media', 'Grande'] as const;
 
@@ -79,6 +80,7 @@ export default function DogOnboardingScreen() {
   });
   const [ageYears, setAgeYears] = useState<number | null>(null);
   const [birthDate, setBirthDate] = useState<string | null>(null);
+  const [sex, setSex] = useState<DogSex | null>(null);
   const [breedSelection, setBreedSelection] = useState<BreedSelection>({
     kind: 'unselected',
   });
@@ -132,6 +134,7 @@ export default function DogOnboardingScreen() {
             weightKg: parsed.data.weightKg
               ? Number(parsed.data.weightKg.replace(',', '.'))
               : null,
+            sex,
             breedLabel,
             isMix: breedSelection.kind === 'mixed',
             ageLabel,
@@ -213,6 +216,18 @@ export default function DogOnboardingScreen() {
         autoCapitalize="words"
         testID="onboarding-name"
       />
+
+      <Text style={styles.label}>Sesso</Text>
+      <View style={styles.chips}>
+        {SEX_OPTIONS.map((option) => (
+          <OptionChip
+            key={option.value}
+            label={option.label}
+            selected={sex === option.value}
+            onPress={() => setSex(option.value)}
+          />
+        ))}
+      </View>
 
       <Text style={styles.label}>Età</Text>
       <View style={styles.profileField}>

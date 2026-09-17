@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.contracts.api import ProfilePatch
 from app.domains.models import ProfileRec
 
 
@@ -25,10 +26,33 @@ async def get_or_create_profile(engine: AsyncEngine, user_id: str) -> ProfileRec
                     insert into public.profiles (user_id)
                     values (:user_id)
                     on conflict (user_id) do update set user_id = excluded.user_id
-                    returning user_id, locale, timezone, created_at, deleted_at
+                    returning user_id, display_name, locale, timezone, created_at, deleted_at
                     """
                 ),
                 {"user_id": user_id},
+            )
+        ).mappings().first()
+    return _row_to_profile(row)
+
+
+async def update_profile(
+    engine: AsyncEngine, user_id: str, payload: ProfilePatch
+) -> ProfileRec:
+    if "display_name" not in payload.model_fields_set:
+        return await get_or_create_profile(engine, user_id)
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    insert into public.profiles (user_id, display_name)
+                    values (:user_id, :display_name)
+                    on conflict (user_id) do update
+                      set display_name = excluded.display_name
+                    returning user_id, display_name, locale, timezone, created_at, deleted_at
+                    """
+                ),
+                {"user_id": user_id, "display_name": payload.display_name},
             )
         ).mappings().first()
     return _row_to_profile(row)

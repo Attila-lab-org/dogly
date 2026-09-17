@@ -51,6 +51,7 @@ from app.domains import (
     owner_stories_db,
     patterns_db,
     privacy_db,
+    profiles_db,
 )
 from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
@@ -277,7 +278,10 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
             and row.get("status") == "CONFIRMED"
         ]
     dump = lifestyle.model_dump()
-    context = build_dog_context(dog, dump)
+    owner_display_name = await _owner_display_name(state, event.user_id)
+    context = build_dog_context(
+        dog, dump, owner_display_name=owner_display_name
+    )
     routine = dict(context.routine)
     extras: dict[str, list] = {
         "preferences": list(context.preferences),
@@ -1395,6 +1399,20 @@ async def process_media_retention_cleanup(state: AppState, *, event_id: str | No
             result["purged_idempotency_rows"] = 0
         return result
     return await cleanup_expired_raw_media(state.store, storage=state.storage)
+
+
+async def _owner_display_name(state: AppState, user_id: str) -> str | None:
+    try:
+        if state.engine is not None:
+            profile = await profiles_db.get_or_create_profile(state.engine, user_id)
+        else:
+            profile = state.store.ensure_profile(user_id)
+        name = getattr(profile, "display_name", None)
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    except Exception:
+        logger.exception("Could not load owner display name")
+    return None
 
 
 async def _dog_display_name(

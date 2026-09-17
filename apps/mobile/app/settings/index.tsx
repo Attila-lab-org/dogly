@@ -13,6 +13,7 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
+import { useMeProfile } from '@/features/me/api';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
@@ -29,6 +30,7 @@ export default function SettingsScreen() {
   const { live, query, state: subscription } = useSubscriptionState();
   const { dog } = useDogProfile();
   const dogId = isPersistedId(dog.id) ? dog.id : '';
+  const { data: meProfile } = useMeProfile();
 
   const subscriptionSubtitle = (() => {
     if (live && query.isLoading) return 'Verifica del piano in corso…';
@@ -41,6 +43,12 @@ export default function SettingsScreen() {
   })();
 
   const rows: Row[] = [
+    {
+      icon: 'person-circle-outline',
+      title: 'Il tuo nome',
+      subtitle: meProfile?.display_name || 'Come vuole chiamarti DOGly',
+      href: '/settings/account',
+    },
     {
       icon: 'person-outline',
       title: 'Profilo',

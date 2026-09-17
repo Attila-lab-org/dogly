@@ -126,11 +126,14 @@ class LifestyleFact(BaseModel):
 
 class DogContextSnapshot(BaseModel):
     dog_id: str
+    name: str | None = None
+    sex: str | None = None
     age_months: int | None = None
     life_stage: LifeStageContext
     size: str | None = None
     breed_label: str | None = None
     is_mix: bool = False
+    owner_display_name: str | None = None
     routine: dict[str, LifestyleFact | None] = Field(default_factory=dict)
     today_vs_usual: list[LifestyleFact] = Field(default_factory=list)
     recent_changes: list[LifestyleFact] = Field(default_factory=list)
