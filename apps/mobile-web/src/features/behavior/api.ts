@@ -139,6 +139,40 @@ export async function getBehaviorEvent(eventId: string): Promise<ApiBehaviorEven
   return api.get<ApiBehaviorEvent>(`/v1/behavior/events/${eventId}`);
 }
 
+export type ProcessingContextQuestion = {
+  id: string;
+  text: string;
+  options: Array<{ id: string; label: string }>;
+};
+
+export type ProcessingContextOut = {
+  event_id: string;
+  analysis_status: string;
+  question: ProcessingContextQuestion | null;
+  answered_count: number;
+  max_questions: number;
+  planner_version: string;
+  applied_to_interpretation?: boolean | null;
+};
+
+export async function getProcessingContext(
+  eventId: string,
+): Promise<ProcessingContextOut> {
+  return api.get<ProcessingContextOut>(
+    `/v1/behavior/events/${eventId}/processing-context`,
+  );
+}
+
+export async function postProcessingContext(
+  eventId: string,
+  body: { question_id: string; answer_id?: string; skipped?: boolean },
+): Promise<ProcessingContextOut> {
+  return api.post<ProcessingContextOut>(
+    `/v1/behavior/events/${eventId}/processing-context`,
+    body,
+  );
+}
+
 export async function postBehaviorContext(
   eventId: string,
   answerId: string,

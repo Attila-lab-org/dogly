@@ -159,6 +159,63 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Patch Me",
+        "operationId": "patch_me_v1_me_patch",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/dogs/{dog_id}/knowledge-score": {
@@ -2153,6 +2210,130 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BehaviorFeedbackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/behavior/events/{event_id}/processing-context": {
+      "get": {
+        "tags": [
+          "behavior"
+        ],
+        "summary": "Get Processing Context",
+        "operationId": "get_processing_context_v1_behavior_events__event_id__processing_context_get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingContextOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "behavior"
+        ],
+        "summary": "Post Processing Context",
+        "operationId": "post_processing_context_v1_behavior_events__event_id__processing_context_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessingContextAnswerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingContextOut"
                 }
               }
             }
@@ -8814,11 +8995,155 @@
         ],
         "title": "PrivacyExportStatusResponse"
       },
+      "ProcessingContextAnswerRequest": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9_]+$",
+            "title": "Question Id"
+          },
+          "answer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": "^[a-z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Id"
+          },
+          "skipped": {
+            "type": "boolean",
+            "title": "Skipped",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id"
+        ],
+        "title": "ProcessingContextAnswerRequest"
+      },
+      "ProcessingContextOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ProcessingContextOption"
+      },
+      "ProcessingContextOut": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "analysis_status": {
+            "type": "string",
+            "title": "Analysis Status"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcessingContextQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answered_count": {
+            "type": "integer",
+            "title": "Answered Count",
+            "default": 0
+          },
+          "max_questions": {
+            "type": "integer",
+            "title": "Max Questions",
+            "default": 3
+          },
+          "planner_version": {
+            "type": "string",
+            "title": "Planner Version"
+          },
+          "applied_to_interpretation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied To Interpretation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "analysis_status",
+          "planner_version"
+        ],
+        "title": "ProcessingContextOut"
+      },
+      "ProcessingContextQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessingContextOption"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "options"
+        ],
+        "title": "ProcessingContextQuestion"
+      },
       "ProfileOut": {
         "properties": {
           "user_id": {
             "type": "string",
             "title": "User Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
           },
           "locale": {
             "anyOf": [
@@ -8854,6 +9179,24 @@
           "created_at"
         ],
         "title": "ProfileOut"
+      },
+      "ProfilePatch": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "title": "ProfilePatch"
       },
       "PushTokenRequest": {
         "properties": {

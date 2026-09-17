@@ -10,6 +10,15 @@ describe('queryClient / query keys (sez. 5.3)', () => {
       'behavior-events',
       'e1',
     ]);
+    expect(queryKeys.processingContext('u1', 'd1', 'e1')).toEqual([
+      'user',
+      'u1',
+      'dog',
+      'd1',
+      'behavior-events',
+      'e1',
+      'processing-context',
+    ]);
     expect(queryKeys.diary('u1', 'd1')).toEqual(['user', 'u1', 'dog', 'd1', 'diary']);
     expect(queryKeys.subscription('u1')).toEqual(['user', 'u1', 'subscription']);
   });

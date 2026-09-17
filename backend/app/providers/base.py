@@ -84,6 +84,7 @@ class Reasoner(Protocol):
         owner_context_answer: OwnerContextAnswer | None = None,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
         intelligence_context: dict | None = None,
+        processing_owner_context: list[dict] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]: ...
 
 

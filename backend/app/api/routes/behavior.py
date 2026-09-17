@@ -13,12 +13,29 @@ from app.contracts.api import (
     BehaviorFeedbackRequest,
     BehaviorFeedbackResponse,
     CaptureCompleteResponse,
+    ProcessingContextAnswerRequest,
+    ProcessingContextOption,
+    ProcessingContextOut,
+    ProcessingContextQuestion,
 )
-from app.contracts.taxonomy import INTERPRETATION_SCHEMA_VERSION, FeedbackValue
+from app.contracts.errors import ApiError, ErrorCode
+from app.contracts.taxonomy import (
+    BehaviorEventStatus,
+    INTERPRETATION_SCHEMA_VERSION,
+    FeedbackValue,
+)
 from app.domains import behavior as behavior_domain
 from app.domains import behavior_db, idempotency_db, lifestyle, lifestyle_db
 from app.domains.context_bucket import resolve_context_bucket
 from app.domains.models import BehaviorEventRec
+from app.domains.processing_context import (
+    MAX_PROCESSING_QUESTIONS,
+    PLANNER_VERSION,
+    owner_facts_for_reasoner,
+    plan_next_question,
+    resolve_question,
+)
+from app.domains import processing_context_store
 from app.knowledge.models import AdviceOutcomeValue
 
 router = APIRouter()
@@ -298,3 +315,159 @@ async def post_feedback(
     resp = BehaviorFeedbackResponse(event_id=event_id, value=rec.value)
     await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp
+
+
+async def _processing_rows(state: StateDep, *, event_id: str, user_id: str):
+    if state.engine is not None:
+        return await processing_context_store.list_answers_db(
+            state.engine, event_id=event_id, user_id=user_id
+        )
+    return processing_context_store.list_answers(
+        state.store, event_id=event_id, user_id=user_id
+    )
+
+
+async def _processing_out(
+    state: StateDep,
+    *,
+    event: BehaviorEventRec,
+    applied_to_interpretation: bool | None = None,
+) -> ProcessingContextOut:
+    from app.worker.handlers import _dog_context, _eligible_memory
+
+    rows = await _processing_rows(
+        state, event_id=event.id, user_id=event.user_id
+    )
+    occupied = [row.question_id for row in rows]
+    capture = None
+    if state.engine is not None:
+        capture = await behavior_db.load_capture(
+            state.engine, capture_id=event.capture_id
+        )
+    if capture is None:
+        capture = state.store.captures.get(event.capture_id)
+    has_audio = True if capture is None else bool(capture.has_audio)
+    bucket = getattr(capture, "context_bucket", None) if capture is not None else None
+    dog_name = "il cane"
+    dog_context = None
+    memory = []
+    try:
+        dog, dog_context, _lifestyle = await _dog_context(state, event)
+        dog_name = dog.name
+        memory = await _eligible_memory(state, event.dog_id)
+    except Exception:
+        if event.dog_id in state.store.dogs:
+            dog_name = state.store.dogs[event.dog_id].name
+    question = None
+    if event.status not in {
+        BehaviorEventStatus.REJECTED_QUALITY,
+        BehaviorEventStatus.FAILED_TERMINAL,
+        BehaviorEventStatus.CANCELLED,
+        BehaviorEventStatus.COMPLETED,
+    }:
+        planned = plan_next_question(
+            dog_name=dog_name,
+            context_bucket=bucket,
+            has_audio=has_audio,
+            occupied_question_ids=occupied,
+            dog_context=dog_context,
+            eligible_memory=memory,
+            observation=event.observation_json,
+        )
+        if planned is not None:
+            question = ProcessingContextQuestion(
+                id=planned.id,
+                text=planned.text,
+                options=[
+                    ProcessingContextOption(id=item.id, label=item.label)
+                    for item in planned.options
+                ],
+            )
+    answered = sum(1 for row in rows if not row.skipped and row.answer_id)
+    return ProcessingContextOut(
+        event_id=event.id,
+        analysis_status=str(getattr(event.status, "value", event.status)),
+        question=question,
+        answered_count=answered,
+        max_questions=MAX_PROCESSING_QUESTIONS,
+        planner_version=PLANNER_VERSION,
+        applied_to_interpretation=applied_to_interpretation,
+    )
+
+
+@router.get(
+    "/behavior/events/{event_id}/processing-context",
+    response_model=ProcessingContextOut,
+)
+async def get_processing_context(
+    event_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> ProcessingContextOut:
+    if state.engine is not None:
+        event = await behavior_db.get_event(
+            state.engine, user_id=user_id, event_id=event_id
+        )
+    else:
+        event = behavior_domain.get_event(
+            state.store, user_id=user_id, event_id=event_id
+        )
+    return await _processing_out(state, event=event)
+
+
+@router.post(
+    "/behavior/events/{event_id}/processing-context",
+    response_model=ProcessingContextOut,
+)
+async def post_processing_context(
+    event_id: str,
+    payload: ProcessingContextAnswerRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    _limiter: None = Depends(rate_limit("behavior.processing_context", limit=30)),
+) -> ProcessingContextOut:
+    try:
+        resolve_question(payload.question_id, None if payload.skipped else payload.answer_id)
+    except ValueError as exc:
+        raise ApiError(ErrorCode.VALIDATION_FAILED, "Unknown question or answer.") from exc
+    if state.engine is not None:
+        event = await behavior_db.get_event(
+            state.engine, user_id=user_id, event_id=event_id
+        )
+        await processing_context_store.upsert_answer_db(
+            state.engine,
+            event_id=event.id,
+            user_id=user_id,
+            question_id=payload.question_id,
+            answer_id=payload.answer_id,
+            skipped=payload.skipped,
+        )
+    else:
+        event = behavior_domain.get_event(
+            state.store, user_id=user_id, event_id=event_id
+        )
+        processing_context_store.upsert_answer(
+            state.store,
+            event_id=event.id,
+            user_id=user_id,
+            question_id=payload.question_id,
+            answer_id=payload.answer_id,
+            skipped=payload.skipped,
+        )
+    applied = event.status in {
+        BehaviorEventStatus.QUEUED,
+        BehaviorEventStatus.OBSERVING,
+        BehaviorEventStatus.UPLOADING,
+    }
+    # Late answers stay audited. They never re-run the Observer.
+    return await _processing_out(
+        state,
+        event=event,
+        applied_to_interpretation=applied,
+    )
+
+
+# Keep a named export for the reasoner wiring without importing routes.
+def processing_facts_payload(rows) -> list[dict]:
+    return [item.model_dump(mode="json") for item in owner_facts_for_reasoner(rows)]
+

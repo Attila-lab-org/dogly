@@ -262,6 +262,13 @@ async def collect_export_payload(engine: AsyncEngine, user_id: str) -> dict[str,
             order by created_at, id
         """,
         "behavior_feedback": "select * from public.behavior_feedback where user_id = :uid order by created_at",
+        "behavior_processing_context_answers": """
+            select id, event_id, user_id, question_id, answer_id, skipped,
+                   question_version, source, answered_at, created_at
+            from public.behavior_processing_context_answers
+            where user_id = :uid
+            order by created_at, id
+        """,
         "behavior_observations": """
             select o.*
             from internal.behavior_observations o

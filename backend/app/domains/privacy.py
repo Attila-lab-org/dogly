@@ -146,6 +146,11 @@ def collect_export_payload(store: InMemoryStore, user_id: str) -> dict[str, Any]
             for rec in store.behavior_feedback.values()
             if rec.user_id == user_id
         ],
+        "behavior_processing_context_answers": [
+            rec.model_dump(mode="json")
+            for rec in store.processing_context_answers.values()
+            if rec.user_id == user_id
+        ],
         "personal_patterns": [
             rec.model_dump(mode="json")
             for rec in store.patterns.values()

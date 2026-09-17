@@ -67,6 +67,19 @@ export function usefulQuestionKicker(ownerDisplayName?: string | null): string {
   return name ? `${name}, una cosa può aiutarmi` : 'Una cosa può aiutarmi';
 }
 
+export function processingQuestionKicker(ownerDisplayName?: string | null): string {
+  const name = ownerDisplayName?.trim();
+  return name
+    ? `${name}, intanto una cosa può aiutarmi`
+    : 'Intanto una cosa può aiutarmi';
+}
+
+export const PROCESSING_ACKS = [
+  'Perfetto, questo mi aiuta.',
+  'Ok, continuo a guardare.',
+  'Questo dettaglio può essere utile.',
+] as const;
+
 export function homeGreeting(args: {
   ownerDisplayName?: string | null;
   dogName: string;

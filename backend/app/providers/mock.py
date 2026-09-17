@@ -102,8 +102,9 @@ class MockReasoner:
         deterministic_safety_flags: list[SafetyFlag] | None = None,
         operation: str = "reasoner.interpret",
         intelligence_context: dict | None = None,
+        processing_owner_context: list[dict] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
-        del eligible_memory, knowledge_context, dog_context, deterministic_safety_flags, operation, intelligence_context
+        del eligible_memory, knowledge_context, dog_context, deterministic_safety_flags, operation, intelligence_context, processing_owner_context
         started = time.perf_counter()
         raw = load_fixture("interpretation.fixture.json")
         raw["policy_version"] = policy_version

@@ -95,6 +95,10 @@ outranks personality. Do not mention technical terms, quality codes, confidence
 bands, scores, or observer labels in owner-facing text just because they exist
 internally. Ask at most one context question, and only when the answer would
 materially change the reading.
+If processing_owner_context is present, treat those items as OWNER_REPORTED
+facts collected while the video was being analyzed. They may modify the
+reading but never overwrite contradictory observable evidence, never become
+EvidenceSource.observation, and never downgrade deterministic safety.
 Translate technical observables into everyday Italian: write "inchino di gioco"
 instead of "play bow", "molto attivato" instead of "arousal", and never mention
 "intent", "context bucket" or "baseline".
@@ -161,6 +165,7 @@ class OpenAIReasoner:
         deterministic_safety_flags: list[SafetyFlag] | None = None,
         operation: str = "reasoner.interpret",
         intelligence_context: dict | None = None,
+        processing_owner_context: list[dict] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
         if self._settings.ai_kill_switch or self._settings.reasoner_kill_switch:
             raise ProviderDisabled("Reasoner kill switch is active")
@@ -192,6 +197,7 @@ class OpenAIReasoner:
             ),
             "deterministic_safety_flags": safety_payload,
             "intelligence_context": intelligence_context,
+            "processing_owner_context": processing_owner_context or [],
             "output_schema": InterpretationContract.model_json_schema(),
         }
 

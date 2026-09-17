@@ -6,6 +6,8 @@ import {
   leaksInternalConsumerCopy,
   mediaQualityCopy,
   usefulQuestionKicker,
+  processingQuestionKicker,
+  PROCESSING_ACKS,
 } from '../features/core/conversationCopy';
 import { sanitizeOwnerCopy } from '../features/core/copy';
 import { mapApiDigestiveEventToResult } from '../features/digestive/map';
@@ -41,6 +43,17 @@ describe('consumer conversation copy', () => {
     expect(usefulQuestionKicker('Attilio')).toBe(
       'Attilio, una cosa può aiutarmi',
     );
+    expect(processingQuestionKicker('Attilio')).toBe(
+      'Attilio, intanto una cosa può aiutarmi',
+    );
+    expect(processingQuestionKicker(null)).toBe(
+      'Intanto una cosa può aiutarmi',
+    );
+    expect(PROCESSING_ACKS).toEqual([
+      'Perfetto, questo mi aiuta.',
+      'Ok, continuo a guardare.',
+      'Questo dettaglio può essere utile.',
+    ]);
     expect(homeGreeting({ ownerDisplayName: 'Attilio', dogName: 'Rocky' })).toBe(
       'Ciao Attilio, come sta Rocky oggi?',
     );

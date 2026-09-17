@@ -547,6 +547,43 @@ class BehaviorFeedbackResponse(BaseModel):
     recorded: bool = True
 
 
+class ProcessingContextOption(BaseModel):
+    id: str
+    label: str
+
+
+class ProcessingContextQuestion(BaseModel):
+    id: str
+    text: str
+    options: list[ProcessingContextOption]
+
+
+class ProcessingContextOut(BaseModel):
+    event_id: str
+    analysis_status: str
+    question: ProcessingContextQuestion | None = None
+    answered_count: int = 0
+    max_questions: int = 3
+    planner_version: str
+    applied_to_interpretation: bool | None = None
+
+
+class ProcessingContextAnswerRequest(BaseModel):
+    question_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
+    answer_id: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[a-z0-9_]+$"
+    )
+    skipped: bool = False
+
+    @model_validator(mode="after")
+    def _answer_or_skip(self) -> ProcessingContextAnswerRequest:
+        if self.skipped:
+            return self
+        if not self.answer_id:
+            raise ValueError("provide answer_id or skipped")
+        return self
+
+
 class BehaviorContextUpdateRequest(BaseModel):
     """One owner answer that can materially refine a behavior result."""
 

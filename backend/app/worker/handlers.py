@@ -799,6 +799,21 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
         det_flags = behavior_safety_flags(observation, dog_context)
         eligible_memory = await _eligible_memory(state, event.dog_id)
+        from app.domains import processing_context_store
+        from app.domains.processing_context import owner_facts_for_reasoner
+
+        if state.engine is not None:
+            processing_rows = await processing_context_store.list_answers_db(
+                state.engine, event_id=event.id, user_id=event.user_id
+            )
+        else:
+            processing_rows = processing_context_store.list_answers(
+                state.store, event_id=event.id, user_id=event.user_id
+            )
+        processing_owner_context = [
+            item.model_dump(mode="json")
+            for item in owner_facts_for_reasoner(processing_rows)
+        ]
         interpret_kwargs: dict = {
             "observation": observation,
             "context_bucket": context_bucket,
@@ -809,6 +824,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             "dog_name": dog.name,
             "owner_context_answer": None,
             "deterministic_safety_flags": det_flags,
+            "processing_owner_context": processing_owner_context,
         }
         if any(intelligence.flags.values()):
             interpret_kwargs["intelligence_context"] = intelligence.reasoner_payload()
@@ -887,6 +903,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         if hasattr(capture.context_bucket, "value")
         else capture.context_bucket
     )
+    interpretation_json["processing_owner_context"] = processing_owner_context
     event.interpretation_json = interpretation_json
     event.primary_intent = interpretation.primary_intent
     event.confidence_band = interpretation.confidence_band
@@ -1020,6 +1037,17 @@ async def refine_behavior_event_context(
     )
     deterministic_flags = behavior_safety_flags(observation, dog_context)
 
+    from app.domains import processing_context_store as _proc_store
+    from app.domains.processing_context import owner_facts_for_reasoner as _owner_facts
+
+    if state.engine is not None:
+        refine_rows = await _proc_store.list_answers_db(
+            state.engine, event_id=event.id, user_id=event.user_id
+        )
+    else:
+        refine_rows = _proc_store.list_answers(
+            state.store, event_id=event.id, user_id=event.user_id
+        )
     refine_kwargs: dict = {
         "observation": observation,
         "context_bucket": context_bucket,
@@ -1031,6 +1059,9 @@ async def refine_behavior_event_context(
         "owner_context_answer": owner_answer,
         "deterministic_safety_flags": deterministic_flags,
         "operation": "reasoner.refine_context",
+        "processing_owner_context": [
+            item.model_dump(mode="json") for item in _owner_facts(refine_rows)
+        ],
     }
     if any(intelligence.flags.values()):
         refine_kwargs["intelligence_context"] = intelligence.reasoner_payload()

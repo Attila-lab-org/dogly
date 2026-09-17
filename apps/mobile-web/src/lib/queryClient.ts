@@ -34,6 +34,8 @@ export const queryKeys = {
     [...queryKeys.dog(userId, dogId), 'behavior-events'] as const,
   behaviorEvent: (userId: string, dogId: string, eventId: string) =>
     [...queryKeys.behaviorEvents(userId, dogId), eventId] as const,
+  processingContext: (userId: string, dogId: string, eventId: string) =>
+    [...queryKeys.behaviorEvent(userId, dogId, eventId), 'processing-context'] as const,
   diary: (userId: string, dogId: string) =>
     [...queryKeys.dog(userId, dogId), 'diary'] as const,
   patterns: (userId: string, dogId: string) =>

@@ -143,6 +143,19 @@ class BehaviorEventRec(BaseModel):
     completed_at: datetime | None = None
 
 
+class ProcessingContextAnswerRec(BaseModel):
+    id: str
+    event_id: str
+    user_id: str
+    question_id: str
+    answer_id: str | None = None
+    skipped: bool = False
+    question_version: str = "processing-questions/v1"
+    source: str = "OWNER_REPORTED"
+    answered_at: datetime
+    created_at: datetime
+
+
 class BehaviorFeedbackRec(BaseModel):
     event_id: str
     user_id: str

@@ -23,7 +23,9 @@ import { markUploadCompletedForEvent } from '@/features/behavior/upload';
 import { isApiConfigured } from '@/features/auth/env';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
+import { ProcessingContextCard } from '@/features/behavior/ProcessingContextCard';
 import { useSession } from '@/features/auth/SessionProvider';
+import { useMeProfile } from '@/features/me/api';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
 import {
@@ -35,6 +37,7 @@ export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
+  const meQuery = useMeProfile();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
     isApiConfigured() &&
@@ -175,9 +178,9 @@ export default function BehaviorProcessingScreen() {
           </View>
           <Text style={styles.stateTitle}>Il video non è abbastanza chiaro</Text>
           <Text style={styles.stateText}>
-            Non riesco a vedere bene {dog.name}: possibile scarsa luce, movimento
-            sfocato o inquadratura parziale. Questa prova non viene conteggiata:
-            riprova quando vuoi.
+            Non riesco a vedere abbastanza bene {dog.name} per darti una lettura
+            affidabile. Riproviamo con una ripresa più chiara. Questa prova non
+            viene conteggiata.
           </Text>
           <Button
             title="Registra di nuovo"
@@ -308,6 +311,17 @@ export default function BehaviorProcessingScreen() {
         status={displayStatus}
         finishing={finishing}
       />
+
+      {eventId && userId ? (
+        <ProcessingContextCard
+          eventId={eventId}
+          dogId={dog.id}
+          userId={userId}
+          ownerDisplayName={meQuery.data?.display_name}
+          enabled={useApi}
+          finishing={finishing}
+        />
+      ) : null}
 
       <Text style={styles.heroText}>
         Puoi anche chiudere. Se hai attivato le notifiche, ti avviso quando il
