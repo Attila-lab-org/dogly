@@ -18,6 +18,7 @@ import {
 import { detectImageContentType } from '../dogs/photoUri';
 
 const draining = new Set<string>();
+const inflight = new Map<string, Promise<string | null>>();
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -41,9 +42,11 @@ async function fileBytes(localUri: string): Promise<number> {
       return Math.max(1, info.size);
     }
   } catch {
-    // fallback
+    // handled below
   }
-  return 1;
+  throw new Error(
+    'Non riesco a leggere la foto sul dispositivo. Scattala di nuovo.',
+  );
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {
@@ -65,6 +68,25 @@ async function deleteLocalIfExists(uri: string): Promise<void> {
  * keyato su event_id (non capture_id come behavior).
  */
 export async function processPendingDigestiveUpload(
+  id: string,
+  onInitialized?: (eventId: string) => void,
+): Promise<string | null> {
+  const existing = inflight.get(id);
+  if (existing) {
+    const eventId = await existing;
+    if (eventId) onInitialized?.(eventId);
+    return eventId;
+  }
+  const promise = processPendingDigestiveUploadInner(id, onInitialized);
+  inflight.set(id, promise);
+  try {
+    return await promise;
+  } finally {
+    inflight.delete(id);
+  }
+}
+
+async function processPendingDigestiveUploadInner(
   id: string,
   onInitialized?: (eventId: string) => void,
 ): Promise<string | null> {

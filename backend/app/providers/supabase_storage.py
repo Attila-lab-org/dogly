@@ -97,8 +97,16 @@ class SupabaseStorageProvider:
         return int(size) == int(expected_bytes)
 
     async def delete_object(self, *, bucket: str, path: str) -> None:
-        url = f"{self._base}/storage/v1/object/{bucket}/{quote(path, safe='/')}"
-        response = await self._client.delete(url, headers=self._headers())
+        # Use the same idempotent bulk endpoint as supabase-js `remove()`.
+        # The single-object wildcard endpoint can return 400 when the object
+        # has already disappeared, which leaves retention rows stuck forever.
+        url = f"{self._base}/storage/v1/object/{bucket}"
+        response = await self._client.request(
+            "DELETE",
+            url,
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json={"prefixes": [path]},
+        )
         if response.status_code not in (200, 404):
             response.raise_for_status()
 
@@ -113,11 +121,18 @@ class SupabaseStorageProvider:
 
     async def create_signed_read_url(self, *, bucket: str, path: str, ttl_seconds: int) -> str:
         url = f"{self._base}/storage/v1/object/sign/{bucket}/{quote(path, safe='/')}"
-        response = await self._client.post(
-            url,
-            headers={**self._headers(), "Content-Type": "application/json"},
-            json={"expiresIn": ttl_seconds},
-        )
+        try:
+            response = await self._client.post(
+                url,
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json={"expiresIn": ttl_seconds},
+            )
+        except httpx.TransportError as exc:
+            raise TimeoutError("Supabase Storage is temporarily unavailable") from exc
+        if response.status_code in (408, 429) or response.status_code >= 500:
+            raise TimeoutError(
+                f"Supabase Storage upstream {response.status_code}"
+            )
         response.raise_for_status()
         data = response.json()
         signed = data.get("signedURL") or data.get("signedUrl")

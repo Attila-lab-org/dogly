@@ -13,21 +13,16 @@
       "channel": "development"
     },
     "staging": {
+      "extends": "production",
       "distribution": "internal",
       "channel": "staging",
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
-      },
-      "env": {
-        "APP_ENV": "staging",
-        "EXPO_PUBLIC_APP_ENV": "staging",
-        "EXPO_PUBLIC_API_URL": "https://dogly-staging.vercel.app",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://dogly-staging.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_STAGING_REPLACE_ME"
       }
     },
     "preview": {
+      "extends": "production",
       "distribution": "internal",
       "android": {
         "buildType": "apk"

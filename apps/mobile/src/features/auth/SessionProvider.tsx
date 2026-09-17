@@ -8,6 +8,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
@@ -25,7 +26,10 @@ import {
   saveSession,
 } from '../../lib/secureStore';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
-import { recoverAndDrainUploads } from '../behavior/upload';
+import {
+  clearUploadsForUser,
+  recoverAndDrainUploads,
+} from '../behavior/upload';
 import { clearCareState } from '../care/store';
 import {
   isApiConfigured,
@@ -133,6 +137,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const [loading, setLoading] = useState(!usingMockGate);
   const [session, setSession] = useState<Session | null>(null);
+  const sessionUserIdRef = useRef<string | null>(null);
+  sessionUserIdRef.current = session?.user?.id ?? null;
   const [hasDog, setHasDog] = useState(false);
   const [primaryDogId, setPrimaryDogId] = useState<string | null>(null);
   const [dogStatusUnknown, setDogStatusUnknown] = useState(false);
@@ -144,6 +150,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
    */
   const doSignOut = useCallback(async () => {
     clearProtectedCache();
+    if (sessionUserIdRef.current) {
+      await clearUploadsForUser(sessionUserIdRef.current).catch(() => {
+        // Logout must continue even if the OS already removed a local file.
+      });
+    }
     await clearSession();
     await clearCareState();
     setHasDog(false);

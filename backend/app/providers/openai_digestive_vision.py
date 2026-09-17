@@ -103,37 +103,40 @@ class OpenAIDigestiveVision:
             "apparent_volume": ["low", "normal", "high", "not_assessable"],
             "confidence_band": [value.value for value in ConfidenceBand],
         }
-        response = await self._client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self._model,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": _SYSTEM},
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "Observe this digestive capture. Return JSON only. "
-                                    f"Closed schema: {json.dumps(schema_hint)}"
-                                ),
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": image_ref, "detail": "high"},
-                            },
-                        ],
-                    },
-                ],
-            },
-        )
-        if response.status_code == 429 or response.status_code >= 500:
+        try:
+            response = await self._client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._model,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": _SYSTEM},
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Observe this digestive capture. Return JSON only. "
+                                        f"Closed schema: {json.dumps(schema_hint)}"
+                                    ),
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": image_ref, "detail": "high"},
+                                },
+                            ],
+                        },
+                    ],
+                },
+            )
+        except httpx.TransportError as exc:
+            raise TimeoutError("OpenAI digestive vision is temporarily unavailable") from exc
+        if response.status_code in (408, 429) or response.status_code >= 500:
             raise TimeoutError(f"OpenAI upstream {response.status_code}")
         response.raise_for_status()
         payload = response.json()
@@ -167,28 +170,31 @@ class OpenAIDigestiveVision:
     async def _repair(
         self, raw: dict[str, Any], request_id: str
     ) -> dict[str, Any]:
-        response = await self._client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self._model,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Repair the supplied JSON to match "
-                            "StoolObservationContract. JSON only."
-                        ),
-                    },
-                    {"role": "user", "content": json.dumps(raw)},
-                ],
-            },
-        )
-        if response.status_code == 429 or response.status_code >= 500:
+        try:
+            response = await self._client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._model,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "Repair the supplied JSON to match "
+                                "StoolObservationContract. JSON only."
+                            ),
+                        },
+                        {"role": "user", "content": json.dumps(raw)},
+                    ],
+                },
+            )
+        except httpx.TransportError as exc:
+            raise TimeoutError("OpenAI digestive repair is temporarily unavailable") from exc
+        if response.status_code in (408, 429) or response.status_code >= 500:
             raise TimeoutError(f"OpenAI repair upstream {response.status_code}")
         response.raise_for_status()
         fixed = _json_content(response.json())

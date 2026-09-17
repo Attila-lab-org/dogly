@@ -339,6 +339,38 @@ async def notify_analysis_failure(
         logger.exception("Could not send analysis failure notification")
 
 
+async def notify_analysis_quality_rejected(
+    state: AppState,
+    *,
+    user_id: str,
+    event_id: str,
+    domain: str,
+) -> None:
+    """Tell users who left the processing screen that a new capture is needed."""
+    try:
+        tokens = await _notification_tokens(state, user_id)
+        if domain == "DIGESTIVE":
+            href = f"/digestive/processing/{event_id}"
+            body = (
+                "La foto non è abbastanza chiara per un risultato affidabile. "
+                "L'analisi non è stata conteggiata: puoi rifarla."
+            )
+        else:
+            href = f"/behavior/processing/{event_id}"
+            body = (
+                "Nel video non riesco a osservare bene il cane. "
+                "L'analisi non è stata conteggiata: puoi registrarlo di nuovo."
+            )
+        await send_push(
+            tokens,
+            title="Serve una nuova acquisizione",
+            body=body,
+            data={"href": href, "event_id": event_id},
+        )
+    except Exception:
+        logger.exception("Could not send quality-rejected notification")
+
+
 async def _notification_tokens(state: AppState, user_id: str) -> list[str]:
     if state.engine is not None:
         return await devices_db.list_notification_tokens(state.engine, user_id)
@@ -633,6 +665,12 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             state,
             event_id=event.id,
             status="COMPLETED",
+        )
+        await notify_analysis_quality_rejected(
+            state,
+            user_id=event.user_id,
+            event_id=event.id,
+            domain="BEHAVIOR",
         )
         return {"event_id": event.id, "status": event.status.value}
 
@@ -1031,10 +1069,14 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             "status": event.status,
             "error": ErrorCode.AI_BUDGET_EXCEEDED.value,
         }
-    except Exception:  # noqa: BLE001 -- deliberate: any digestive-vision failure is a
-        # terminal event with quota refund (sez. 22), never crashes the worker.
+    except Exception:
+        logger.exception(
+            "Digestive observer failed for event %s on attempt %s",
+            event.id,
+            event.attempt_count,
+        )
         event.status = "FAILED_TERMINAL"
-        event.last_error_code = ErrorCode.PROVIDER_SCHEMA_INVALID.value
+        event.last_error_code = ErrorCode.PROCESSING_FAILED.value
         if not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
             event.quota_refunded = True
@@ -1047,7 +1089,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             state,
             event_id=event.id,
             status="FAILED",
-            error_code=ErrorCode.PROVIDER_SCHEMA_INVALID.value,
+            error_code=ErrorCode.PROCESSING_FAILED.value,
         )
         await notify_analysis_failure(
             state,
@@ -1055,7 +1097,11 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             event_id=event.id,
             domain="DIGESTIVE",
         )
-        return {"event_id": event.id, "status": event.status, "error": ErrorCode.PROVIDER_SCHEMA_INVALID.value}
+        return {
+            "event_id": event.id,
+            "status": event.status,
+            "error": ErrorCode.PROCESSING_FAILED.value,
+        }
     await state.cost_meter.record(
         usage=usage,
         operation="digestive_vision.observe_stool",
@@ -1081,6 +1127,12 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             state,
             event_id=event.id,
             status="COMPLETED",
+        )
+        await notify_analysis_quality_rejected(
+            state,
+            user_id=event.user_id,
+            event_id=event.id,
+            domain="DIGESTIVE",
         )
         return {"event_id": event.id, "status": event.status}
 

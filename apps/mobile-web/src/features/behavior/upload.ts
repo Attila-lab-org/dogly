@@ -377,6 +377,15 @@ export function markUploadCompletedForEvent(eventId: string): void {
   markUploadsCompletedForEvent(getUploadQueue(), eventId);
 }
 
+/** Logout/privacy boundary: remove every queued row and local media for a user. */
+export async function clearUploadsForUser(userId: string): Promise<void> {
+  const queue = getUploadQueue();
+  const items = queue.listByUser(userId);
+  const uris = new Set(items.map((item) => item.localUri));
+  for (const item of items) queue.remove(item.id);
+  await Promise.all([...uris].map((uri) => deleteLocalIfExists(uri)));
+}
+
 /**
  * "Registra di nuovo" dopo un upload fallito: scarta la riga pending dalla
  * coda SQLite (altrimenti il drain la riproverebbe a ogni resume) e pulisce

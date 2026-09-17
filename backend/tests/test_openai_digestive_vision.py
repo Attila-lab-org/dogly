@@ -39,6 +39,13 @@ class _FakeClient:
         return self._responses.pop(0)
 
 
+class _TransportFailingClient:
+    async def post(self, url: str, **kwargs):
+        del kwargs
+        request = httpx.Request("POST", url)
+        raise httpx.ConnectError("temporary network failure", request=request)
+
+
 def _payload(content: dict) -> dict:
     return {
         "choices": [{"message": {"content": json.dumps(content)}}],
@@ -102,6 +109,28 @@ async def test_openai_digestive_observer_retries_rate_limits(monkeypatch):
         openai_digestive_vision.httpx,
         "AsyncClient",
         lambda *args, **kwargs: fake,
+    )
+    observer = openai_digestive_vision.OpenAIDigestiveVision(
+        Settings(
+            app_env="local",
+            digestive_vision_provider="openai",
+            digestive_vision_model="gpt-5-mini",
+            openai_api_key="test-key",
+        )
+    )
+
+    with pytest.raises(TimeoutError):
+        await observer.observe_stool(
+            image_ref="https://storage.example.test/stool.jpg"
+        )
+
+
+@pytest.mark.asyncio
+async def test_openai_digestive_observer_retries_transport_errors(monkeypatch):
+    monkeypatch.setattr(
+        openai_digestive_vision.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: _TransportFailingClient(),
     )
     observer = openai_digestive_vision.OpenAIDigestiveVision(
         Settings(

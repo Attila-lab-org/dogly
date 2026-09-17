@@ -113,3 +113,71 @@ async def test_signed_upload_maps_storage_http_error() -> None:
     assert excinfo.value.code == ErrorCode.PROCESSING_FAILED
     assert excinfo.value.retryable is True
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_delete_object_uses_idempotent_remove_endpoint() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "DELETE"
+        assert request.url.path == "/storage/v1/object/behavior-raw"
+        assert json.loads(request.content) == {
+            "prefixes": ["users/u/dogs/d/behavior/e/clip.webm"]
+        }
+        assert request.headers["content-type"] == "application/json"
+        return httpx.Response(200, json=[])
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+
+    await provider.delete_object(
+        bucket="behavior-raw",
+        path="users/u/dogs/d/behavior/e/clip.webm",
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_delete_missing_object_is_successful() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+
+    await provider.delete_object(bucket="digestive-raw", path="missing/photo.jpg")
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_signed_read_maps_transient_storage_error_to_timeout() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="temporarily unavailable")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+
+    with pytest.raises(TimeoutError):
+        await provider.create_signed_read_url(
+            bucket="digestive-raw",
+            path="users/u/photo.jpg",
+            ttl_seconds=60,
+        )
+    await client.aclose()
