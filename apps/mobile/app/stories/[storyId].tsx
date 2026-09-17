@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { deleteStory, markStorySeen, useStories } from '@/features/stories/data';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { confirmDestructiveAction } from '@/lib/confirmAction';
 
 export default function StoryViewerScreen() {
   const params = useLocalSearchParams<{ storyId?: string | string[] }>();
@@ -107,35 +108,28 @@ export default function StoryViewerScreen() {
                 accessibilityLabel="Elimina storia"
                 disabled={deleting}
                 onPress={() =>
-                  Alert.alert(
+                  confirmDestructiveAction(
                     'Eliminare questa storia?',
                     'Verrà rimossa subito e definitivamente.',
-                    [
-                      { text: 'Annulla', style: 'cancel' },
-                      {
-                        text: 'Elimina',
-                        style: 'destructive',
-                        onPress: () => {
-                          const next = stories[index + 1] ?? stories[index - 1];
-                          setDeleting(true);
-                          void deleteStory(story.id, dog.id)
-                            .then(() => {
-                              if (next) {
-                                router.replace(`/stories/${next.id}` as never);
-                              } else {
-                                router.back();
-                              }
-                            })
-                            .catch(() => {
-                              setDeleting(false);
-                              Alert.alert(
-                                'Storia non eliminata',
-                                'Riprova tra poco.',
-                              );
-                            });
-                        },
-                      },
-                    ],
+                    () => {
+                      const next = stories[index + 1] ?? stories[index - 1];
+                      setDeleting(true);
+                      void deleteStory(story.id, dog.id)
+                        .then(() => {
+                          if (next) {
+                            router.replace(`/stories/${next.id}` as never);
+                          } else {
+                            router.back();
+                          }
+                        })
+                        .catch(() => {
+                          setDeleting(false);
+                          Alert.alert(
+                            'Storia non eliminata',
+                            'Riprova tra poco.',
+                          );
+                        });
+                    },
                   )
                 }
                 hitSlop={10}

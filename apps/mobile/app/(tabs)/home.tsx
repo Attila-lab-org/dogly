@@ -11,7 +11,6 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ImageBackground,
   Pressable,
@@ -29,7 +28,7 @@ import { colors, gradients, radius, shadows, spacing, typography } from '@/theme
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { StoriesRail } from '@/features/stories/StoriesRail';
-import { deleteStory, useStories } from '@/features/stories/data';
+import { useStories } from '@/features/stories/data';
 import {
   currentAgeLabel,
   isBirthdayToday,
@@ -157,24 +156,6 @@ export default function HomeScreen() {
             stories={stories}
             onAdd={() => router.push('/(tabs)/camera')}
             onOpen={(story) => router.push(`/stories/${story.id}` as never)}
-            onDelete={(story) =>
-              Alert.alert(
-                'Eliminare questa storia?',
-                'Verrà rimossa subito e definitivamente.',
-                [
-                  { text: 'Annulla', style: 'cancel' },
-                  {
-                    text: 'Elimina',
-                    style: 'destructive',
-                    onPress: () => {
-                      void deleteStory(story.id, dog.id).catch(() =>
-                        Alert.alert('Storia non eliminata', 'Riprova tra poco.'),
-                      );
-                    },
-                  },
-                ],
-              )
-            }
           />
 
           <Pressable

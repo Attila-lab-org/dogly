@@ -16,12 +16,10 @@ export function StoriesRail({
   stories,
   onAdd,
   onOpen,
-  onDelete,
 }: {
   stories: DogStory[];
   onAdd: () => void;
   onOpen: (story: DogStory) => void;
-  onDelete: (story: DogStory) => void;
 }) {
   const previews = stories
     .filter(
@@ -61,46 +59,36 @@ export function StoriesRail({
         </Pressable>
 
         {previews.map((story) => (
-          <View key={story.id} style={styles.storyItem}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Storia di ${story.dogName}`}
-              onPress={() => onOpen(story)}
-              style={styles.item}
-            >
-              {story.unseen ? (
-                <LinearGradient
-                  colors={[colors.primary, colors.accent]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.ring}
-                >
-                  <View style={styles.ringInner}>
-                    <Image
-                      source={{ uri: story.photoUri }}
-                      style={styles.avatar}
-                    />
-                  </View>
-                </LinearGradient>
-              ) : (
-                <View style={styles.ringSeen}>
-                  <Image source={{ uri: story.photoUri }} style={styles.avatar} />
+          <Pressable
+            key={story.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Storia di ${story.dogName}`}
+            onPress={() => onOpen(story)}
+            style={styles.item}
+          >
+            {story.unseen ? (
+              <LinearGradient
+                colors={[colors.primary, colors.accent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.ring}
+              >
+                <View style={styles.ringInner}>
+                  <Image
+                    source={{ uri: story.photoUri }}
+                    style={styles.avatar}
+                  />
                 </View>
-              )}
-              <Text style={styles.label} numberOfLines={1}>
-                {story.dogName}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Elimina storia"
-              onPress={() => onDelete(story)}
-              hitSlop={8}
-              style={styles.deleteStory}
-            >
-              <Ionicons name="close" size={14} color={colors.textOnPrimary} />
-            </Pressable>
-          </View>
+              </LinearGradient>
+            ) : (
+              <View style={styles.ringSeen}>
+                  <Image source={{ uri: story.photoUri }} style={styles.avatar} />
+              </View>
+            )}
+            <Text style={styles.label} numberOfLines={1}>
+              {story.dogName}
+            </Text>
+          </Pressable>
         ))}
       </ScrollView>
     </View>
@@ -136,23 +124,6 @@ const styles = StyleSheet.create({
     width: SIZE + 8,
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  storyItem: {
-    width: SIZE + 8,
-    position: 'relative',
-  },
-  deleteStory: {
-    position: 'absolute',
-    top: -3,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.82)',
-    borderWidth: 2,
-    borderColor: colors.surface,
   },
   addRing: {
     width: SIZE,

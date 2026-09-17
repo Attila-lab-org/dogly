@@ -16,6 +16,7 @@ import { pickAlbumPhoto } from '@/features/photos/share';
 import type { AlbumPhoto } from '@/features/photos/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
+import { confirmDestructiveAction } from '@/lib/confirmAction';
 
 const PAGE_SIZE = 60;
 
@@ -65,35 +66,28 @@ export default function AlbumIndexScreen() {
   };
 
   const deletePhoto = (photo: AlbumPhoto) => {
-    Alert.alert(
+    confirmDestructiveAction(
       'Eliminare questa foto?',
       'Verrà rimossa definitivamente dai momenti di ' + dog.name + '.',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: () => {
-            setDeletingId(photo.id);
-            void deleteAlbumPhoto(photo.id)
-              .then(async () => {
-                await Promise.all([
-                  queryClient.invalidateQueries({
-                    queryKey: ['gallery-dog-photos', dogId],
-                  }),
-                  queryClient.invalidateQueries({
-                    queryKey: ['gallery-albums', dogId],
-                  }),
-                ]);
-                setDeletingId(null);
-              })
-              .catch(() => {
-                setDeletingId(null);
-                Alert.alert('Foto non eliminata', 'Riprova tra poco.');
-              });
-          },
-        },
-      ],
+      () => {
+        setDeletingId(photo.id);
+        void deleteAlbumPhoto(photo.id)
+          .then(async () => {
+            await Promise.all([
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-dog-photos', dogId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-albums', dogId],
+              }),
+            ]);
+            setDeletingId(null);
+          })
+          .catch(() => {
+            setDeletingId(null);
+            Alert.alert('Foto non eliminata', 'Riprova tra poco.');
+          });
+      },
     );
   };
 

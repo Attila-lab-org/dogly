@@ -1,7 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { Share, Alert, Platform } from 'react-native';
-import { PHOTO_COPY } from './copy';
 import type { AlbumPhoto, SharePhotoPayload } from './types';
 
 export async function pickAlbumPhoto(): Promise<string | null> {
@@ -67,36 +66,28 @@ export async function sharePhoto(
   photo: AlbumPhoto,
   dogName: string,
 ): Promise<void> {
-  Alert.alert('Condividi', PHOTO_COPY.shareConfirm, [
-    { text: 'Annulla', style: 'cancel' },
-    {
-      text: 'Continua',
-      onPress: async () => {
-        const payload: SharePhotoPayload = {
-          title: `${dogName} su Dogly`,
-          message: photo.caption
-            ? `${photo.caption} — ${dogName} su Dogly`
-            : `Un momento di ${dogName} su Dogly`,
-        };
-        try {
-          if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
-            await Sharing.shareAsync(photo.localUri, {
-              dialogTitle: payload.title,
-              mimeType: 'image/jpeg',
-            });
-            return;
-          }
-          await Share.share({
-            title: payload.title,
-            message: payload.message,
-            url: photo.localUri,
-          });
-        } catch {
-          Alert.alert('Condivisione non riuscita', 'Riprova tra poco.');
-        }
-      },
-    },
-  ]);
+  const payload: SharePhotoPayload = {
+    title: `${dogName} su Dogly`,
+    message: photo.caption
+      ? `${photo.caption} — ${dogName} su Dogly`
+      : `Un momento di ${dogName} su Dogly`,
+  };
+  try {
+    if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
+      await Sharing.shareAsync(photo.localUri, {
+        dialogTitle: payload.title,
+        mimeType: 'image/jpeg',
+      });
+      return;
+    }
+    await Share.share({
+      title: payload.title,
+      message: payload.message,
+      url: photo.localUri,
+    });
+  } catch {
+    Alert.alert('Condivisione non riuscita', 'Riprova tra poco.');
+  }
 }
 
 export async function shareTextCard(payload: SharePhotoPayload): Promise<void> {

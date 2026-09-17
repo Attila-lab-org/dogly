@@ -1,7 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { Share, Alert, Platform } from 'react-native';
-import { PHOTO_COPY } from './copy';
 import type { AlbumPhoto, SharePhotoPayload } from './types';
 import { pickWebImage } from './webPickImage';
 
@@ -76,36 +75,62 @@ export async function sharePhoto(
   photo: AlbumPhoto,
   dogName: string,
 ): Promise<void> {
-  Alert.alert('Condividi', PHOTO_COPY.shareConfirm, [
-    { text: 'Annulla', style: 'cancel' },
-    {
-      text: 'Continua',
-      onPress: async () => {
-        const payload: SharePhotoPayload = {
-          title: `${dogName} su Dogly`,
-          message: photo.caption
-            ? `${photo.caption} — ${dogName} su Dogly`
-            : `Un momento di ${dogName} su Dogly`,
+  const payload: SharePhotoPayload = {
+    title: `${dogName} su Dogly`,
+    message: photo.caption
+      ? `${photo.caption} — ${dogName} su Dogly`
+      : `Un momento di ${dogName} su Dogly`,
+  };
+  try {
+    if (Platform.OS === 'web') {
+      const webNavigator = globalThis.navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+        share?: (data: ShareData) => Promise<void>;
+      };
+      if (webNavigator.share) {
+        const response = await fetch(photo.localUri);
+        const blob = await response.blob();
+        const file = new File([blob], `${dogName}-dogly.jpg`, {
+          type: blob.type || 'image/jpeg',
+        });
+        const data: ShareData = {
+          title: payload.title,
+          text: payload.message,
+          files: [file],
         };
-        try {
-          if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
-            await Sharing.shareAsync(photo.localUri, {
-              dialogTitle: payload.title,
-              mimeType: 'image/jpeg',
-            });
-            return;
-          }
-          await Share.share({
-            title: payload.title,
-            message: payload.message,
-            url: photo.localUri,
-          });
-        } catch {
-          Alert.alert('Condivisione non riuscita', 'Riprova tra poco.');
+        if (!webNavigator.canShare || webNavigator.canShare(data)) {
+          await webNavigator.share(data);
+          return;
         }
-      },
-    },
-  ]);
+        await webNavigator.share({
+          title: payload.title,
+          text: payload.message,
+          url: photo.localUri,
+        });
+        return;
+      }
+      await webNavigator.clipboard.writeText(
+        `${payload.message}\n${photo.localUri}`,
+      );
+      Alert.alert('Link copiato', 'Ora puoi incollarlo dove preferisci.');
+      return;
+    }
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(photo.localUri, {
+        dialogTitle: payload.title,
+        mimeType: 'image/jpeg',
+      });
+      return;
+    }
+    await Share.share({
+      title: payload.title,
+      message: payload.message,
+      url: photo.localUri,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    Alert.alert('Condivisione non riuscita', 'Riprova tra poco.');
+  }
 }
 
 export async function shareTextCard(payload: SharePhotoPayload): Promise<void> {
