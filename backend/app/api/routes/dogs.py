@@ -13,9 +13,12 @@ from app.contracts.api import (
     DogListResponse,
     DogOut,
     DogUpdate,
+    WeightEventCreate,
+    WeightEventOut,
 )
 from app.domains import dogs as dogs_domain
-from app.domains import dogs_db
+from app.domains import dogs_db, weight_db
+from app.domains import weight_events as weight_domain
 from app.domains.dogs import AVATAR_BUCKET
 from app.domains.models import DogRec
 
@@ -76,6 +79,60 @@ async def update_dog(dog_id: str, payload: DogUpdate, state: StateDep, user_id: 
     else:
         dog = dogs_domain.update_dog(state.store, user_id=user_id, dog_id=dog_id, payload=payload)
     return await to_out(dog, state)
+
+
+def _weight_out(event) -> WeightEventOut:
+    return WeightEventOut(
+        id=event.id,
+        dog_id=event.dog_id,
+        weight_kg=event.weight_kg,
+        body_condition_score=event.body_condition_score,
+        source=event.source,
+        recorded_at=event.recorded_at,
+        created_at=event.created_at,
+    )
+
+
+@router.get("/dogs/{dog_id}/weight-events", response_model=list[WeightEventOut])
+async def list_weight_events(
+    dog_id: str, state: StateDep, user_id: UserIdDep
+) -> list[WeightEventOut]:
+    if state.engine is not None:
+        events = await weight_db.list_weight_events(
+            state.engine, user_id=user_id, dog_id=dog_id
+        )
+    else:
+        events = weight_domain.list_weight_events(
+            state.store, user_id=user_id, dog_id=dog_id
+        )
+    return [_weight_out(event) for event in events]
+
+
+@router.post(
+    "/dogs/{dog_id}/weight-events",
+    response_model=WeightEventOut,
+    status_code=201,
+)
+async def create_weight_event(
+    dog_id: str,
+    payload: WeightEventCreate,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> WeightEventOut:
+    if state.engine is not None:
+        event = await weight_db.create_weight_event(
+            state.engine, user_id=user_id, dog_id=dog_id, payload=payload
+        )
+    else:
+        event = weight_domain.record_weight_event(
+            state.store,
+            user_id=user_id,
+            dog_id=dog_id,
+            weight_kg=payload.weight_kg,
+            body_condition_score=payload.body_condition_score,
+            recorded_at=payload.recorded_at,
+        )
+    return _weight_out(event)
 
 
 @router.post("/dogs/{dog_id}/avatar/init", response_model=DogAvatarInitResponse)

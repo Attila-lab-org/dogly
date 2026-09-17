@@ -168,6 +168,15 @@ async def create_dog(engine: AsyncEngine, *, user_id: str, payload: DogCreate) -
                 "fields": ["created"],
             },
         )
+        if dog.weight_kg is not None:
+            from app.domains.weight_db import insert_weight_event_on_conn
+
+            await insert_weight_event_on_conn(
+                conn,
+                user_id=user_id,
+                dog_id=dog.id,
+                weight_kg=dog.weight_kg,
+            )
     return dog
 
 
@@ -216,6 +225,11 @@ async def update_dog(
         if not changed:
             return _row_to_dog(current_row)
 
+        previous_weight = (
+            float(current_row["weight_kg"])
+            if current_row["weight_kg"] is not None
+            else None
+        )
         sets = ", ".join(f"{key} = :{key}" for key in changed)
         row = (
             await conn.execute(
@@ -245,6 +259,16 @@ async def update_dog(
                 "fields": sorted(changed.keys()),
             },
         )
+        if "weight_kg" in changed and dog.weight_kg is not None:
+            from app.domains.weight_db import insert_weight_event_on_conn
+
+            if dog.weight_kg != previous_weight:
+                await insert_weight_event_on_conn(
+                    conn,
+                    user_id=user_id,
+                    dog_id=dog.id,
+                    weight_kg=dog.weight_kg,
+                )
     return dog
 
 

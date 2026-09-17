@@ -8,6 +8,9 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
+    ExternalFoodCandidateOut,
+    ExternalFoodConfirmRequest,
+    ExternalFoodLookupRequest,
     FeedingPeriodCreate,
     FeedingPeriodOut,
     FoodManualCreateRequest,
@@ -19,7 +22,7 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains import digestive as digestive_domain
-from app.domains import digestive_db, idempotency_db
+from app.domains import digestive_db, external_food, external_food_db, idempotency_db
 from app.domains.models import FeedingPeriodRec, FoodProductRec
 from app.providers.openai_food_label import extract_food_label
 
@@ -37,6 +40,8 @@ def _food_out(product: FoodProductRec) -> FoodProductOut:
         feeding_directions=product.feeding_directions,
         extraction_confidence=product.extraction_confidence or {},
         verified_at=product.verified_at,
+        barcode=product.barcode,
+        external_source=product.external_source,
     )
 
 
@@ -338,3 +343,95 @@ async def create_feeding_period(
     resp = _period_out(rec)
     await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp
+
+
+@router.post(
+    "/nutrition/foods/external/lookup",
+    response_model=ExternalFoodCandidateOut,
+)
+async def lookup_external_food(
+    payload: ExternalFoodLookupRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
+) -> ExternalFoodCandidateOut:
+    if cached := guard.lookup():
+        return ExternalFoodCandidateOut.model_validate(cached)
+    enabled = state.settings.open_pet_food_facts_v1
+    if state.engine is not None:
+        lookup_id, candidate = await external_food_db.lookup_external_food(
+            state.engine,
+            user_id=user_id,
+            payload=payload,
+            enabled=enabled,
+        )
+    else:
+        lookup_id, candidate = await external_food.lookup_external_food(
+            state.store,
+            user_id=user_id,
+            payload=payload,
+            enabled=enabled,
+        )
+    response = ExternalFoodCandidateOut(
+        lookup_id=lookup_id,
+        barcode=candidate.barcode,
+        brand=candidate.brand,
+        name=candidate.name,
+        ingredients_raw=candidate.ingredients_raw,
+        calories=candidate.calories,
+        image_url=candidate.image_url,
+        attribution=candidate.attribution,
+    )
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
+
+
+@router.post(
+    "/nutrition/foods/external/confirm",
+    response_model=FoodProductOut,
+    status_code=201,
+)
+async def confirm_external_food(
+    payload: ExternalFoodConfirmRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
+) -> FoodProductOut:
+    if cached := guard.lookup():
+        return FoodProductOut.model_validate(cached)
+    enabled = state.settings.open_pet_food_facts_v1
+    if state.engine is not None:
+        product = await external_food_db.confirm_external_food(
+            state.engine,
+            user_id=user_id,
+            payload=payload,
+            enabled=enabled,
+        )
+    else:
+        product = external_food.confirm_external_food(
+            state.store,
+            user_id=user_id,
+            payload=payload,
+            enabled=enabled,
+        )
+    if payload.activate:
+        from datetime import UTC, datetime
+
+        from app.contracts.api import FeedingPeriodCreate
+
+        period_payload = FeedingPeriodCreate(
+            dog_id=payload.dog_id,
+            food_product_id=product.id,
+            start_at=datetime.now(UTC),
+        )
+        if state.engine is not None:
+            await digestive_db.create_feeding_period(
+                state.engine, user_id=user_id, payload=period_payload
+            )
+        else:
+            digestive_domain.create_feeding_period(
+                state.store, user_id=user_id, payload=period_payload
+            )
+    response = _food_out(product)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response

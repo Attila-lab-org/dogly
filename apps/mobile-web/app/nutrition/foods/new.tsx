@@ -15,7 +15,9 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import {
   activateFeedingPeriod,
+  confirmExternalFood,
   createManualFood,
+  lookupFoodByBarcode,
 } from '@/features/nutrition/api';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { queryKeys } from '@/lib/queryClient';
@@ -28,6 +30,9 @@ export default function NewFoodScreen() {
   const { userId } = useSession();
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [lookupId, setLookupId] = useState<string | null>(null);
+  const [attribution, setAttribution] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('');
   const [treats, setTreats] = useState('');
   const [transition, setTransition] = useState('');
@@ -40,11 +45,19 @@ export default function NewFoodScreen() {
     setWorking(true);
     setError(null);
     try {
-      const food = await createManualFood({
-        dogId: dog.id,
-        name,
-        brand,
-      });
+      const food = lookupId
+        ? await confirmExternalFood({
+            dogId: dog.id,
+            lookupId,
+            name,
+            brand,
+            activate: false,
+          })
+        : await createManualFood({
+            dogId: dog.id,
+            name,
+            brand,
+          });
       if (activeNow) {
         await activateFeedingPeriod({
           dogId: dog.id,
@@ -104,6 +117,38 @@ export default function NewFoodScreen() {
         maxLength={120}
         style={styles.input}
       />
+
+      <Text style={styles.label}>Codice a barre, se ce l’hai</Text>
+      <TextInput
+        accessibilityLabel="Codice a barre dell’alimento"
+        value={barcode}
+        onChangeText={(value) => {
+          setBarcode(value);
+          setLookupId(null);
+          setAttribution(null);
+        }}
+        onEndEditing={() => {
+          const cleaned = barcode.replace(/\D/g, '');
+          if (cleaned.length < 8 || !dog.id) return;
+          void lookupFoodByBarcode({ dogId: dog.id, barcode: cleaned })
+            .then((candidate) => {
+              setLookupId(candidate.lookup_id);
+              setAttribution(candidate.attribution);
+              if (candidate.name && !name.trim()) setName(candidate.name);
+              if (candidate.brand && !brand.trim()) setBrand(candidate.brand);
+            })
+            .catch(() => {
+              setLookupId(null);
+              setAttribution(null);
+            });
+        }}
+        placeholder="Facoltativo"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="number-pad"
+        maxLength={32}
+        style={styles.input}
+      />
+      {attribution ? <Text style={styles.subtitle}>{attribution}</Text> : null}
 
       <View style={styles.activeRow}>
         <View style={styles.activeCopy}>

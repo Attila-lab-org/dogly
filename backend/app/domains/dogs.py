@@ -52,6 +52,10 @@ def create_dog(store: InMemoryStore, *, user_id: str, payload: DogCreate) -> Dog
     )
     store.create_dog(rec)
     store.save_profile_version(rec.id, rec.model_dump(mode="json"), ["created"])
+    if rec.weight_kg is not None:
+        from app.domains.weight_events import maybe_record_profile_weight
+
+        maybe_record_profile_weight(store, dog=rec, previous=None)
     return rec
 
 
@@ -75,10 +79,17 @@ def update_dog(store: InMemoryStore, *, user_id: str, dog_id: str, payload: DogU
         if getattr(dog, key) != value
     }
     if changed:
+        previous_weight = dog.weight_kg
         updated = dog.model_copy(update=changed)
         store.dogs[dog.id] = updated
         # Profile version audit: changes that can influence interpretation (sez. 10.1).
         store.save_profile_version(dog_id, updated.model_dump(mode="json"), sorted(changed.keys()))
+        if "weight_kg" in changed and updated.weight_kg is not None:
+            from app.domains.weight_events import maybe_record_profile_weight
+
+            maybe_record_profile_weight(
+                store, dog=updated, previous=previous_weight
+            )
         return updated
     return dog
 

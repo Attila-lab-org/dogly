@@ -627,6 +627,9 @@ class DigestiveContextUpdateRequest(BaseModel):
     vomiting_today: bool | None = None
     reduced_activity_today: bool | None = None
     unusual_food_48h: bool | None = None
+    appetite_reduced: bool | None = None
+    straining_or_urgency: bool | None = None
+    supplements_or_medication: bool | None = None
 
 
 class OwnerReportedFact(BaseModel):
@@ -791,6 +794,8 @@ class FoodProductOut(BaseModel):
     feeding_directions: str | None = None
     extraction_confidence: dict[str, float] = Field(default_factory=dict)
     verified_at: datetime | None = None
+    barcode: str | None = None
+    external_source: str | None = None
 
 
 class FeedingPeriodCreate(BaseModel):
@@ -819,6 +824,50 @@ class DigestiveSummaryOut(BaseModel):
     data_sufficiency: str = "insufficient"
     recent_trend: str | None = None
     safety_flags: list[SafetyFlag] = Field(default_factory=list)
+
+
+class WeightEventCreate(BaseModel):
+    weight_kg: float = Field(gt=0, lt=200)
+    body_condition_score: int | None = Field(default=None, ge=1, le=9)
+    recorded_at: datetime | None = None
+
+
+class WeightEventOut(BaseModel):
+    id: str
+    dog_id: str
+    weight_kg: float
+    body_condition_score: int | None = None
+    source: str = "OWNER"
+    recorded_at: datetime
+    created_at: datetime
+
+
+class ExternalFoodLookupRequest(BaseModel):
+    dog_id: str
+    barcode: str = Field(min_length=8, max_length=32)
+    client_request_id: str = Field(min_length=8, max_length=128)
+
+
+class ExternalFoodCandidateOut(BaseModel):
+    lookup_id: str
+    barcode: str
+    brand: str | None = None
+    name: str | None = None
+    ingredients_raw: str | None = None
+    calories: str | None = None
+    image_url: str | None = None
+    attribution: str
+    confirmation_required: bool = True
+
+
+class ExternalFoodConfirmRequest(BaseModel):
+    dog_id: str
+    lookup_id: str
+    brand: str | None = Field(default=None, max_length=120)
+    name: str = Field(min_length=1, max_length=200)
+    ingredients_raw: str | None = None
+    calories: str | None = None
+    activate: bool = False
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,127 @@
+{
+  "version": "3.0",
+  "sources": [
+    {
+      "id": "MORRILL_2022_SCIENCE",
+      "citation": "Morrill et al., 2022. Ancestry-inclusive dog genomics finds strong conservation of behavioral variation across breeds. Science.",
+      "url": "https://www.science.org/doi/10.1126/science.abk0639",
+      "license": "CC0 (Darwin's Ark / Dryad data); paper cited for claims",
+      "commercial_use": "allowed_with_attribution_of_paper",
+      "use": "Population variation bound: breed is a weak individual prior."
+    },
+    {
+      "id": "DARWINS_ARK_DRYAD",
+      "citation": "Darwin's Ark citizen-science dog data (Dryad).",
+      "url": "https://datadryad.org/stash/dataset/doi:10.5061/dryad.g4f4qrfr0",
+      "license": "CC0",
+      "commercial_use": "allowed",
+      "use": "Curated population claims and offline import fixtures only."
+    },
+    {
+      "id": "OPEN_PET_FOOD_FACTS",
+      "citation": "Open Pet Food Facts product database.",
+      "url": "https://world.openpetfoodfacts.org",
+      "license": "ODbL",
+      "commercial_use": "allowed_with_attribution_and_share_alike",
+      "use": "Barcode candidate lookup; owner confirmation required."
+    },
+    {
+      "id": "WSAVA_NUTRITION_2011",
+      "citation": "WSAVA Nutritional Assessment Guidelines, 2011.",
+      "url": "https://wsava.org/wp-content/uploads/2020/01/WSAVA-Nutrition-Assessment-Guidelines-2011-JSAP.pdf",
+      "license": "publisher_page",
+      "commercial_use": "citation_only",
+      "use": "Weight, appetite and diet history are context, not diagnosis."
+    },
+    {
+      "id": "AAHA_NUTRITION_2021",
+      "citation": "2021 AAHA Nutrition and Weight Management Guidelines.",
+      "url": "https://www.aaha.org/resources/2021-aaha-nutrition-and-weight-management-guidelines/",
+      "license": "publisher_page",
+      "commercial_use": "citation_only",
+      "use": "Food transitions are gradual associations, not causal proof."
+    },
+    {
+      "id": "VCA_DIARRHEA_CONTEXT",
+      "citation": "VCA Animal Hospitals diarrhea questionnaire for dogs.",
+      "url": "https://vcahospitals.com/know-your-pet/diarrhea-questionnaire-and-checklist-for-dogs",
+      "license": "publisher_page",
+      "commercial_use": "citation_only",
+      "use": "Frequency, vomiting, appetite and diet belong in digestive context."
+    }
+  ],
+  "claims": [
+    {
+      "id": "POP_VARIATION_001",
+      "domain": "population",
+      "statement": "Breed explains only a small share of individual behavioral variation. A named breed is a weak population prior, never a personality.",
+      "forbidden": "Do not treat breed as destiny, temperament, or an aggression label.",
+      "applies_when": ["named_breed", "breed_intelligence_v1"],
+      "evidence_grade": "A",
+      "source_ids": ["MORRILL_2022_SCIENCE", "DARWINS_ARK_DRYAD"]
+    },
+    {
+      "id": "POP_FUNCTION_001",
+      "domain": "population",
+      "statement": "Ancestral working function may weakly align with some motion or attention patterns at population level only.",
+      "forbidden": "Do not infer intent, drive, or training need from functional group alone.",
+      "applies_when": ["named_breed", "breed_intelligence_v1"],
+      "evidence_grade": "B",
+      "source_ids": ["MORRILL_2022_SCIENCE"]
+    },
+    {
+      "id": "POP_NO_AGGRESSION_001",
+      "domain": "population",
+      "statement": "No breed or mix receives an aggression, bite-risk, or dangerousness prior.",
+      "forbidden": "Never introduce aggression, guilt, or breed ban language from taxonomy.",
+      "applies_when": ["always"],
+      "evidence_grade": "A",
+      "source_ids": ["MORRILL_2022_SCIENCE"]
+    },
+    {
+      "id": "MORPH_VERIFY_001",
+      "domain": "behavior",
+      "statement": "Visible anatomy in the clip is the only morphology evidence. Hints may resolve ambiguous ear, tail or muzzle views when they match the video.",
+      "forbidden": "Do not infer breed, mix composition, or temperament from morphology.",
+      "applies_when": ["morphology_observer_context_v1"],
+      "evidence_grade": "C",
+      "source_ids": ["MORRILL_2022_SCIENCE"]
+    },
+    {
+      "id": "DIGEST_LONGITUDINAL_001",
+      "domain": "digestive",
+      "statement": "Seven- and thirty-day episode counts describe frequency for this dog, not a diagnosis or a food verdict.",
+      "forbidden": "Do not claim a food caused the change or name a disease from photo frequency.",
+      "applies_when": ["digestive", "digestive_longitudinal_v3"],
+      "evidence_grade": "B",
+      "source_ids": ["VCA_DIARRHEA_CONTEXT"]
+    },
+    {
+      "id": "NUTR_WEIGHT_001",
+      "domain": "nutrition",
+      "statement": "Owner-recorded weight and body-condition scores are monitoring facts. Change over time is context for appetite and digestion, not a clinical diagnosis.",
+      "forbidden": "Do not diagnose obesity, malnutrition, or endocrine disease from a home weight.",
+      "applies_when": ["nutrition_intelligence_v1"],
+      "evidence_grade": "B",
+      "source_ids": ["WSAVA_NUTRITION_2011"]
+    },
+    {
+      "id": "NUTR_TRANSITION_001",
+      "domain": "nutrition",
+      "statement": "A recent food change is useful coincidence to watch. It does not prove the food caused a digestive change.",
+      "forbidden": "Do not blame or clear a product without owner-confirmed diet history.",
+      "applies_when": ["nutrition_intelligence_v1", "digestive"],
+      "evidence_grade": "B",
+      "source_ids": ["AAHA_NUTRITION_2021"]
+    },
+    {
+      "id": "OPFF_ATTRIBUTION_001",
+      "domain": "nutrition",
+      "statement": "Open Pet Food Facts candidates stay unverified until the owner confirms the product. Attribution and share-alike apply to reused product data.",
+      "forbidden": "Do not persist barcode data as the dog's food without confirmation.",
+      "applies_when": ["open_pet_food_facts_v1"],
+      "evidence_grade": "A",
+      "source_ids": ["OPEN_PET_FOOD_FACTS"]
+    }
+  ]
+}

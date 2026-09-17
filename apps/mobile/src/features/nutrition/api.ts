@@ -172,6 +172,58 @@ export async function createManualFood(options: {
   );
 }
 
+export type ExternalFoodCandidate = {
+  lookup_id: string;
+  barcode: string;
+  brand: string | null;
+  name: string | null;
+  ingredients_raw?: string | null;
+  calories?: string | null;
+  attribution: string;
+  confirmation_required: boolean;
+};
+
+export async function lookupFoodByBarcode(options: {
+  dogId: string;
+  barcode: string;
+}): Promise<ExternalFoodCandidate> {
+  const clientRequestId = newId('opff');
+  return api.post<ExternalFoodCandidate>(
+    '/v1/nutrition/foods/external/lookup',
+    {
+      dog_id: options.dogId,
+      barcode: options.barcode,
+      client_request_id: clientRequestId,
+    },
+    { headers: { 'X-Idempotency-Key': clientRequestId } },
+  );
+}
+
+export async function confirmExternalFood(options: {
+  dogId: string;
+  lookupId: string;
+  brand?: string;
+  name: string;
+  ingredientsRaw?: string;
+  calories?: string;
+  activate?: boolean;
+}): Promise<ApiFoodProduct> {
+  const key = `opff-confirm-${options.lookupId}`;
+  return api.post<ApiFoodProduct>(
+    '/v1/nutrition/foods/external/confirm',
+    {
+      dog_id: options.dogId,
+      lookup_id: options.lookupId,
+      brand: options.brand?.trim() || null,
+      name: options.name.trim(),
+      ingredients_raw: options.ingredientsRaw?.trim() || null,
+      calories: options.calories?.trim() || null,
+      activate: options.activate ?? false,
+    },
+    { headers: { 'X-Idempotency-Key': key } },
+  );
+}
+
 export async function activateFeedingPeriod(options: {
   dogId: string;
   foodId: string;

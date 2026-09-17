@@ -60,6 +60,7 @@ class VideoObserver(Protocol):
         content_type: str,
         policy_version: str,
         duration_ms: int,
+        morphology_context: dict[str, str] | None = None,
     ) -> tuple[ObservationContract, ProviderUsage]: ...
 
 
@@ -82,6 +83,7 @@ class Reasoner(Protocol):
         dog_name: str = "il cane",
         owner_context_answer: OwnerContextAnswer | None = None,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
+        intelligence_context: dict | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]: ...
 
 

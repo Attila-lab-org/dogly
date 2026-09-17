@@ -87,6 +87,27 @@ export async function completeDogAvatar(
   return api.post<ApiDog>(`/v1/dogs/${dogId}/avatar/complete`, body);
 }
 
+export type WeightEvent = {
+  id: string;
+  dog_id: string;
+  weight_kg: number;
+  body_condition_score?: number | null;
+  source: string;
+  recorded_at: string;
+  created_at: string;
+};
+
+export async function listWeightEvents(dogId: string): Promise<WeightEvent[]> {
+  return api.get<WeightEvent[]>(`/v1/dogs/${dogId}/weight-events`);
+}
+
+export async function createWeightEvent(
+  dogId: string,
+  body: { weight_kg: number; body_condition_score?: number | null },
+): Promise<WeightEvent> {
+  return api.post<WeightEvent>(`/v1/dogs/${dogId}/weight-events`, body);
+}
+
 export function dogsQueryKey(userId: string) {
   return queryKeys.dogs(userId);
 }

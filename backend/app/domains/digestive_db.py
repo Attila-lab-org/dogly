@@ -20,12 +20,13 @@ from app.contracts.api import (
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
-from app.domains import dogs_db
+from app.domains import dogs_db, weight_db
 from app.domains.billing import QuotaExceeded
 from app.domains.db import reserve_usage_on_conn
 from app.domains.digestive_intelligence import (
     DIGESTIVE_BASELINE_VERSION,
     DigestiveContext,
+    count_recent_windows,
 )
 from app.domains.ids import require_uuid
 from app.domains.models import FecalEventRec, FeedingPeriodRec, FoodProductRec
@@ -565,6 +566,9 @@ async def load_digestive_context(
     active_food_id = profile["active_food_product_id"]
     season_key, season_label = _digestive_period_label(event.created_at.month)
     scored = [row for row in ordered if row["fecal_score_estimate"] is not None]
+    nutrition = await weight_db.nutrition_history_snapshot(
+        engine, dog_id=event.dog_id
+    )
     return DigestiveContext(
         dog_name=profile["name"],
         age_stage=profile["age_stage"],
@@ -617,6 +621,17 @@ async def load_digestive_context(
         vomiting_today=answers.get("vomiting_today"),
         reduced_activity_today=answers.get("reduced_activity_today"),
         unusual_food_48h=answers.get("unusual_food_48h"),
+        appetite_reduced=answers.get("appetite_reduced"),
+        straining_or_urgency=answers.get("straining_or_urgency"),
+        supplements_or_medication=answers.get("supplements_or_medication"),
+        **count_recent_windows(
+            event.created_at,
+            prior,
+            consistency_of=lambda row: str(row["consistency"] or "").lower(),
+            created_of=lambda row: row["created_at"],
+        ),
+        latest_weight_kg=nutrition.get("latest_kg"),
+        weight_delta_kg=nutrition.get("delta_kg"),
     )
 
 

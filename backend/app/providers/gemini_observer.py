@@ -88,6 +88,7 @@ class GeminiVideoObserver:
         content_type: str,
         policy_version: str,
         duration_ms: int,
+        morphology_context: dict[str, str] | None = None,
     ) -> tuple[ObservationContract, ProviderUsage]:
         if self._settings.ai_kill_switch or self._settings.observer_kill_switch:
             raise ProviderDisabled("Observer kill switch is active")
@@ -213,7 +214,15 @@ class GeminiVideoObserver:
                         {
                             "text": (
                                 f"Clip duration_ms={duration_ms}. policy_version={policy_version}. "
-                                "Return JSON only. Schema with the CLOSED allowed values "
+                                + (
+                                    "Visible-anatomy hints (not breed, not temperament): "
+                                    f"{json.dumps(morphology_context)}. Use them only to "
+                                    "resolve ear, tail or muzzle when the clip matches. "
+                                    "If the clip contradicts the hint, trust the clip. "
+                                    if morphology_context
+                                    else ""
+                                )
+                                + "Return JSON only. Schema with the CLOSED allowed values "
                                 "for each observable field:\n"
                                 f"{json.dumps(schema_hint)}"
                             )

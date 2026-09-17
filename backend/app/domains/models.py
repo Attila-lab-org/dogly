@@ -245,6 +245,9 @@ class FoodProductRec(BaseModel):
     feeding_directions: str | None = None
     extraction_confidence: dict[str, float] = Field(default_factory=dict)
     verified_at: datetime | None = None
+    barcode: str | None = None
+    external_source: str | None = None
+    external_code: str | None = None
     created_at: datetime
 
 

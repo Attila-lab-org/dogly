@@ -19,7 +19,7 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains.billing import QuotaService
-from app.domains.digestive_intelligence import DigestiveContext
+from app.domains.digestive_intelligence import DigestiveContext, count_recent_windows
 from app.domains.dogs import get_owned_dog
 from app.domains.models import (
     AnalysisJobRec,
@@ -28,6 +28,7 @@ from app.domains.models import (
     FoodProductRec,
 )
 from app.domains.repository import InMemoryStore, new_id, now_utc
+from app.domains.weight_events import nutrition_history_snapshot
 from app.providers.base import JobQueue, StorageProvider
 
 DIGESTIVE_BUCKET = "digestive-raw"
@@ -140,6 +141,7 @@ def build_inmemory_digestive_context(
         item for item in prior_events if item.fecal_score_estimate is not None
     ]
     active_food_id = active_food.id if active_food else None
+    nutrition = nutrition_history_snapshot(store, dog_id=event.dog_id)
     return DigestiveContext(
         dog_name=dog.name,
         age_stage=dog.age_stage,
@@ -195,6 +197,19 @@ def build_inmemory_digestive_context(
             "reduced_activity_today"
         ),
         unusual_food_48h=event.owner_context_json.get("unusual_food_48h"),
+        appetite_reduced=event.owner_context_json.get("appetite_reduced"),
+        straining_or_urgency=event.owner_context_json.get("straining_or_urgency"),
+        supplements_or_medication=event.owner_context_json.get(
+            "supplements_or_medication"
+        ),
+        **count_recent_windows(
+            event.created_at,
+            prior_events,
+            consistency_of=lambda item: (item.consistency or "").lower(),
+            created_of=lambda item: item.created_at,
+        ),
+        latest_weight_kg=nutrition.get("latest_kg"),
+        weight_delta_kg=nutrition.get("delta_kg"),
     )
 
 

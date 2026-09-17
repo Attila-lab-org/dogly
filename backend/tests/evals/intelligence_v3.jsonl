@@ -1,0 +1,4 @@
+{"id": "mix-no-prior", "domain": "behavior", "breed_label": "Mix", "is_mix": true, "expect": {"prior_eligible": false, "forbidden_card": "PRIOR_BREED_001"}}
+{"id": "unknown-no-prior", "domain": "behavior", "breed_label": null, "is_mix": false, "expect": {"prior_eligible": false, "forbidden_card": "PRIOR_BREED_001"}}
+{"id": "labrador-named-prior", "domain": "behavior", "breed_label": "Labrador Retriever", "is_mix": false, "expect": {"prior_eligible": true}}
+{"id": "digestive-frequency-not-diagnosis", "domain": "digestive", "episode_count_7d": 4, "watery_count_7d": 2, "expect": {"must_include": ["diagnosi"], "must_not_include": ["ha causato", "malattia"]}}

@@ -50,6 +50,15 @@ class DigestiveContext(BaseModel):
     vomiting_today: bool | None = None
     reduced_activity_today: bool | None = None
     unusual_food_48h: bool | None = None
+    episode_count_7d: int = Field(default=0, ge=0)
+    episode_count_30d: int = Field(default=0, ge=0)
+    watery_count_7d: int = Field(default=0, ge=0)
+    watery_count_30d: int = Field(default=0, ge=0)
+    appetite_reduced: bool | None = None
+    straining_or_urgency: bool | None = None
+    supplements_or_medication: bool | None = None
+    latest_weight_kg: float | None = None
+    weight_delta_kg: float | None = None
 
 
 class DigestiveIntelligenceResult(BaseModel):
@@ -183,8 +192,37 @@ def _safety_state(
     return DigestiveState.ROUTINE
 
 
+def count_recent_windows(
+    created_at,
+    rows: list,
+    *,
+    consistency_of,
+    created_of,
+) -> dict[str, int]:
+    counts = {
+        "episode_count_7d": 0,
+        "episode_count_30d": 0,
+        "watery_count_7d": 0,
+        "watery_count_30d": 0,
+    }
+    for row in rows:
+        delta = (created_at - created_of(row)).total_seconds()
+        if delta <= 7 * 86_400:
+            counts["episode_count_7d"] += 1
+            if consistency_of(row) == "watery":
+                counts["watery_count_7d"] += 1
+        if delta <= 30 * 86_400:
+            counts["episode_count_30d"] += 1
+            if consistency_of(row) == "watery":
+                counts["watery_count_30d"] += 1
+    return counts
+
+
 def build_digestive_intelligence(
-    observation: dict[str, Any], context: DigestiveContext
+    observation: dict[str, Any],
+    context: DigestiveContext,
+    *,
+    longitudinal: bool = False,
 ) -> DigestiveIntelligenceResult:
     """Build a bounded consumer result from observed and persisted facts only."""
 
@@ -280,6 +318,38 @@ def build_digestive_intelligence(
         associations.append(
             "Hai segnalato qualcosa di insolito mangiato nelle ultime 48 ore. "
             "È un contesto utile, non una causa accertata."
+        )
+    if longitudinal and context.episode_count_7d >= 3:
+        associations.append(
+            f"Negli ultimi 7 giorni hai registrato {context.episode_count_7d} "
+            "osservazioni. È un andamento da seguire, non una diagnosi."
+        )
+    if longitudinal and context.watery_count_7d >= 2:
+        associations.append(
+            "Nelle osservazioni degli ultimi 7 giorni la consistenza è stata "
+            "più liquida più di una volta. Vale la pena annotare come sta "
+            f"{context.dog_name} nel frattempo."
+        )
+    if longitudinal and context.appetite_reduced is True:
+        associations.append(
+            "Hai segnalato un appetito ridotto. È un contesto da tenere "
+            "insieme a questa foto, non una causa."
+        )
+    if longitudinal and context.straining_or_urgency is True:
+        associations.append(
+            "Hai segnalato sforzo o urgenza. È un’informazione utile da "
+            "condividere se la situazione non si normalizza."
+        )
+    if (
+        longitudinal
+        and context.weight_delta_kg is not None
+        and abs(context.weight_delta_kg) >= 1.0
+    ):
+        direction = "perso" if context.weight_delta_kg < 0 else "preso"
+        associations.append(
+            f"Nel diario del peso {context.dog_name} ha {direction} circa "
+            f"{abs(context.weight_delta_kg):.1f} kg. È un dato da osservare "
+            "insieme al veterinario se il cambiamento continua, non una diagnosi."
         )
     if score is not None and context.active_food_name:
         food_association = _directional_association(

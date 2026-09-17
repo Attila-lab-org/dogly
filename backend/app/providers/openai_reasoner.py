@@ -118,6 +118,10 @@ Italian sentence explaining how the answer changed or confirmed the reading.
 On a first interpretation context_effect must be null.
 Deterministic safety_flags in the input are established constraints: carry them
 into safety_flags and never downgrade or drop them (sez. 19.3).
+If intelligence_context is present, treat it as bounded product evidence.
+Mix and unknown have no named-breed prior. Never infer aggression, guilt,
+personality or diagnosis from breed, functional group or weight. Claims are
+constraints, not extra facts to invent.
 """
 
 
@@ -145,6 +149,7 @@ class OpenAIReasoner:
         owner_context_answer: OwnerContextAnswer | None = None,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
         operation: str = "reasoner.interpret",
+        intelligence_context: dict | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
         if self._settings.ai_kill_switch or self._settings.reasoner_kill_switch:
             raise ProviderDisabled("Reasoner kill switch is active")
@@ -175,6 +180,7 @@ class OpenAIReasoner:
                 else None
             ),
             "deterministic_safety_flags": safety_payload,
+            "intelligence_context": intelligence_context,
             "output_schema": InterpretationContract.model_json_schema(),
         }
 

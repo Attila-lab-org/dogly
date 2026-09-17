@@ -75,6 +75,7 @@ def test_known_observation_retrieves_bounded_scientific_cards():
     ids = {card.card_id for card in result.cards}
     assert "OBS_BODY_002" in ids
     assert "OBS_TAIL_003" in ids
+    assert "PRIOR_BREED_001" not in ids
     assert len(result.cards) <= 6
 
 

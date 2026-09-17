@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     # --- Retention (sez. 23.2) ---
     raw_media_ttl_hours: int = 24
 
+    # --- Intelligence V3 (off in production until evals pass) ---
+    breed_intelligence_v1: bool = False
+    morphology_observer_context_v1: bool = False
+    nutrition_intelligence_v1: bool = False
+    digestive_longitudinal_v3: bool = False
+    open_pet_food_facts_v1: bool = False
+
     # --- CORS (sez. 9.1) ---
     # Comma-separated list of allowed origins for the public API. The mobile
     # web deployment (apps/mobile-web on Vercel) and local dev ports are

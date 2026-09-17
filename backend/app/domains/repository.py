@@ -97,6 +97,8 @@ class InMemoryStore:
         self.owner_reported_observations: dict[str, dict] = {}
         self.pattern_event_links: set[tuple[str, str]] = set()
         self.knowledge_scores: list[dict] = []
+        self.weight_events: dict[str, list] = {}
+        self.external_food_lookups: dict[str, dict] = {}
         # Index: (user_id, client_request_id) -> capture/fecal id
         self.capture_by_client_request: dict[tuple[str, str], str] = {}
         self.fecal_by_client_request: dict[tuple[str, str], str] = {}

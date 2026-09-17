@@ -64,6 +64,7 @@ from app.domains.digestive import (
 )
 from app.domains.digestive_intelligence import build_digestive_intelligence
 from app.domains.dog_context import build_dog_context
+from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import BehaviorEventRec
 from app.domains.repository import now_utc
 from app.domains.retention import (
@@ -680,12 +681,27 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                     path=capture.storage_path,
                     ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 600),
                 )
-            observation, obs_usage = await state.observer.observe(
-                video_ref=video_ref,
-                content_type=capture.content_type,
-                policy_version=INTERPRETATION_POLICY_VERSION,
-                duration_ms=capture.duration_ms,
-            )
+            observe_kwargs: dict = {
+                "video_ref": video_ref,
+                "content_type": capture.content_type,
+                "policy_version": INTERPRETATION_POLICY_VERSION,
+                "duration_ms": capture.duration_ms,
+            }
+            if state.settings.morphology_observer_context_v1:
+                if state.engine is not None:
+                    observer_dog = await dogs_db.get_owned_dog(
+                        state.engine, user_id=event.user_id, dog_id=event.dog_id
+                    )
+                else:
+                    observer_dog = state.store.dogs[event.dog_id]
+                morphology = build_dog_intelligence_context(
+                    observer_dog,
+                    domain="behavior",
+                    settings=state.settings,
+                ).observer_payload()
+                if morphology:
+                    observe_kwargs["morphology_context"] = morphology
+            observation, obs_usage = await state.observer.observe(**observe_kwargs)
         except TimeoutError:
             return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
         except BudgetExceededError:
@@ -767,23 +783,32 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         knowledge_context = retrieve_evidence(
             observation, context_bucket, dog_context
         )
+        intelligence = build_dog_intelligence_context(
+            dog,
+            dog_context,
+            domain="behavior",
+            settings=state.settings,
+        )
         # Sicurezza deterministica PRIMA dell'LLM (stesse regole SAFE_*_001 del
         # retrieval, fonte unica in knowledge.safety): il reasoner le riceve
         # come vincoli stabiliti e il merge finale le rende effettive anche se
         # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
         det_flags = behavior_safety_flags(observation, dog_context)
         eligible_memory = await _eligible_memory(state, event.dog_id)
-        interpretation, rea_usage = await state.reasoner.interpret(
-            observation=observation,
-            context_bucket=context_bucket,
-            policy_version=INTERPRETATION_POLICY_VERSION,
-            eligible_memory=eligible_memory,
-            knowledge_context=knowledge_context,
-            dog_context=dog_context,
-            dog_name=dog.name,
-            owner_context_answer=None,
-            deterministic_safety_flags=det_flags,
-        )
+        interpret_kwargs: dict = {
+            "observation": observation,
+            "context_bucket": context_bucket,
+            "policy_version": INTERPRETATION_POLICY_VERSION,
+            "eligible_memory": eligible_memory,
+            "knowledge_context": knowledge_context,
+            "dog_context": dog_context,
+            "dog_name": dog.name,
+            "owner_context_answer": None,
+            "deterministic_safety_flags": det_flags,
+        }
+        if any(intelligence.flags.values()):
+            interpret_kwargs["intelligence_context"] = intelligence.reasoner_payload()
+        interpretation, rea_usage = await state.reasoner.interpret(**interpret_kwargs)
         interpretation = _ground_personal_memory(
             interpretation,
             eligible_memory,
@@ -842,6 +867,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         "coverage": knowledge_context.coverage,
         "card_ids": [card.card_id for card in knowledge_context.cards],
     }
+    interpretation_json["intelligence_audit"] = intelligence.audit()
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
@@ -982,21 +1008,31 @@ async def refine_behavior_event_context(
     knowledge_context = retrieve_evidence(
         observation, context_bucket, dog_context
     )
+    intelligence = build_dog_intelligence_context(
+        dog,
+        dog_context,
+        domain="behavior",
+        settings=state.settings,
+    )
     deterministic_flags = behavior_safety_flags(observation, dog_context)
 
+    refine_kwargs: dict = {
+        "observation": observation,
+        "context_bucket": context_bucket,
+        "policy_version": INTERPRETATION_POLICY_VERSION,
+        "eligible_memory": await _eligible_memory(state, event.dog_id),
+        "knowledge_context": knowledge_context,
+        "dog_context": dog_context,
+        "dog_name": dog.name,
+        "owner_context_answer": owner_answer,
+        "deterministic_safety_flags": deterministic_flags,
+        "operation": "reasoner.refine_context",
+    }
+    if any(intelligence.flags.values()):
+        refine_kwargs["intelligence_context"] = intelligence.reasoner_payload()
+
     try:
-        interpretation, usage = await state.reasoner.interpret(
-            observation=observation,
-            context_bucket=context_bucket,
-            policy_version=INTERPRETATION_POLICY_VERSION,
-            eligible_memory=await _eligible_memory(state, event.dog_id),
-            knowledge_context=knowledge_context,
-            dog_context=dog_context,
-            dog_name=dog.name,
-            owner_context_answer=owner_answer,
-            deterministic_safety_flags=deterministic_flags,
-            operation="reasoner.refine_context",
-        )
+        interpretation, usage = await state.reasoner.interpret(**refine_kwargs)
     except TimeoutError as exc:
         raise ApiError(
             ErrorCode.PROVIDER_TIMEOUT,
@@ -1059,6 +1095,7 @@ async def refine_behavior_event_context(
         "coverage": knowledge_context.coverage,
         "card_ids": [card.card_id for card in knowledge_context.cards],
     }
+    interpretation_json["intelligence_audit"] = intelligence.audit()
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
@@ -1303,7 +1340,11 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         )
     # Includes owner-confirmed context; generated text cannot add or downgrade.
     event.safety_flags = contextual_safety_flags(obs_json, digestive_context)
-    intelligence = build_digestive_intelligence(obs_json, digestive_context)
+    intelligence = build_digestive_intelligence(
+        obs_json,
+        digestive_context,
+        longitudinal=state.settings.digestive_longitudinal_v3,
+    )
     event.intelligence_json = intelligence.model_dump(mode="json")
     event.summary = intelligence.consumer_summary
     event.status = "COMPLETED"

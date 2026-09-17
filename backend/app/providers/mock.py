@@ -53,8 +53,9 @@ class MockVideoObserver:
         content_type: str,
         policy_version: str,
         duration_ms: int,
+        morphology_context: dict[str, str] | None = None,
     ) -> tuple[ObservationContract, ProviderUsage]:
-        del content_type
+        del content_type, morphology_context
         started = time.perf_counter()
         raw = load_fixture("observation.fixture.json")
         if "nodog" in video_ref:
@@ -100,8 +101,9 @@ class MockReasoner:
         owner_context_answer: OwnerContextAnswer | None = None,
         deterministic_safety_flags: list[SafetyFlag] | None = None,
         operation: str = "reasoner.interpret",
+        intelligence_context: dict | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
-        del eligible_memory, knowledge_context, dog_context, deterministic_safety_flags, operation
+        del eligible_memory, knowledge_context, dog_context, deterministic_safety_flags, operation, intelligence_context
         started = time.perf_counter()
         raw = load_fixture("interpretation.fixture.json")
         raw["policy_version"] = policy_version

@@ -19,6 +19,38 @@ from app.knowledge.models import (
 from app.knowledge.registry import get_registry
 from app.knowledge.safety import fired_safety_ids
 
+_UNKNOWN_BREED_LABELS = frozenset(
+    {
+        "",
+        "mix",
+        "misto",
+        "meticcio",
+        "incrocio",
+        "unknown",
+        "sconosciuto",
+        "non so",
+        "non lo so",
+        "non specificata",
+        "non specificato",
+        "altro",
+        "other",
+        "n/a",
+        "na",
+        "cane",
+        "dog",
+    }
+)
+
+
+def breed_prior_eligible(dog_context: DogContextSnapshot | None) -> bool:
+    """PRIOR_BREED_001 applies only to a named, non-mix breed label."""
+    if dog_context is None or dog_context.is_mix:
+        return False
+    label = (dog_context.breed_label or "").strip().lower()
+    if not label or label in _UNKNOWN_BREED_LABELS:
+        return False
+    return not any(token in label for token in ("mix", "misto", "meticcio", "incrocio"))
+
 
 def _candidate_ids(
     observation: ObservationContract,
@@ -91,7 +123,7 @@ def _candidate_ids(
         ids.append("CTX_RESOURCE_001")
     if context_bucket == ContextBucket.DOOR_EXIT:
         ids.append("CTX_SEP_001")
-    if dog_context.breed_label:
+    if breed_prior_eligible(dog_context):
         ids.append("PRIOR_BREED_001")
     if observation.capture_quality.overall_quality != "good":
         ids.append("ABSTAIN_001")
