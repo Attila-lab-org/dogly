@@ -13,7 +13,6 @@ import type { FeedbackValue } from '@/contracts/types';
 import { BehaviorResultView } from '@/features/core/components';
 import { saveBehaviorFeedback } from '@/features/core/feedback';
 import { shareBehaviorResult } from '@/features/behavior/share';
-import { behaviorResultsMock } from '@/mocks/core';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
 import {
@@ -35,14 +34,13 @@ const NAVY = '#1A2B48';
 export default function BehaviorResultScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { userId } = useSession();
   const { analysisContext } = useCheckIn();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
     isApiConfigured() &&
     Boolean(userId) &&
-    isPersistedId(eventId) &&
-    !usingMockGate;
+    isPersistedId(eventId);
 
   const query = useQuery({
     queryKey: queryKeys.behaviorEvent(
@@ -54,17 +52,10 @@ export default function BehaviorResultScreen() {
     enabled: useApi,
   });
 
-  const result = useApi
-    ? query.data
-      ? mapApiEventToResult(query.data)
-      : undefined
-    : usingMockGate && eventId
-      ? behaviorResultsMock[eventId]
-      : undefined;
+  const result = query.data ? mapApiEventToResult(query.data) : undefined;
   const advice = result
     ? selectAdvice(result, {
-        apiAdvice: useApi ? mapApiAdviceItem(query.data?.advice) : null,
-        useMockCatalog: !useApi,
+        apiAdvice: mapApiAdviceItem(query.data?.advice),
       })
     : null;
 
@@ -133,7 +124,6 @@ export default function BehaviorResultScreen() {
       const saved = await saveBehaviorFeedback(
         result.eventId,
         value,
-        usingMockGate,
         extras,
       );
       setFeedback(saved);
@@ -210,7 +200,6 @@ export default function BehaviorResultScreen() {
               : null
           }
           photoUri={dog.photoUri}
-          onSaveDiary={() => router.replace('/(tabs)/diary')}
           contextPrompt={
             result.needs_context &&
             result.context_question &&

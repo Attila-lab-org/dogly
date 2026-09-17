@@ -4,10 +4,9 @@
  * CTA dominante gradiente "CAPISCI ROCKY",
  * "Controlla digestione" secondario, ultima analisi, quota residua sottile.
  * Stati obbligatori (sez. 6): new user (cold-start), quota exhausted,
- * offline (banner con retry su network monitor reale; demoFlags.homeOffline
- * forza la demo in dev), processing existing event.
- * Dati reali via useHomeData (GET /v1/usage + GET /v1/diary); mock solo in
- * mock gate dev.
+ * offline (banner con retry sul network monitor reale), processing
+ * existing event.
+ * Dati reali via useHomeData (GET /v1/usage + GET /v1/diary).
  */
 import React from 'react';
 import {
@@ -26,8 +25,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, CuteIcon } from '@/components';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
-import { diaryEntriesMock } from '@/mocks/core';
-import { demoFlags } from '@/mocks/demo';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { StoriesRail } from '@/features/stories/StoriesRail';
@@ -58,16 +55,13 @@ export default function HomeScreen() {
     usage,
     lastInsight,
     processingEventId,
-    source,
     loading,
     error,
     refetch,
   } = useHomeData(dog.id);
 
-  // Stato offline (sez. 6 Home): network monitor reale (expo-network);
-  // demoFlags.homeOffline resta solo per forzare la demo in dev.
   const network = useNetworkStatus();
-  const offline = demoFlags.homeOffline || network.offline;
+  const offline = network.offline;
 
   const behaviorRemaining = usage
     ? usage.behaviorLimit - usage.behaviorUsed
@@ -211,7 +205,6 @@ export default function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Riprova connessione"
                 onPress={() => {
-                  if (demoFlags.homeOffline) return; // demo forzata in dev
                   void network.refresh();
                 }}
                 hitSlop={8}
@@ -284,14 +277,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Apri l'ultima analisi: ${lastInsight.label}`}
               onPress={() => {
-                if (source === 'api') {
-                  router.push(`/behavior/result/${lastInsight.eventId}`);
-                  return;
-                }
-                const entry = diaryEntriesMock.find(
-                  (item) => item.refId === lastInsight.eventId,
-                );
-                if (entry) router.push(`/diary/event/${entry.id}`);
+                router.push(`/behavior/result/${lastInsight.eventId}`);
               }}
             >
               <Card style={styles.lastInsight}>

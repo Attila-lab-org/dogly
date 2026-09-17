@@ -11,13 +11,11 @@ import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { takeStoryPhoto, pickAlbumPhoto } from '@/features/photos/share';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { publishStory } from '@/features/stories/data';
-import { useSession } from '@/features/auth/SessionProvider';
 import { isPersistedId } from '@/lib/persistedId';
 
 export default function CameraTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +24,7 @@ export default function CameraTabScreen() {
   >(null);
 
   const saveStory = async (uri: string) => {
-    if (!usingMockGate && !isPersistedId(dog.id)) {
+    if (!isPersistedId(dog.id)) {
       setError('Il profilo del cane non è ancora pronto. Attendi e riprova.');
       return;
     }
@@ -38,7 +36,6 @@ export default function CameraTabScreen() {
         dogName: dog.name,
         photoUri: uri,
         caption: caption.trim() || `Storia di ${dog.name}`,
-        mockGate: usingMockGate,
       });
       setPreviewUri(null);
       setCaption('');
@@ -114,7 +111,7 @@ export default function CameraTabScreen() {
             onPress={() => void saveStory(previewUri)}
             loading={busy === 'publishing'}
             disabled={
-              busy !== null || (!usingMockGate && !isPersistedId(dog.id))
+              busy !== null || !isPersistedId(dog.id)
             }
             testID="story-publish"
           />

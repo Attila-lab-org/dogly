@@ -10,13 +10,11 @@ import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
 import { PROCESSING_STEP_ORDER, processingStepsFor } from '@/features/core/copy';
-import { behaviorResultsMock } from '@/mocks/core';
 import {
   getBehaviorEvent,
   IN_PROGRESS_STATUSES,
   isTerminalBehaviorStatus,
 } from '@/features/behavior/api';
-import { mockProcessingAction } from '@/features/behavior/processing';
 import {
   cancelResultReadyNotification,
   scheduleResultReadyNotification,
@@ -36,13 +34,12 @@ import {
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { userId } = useSession();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
     isApiConfigured() &&
     Boolean(userId) &&
-    isPersistedId(eventId) &&
-    !usingMockGate;
+    isPersistedId(eventId);
   const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
   const [finishing, setFinishing] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -75,41 +72,7 @@ export default function BehaviorProcessingScreen() {
     },
   });
 
-  const mockEvent =
-    usingMockGate && eventId ? behaviorResultsMock[eventId] : undefined;
-  const status: BehaviorEventStatus | undefined = useApi
-    ? query.data?.status
-    : mockEvent?.status === 'QUEUED' ||
-        mockEvent?.status === 'OBSERVING' ||
-        mockEvent?.status === 'INTERPRETING'
-      ? mockEvent.status
-      : mockEvent?.status;
-
-  // Mock progression for demo ids: rispetta lo stato dell'evento richiesto
-  useEffect(() => {
-    if (useApi || !mockEvent) return;
-    const action = mockProcessingAction(mockEvent);
-    if (action.type === 'redirect-result') {
-      void cancelResultReadyNotification(mockEvent.eventId);
-      router.replace(`/behavior/result/${action.eventId}`);
-      return;
-    }
-    if (action.type === 'stay') return;
-    let i = 0;
-    const t = setInterval(() => {
-      i += 1;
-      if (i >= steps.length) {
-        clearInterval(t);
-        setFinishing(true);
-        void cancelResultReadyNotification(mockEvent.eventId);
-        completionTimer.current = setTimeout(
-          () => router.replace('/behavior/result/evt-play'),
-          850,
-        );
-      }
-    }, 1600);
-    return () => clearInterval(t);
-  }, [useApi, mockEvent, router, steps.length]);
+  const status: BehaviorEventStatus | undefined = query.data?.status;
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -169,7 +132,7 @@ export default function BehaviorProcessingScreen() {
     );
   }
 
-  if (!useApi && !mockEvent) {
+  if (!useApi) {
     return (
       <ScreenContainer>
         <ErrorState

@@ -1,13 +1,11 @@
 /**
  * Storie reali: foto persistite nell'album dedicato "Storie", pubblicate per
- * 24 ore nella rail. Il seed locale esiste esclusivamente nel mock gate.
+ * 24 ore nella rail.
  */
-import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '../../lib/queryClient';
 import { isPersistedId } from '../../lib/persistedId';
 import { isApiConfigured } from '../auth/env';
-import { useSession } from '../auth/SessionProvider';
 import {
   createAlbum,
   fetchAlbumPhotos,
@@ -15,12 +13,6 @@ import {
   uploadAlbumPhoto,
 } from '../photos/api';
 import type { AlbumPhoto, PhotoAlbum } from '../photos/types';
-import {
-  addStory as addMockStory,
-  getActiveStories as getActiveMockStories,
-  markMockStorySeen,
-  subscribeMockStories,
-} from './mockStore';
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 const STORIES_ALBUM_TITLE = 'Storie';
@@ -60,8 +52,6 @@ async function storyAlbum(dogId: string): Promise<PhotoAlbum> {
   try {
     return await createAlbum(dogId, STORIES_ALBUM_TITLE);
   } catch (error) {
-    // Due dispositivi possono creare l'album nello stesso istante. Il vincolo
-    // DB ne conserva uno solo; rileggendolo il secondo upload può continuare.
     const refreshed = await fetchAlbums(dogId);
     const raced = refreshed.find(
       (album) =>
@@ -92,13 +82,7 @@ async function fetchRealStories(
 }
 
 export function useStories(dogId: string, dogName: string): DogStory[] {
-  const { usingMockGate } = useSession();
-  const mock = useSyncExternalStore(
-    subscribeMockStories,
-    getActiveMockStories,
-    getActiveMockStories,
-  );
-  const live = isApiConfigured() && !usingMockGate;
+  const live = isApiConfigured();
   const query = useQuery({
     queryKey: ['stories', dogId],
     queryFn: () => fetchRealStories(dogId, dogName),
@@ -107,7 +91,7 @@ export function useStories(dogId: string, dogName: string): DogStory[] {
     refetchInterval: live ? 45 * 60_000 : false,
     refetchOnMount: true,
   });
-  return usingMockGate ? mock : query.data ?? [];
+  return query.data ?? [];
 }
 
 export async function publishStory(input: {
@@ -115,30 +99,23 @@ export async function publishStory(input: {
   dogName: string;
   photoUri: string;
   caption?: string;
-  mockGate: boolean;
 }): Promise<DogStory> {
-  if (!input.mockGate) {
-    if (!isApiConfigured() || !isPersistedId(input.dogId)) {
-      throw new Error('Servizio storie non disponibile');
-    }
-    const album = await storyAlbum(input.dogId);
-    const photo = await uploadAlbumPhoto(album.id, input.photoUri, {
-      caption: input.caption,
-      visibility: 'PUBLISHED',
-    });
-    const story = storyFromPhoto(photo, input.dogName);
-    await queryClient.invalidateQueries({ queryKey: ['stories', input.dogId] });
-    await queryClient.invalidateQueries({
-      queryKey: ['gallery-albums', input.dogId],
-    });
-    return story;
+  if (!isApiConfigured() || !isPersistedId(input.dogId)) {
+    throw new Error('Servizio storie non disponibile');
   }
-
-  const { mockGate: _mockGate, ...storyInput } = input;
-  return addMockStory(storyInput);
+  const album = await storyAlbum(input.dogId);
+  const photo = await uploadAlbumPhoto(album.id, input.photoUri, {
+    caption: input.caption,
+    visibility: 'PUBLISHED',
+  });
+  const story = storyFromPhoto(photo, input.dogName);
+  await queryClient.invalidateQueries({ queryKey: ['stories', input.dogId] });
+  await queryClient.invalidateQueries({
+    queryKey: ['gallery-albums', input.dogId],
+  });
+  return story;
 }
 
 export function markStorySeen(storyId: string) {
   seenStoryIds.add(storyId);
-  markMockStorySeen(storyId);
 }

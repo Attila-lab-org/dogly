@@ -10,16 +10,12 @@ export function buildBehaviorShareCard(
   result: BehaviorEventResult,
   dogName: string,
 ): BehaviorShareCard {
-  // FIX 3.9: tolerate a null summary (API omitted it) without inventing one.
   const personalize = (copy: string | null | undefined) =>
     (copy ?? '').replace(/Rocky/g, dogName);
-  const lines = [intentHeadline(dogName, result.primary_intent)];
-  if (result.evidence.length > 0) {
-    lines.push('', 'Segnali osservati:');
-    for (const item of result.evidence) {
-      lines.push(`• ${personalize(item.label)}`);
-    }
-  }
+  const headline =
+    personalize(result.consumer_headline) ||
+    intentHeadline(dogName, result.primary_intent);
+  const lines = [headline];
   const summaryLine = personalize(result.consumer_summary);
   lines.push(
     '',
@@ -28,7 +24,7 @@ export function buildBehaviorShareCard(
     `Condiviso da Dogly — un'osservazione di ${dogName}, non una diagnosi.`,
   );
   return {
-    title: `Come sta ${dogName}`,
+    title: `Cosa ho osservato di ${dogName}`,
     message: lines.join('\n'),
   };
 }

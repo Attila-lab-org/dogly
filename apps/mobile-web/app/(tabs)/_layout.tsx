@@ -2,8 +2,8 @@ import React from 'react';
 import { View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { tabBar } from '../../src/theme/tokens';
 import { useSession } from '../../src/features/auth/SessionProvider';
+import { useDogProfile } from '../../src/features/core/useDogProfile';
 
 /**
  * Tab V5.1: Home / Diario / Profilo.
@@ -12,6 +12,7 @@ import { useSession } from '../../src/features/auth/SessionProvider';
  */
 export default function TabsLayout() {
   const { loading, sessionState, usingMockGate } = useSession();
+  const { dog } = useDogProfile();
 
   if (loading) {
     return null;
@@ -101,7 +102,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="rocky"
         options={{
-          title: 'Rocky',
+          title: dog.name || 'Cane',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'paw' : 'paw-outline'}

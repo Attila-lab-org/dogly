@@ -1281,6 +1281,23 @@ async def process_media_retention_cleanup(state: AppState, *, event_id: str | No
     return await cleanup_expired_raw_media(state.store, storage=state.storage)
 
 
+async def _dog_display_name(
+    state: AppState, *, user_id: str, dog_id: str
+) -> str:
+    try:
+        if state.engine is not None:
+            dog = await dogs_db.get_owned_dog(
+                state.engine, user_id=user_id, dog_id=dog_id
+            )
+        else:
+            dog = state.store.get_dog(dog_id)
+        if dog is not None and dog.name:
+            return dog.name
+    except Exception:
+        logger.exception("Could not load dog name for notification")
+    return "il tuo cane"
+
+
 async def process_behavior_result_notification(
     state: AppState, *, event_id: str
 ) -> dict:
@@ -1291,11 +1308,14 @@ async def process_behavior_result_notification(
     )
     if event is None or event.status != BehaviorEventStatus.COMPLETED:
         return {"event_id": event_id, "status": "ignored"}
+    dog_name = await _dog_display_name(
+        state, user_id=event.user_id, dog_id=event.dog_id
+    )
     tokens = await _notification_tokens(state, event.user_id)
     sent = await send_push(
         tokens,
-        title="Analisi pronta",
-        body="Il risultato dell'analisi di Dogly è disponibile.",
+        title=f"Il risultato di {dog_name} è pronto",
+        body=f"Ho finito di osservare {dog_name}: apri per scoprire cosa potrebbe stare comunicando.",
         data={"href": f"/behavior/result/{event.id}", "event_id": event.id},
     )
     return {"event_id": event.id, "status": "sent", "devices": sent}

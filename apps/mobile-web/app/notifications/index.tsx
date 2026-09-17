@@ -20,7 +20,6 @@ import { isApiConfigured } from '@/features/auth/env';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, formatInsightTimestamp } from '@/features/home/api';
-import { diaryEntriesMock } from '@/mocks/core';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
 
 interface ResultItem {
@@ -57,14 +56,7 @@ export default function NotificationsScreen() {
           title: item.title,
           whenLabel: formatInsightTimestamp(item.created_at),
         }))
-    : diaryEntriesMock
-        .filter((entry) => entry.domain === 'BEHAVIOR')
-        .slice(0, 3)
-        .map((entry) => ({
-          id: entry.id,
-          title: entry.title,
-          whenLabel: formatInsightTimestamp(entry.occurredAt),
-        }));
+    : [];
 
   return (
     <ScreenContainer scroll style={styles.screen}>

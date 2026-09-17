@@ -28,7 +28,7 @@ export async function shareBehaviorResult(
       );
       await Sharing.shareAsync(svgUri, {
         mimeType: 'image/svg+xml',
-        dialogTitle: `Condividi cosa ha capito Dogly di ${dogName}`,
+        dialogTitle: `Condividi un'osservazione di ${dogName}`,
         UTI: 'public.svg-image',
       });
       return true;
@@ -96,7 +96,9 @@ async function buildGraphicShareCard(
   dogName: string,
   photoUri: string | null,
 ): Promise<string> {
-  const headline = intentHeadline(dogName, result.primary_intent);
+  const headline =
+    (result.consumer_headline ?? '').replace(/Rocky/g, dogName) ||
+    intentHeadline(dogName, result.primary_intent);
   const lines = wrapLines(headline);
   const image = await photoDataUri(photoUri);
   const initial = escapeXml(dogName.trim().charAt(0).toUpperCase() || 'D');
@@ -121,7 +123,7 @@ ${headlineSvg}
 <rect x="120" y="780" width="840" height="230" rx="36" fill="#FFFFFF" opacity=".94"/>
 <text x="170" y="870" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#168F83">Una lettura prudente</text>
 <text x="170" y="940" font-family="Arial, sans-serif" font-size="25" fill="#667085">Un&apos;osservazione, non una diagnosi.</text>
-<text x="540" y="1170" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#14213D">Guarda cosa ha capito Dogly</text>
+<text x="540" y="1170" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#14213D">Cosa ho osservato di ${escapeXml(dogName)}</text>
 <text x="540" y="1220" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#667085">del mio cane ${escapeXml(dogName)} 🐾</text>
 </svg>`;
   const uri = `${FileSystem.cacheDirectory}dogly-${result.eventId}.svg`;

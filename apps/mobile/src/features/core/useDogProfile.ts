@@ -22,7 +22,6 @@ import {
 } from '../dogs/api';
 import { ageStageToApi } from '../dogs/map';
 import type { DogProfile, KnowledgeScore } from './types';
-import { dogMock, homeKnowledgeScoreMock } from '../../mocks/core';
 
 type DogProfileState = {
   dog: DogProfile;
@@ -34,8 +33,7 @@ type ApiKnowledgeScore = {
   score: number | null;
 };
 
-/** Il mock resta disponibile esclusivamente nel mock gate. */
-let knowledgeScore: KnowledgeScore = { ...homeKnowledgeScoreMock };
+let lastKnowledgeScore: KnowledgeScore = mapKnowledgeScore(null);
 let lastDog: DogProfile = emptyDog();
 
 export function mapKnowledgeScore(
@@ -69,13 +67,9 @@ function emptyDog(): DogProfile {
   };
 }
 
-export function setKnowledgeScore(score: KnowledgeScore) {
-  knowledgeScore = score;
-}
-
 export function useDogProfile(): DogProfileState {
-  const { userId, primaryDogId, usingMockGate } = useSession();
-  const enabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
+  const { userId, primaryDogId } = useSession();
+  const enabled = Boolean(userId) && isApiConfigured();
 
   const query = useQuery({
     queryKey: userId ? dogsQueryKey(userId) : ['dogs', 'anon'],
@@ -85,16 +79,13 @@ export function useDogProfile(): DogProfileState {
   });
 
   const dog = useMemo(() => {
-    if (usingMockGate) {
-      return { ...dogMock };
-    }
     const items = query.data ?? [];
     const preferred =
       (primaryDogId
         ? items.find((d) => d.id === primaryDogId)
         : undefined) ?? items[0];
     return preferred ? mapApiDogToProfile(preferred) : emptyDog();
-  }, [usingMockGate, query.data, primaryDogId]);
+  }, [query.data, primaryDogId]);
 
   const knowledgeQuery = useQuery({
     queryKey: queryKeys.knowledgeScore(userId ?? 'anon', dog.id),
@@ -103,12 +94,10 @@ export function useDogProfile(): DogProfileState {
     enabled: enabled && isPersistedId(dog.id),
   });
 
-  const resolvedKnowledgeScore =
-    usingMockGate
-      ? knowledgeScore
-      : mapKnowledgeScore(knowledgeQuery.data);
+  const resolvedKnowledgeScore = mapKnowledgeScore(knowledgeQuery.data);
 
   lastDog = dog;
+  lastKnowledgeScore = resolvedKnowledgeScore;
   return { dog, knowledgeScore: resolvedKnowledgeScore };
 }
 
@@ -139,21 +128,11 @@ export function useUpdateDogMutation(dogId: string) {
   });
 }
 
-/**
- * Patch locale/dev — preferire useUpdateDogMutation in produzione.
- * Mantenuto per schermate legacy; no-op se non in mock gate.
- */
-export function updateDogProfile(patch: Partial<DogProfile>) {
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    Object.assign(dogMock, { ...dogMock, ...patch });
-  }
-}
-
-/** Snapshot sync per settings (ultimo dog visto dall’hook o mock). */
+/** Snapshot sync per settings from the latest real query result. */
 export function getDogProfileSnapshot(): DogProfileState {
   return {
     dog: { ...lastDog },
-    knowledgeScore: { ...knowledgeScore },
+    knowledgeScore: { ...lastKnowledgeScore },
   };
 }
 

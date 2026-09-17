@@ -57,7 +57,7 @@ export function ProcessingCompanion({
 
   const copy = finishing
     ? {
-        title: 'Fatto! Ho capito qualcosa in più.',
+        title: 'Fatto! Ho osservato qualcosa in più.',
         detail: `Ti mostro subito cosa ho osservato di ${dogName}.`,
       }
     : status === 'INTERPRETING'

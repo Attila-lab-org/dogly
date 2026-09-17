@@ -69,13 +69,15 @@ describe('fix 1 — feedback a 3 vie onesto (mai finto "Salvato")', () => {
     postFeedbackMock.mockReset();
   });
 
-  it('in mock gate (eventi demo evt-*) salva solo in locale', async () => {
+  it('invia il feedback al backend, mai a un mock locale', async () => {
     const result = behaviorResultsMock['evt-play'];
-    const previous = result.feedback;
-    await expect(saveBehaviorFeedback('evt-play', 'YES', true)).resolves.toBe('YES');
-    expect(result.feedback).toBe('YES');
-    expect(postFeedbackMock).not.toHaveBeenCalled();
-    result.feedback = previous;
+    postFeedbackMock.mockResolvedValue({
+      event_id: result.eventId,
+      value: 'YES',
+      recorded: true,
+    });
+    await expect(saveBehaviorFeedback('evt-play', 'YES')).resolves.toBe('YES');
+    expect(postFeedbackMock).toHaveBeenCalledWith('evt-play', 'YES', undefined);
   });
 
   it('successo reale → ritorna il valore salvato dal server', async () => {

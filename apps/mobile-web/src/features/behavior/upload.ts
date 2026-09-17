@@ -12,6 +12,10 @@ import {
   isTerminalBehaviorStatus,
 } from './api';
 import { deriveContextBucketHint } from './contextBucket';
+import {
+  videoContentTypeFromUri,
+  type VideoContentType,
+} from './videoContentType';
 import { processPendingDigestiveUpload } from '../digestive/upload';
 import { persistTodayVsUsual } from '../checkin/sync';
 import { getCheckInSnapshot } from '../checkin/store';
@@ -29,16 +33,6 @@ import {
 const draining = new Set<string>();
 const inflight = new Map<string, Promise<string | null>>();
 let recoverStarted = false;
-
-type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm';
-
-function asVideoContentType(value?: string | null): VideoContentType | null {
-  const type = (value ?? '').split(';', 1)[0].toLowerCase();
-  if (type === 'video/webm' || type === 'video/quicktime' || type === 'video/mp4') {
-    return type;
-  }
-  return null;
-}
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -68,15 +62,13 @@ async function fileBytes(localUri: string): Promise<number> {
 async function detectVideoContentType(localUri: string): Promise<VideoContentType> {
   const held = peekWebClipBlob(localUri);
   if (held) {
-    const fromHeld = asVideoContentType(held.type);
-    if (fromHeld) return fromHeld;
+    return videoContentTypeFromUri(localUri, held.type);
   }
   if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
     const response = await fetch(localUri);
-    const fromBlob = asVideoContentType((await response.blob()).type);
-    if (fromBlob) return fromBlob;
+    return videoContentTypeFromUri(localUri, (await response.blob()).type);
   }
-  return 'video/mp4';
+  return videoContentTypeFromUri(localUri);
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {
@@ -298,9 +290,9 @@ export async function enqueueAndUploadBehaviorClip(
 
   const uploadId = newId('upl');
   const clientRequestId = newId('crid');
-  const contentType =
-    asVideoContentType(input.contentType) ??
-    (await detectVideoContentType(input.localUri));
+  const contentType = input.contentType
+    ? videoContentTypeFromUri(input.localUri, input.contentType)
+    : await detectVideoContentType(input.localUri);
   queue.enqueue({
     id: uploadId,
     userId: input.userId,

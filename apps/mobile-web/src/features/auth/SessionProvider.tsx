@@ -31,16 +31,12 @@ import {
   recoverAndDrainUploads,
 } from '../behavior/upload';
 import { clearCareState } from '../care/store';
-import {
-  isApiConfigured,
-  shouldUseMockAuthGate,
-} from './env';
+import { isApiConfigured } from './env';
 import {
   resolveEntryRoute,
-  sessionMock,
   type EntryRoute,
   type SessionState,
-} from '../../mocks/session';
+} from './sessionRouting';
 
 type DogListResponse = { items: Array<{ id: string; name: string }> };
 type DogLookupResult = {
@@ -62,7 +58,7 @@ export type SessionContextValue = {
   primaryDogId: string | null;
   /** Env real auth disponibile */
   authConfigured: boolean;
-  /** __DEV__ fallback quando manca env */
+  /** Kept for API compatibility; always false in the real-only runtime. */
   usingMockGate: boolean;
   refreshDogs: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -132,10 +128,10 @@ async function fetchHasDog(): Promise<DogLookupResult> {
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const usingMockGate = shouldUseMockAuthGate();
+  const usingMockGate = false;
   const authConfigured = isSupabaseConfigured();
 
-  const [loading, setLoading] = useState(!usingMockGate);
+  const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const sessionUserIdRef = useRef<string | null>(null);
   sessionUserIdRef.current = session?.user?.id ?? null;
@@ -250,10 +246,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (usingMockGate) {
-      setLoading(false);
-      return;
-    }
     if (!authConfigured) {
       setLoading(false);
       return;
@@ -313,7 +305,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [authConfigured, usingMockGate, bootstrapSession, syncTokens]);
+  }, [authConfigured, bootstrapSession, syncTokens]);
 
   // Ripresa upload dopo background / restart
   useEffect(() => {
@@ -346,20 +338,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const sessionState: SessionState = useMemo(() => {
-    if (usingMockGate) {
-      const isDemo =
-        typeof window !== 'undefined' &&
-        (new URLSearchParams(window.location.search).get('demo') === '1' ||
-          window.location.hash.includes('demo') ||
-          window.location.pathname.includes('home') ||
-          window.location.pathname.includes('tabs'));
-      return isDemo ? 'authenticated-with-dog' : sessionMock;
-    }
     if (!session?.user) return 'unauthenticated';
     if (dogStatusUnknown) return 'authenticated-dog-status-unknown';
     if (!hasDog) return 'authenticated-no-dog';
     return 'authenticated-with-dog';
-  }, [usingMockGate, session?.user, dogStatusUnknown, hasDog]);
+  }, [session?.user, dogStatusUnknown, hasDog]);
 
   const value = useMemo<SessionContextValue>(
     () => ({

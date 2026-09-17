@@ -30,7 +30,6 @@ import {
 } from '@/features/behavior/api';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
-import { behaviorResultsMock, diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain } from '@/features/core/types';
 import {
   AdviceCard,
@@ -44,7 +43,7 @@ const NAVY = '#1A2B48';
 export default function DiaryEventScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { userId } = useSession();
   const params = useLocalSearchParams<{
     eventId: string;
     domain?: string;
@@ -55,23 +54,16 @@ export default function DiaryEventScreen() {
   }>();
   const { eventId } = params;
 
-  const entry = usingMockGate
-    ? diaryEntriesMock.find((e) => e.id === eventId)
-    : undefined;
   const domain: DiaryDomain =
-    entry?.domain ?? (params.domain === 'DIGESTIVE' ? 'DIGESTIVE' : 'BEHAVIOR');
-  const mediaDeleted = entry?.mediaDeleted ?? params.deleted === '1';
-  const occurredAt = entry?.occurredAt ?? params.occurredAt ?? null;
+    params.domain === 'DIGESTIVE' ? 'DIGESTIVE' : 'BEHAVIOR';
+  const mediaDeleted = params.deleted === '1';
+  const occurredAt = params.occurredAt ?? null;
 
-  // API first: id mock del mock gate hanno prefisso noto ('diary-'/'evt-');
-  // gli id reali arrivano dalla timeline /v1/diary.
   const useApi =
     domain === 'BEHAVIOR' &&
     Boolean(userId) &&
     isPersistedId(eventId) &&
-    !entry &&
-    isApiConfigured() &&
-    !usingMockGate;
+    isApiConfigured();
 
   const query = useQuery({
     queryKey: queryKeys.behaviorEvent(userId ?? 'anon', dog.id, eventId ?? ''),
@@ -79,21 +71,13 @@ export default function DiaryEventScreen() {
     enabled: useApi,
   });
 
-  // Fallback mock: entry del mock gate o id risultato mock noto.
   const behaviorResult =
-    domain === 'BEHAVIOR'
-      ? entry
-        ? behaviorResultsMock[entry.refId]
-        : query.data
-          ? mapApiEventToResult(query.data)
-          : (usingMockGate && eventId
-              ? behaviorResultsMock[eventId]
-              : undefined)
+    domain === 'BEHAVIOR' && query.data
+      ? mapApiEventToResult(query.data)
       : undefined;
   const advice = behaviorResult
     ? selectAdvice(behaviorResult, {
-        apiAdvice: useApi ? mapApiAdviceItem(query.data?.advice) : null,
-        useMockCatalog: !useApi,
+        apiAdvice: mapApiAdviceItem(query.data?.advice),
       })
     : null;
 
@@ -123,7 +107,7 @@ export default function DiaryEventScreen() {
     );
   }
 
-  if (!entry && !behaviorResult && domain === 'BEHAVIOR') {
+  if (!behaviorResult && domain === 'BEHAVIOR') {
     return (
       <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
@@ -177,14 +161,13 @@ export default function DiaryEventScreen() {
     void saveBehaviorFeedback(
       behaviorResult.eventId,
       value,
-      usingMockGate,
       extras,
     ).then(setFeedback);
   };
 
-  const entryTitle = entry?.title ?? params.title ?? null;
-  const entrySubtitle = entry?.subtitle ?? (params.subtitle || null);
-  const entryRefId = entry?.refId ?? eventId ?? '';
+  const entryTitle = params.title ?? null;
+  const entrySubtitle = params.subtitle || null;
+  const entryRefId = eventId ?? '';
 
   return (
     <ScreenContainer padded={false} style={styles.whiteScreen}>
@@ -226,19 +209,20 @@ export default function DiaryEventScreen() {
               feedback={feedback}
               onFeedback={handleFeedback}
               photoUri={dog.photoUri}
-              onSaveDiary={() => router.replace('/(tabs)/diary')}
+              primaryAdvice={
+                advice ? (
+                  <>
+                    <AdviceCard advice={advice} dogName={dog.name} />
+                    <AdviceOutcomePrompt
+                      eventId={behaviorResult.eventId}
+                      adviceCode={advice.code}
+                      existingOutcome={query.data?.advice_outcome}
+                      deferred
+                    />
+                  </>
+                ) : null
+              }
             />
-            {advice ? (
-              <>
-                <AdviceCard advice={advice} dogName={dog.name} />
-                <AdviceOutcomePrompt
-                  eventId={behaviorResult.eventId}
-                  adviceCode={advice.code}
-                  existingOutcome={query.data?.advice_outcome}
-                  deferred
-                />
-              </>
-            ) : null}
           </>
         ) : (
           /* Evento digestivo: il dettaglio completo vive nel flusso F2 */

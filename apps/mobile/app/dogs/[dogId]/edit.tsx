@@ -17,7 +17,6 @@ import { Button, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
-  updateDogProfile,
   useDogProfile,
   useUpdateDogMutation,
 } from '@/features/core/useDogProfile';
@@ -49,7 +48,7 @@ export default function DogEditScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dogId?: string | string[] }>();
   const { dog } = useDogProfile();
-  const { usingMockGate, userId } = useSession();
+  const { userId } = useSession();
   const queryClient = useQueryClient();
   const routeDogId = Array.isArray(params.dogId) ? params.dogId[0] : params.dogId;
   const dogId = routeDogId ?? dog.id;
@@ -86,10 +85,6 @@ export default function DogEditScreen() {
     if (!uri) return;
     setPhotoUri(uri);
     setPendingPhotoUri(uri);
-    if (usingMockGate) {
-      setPendingPhotoUri(null);
-      return;
-    }
     if (!dogId) {
       Alert.alert('Foto non salvata', 'Profilo del cane non disponibile.');
       return;
@@ -116,7 +111,6 @@ export default function DogEditScreen() {
   const save = async () => {
     let photoUploadedOnSave = false;
     if (
-      !usingMockGate &&
       dogId &&
       photoUri &&
       isLocalPhotoUri(photoUri)
@@ -164,30 +158,6 @@ export default function DogEditScreen() {
       (!Number.isFinite(parsedWeight) || parsedWeight <= 0 || parsedWeight > 999.99)
     ) {
       Alert.alert('Peso non valido', 'Inserisci un peso valido in kg.');
-      return;
-    }
-
-    if (usingMockGate) {
-      // Demo: aggiorna il profilo visibile in-sessione (patch mock dev) e
-      // sveglia gli observer react-query così le schermate si ridisegnano.
-      // Nota onesta: nulla viene inviato al server.
-      updateDogProfile({
-        name: name.trim(),
-        ageLabel,
-        birthDate,
-        sizeLabel,
-        weightKg: parsedWeight,
-        breedLabel,
-        isMix: breedSelection.kind === 'mixed',
-        photoUri,
-        profileVisibility,
-      });
-      await queryClient.invalidateQueries({ queryKey: ['dogs'] });
-      Alert.alert(
-        'Salvato in demo',
-        'Le modifiche sono visibili subito nell’app, ma in questa demo non vengono inviate al server.',
-      );
-      router.back();
       return;
     }
 

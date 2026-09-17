@@ -18,7 +18,11 @@ import type {
 } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
-import { CONFIDENCE_BAND_LABELS, intentHeadline } from './copy';
+import {
+  CONFIDENCE_BAND_LABELS,
+  dogVoiceLine,
+  intentHeadline,
+} from './copy';
 import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
 import { getConsents } from '../privacy/consents';
@@ -117,11 +121,11 @@ const BAND_TONE: Record<ConfidenceBand, 'primary' | 'warning' | 'neutral'> = {
 };
 
 export function ConfidencePill({ band }: { band?: ConfidenceBand | null }) {
-  if (!band) return null;
+  if (band !== 'LOW') return null;
   return (
     <View style={styles.confidencePill}>
       <Text style={styles.confidencePillText}>
-        Confidenza {CONFIDENCE_BAND_LABELS[band]}
+        {CONFIDENCE_BAND_LABELS[band]}
       </Text>
     </View>
   );
@@ -181,7 +185,6 @@ export function FeedbackButtons({
   dogName = 'lui',
   primaryIntent = null,
   alternatives = [],
-  onSaveDiary,
 }: {
   value: FeedbackValue | null;
   onFeedback: (
@@ -193,8 +196,6 @@ export function FeedbackButtons({
   dogName?: string;
   primaryIntent?: BehaviorIntent | null;
   alternatives?: Array<{ intent: BehaviorIntent }>;
-  /** Pulsante outline "Salva nel diario" (Screen 2). */
-  onSaveDiary?: () => void;
 }) {
   const [awaitingCorrection, setAwaitingCorrection] = React.useState(false);
   const researchOptIn = getConsents().researchTraining;
@@ -216,7 +217,7 @@ export function FeedbackButtons({
     },
     {
       value: 'NO',
-      label: 'Non credo',
+      label: 'Non proprio',
       icon: 'thumbs-down',
       bgColor: '#FF8B74',
       textColor: '#FFFFFF',
@@ -244,7 +245,7 @@ export function FeedbackButtons({
   return (
     <View style={styles.feedbackCard}>
       <View style={styles.feedbackHeading}>
-        <Text style={styles.feedbackTitle}>Ti sembra proprio {dogName}?</Text>
+        <Text style={styles.feedbackTitle}>Ti torna per {dogName}?</Text>
         {error ? (
           <View style={styles.savedBadge}>
             <Ionicons name="alert-circle" size={13} color={colors.danger} />
@@ -296,21 +297,6 @@ export function FeedbackButtons({
             </Pressable>
           );
         })}
-        {onSaveDiary ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Salva nel diario"
-            onPress={onSaveDiary}
-            style={({ pressed }) => [
-              styles.saveDiaryButton,
-              pressed && styles.feedbackOptionPressed,
-            ]}
-            testID="save-diary"
-          >
-            <Ionicons name="bookmark-outline" size={18} color="#2DAAAB" />
-            <Text style={styles.saveDiaryLabel}>Salva nel diario</Text>
-          </Pressable>
-        ) : null}
       </View>
       {awaitingCorrection ? (
         <View style={styles.correctionBlock} testID="feedback-correction">
@@ -363,7 +349,6 @@ export function BehaviorResultView({
   photoUri,
   contextPrompt,
   primaryAdvice,
-  onSaveDiary,
 }: {
   result: BehaviorEventResult;
   dogName: string;
@@ -378,7 +363,6 @@ export function BehaviorResultView({
   photoUri?: string | null;
   contextPrompt?: React.ReactNode;
   primaryAdvice?: React.ReactNode;
-  onSaveDiary?: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const isInsufficient =
@@ -389,6 +373,7 @@ export function BehaviorResultView({
     dogName,
   );
   const safety = result.safety;
+  const celebrate = !safety && !isInsufficient && !isAmbiguous;
 
   return (
     <View>
@@ -417,6 +402,8 @@ export function BehaviorResultView({
               />
             )}
           </View>
+          {celebrate ? (
+            <>
           <View
             style={[
               styles.confettiDot,
@@ -441,10 +428,20 @@ export function BehaviorResultView({
               { bottom: 22, right: 24, backgroundColor: '#BBF7D0', width: 7, height: 7, borderRadius: 3.5 },
             ]}
           />
+            </>
+          ) : null}
         </View>
         <View style={styles.headlineRow}>
           <Text style={styles.headline}>{headline}</Text>
-          <Text style={styles.headlineSparkle}> ✨</Text>
+          {celebrate ? <Text style={styles.headlineSparkle}> ✨</Text> : null}
+        </View>
+        <View style={styles.translationBlock}>
+          <Text style={styles.translationKicker}>
+            In parole umane, potrebbe essere
+          </Text>
+          <Text style={styles.translationText}>
+            {dogVoiceLine(result.primary_intent)}
+          </Text>
         </View>
 
         <ConfidencePill band={result.confidence_band} />
@@ -455,22 +452,6 @@ export function BehaviorResultView({
           </Text>
         ) : null}
       </View>
-
-      {/* Sezione "Perché?" — capsule con icona circolare come da Screen 2 */}
-      {result.evidence.length > 0 ? (
-        <View style={styles.whySection}>
-          <Text style={styles.whyTitle}>Perché?</Text>
-          {result.evidence.map((item, index) => (
-            <EvidenceRow
-              key={`${item.label}-${index}`}
-              item={{
-                ...item,
-                label: personalizeCopy(item.label, dogName),
-              }}
-            />
-          ))}
-        </View>
-      ) : null}
 
       {result.baseline_note ? (
         <View style={styles.baselineCard} testID="per-rocky">
@@ -591,7 +572,6 @@ export function BehaviorResultView({
         dogName={dogName}
         primaryIntent={result.primary_intent}
         alternatives={result.alternatives}
-        onSaveDiary={onSaveDiary}
       />
     </View>
   );
@@ -829,6 +809,25 @@ const styles = StyleSheet.create({
     color: NAVY,
     textAlign: 'center',
     lineHeight: 28,
+  },
+  translationBlock: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  translationKicker: {
+    color: SUMMARY_MUTED,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  translationText: {
+    marginTop: spacing.xs,
+    color: NAVY,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+    lineHeight: typography.size.lg * typography.lineHeight.relaxed,
   },
   summary: {
     marginTop: spacing.md,

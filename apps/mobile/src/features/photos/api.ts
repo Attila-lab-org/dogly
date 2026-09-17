@@ -6,7 +6,6 @@ import { apiRequest, getApiBaseUrl } from '../../lib/apiClient';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import { putSignedUpload } from '../../lib/signedUpload';
 import { contentTypeFromUri } from '../dogs/photoUri';
-import { albumById, albumsMock, photosForAlbum } from '../../mocks/photos';
 import type { AlbumPhoto, PhotoAlbum } from './types';
 
 export type GalleryAlbumDto = {
@@ -77,10 +76,7 @@ function mapPhoto(photo: GalleryPhotoDto, fallbackUri = ''): AlbumPhoto {
 }
 
 export async function fetchAlbums(dogId: string): Promise<PhotoAlbum[]> {
-  // Demo senza backend configurato: dati mock locali (stessa shape).
-  if (!apiConfigured()) {
-    return albumsMock.filter((album) => album.dogId === dogId);
-  }
+  if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryAlbumDto[] }>(
     `/v1/dogs/${dogId}/albums`,
   );
@@ -96,19 +92,12 @@ export async function createAlbum(dogId: string, title: string): Promise<PhotoAl
 }
 
 export async function fetchAlbum(albumId: string): Promise<PhotoAlbum> {
-  if (!apiConfigured()) {
-    const album = albumById(albumId);
-    if (!album) throw new Error('Album non trovato');
-    return album;
-  }
   const album = await apiRequest<GalleryAlbumDto>(`/v1/albums/${albumId}`);
   return mapAlbum(album);
 }
 
 export async function fetchAlbumPhotos(albumId: string): Promise<AlbumPhoto[]> {
-  if (!apiConfigured()) {
-    return photosForAlbum(albumId);
-  }
+  if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
     `/v1/albums/${albumId}/photos`,
   );

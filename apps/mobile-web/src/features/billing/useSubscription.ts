@@ -7,7 +7,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
-import { subscriptionMock } from '../../mocks/secondary';
 import { fetchSubscriptionState } from './api';
 import type { SubscriptionState } from '../secondary/types';
 
@@ -33,6 +32,6 @@ export function useSubscriptionState(): SubscriptionStateResult {
   return {
     live,
     query,
-    state: query.data ?? (live ? null : subscriptionMock),
+    state: query.data ?? null,
   };
 }

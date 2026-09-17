@@ -8,7 +8,8 @@
  * - Home: ultima analisi instradata via lastInsight.eventId (niente id
  *   hardcoded), flag offline di default spento.
  */
-import { resolveEntryRoute, sessionMock } from '../mocks/session';
+import { resolveEntryRoute } from '../features/auth/sessionRouting';
+import { sessionMock } from '../mocks/session';
 import { demoFlags } from '../mocks/demo';
 import { entitlementMock, paywallOfferingMock } from '../mocks/entitlements';
 import { fecalEventsMock } from '../mocks/secondary';

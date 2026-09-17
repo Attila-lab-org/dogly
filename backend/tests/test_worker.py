@@ -28,7 +28,13 @@ class RateLimitedObserver:
         raise ProviderRateLimitError("provider quota exhausted")
 
 
-async def _queue_behavior_event(client, headers, crid: str) -> str:
+async def _queue_behavior_event(
+    client,
+    headers,
+    crid: str,
+    *,
+    content_type: str = "video/mp4",
+) -> str:
     dog_id = await create_dog(client, headers)
     r = await client.post(
         "/v1/behavior/captures/init",
@@ -38,7 +44,7 @@ async def _queue_behavior_event(client, headers, crid: str) -> str:
             "duration_ms": 8000,
             "has_audio": True,
             "bytes": 1_000_000,
-            "content_type": "video/mp4",
+            "content_type": content_type,
             "context_bucket": "HOME",
         },
         headers=headers,
@@ -53,7 +59,15 @@ async def _queue_behavior_event(client, headers, crid: str) -> str:
 async def test_behavior_event_completes_end_to_end(
     client: httpx.AsyncClient, worker_client: httpx.AsyncClient, auth_headers, state, user_id
 ):
-    event_id = await _queue_behavior_event(client, auth_headers, "crid-e2e-0001")
+    event_id = await _queue_behavior_event(
+        client,
+        auth_headers,
+        "crid-e2e-0001",
+        content_type="video/quicktime",
+    )
+    capture = state.store.captures[state.store.behavior_events[event_id].capture_id]
+    assert capture.content_type == "video/quicktime"
+    assert capture.storage_path.endswith(".mov")
 
     resp = await worker_client.post(
         "/tasks/run",

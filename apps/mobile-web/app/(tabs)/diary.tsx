@@ -25,7 +25,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -110,7 +109,7 @@ function entryStatusChip(entry: DiaryEntry): StatusChip | null {
   if (/confermato/i.test(haystack)) {
     return { label: 'Confermato', bg: '#E0F7F6', fg: '#0D9488' };
   }
-  return { label: 'Relax', bg: '#E0F7F6', fg: '#0D9488' };
+  return null;
 }
 
 function entryIconTone(entry: DiaryEntry): IconTone {
@@ -238,11 +237,7 @@ export default function DiaryScreen() {
   });
 
   const entries = useMemo<DiaryEntry[]>(() => {
-    const source = !realEnabled
-      ? diaryEntriesMock.filter(
-          (entry) => filter === 'ALL' || entry.domain === filter,
-        )
-      : (query.data?.pages ?? [])
+    const source = (query.data?.pages ?? [])
           .flatMap((page) => page.items)
           .map(mapDiaryItemToEntry)
           .filter((entry): entry is DiaryEntry => entry !== null);
@@ -253,7 +248,7 @@ export default function DiaryScreen() {
         .toLocaleLowerCase('it-IT')
         .includes(term),
     );
-  }, [realEnabled, filter, query.data, search]);
+  }, [filter, query.data, search]);
 
   const groups = useMemo(() => {
     const map = new Map<string, DiaryEntry[]>();

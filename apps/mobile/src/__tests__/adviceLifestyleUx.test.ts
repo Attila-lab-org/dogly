@@ -29,11 +29,12 @@ describe('Advice Engine consumer surfaces', () => {
     });
   });
 
-  it('shows a backend safety-management advice but never invents a mock one', () => {
+  it('shows a backend advice but never invents one, and hides it when safety is present', () => {
     const result = {
-      status: 'COMPLETED',
-      primary_intent: 'FEAR_INSECURITY',
-    } as const;
+      status: 'COMPLETED' as const,
+      primary_intent: 'FEAR_INSECURITY' as const,
+      safety: null,
+    };
     const apiAdvice = mapApiAdviceItem({
       code: 'ADVICE_DISTANCE_CHOICE',
       category: 'LOW_RISK_MANAGEMENT',
@@ -41,11 +42,20 @@ describe('Advice Engine consumer surfaces', () => {
       rationale: 'È una scelta prudente.',
       risk: 'LOW',
     });
-    expect(selectAdvice(result, { apiAdvice, useMockCatalog: false })).toEqual(
-      apiAdvice,
-    );
+    expect(selectAdvice(result, { apiAdvice })).toEqual(apiAdvice);
+    expect(selectAdvice(result, { apiAdvice: null })).toBeNull();
     expect(
-      selectAdvice(result, { apiAdvice: null, useMockCatalog: true }),
+      selectAdvice(
+        {
+          ...result,
+          safety: {
+            title: 'Spazio',
+            message: 'Lascia distanza.',
+            action: 'Aumenta lo spazio.',
+          },
+        },
+        { apiAdvice },
+      ),
     ).toBeNull();
   });
 });

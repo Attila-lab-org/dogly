@@ -18,7 +18,11 @@ import type {
 } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
-import { CONFIDENCE_BAND_LABELS, intentHeadline } from './copy';
+import {
+  CONFIDENCE_BAND_LABELS,
+  dogVoiceLine,
+  intentHeadline,
+} from './copy';
 import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
 import { getConsents } from '../privacy/consents';
@@ -107,7 +111,8 @@ const BAND_TONE: Record<ConfidenceBand, 'primary' | 'warning' | 'neutral'> = {
   LOW: 'neutral',
 };
 
-export function ConfidencePill({ band }: { band: ConfidenceBand }) {
+export function ConfidencePill({ band }: { band?: ConfidenceBand | null }) {
+  if (band !== 'LOW') return null;
   return (
     <Chip
       label={CONFIDENCE_BAND_LABELS[band]}
@@ -213,7 +218,7 @@ export function FeedbackButtons({
   return (
     <View style={styles.feedbackCard}>
       <View style={styles.feedbackHeading}>
-        <Text style={styles.feedbackTitle}>Ti sembra proprio {dogName}?</Text>
+        <Text style={styles.feedbackTitle}>Ti torna per {dogName}?</Text>
         {error ? (
           <View style={styles.savedBadge}>
             <Ionicons name="alert-circle" size={13} color={colors.danger} />
@@ -398,6 +403,15 @@ export function BehaviorResultView({
           </View>
         )}
         <Text style={styles.headline}>{headline}</Text>
+        <View style={styles.translationBlock}>
+          <Text style={styles.translationKicker}>
+            In parole umane, potrebbe essere
+          </Text>
+          <Text style={styles.translationText}>
+            {dogVoiceLine(result.primary_intent)}
+          </Text>
+        </View>
+        <ConfidencePill band={result.confidence_band} />
         <Text style={styles.summary}>
           {personalizeCopy(result.consumer_summary, dogName)}
         </Text>
@@ -699,6 +713,25 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     lineHeight: typography.size.xxl * typography.lineHeight.tight,
+  },
+  translationBlock: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  translationKicker: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  translationText: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+    lineHeight: typography.size.lg * typography.lineHeight.relaxed,
   },
   summary: {
     marginTop: spacing.md,

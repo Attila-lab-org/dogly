@@ -24,6 +24,14 @@ import { knowledgeLevelLabel } from '../features/core/types';
 import { BEHAVIOR_EVENT_STATUSES } from '../contracts/types';
 import { behaviorResultsMock, diaryEntriesMock, homeDataMock } from '../mocks/core';
 
+jest.mock('../features/behavior/api', () => ({
+  postBehaviorFeedback: jest.fn(),
+}));
+
+import { postBehaviorFeedback } from '../features/behavior/api';
+
+const postFeedbackMock = postBehaviorFeedback as jest.Mock;
+
 describe('captureMachine (sez. 13)', () => {
   const ready: CaptureState = captureReducer(initialCaptureState, {
     type: 'PERMISSION_GRANTED',
@@ -189,17 +197,15 @@ describe('mock Home e Diario', () => {
     );
   });
 
-  it('salva il feedback con un solo tap e lo mantiene nel Diario', async () => {
+  it('salva il feedback con un solo tap via API', async () => {
     const result = behaviorResultsMock['evt-play'];
-    const entry = diaryEntriesMock.find((item) => item.refId === result.eventId);
-    const previousFeedback = result.feedback;
-    const previousSubtitle = entry?.subtitle ?? null;
+    postFeedbackMock.mockResolvedValue({
+      event_id: result.eventId,
+      value: 'NO',
+      recorded: true,
+    });
 
-    await expect(saveBehaviorFeedback(result.eventId, 'NO', true)).resolves.toBe('NO');
-    expect(result.feedback).toBe('NO');
-    expect(entry?.subtitle).toContain('Feedback: non credo');
-
-    result.feedback = previousFeedback;
-    if (entry) entry.subtitle = previousSubtitle;
+    await expect(saveBehaviorFeedback(result.eventId, 'NO')).resolves.toBe('NO');
+    expect(postFeedbackMock).toHaveBeenCalledWith(result.eventId, 'NO', undefined);
   });
 });

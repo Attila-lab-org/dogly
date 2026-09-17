@@ -27,7 +27,6 @@ import {
   ScreenContainer,
 } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
-import { diaryEntriesMock } from '@/mocks/core';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -158,11 +157,7 @@ export default function DiaryScreen() {
   });
 
   const entries = useMemo<DiaryEntry[]>(() => {
-    const source = !realEnabled
-      ? diaryEntriesMock.filter(
-        (entry) => filter === 'ALL' || entry.domain === filter,
-      )
-      : (query.data?.pages ?? [])
+    const source = (query.data?.pages ?? [])
           .flatMap((page) => page.items)
           .map(mapDiaryItemToEntry)
           .filter((entry): entry is DiaryEntry => entry !== null);
@@ -173,7 +168,7 @@ export default function DiaryScreen() {
         .toLocaleLowerCase('it-IT')
         .includes(term),
     );
-  }, [realEnabled, filter, query.data, search]);
+  }, [filter, query.data, search]);
 
   // Raggruppamento per giorno (timeline cursor, sez. 5.1)
   const groups = useMemo(() => {
@@ -216,7 +211,7 @@ export default function DiaryScreen() {
     <ScreenContainer>
       <Text style={styles.title}>Le analisi di {dog.name}</Text>
       <Text style={styles.subtitle}>
-        Tutto quello che ho capito di {dog.name}, giorno per giorno.
+        Tutto quello che ho osservato di {dog.name}, giorno per giorno.
       </Text>
 
       <View style={styles.search}>

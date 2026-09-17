@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../../lib/apiClient';
 import { isPersistedId } from '../../lib/persistedId';
-import { patternsMock } from '../../mocks/secondary';
 import { isApiConfigured } from '../auth/env';
 import { useSession } from '../auth/SessionProvider';
 import type { PersonalPattern } from '../secondary/types';
@@ -51,7 +50,7 @@ export function usePersonalPatterns(dogId: string) {
   return {
     ...query,
     live,
-    patterns: live ? query.data ?? [] : patternsMock,
+    patterns: query.data ?? [],
   };
 }
 

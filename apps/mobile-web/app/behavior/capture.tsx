@@ -597,7 +597,7 @@ export default function BehaviorCaptureScreen() {
                     ? `Sto registrando. Tocca per fermare dopo almeno ${CAPTURE_MIN_SECONDS} secondi.`
                     : 'Attendi: sto avviando la registrazione…'
                   : cameraReady
-                    ? `Tieni inquadrato ${dog.name} per 5-15 secondi`
+                    ? `Tieni inquadrato ${dog.name} per 5-20 secondi`
                     : 'Attendi, sto aprendo la fotocamera…'}
               </Text>
             </>

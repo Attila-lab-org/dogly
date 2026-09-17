@@ -35,14 +35,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors, radius, spacing } from '@/theme/tokens';
-import { demoFlags } from '@/mocks/demo';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
-import { CheckInModal } from '@/features/checkin/CheckInModal';
-import { useSession } from '@/features/auth/SessionProvider';
 import { DoglyLogo } from '@/features/brand/DoglyLogo';
 import { StoriesRail } from '@/features/stories/StoriesRail';
 import { useStories } from '@/features/stories/data';
@@ -85,12 +82,10 @@ function DogSizeIcon() {
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
   const {
     usage,
     lastInsight,
     processingEventId,
-    source,
     loading,
     error,
     refetch,
@@ -98,20 +93,16 @@ export default function HomeScreen() {
 
   const network = useNetworkStatus();
   const stories = useStories(dog.id, dog.name);
-  const offline = demoFlags.homeOffline || network.offline;
+  const offline = network.offline;
 
   const behaviorRemaining = usage ? usage.behaviorLimit - usage.behaviorUsed : null;
   const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
 
-  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel) || '4 anni';
-  const sizeLabel = dog.sizeLabel || 'Taglia media';
-  const breedLabel = dog.breedLabel || 'Labrador';
+  const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel);
+  const sizeLabel = dog.sizeLabel;
+  const breedLabel = dog.breedLabel;
 
-  const displayInsight = lastInsight || {
-    eventId: 'evt-relax',
-    label: 'sembra rilassato',
-    timestampLabel: 'Oggi, 09:30',
-  };
+  const displayInsight = lastInsight;
 
   const startVideoCapture = () => {
     if (!dog.id || loading) return;
@@ -133,11 +124,7 @@ export default function HomeScreen() {
 
   const openLastInsight = () => {
     if (!displayInsight) return;
-    if (source === 'api') {
-      router.push(`/behavior/result/${displayInsight.eventId}`);
-      return;
-    }
-    router.push(`/diary/event/${displayInsight.eventId}`);
+    router.push(`/behavior/result/${displayInsight.eventId}`);
   };
 
   return (
@@ -185,18 +172,24 @@ export default function HomeScreen() {
                 <Text style={styles.dogName}>{dog.name}</Text>
               </View>
               <View style={styles.dogMetaList}>
+                {ageLabel ? (
                 <View style={styles.dogMetaRow}>
                   <CakeIcon />
                   <Text style={styles.dogMetaText}>{ageLabel}</Text>
                 </View>
+                ) : null}
+                {sizeLabel ? (
                 <View style={styles.dogMetaRow}>
                   <DogSizeIcon />
                   <Text style={styles.dogMetaText}>{sizeLabel}</Text>
                 </View>
+                ) : null}
+                {breedLabel ? (
                 <View style={styles.dogMetaRow}>
                   <Ionicons name="paw" size={15} color="#06B6D4" />
                   <Text style={styles.dogMetaText}>{breedLabel}</Text>
                 </View>
+                ) : null}
               </View>
             </View>
           </Pressable>
@@ -208,7 +201,7 @@ export default function HomeScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Riprova connessione"
-                onPress={() => { if (!demoFlags.homeOffline) void network.refresh(); }}
+                onPress={() => { void network.refresh(); }}
                 hitSlop={8}
               >
                 <Text style={styles.statusRetry}>Riprova</Text>
@@ -321,22 +314,37 @@ export default function HomeScreen() {
           </View>
 
           {/* Riga "Ultima analisi": faccina sorridente verde in cerchio menta */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Apri l'ultima analisi: ${displayInsight.label}`}
-            onPress={openLastInsight}
-            style={styles.lastInsightRow}
-          >
-            <View style={styles.lastInsightIcon}>
-              <Ionicons name="happy-outline" size={24} color="#10B981" />
+          {displayInsight ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Apri l'ultima analisi: ${displayInsight.label}`}
+              onPress={openLastInsight}
+              style={styles.lastInsightRow}
+            >
+              <View style={styles.lastInsightIcon}>
+                <Ionicons name="happy-outline" size={24} color="#10B981" />
+              </View>
+              <View style={styles.lastInsightText}>
+                <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
+                <Text style={styles.lastInsightValue}>{displayInsight.label}</Text>
+                <Text style={styles.lastInsightTime}>{displayInsight.timestampLabel}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+          ) : (
+            <View style={styles.lastInsightRow}>
+              <View style={styles.lastInsightIcon}>
+                <Ionicons name="videocam-outline" size={24} color="#10B981" />
+              </View>
+              <View style={styles.lastInsightText}>
+                <Text style={styles.lastInsightLabel}>Le vostre traduzioni</Text>
+                <Text style={styles.lastInsightValue}>Ancora nessuna analisi</Text>
+                <Text style={styles.lastInsightTime}>
+                  Registra un video per iniziare a capire i suoi segnali.
+                </Text>
+              </View>
             </View>
-            <View style={styles.lastInsightText}>
-              <Text style={styles.lastInsightLabel}>Ultima analisi</Text>
-              <Text style={styles.lastInsightValue}>{displayInsight.label}</Text>
-              <Text style={styles.lastInsightTime}>{displayInsight.timestampLabel}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </Pressable>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>

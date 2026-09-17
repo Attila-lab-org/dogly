@@ -15,9 +15,9 @@ import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 
 /** Pill di confidenza: stile mockup, testo a band (Spec O-07). */
 export const CONFIDENCE_BAND_LABELS: Record<ConfidenceBand, string> = {
-  LOW: 'Confidenza bassa',
-  MEDIUM: 'Confidenza media',
-  HIGH: 'Confidenza alta',
+  LOW: 'Non del tutto chiaro',
+  MEDIUM: 'Segnali abbastanza chiari',
+  HIGH: 'Segnali abbastanza chiari',
 };
 
 /**
@@ -34,6 +34,26 @@ export function intentHeadline(
   }
   const label = BEHAVIOR_INTENT_LABELS[intent];
   return `${dogName} ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+}
+
+const DOG_VOICE_LINES: Record<BehaviorIntent, string> = {
+  PLAY_INTERACTION: '«Giochiamo insieme?»',
+  ATTENTION_REQUEST: '«Ehi, guardami un momento.»',
+  OUTSIDE_REQUEST: '«Possiamo uscire?»',
+  ALERT_VIGILANCE: '«C’è qualcosa qui: l’hai notato?»',
+  DISCOMFORT_AVOIDANCE: '«Non mi sento a mio agio: lasciami spazio.»',
+  FEAR_INSECURITY: '«Non mi sento sicuro: resta vicino senza forzarmi.»',
+  HIGH_AROUSAL: '«Sono molto carico: aiutami a rallentare.»',
+  FRUSTRATION: '«Non riesco ad arrivare a ciò che vorrei.»',
+  RELAX_REST: '«Qui mi sento tranquillo.»',
+  RESOURCE_TENSION: '«Per me è importante: lasciami un po’ di spazio.»',
+  AMBIGUOUS: '«Ti sto mostrando qualcosa, ma serve più contesto.»',
+  INSUFFICIENT: '«Non voglio inventare: fammi vedere meglio.»',
+};
+
+/** Human-readable mediation, explicitly framed as a possible translation. */
+export function dogVoiceLine(intent: BehaviorIntent | null): string {
+  return DOG_VOICE_LINES[intent ?? 'INSUFFICIENT'];
 }
 
 export interface ProcessingStep {

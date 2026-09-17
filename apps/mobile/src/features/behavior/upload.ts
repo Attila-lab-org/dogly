@@ -12,6 +12,10 @@ import {
   isTerminalBehaviorStatus,
 } from './api';
 import { deriveContextBucketHint } from './contextBucket';
+import {
+  videoContentTypeFromUri,
+  type VideoContentType,
+} from './videoContentType';
 import { processPendingDigestiveUpload } from '../digestive/upload';
 import { persistTodayVsUsual } from '../checkin/sync';
 import { getCheckInSnapshot } from '../checkin/store';
@@ -28,8 +32,6 @@ import {
 const draining = new Set<string>();
 const inflight = new Map<string, Promise<string | null>>();
 let recoverStarted = false;
-
-type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm';
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -57,10 +59,9 @@ async function fileBytes(localUri: string): Promise<number> {
 async function detectVideoContentType(localUri: string): Promise<VideoContentType> {
   if (localUri.startsWith('blob:') || localUri.startsWith('http')) {
     const response = await fetch(localUri);
-    const type = (await response.blob()).type.split(';', 1)[0].toLowerCase();
-    if (type === 'video/webm' || type === 'video/quicktime') return type;
+    return videoContentTypeFromUri(localUri, (await response.blob()).type);
   }
-  return 'video/mp4';
+  return videoContentTypeFromUri(localUri);
 }
 
 async function deleteLocalIfExists(uri: string): Promise<void> {
