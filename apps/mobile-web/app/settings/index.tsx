@@ -1,6 +1,6 @@
 /**
  * Settings (Spec V1 sez. 5.1 — drill-down dal tab Rocky).
- * Lista: profilo, notifiche, privacy, abbonamento.
+ * Lista: profilo (tu e il cane), notifiche, privacy, abbonamento.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,7 +13,6 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
-import { useMeProfile } from '@/features/me/api';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
@@ -32,7 +31,6 @@ export default function SettingsScreen() {
   const { live, query, state: subscription } = useSubscriptionState();
   const { dog } = useDogProfile();
   const dogId = isPersistedId(dog.id) ? dog.id : '';
-  const { data: meProfile } = useMeProfile();
 
   const subscriptionSubtitle = (() => {
     if (live && query.isLoading) return 'Verifica del piano in corso…';
@@ -46,19 +44,11 @@ export default function SettingsScreen() {
 
   const rows: Row[] = [
     {
-      icon: 'person-circle-outline',
-      iconBg: '#F3E8FF',
-      iconColor: '#7C3AED',
-      title: 'Il tuo nome',
-      subtitle: meProfile?.display_name || 'Come vuole chiamarti DOGly',
-      href: '/settings/account',
-    },
-    {
       icon: 'person-outline',
       iconBg: '#E0F2FE',
       iconColor: '#0284C7',
       title: 'Profilo',
-      subtitle: 'Dati del cane e avatar',
+      subtitle: 'Tu e il cane',
       href: dogId ? `/dogs/${dogId}/edit` : null,
     },
     {

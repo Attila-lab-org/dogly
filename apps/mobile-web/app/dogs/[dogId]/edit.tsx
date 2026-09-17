@@ -42,6 +42,7 @@ import {
 import { dogsQueryKey } from '@/features/dogs/api';
 import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
 import { setProfileVisibility as apiSetVisibility } from '@/features/photos/api';
+import { useMeProfile, useUpdateMeProfile } from '@/features/me/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
 
@@ -54,6 +55,11 @@ export default function DogEditScreen() {
   const routeDogId = Array.isArray(params.dogId) ? params.dogId[0] : params.dogId;
   const dogId = routeDogId ?? dog.id;
   const updateMutation = useUpdateDogMutation(dogId);
+  const meQuery = useMeProfile();
+  const updateMe = useUpdateMeProfile();
+  const [ownerName, setOwnerName] = useState(
+    meQuery.data?.display_name ?? '',
+  );
   const [name, setName] = useState(dog.name);
   const [sex, setSex] = useState<DogSex | null>(dog.sex);
   const [ageYears, setAgeYears] = useState<number | null>(
@@ -81,6 +87,12 @@ export default function DogEditScreen() {
       setPhotoUri(dog.photoUri);
     }
   }, [dog.photoUri, pendingPhotoUri, uploadingPhoto]);
+
+  useEffect(() => {
+    if (meQuery.data?.display_name != null) {
+      setOwnerName(meQuery.data.display_name);
+    }
+  }, [meQuery.data?.display_name]);
 
   const selectAndUploadPhoto = async () => {
     const uri = await pickAvatarPhoto();
@@ -164,6 +176,11 @@ export default function DogEditScreen() {
     }
 
     try {
+      const nextOwnerName = ownerName.trim() || null;
+      const currentOwnerName = meQuery.data?.display_name ?? null;
+      if (userId && nextOwnerName !== currentOwnerName) {
+        await updateMe.mutateAsync({ display_name: nextOwnerName });
+      }
       if (dogId) {
         const profilePatch = profileChangesToUpdateBody(dog, {
           name: name.trim(),
@@ -204,7 +221,20 @@ export default function DogEditScreen() {
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Modifica profilo" />
-      <Text style={styles.hint}>Profilo di {dog.name}</Text>
+
+      <Text style={styles.sectionTitle}>Tu</Text>
+      <Text style={styles.label}>Nome con cui DOGly ti chiama</Text>
+      <TextInput
+        value={ownerName}
+        onChangeText={setOwnerName}
+        placeholder="Es. Attila"
+        placeholderTextColor={colors.textMuted}
+        autoCapitalize="words"
+        style={styles.input}
+        testID="owner-display-name"
+      />
+
+      <Text style={styles.sectionTitle}>{name.trim() || dog.name}</Text>
 
       <Pressable
         accessibilityRole="button"
@@ -373,7 +403,9 @@ export default function DogEditScreen() {
       <Button
         title="Salva"
         variant="secondary"
-        loading={updateMutation.isPending || uploadingPhoto}
+        loading={
+          updateMutation.isPending || updateMe.isPending || uploadingPhoto
+        }
         disabled={uploadingPhoto}
         onPress={() => void save()}
       />
@@ -385,11 +417,12 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xxxl,
   },
-  hint: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
+  sectionTitle: {
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+    color: '#1A2B48',
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
   },
   avatarSection: {
     alignSelf: 'center',
