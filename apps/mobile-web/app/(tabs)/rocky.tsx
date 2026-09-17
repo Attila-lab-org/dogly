@@ -229,7 +229,7 @@ export default function DogProfileTabScreen() {
             <Text style={styles.secondaryTitle}>I suoi momenti</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Vedi tutti gli album"
+              accessibilityLabel={`Vedi tutti i momenti di ${dog.name}`}
               onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
               hitSlop={8}
               style={styles.pillButton}
@@ -264,7 +264,7 @@ export default function DogProfileTabScreen() {
                   <Ionicons name="images-outline" size={20} color="#0284C7" />
                 </View>
                 <View style={styles.linkBody}>
-                  <Text style={styles.linkTitle}>Album</Text>
+                  <Text style={styles.linkTitle}>Aggiungi una foto</Text>
                   <Text style={styles.linkSubtitle}>
                     Aggiungi i suoi momenti preferiti
                   </Text>

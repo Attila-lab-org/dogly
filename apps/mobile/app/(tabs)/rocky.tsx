@@ -188,20 +188,18 @@ export default function DogProfileTabScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>I suoi momenti</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Vedi tutti i momenti di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+            hitSlop={8}
+          >
+            <Text style={styles.seeAll}>Vedi tutti</Text>
+          </Pressable>
+        </View>
         {previewPhotos.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>I suoi momenti</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Vedi tutti gli album"
-                onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-                hitSlop={8}
-              >
-                <Text style={styles.seeAll}>Vedi tutti</Text>
-              </Pressable>
-            </View>
-
             <View style={styles.photoRow}>
               {previewPhotos.map((photo) => (
                 <PhotoThumbnail
@@ -216,8 +214,23 @@ export default function DogProfileTabScreen() {
                 />
               ))}
             </View>
-          </>
-        ) : null}
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Aggiungi una foto di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+            style={styles.emptyMoments}
+          >
+            <Ionicons name="images-outline" size={22} color={colors.primary} />
+            <View style={styles.emptyMomentsText}>
+              <Text style={styles.emptyMomentsTitle}>Aggiungi una foto</Text>
+              <Text style={styles.emptyMomentsSubtitle}>
+                Conserva qui i suoi momenti più belli
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
 
         <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
           Benessere
@@ -619,6 +632,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.xxl,
+  },
+  emptyMoments: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.xxl,
+  },
+  emptyMomentsText: {
+    flex: 1,
+  },
+  emptyMomentsTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  emptyMomentsSubtitle: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    marginTop: 2,
   },
   wellnessGrid: {
     flexDirection: 'row',

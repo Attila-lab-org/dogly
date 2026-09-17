@@ -1,8 +1,9 @@
 /**
  * Viewer storia a schermo intero: tap a sinistra/destra per scorrere.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -13,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '@/theme/tokens';
-import { markStorySeen, useStories } from '@/features/stories/data';
+import { deleteStory, markStorySeen, useStories } from '@/features/stories/data';
 import { useDogProfile } from '@/features/core/useDogProfile';
 
 export default function StoryViewerScreen() {
@@ -23,6 +24,7 @@ export default function StoryViewerScreen() {
     : params.storyId ?? '';
   const router = useRouter();
   const { dog } = useDogProfile();
+  const [deleting, setDeleting] = useState(false);
   const stories = useStories(dog.id, dog.name);
   const index = Math.max(
     0,
@@ -99,14 +101,56 @@ export default function StoryViewerScreen() {
           </View>
           <View style={styles.topBar}>
             <Text style={styles.name}>{story.dogName}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Chiudi"
-              onPress={() => router.back()}
-              hitSlop={12}
-            >
-              <Ionicons name="close" size={28} color={colors.textOnPrimary} />
-            </Pressable>
+            <View style={styles.topActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Elimina storia"
+                disabled={deleting}
+                onPress={() =>
+                  Alert.alert(
+                    'Eliminare questa storia?',
+                    'Verrà rimossa subito e definitivamente.',
+                    [
+                      { text: 'Annulla', style: 'cancel' },
+                      {
+                        text: 'Elimina',
+                        style: 'destructive',
+                        onPress: () => {
+                          const next = stories[index + 1] ?? stories[index - 1];
+                          setDeleting(true);
+                          void deleteStory(story.id, dog.id)
+                            .then(() => {
+                              if (next) {
+                                router.replace(`/stories/${next.id}` as never);
+                              } else {
+                                router.back();
+                              }
+                            })
+                            .catch(() => {
+                              setDeleting(false);
+                              Alert.alert(
+                                'Storia non eliminata',
+                                'Riprova tra poco.',
+                              );
+                            });
+                        },
+                      },
+                    ],
+                  )
+                }
+                hitSlop={10}
+              >
+                <Ionicons name="trash-outline" size={24} color={colors.textOnPrimary} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Chiudi"
+                onPress={() => router.back()}
+                hitSlop={12}
+              >
+                <Ionicons name="close" size={28} color={colors.textOnPrimary} />
+              </Pressable>
+            </View>
           </View>
         </View>
         {story.caption ? (
@@ -164,6 +208,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
   },
   name: {
     color: colors.textOnPrimary,

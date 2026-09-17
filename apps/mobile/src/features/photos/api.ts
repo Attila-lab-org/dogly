@@ -99,6 +99,18 @@ export async function createAlbum(dogId: string, title: string): Promise<PhotoAl
   return mapAlbum(album);
 }
 
+export async function getOrCreateMomentsAlbum(
+  dogId: string,
+): Promise<PhotoAlbum> {
+  const albums = await fetchAlbums(dogId);
+  const moments = albums.find(
+    (album) => album.title.trim().toLocaleLowerCase() === 'momenti',
+  );
+  if (moments) return moments;
+  if (albums[0]) return albums[0];
+  return createAlbum(dogId, 'Momenti');
+}
+
 export async function fetchAlbum(albumId: string): Promise<PhotoAlbum> {
   const album = await apiRequest<GalleryAlbumDto>(`/v1/albums/${albumId}`);
   return mapAlbum(album);
@@ -115,10 +127,11 @@ export async function fetchAlbumPhotos(albumId: string): Promise<AlbumPhoto[]> {
 export async function fetchDogPhotos(
   dogId: string,
   limit = 12,
+  offset = 0,
 ): Promise<AlbumPhoto[]> {
   if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
-    `/v1/dogs/${dogId}/photos?limit=${limit}`,
+    `/v1/dogs/${dogId}/photos?limit=${limit}&offset=${offset}`,
   );
   return body.items.map((photo) => mapPhoto(photo));
 }

@@ -8,6 +8,7 @@ import { isPersistedId } from '../../lib/persistedId';
 import { isApiConfigured } from '../auth/env';
 import {
   createAlbum,
+  deleteAlbumPhoto,
   fetchAlbumPhotos,
   fetchAlbums,
   uploadAlbumPhoto,
@@ -118,4 +119,14 @@ export async function publishStory(input: {
 
 export function markStorySeen(storyId: string) {
   seenStoryIds.add(storyId);
+}
+
+export async function deleteStory(storyId: string, dogId: string): Promise<void> {
+  await deleteAlbumPhoto(storyId);
+  seenStoryIds.delete(storyId);
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['stories', dogId] }),
+    queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
+    queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dogId] }),
+  ]);
 }

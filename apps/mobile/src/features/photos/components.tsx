@@ -17,10 +17,12 @@ export function PhotoThumbnail({
   photo,
   onPress,
   size = 104,
+  manageMode = false,
 }: {
   photo: AlbumPhoto;
   onPress?: () => void;
   size?: number;
+  manageMode?: boolean;
 }) {
   return (
     <Pressable
@@ -30,6 +32,11 @@ export function PhotoThumbnail({
       style={[styles.thumb, { width: size, height: size }]}
     >
       <Image source={{ uri: photo.thumbnailUri }} style={styles.thumbImage} />
+      {manageMode ? (
+        <View style={styles.deleteBadge}>
+          <Ionicons name="trash-outline" size={15} color="#FFFFFF" />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -41,6 +48,8 @@ export function PhotoGrid({
   header,
   footer,
   empty,
+  manageMode = false,
+  onEndReached,
 }: {
   photos: AlbumPhoto[];
   onPressPhoto: (photo: AlbumPhoto) => void;
@@ -48,6 +57,8 @@ export function PhotoGrid({
   header?: ReactElement;
   footer?: ReactElement;
   empty?: ReactElement;
+  manageMode?: boolean;
+  onEndReached?: () => void;
 }) {
   const { width } = useWindowDimensions();
   const size = Math.max(
@@ -69,11 +80,14 @@ export function PhotoGrid({
       ListHeaderComponent={header}
       ListFooterComponent={footer}
       ListEmptyComponent={empty}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.4}
       renderItem={({ item: photo }) => (
         <PhotoThumbnail
           photo={photo}
           onPress={() => onPressPhoto(photo)}
           size={size}
+          manageMode={manageMode}
         />
       )}
     />
@@ -137,6 +151,17 @@ const styles = StyleSheet.create({
   thumbImage: {
     width: '100%',
     height: '100%',
+  },
+  deleteBadge: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.danger,
   },
   gridList: {
     flex: 1,

@@ -114,6 +114,7 @@ def list_dog_photos(
     user_id: str,
     dog_id: str,
     limit: int,
+    offset: int = 0,
 ) -> list[DogPhotoOut]:
     """Return the dog's latest lasting moments, excluding 24-hour stories."""
     get_owned_dog(store, user_id=user_id, dog_id=dog_id)
@@ -133,7 +134,7 @@ def list_dog_photos(
         and photo.album_id not in story_album_ids
     ]
     photos.sort(key=lambda photo: photo.taken_at or photo.created_at, reverse=True)
-    return [_photo_out(photo) for photo in photos[:limit]]
+    return [_photo_out(photo) for photo in photos[offset : offset + limit]]
 
 
 async def init_photo_upload(

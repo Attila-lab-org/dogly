@@ -129,6 +129,11 @@ async def test_recent_dog_photos_exclude_stories(
         json={"content_type": "image/jpeg", "bytes": 1_024},
         headers=auth_headers,
     )
+    newer_moment = await client.post(
+        f"/v1/albums/{moments.json()['id']}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 1_024},
+        headers=auth_headers,
+    )
     await client.post(
         f"/v1/albums/{stories.json()['id']}/photos/init",
         json={"content_type": "image/jpeg", "bytes": 1_024},
@@ -142,5 +147,15 @@ async def test_recent_dog_photos_exclude_stories(
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [
+        newer_moment.json()["photo"]["id"],
+        moment.json()["photo"]["id"]
+    ]
+
+    second_page = await client.get(
+        f"/v1/dogs/{dog_id}/photos?limit=1&offset=1",
+        headers=auth_headers,
+    )
+    assert second_page.status_code == 200
+    assert [item["id"] for item in second_page.json()["items"]] == [
         moment.json()["photo"]["id"]
     ]

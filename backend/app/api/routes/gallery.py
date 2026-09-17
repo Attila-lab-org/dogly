@@ -85,6 +85,7 @@ async def list_dog_photos(
     state: StateDep,
     user_id: UserIdDep,
     limit: Annotated[int, Query(ge=1, le=60)] = 12,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DogPhotoListResponse:
     if state.engine is not None:
         items = await gallery_db.list_dog_photos(
@@ -92,6 +93,7 @@ async def list_dog_photos(
             user_id=user_id,
             dog_id=dog_id,
             limit=limit,
+            offset=offset,
         )
     else:
         items = gallery_domain.list_dog_photos(
@@ -99,6 +101,7 @@ async def list_dog_photos(
             user_id=user_id,
             dog_id=dog_id,
             limit=limit,
+            offset=offset,
         )
     return DogPhotoListResponse(
         items=list(

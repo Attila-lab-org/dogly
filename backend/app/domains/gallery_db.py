@@ -200,6 +200,7 @@ async def list_dog_photos(
     user_id: str,
     dog_id: str,
     limit: int,
+    offset: int = 0,
 ) -> list[DogPhotoOut]:
     """Return recent lasting photos without mixing in ephemeral stories."""
     await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
@@ -218,9 +219,15 @@ async def list_dog_photos(
                       and lower(btrim(a.title)) <> 'storie'
                     order by coalesce(p.taken_at, p.created_at) desc, p.id desc
                     limit :limit
+                    offset :offset
                     """
                 ),
-                {"dog_id": dog_id, "user_id": user_id, "limit": limit},
+                {
+                    "dog_id": dog_id,
+                    "user_id": user_id,
+                    "limit": limit,
+                    "offset": offset,
+                },
             )
         ).mappings().all()
     return [_photo_out(row) for row in rows]

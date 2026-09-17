@@ -5,6 +5,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,7 +25,7 @@ import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { DoglyLogo } from '@/features/brand/DoglyLogo';
 import { StoriesRail } from '@/features/stories/StoriesRail';
-import { useStories } from '@/features/stories/data';
+import { deleteStory, useStories } from '@/features/stories/data';
 
 function CakeIcon() {
   return (
@@ -131,6 +132,24 @@ export default function HomeScreen() {
             stories={stories}
             onAdd={() => router.push('/(tabs)/camera')}
             onOpen={(story) => router.push(`/stories/${story.id}` as never)}
+            onDelete={(story) =>
+              Alert.alert(
+                'Eliminare questa storia?',
+                'Verrà rimossa subito e definitivamente.',
+                [
+                  { text: 'Annulla', style: 'cancel' },
+                  {
+                    text: 'Elimina',
+                    style: 'destructive',
+                    onPress: () => {
+                      void deleteStory(story.id, dog.id).catch(() =>
+                        Alert.alert('Storia non eliminata', 'Riprova tra poco.'),
+                      );
+                    },
+                  },
+                ],
+              )
+            }
           />
 
           {/* Profile Card: Rocky, Avatar, Heart, 3 meta rows (without "Quanto conosco Rocky") */}
