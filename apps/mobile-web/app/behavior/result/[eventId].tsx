@@ -27,6 +27,9 @@ import { selectAdvice } from '@/features/advice/logic';
 import { useSession } from '@/features/auth/SessionProvider';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
+import { useMeProfile } from '@/features/me/api';
+import { sanitizeOwnerCopy } from '@/features/core/copy';
+import { usefulQuestionKicker } from '@/features/core/conversationCopy';
 
 const NAVY = '#1A2B48';
 
@@ -34,6 +37,8 @@ export default function BehaviorResultScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
+  const meQuery = useMeProfile();
+  const ownerDisplayName = meQuery.data?.display_name;
   const { analysisContext } = useCheckIn();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
@@ -198,9 +203,11 @@ export default function BehaviorResultScreen() {
             contextAnswers.length > 0 &&
             !result.context_effect ? (
               <Card style={styles.contextCard} testID="behavior-context-question">
-                <Text style={styles.contextKicker}>Mi aiuti a capirlo meglio?</Text>
+                <Text style={styles.contextKicker}>
+                  {usefulQuestionKicker(ownerDisplayName)}
+                </Text>
                 <Text style={styles.contextQuestion}>
-                  {result.context_question}
+                  {sanitizeOwnerCopy(result.context_question)}
                 </Text>
                 <View style={styles.contextAnswers}>
                   {contextAnswers.map((answer) => (
@@ -221,8 +228,12 @@ export default function BehaviorResultScreen() {
               </Card>
             ) : result.context_effect ? (
               <Card style={styles.contextCard} testID="behavior-context-effect">
-                <Text style={styles.contextKicker}>Grazie, ora è più chiaro</Text>
-                <Text style={styles.contextQuestion}>{result.context_effect}</Text>
+                <Text style={styles.contextKicker}>
+                  Ok, ora ho un quadro migliore
+                </Text>
+                <Text style={styles.contextQuestion}>
+                  {sanitizeOwnerCopy(result.context_effect)}
+                </Text>
               </Card>
             ) : null
           }

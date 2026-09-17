@@ -117,7 +117,7 @@ export function PatternStateChip({ state }: { state: PatternState }) {
 const candidateLabel: Record<CandidateLevel, string> = {
   none_observed: 'Non osservato',
   possible: 'Possibile',
-  clear_candidate: 'Candidato',
+  clear_candidate: 'Da tenere d’occhio',
   unknown: 'Non valutabile',
 };
 

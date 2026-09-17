@@ -88,6 +88,43 @@ def _candidate(observation: dict[str, Any], field: str) -> str:
     return str(observation.get(field) or "unknown").lower()
 
 
+_QUALITY_COPY = {
+    "filmed_screen": (
+        "alcuni dettagli si perdono perché la foto non è stata scattata direttamente"
+    ),
+    "blurry": "la foto è un po’ sfocata",
+    "motion_blur": "la foto è mossa",
+    "too_dark": "c’è poca luce",
+    "poor_lighting": "la luce non mostra bene i dettagli",
+    "overexposed": "la luce è troppo forte",
+    "too_far": "il soggetto è un po’ lontano",
+    "too_close": "il soggetto è troppo ravvicinato",
+    "occluded": "una parte importante non è visibile",
+    "dog_not_visible": "il cane non si vede abbastanza bene",
+    "audio_degraded": "l’audio non è abbastanza chiaro",
+}
+
+
+def _quality_phrase(item: object) -> str:
+    raw = str(item).strip()
+    key = raw.lower().replace(" ", "_").replace("-", "_")
+    if key in _QUALITY_COPY:
+        return _QUALITY_COPY[key]
+    if " " in raw:
+        return raw[0].lower() + raw[1:] if raw else raw
+    return "alcuni dettagli non si vedono abbastanza bene"
+
+
+def _observation_reliability(observation: dict[str, Any]) -> str:
+    limitations = observation.get("warnings") or []
+    phrases = [_quality_phrase(item) for item in limitations[:2]]
+    if phrases:
+        return "La foto mi permette di vedere alcune cose, ma " + " e ".join(
+            phrases
+        ) + "."
+    return "La foto permette di valutare forma, consistenza e colore apparente."
+
+
 def _observation_summary(observation: dict[str, Any]) -> str:
     consistency = {
         "hard": "dura",
@@ -245,7 +282,7 @@ def build_digestive_intelligence(
         next_step = "Controlla come sta e registra la prossima evacuazione."
     elif baseline_code == "ABOVE_USUAL":
         state = DigestiveState.MONITOR
-        headline = f"Le feci di {context.dog_name} sembrano più morbide del suo solito"
+        headline = f"Oggi è un po’ più morbida del solito di {context.dog_name}"
         summary = (
             f"{observed_summary} Rispetto alle osservazioni recenti sono più morbide: "
             "una singola foto non basta a indicarne il motivo."
@@ -253,7 +290,7 @@ def build_digestive_intelligence(
         next_step = "Osserva la prossima evacuazione e verifica se il cambiamento si ripete."
     elif baseline_code == "BELOW_USUAL":
         state = DigestiveState.MONITOR
-        headline = f"Le feci di {context.dog_name} sembrano più compatte del suo solito"
+        headline = f"Oggi è un po’ più compatta del solito di {context.dog_name}"
         summary = (
             f"{observed_summary} Rispetto alle osservazioni recenti sono più compatte: "
             "vale la pena vedere se succede ancora."
@@ -261,7 +298,7 @@ def build_digestive_intelligence(
         next_step = "Osserva la prossima evacuazione; per ora non serve cambiare nulla."
     elif baseline_code == "NEAR_USUAL":
         state = DigestiveState.ROUTINE
-        headline = f"Per {context.dog_name}, questa osservazione è in linea con il suo solito"
+        headline = f"Oggi è in linea con le ultime osservazioni di {context.dog_name}"
         summary = f"{observed_summary} È simile alle osservazioni recenti."
         next_step = "Non emerge un cambiamento da seguire in modo particolare."
     elif baseline_code == "INSUFFICIENT" and consistency == "formed":
@@ -386,19 +423,22 @@ def build_digestive_intelligence(
         if season_association:
             associations.append(season_association)
 
-    limitations = observation.get("warnings") or []
-    reliability = (
-        "La foto permette una lettura utile, con alcuni limiti: "
-        + "; ".join(str(item) for item in limitations[:2])
-        if limitations
-        else "La foto permette di valutare forma, consistenza e colore apparente."
-    )
+    reliability = _observation_reliability(observation)
 
     followup = None
     followup_key = None
     if consistency in {"unformed", "watery"} and context.vomiting_today is None:
         followup_key = "vomiting_today"
-        followup = f"{context.dog_name} ha vomitato oggi?"
+        if (
+            context.recent_watery_count_24h >= 1
+            or context.recent_episode_count_24h >= 1
+        ):
+            followup = (
+                f"Questa è la seconda osservazione molto morbida nelle ultime 24 ore. "
+                f"{context.dog_name} ha anche vomitato oggi?"
+            )
+        else:
+            followup = f"{context.dog_name} ha vomitato oggi?"
     elif state is DigestiveState.ATTENTION and context.reduced_activity_today is None:
         followup_key = "reduced_activity_today"
         followup = f"{context.dog_name} appare meno attivo del solito?"

@@ -25,6 +25,12 @@ import {
   SAFETY_COPY,
 } from '@/features/secondary/safetyCopy';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { useMeProfile } from '@/features/me/api';
+import { sanitizeOwnerCopy } from '@/features/core/copy';
+import {
+  isPersonalBaselineNote,
+  usefulQuestionKicker,
+} from '@/features/core/conversationCopy';
 import {
   getDigestiveEvent,
   mapApiDigestiveEventToResult,
@@ -51,6 +57,8 @@ export default function DigestiveResultScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
+  const meQuery = useMeProfile();
+  const ownerDisplayName = meQuery.data?.display_name;
   const { usingMockGate } = useSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
@@ -211,12 +219,21 @@ export default function DigestiveResultScreen() {
     hasSafetyFlags ||
     event.overallState === 'ATTENTION' ||
     event.overallState === 'VET_CONTACT';
-  const headline =
-    event.consumerHeadline ??
-    digestiveHeadline(event.baselineComparison, dog.name, hasSafetyFlags);
-  const summary =
-    event.consumerSummary ??
-    event.baselineComparison.replace(/Rocky/g, dog.name);
+  const headline = sanitizeOwnerCopy(
+    (event.consumerHeadline ??
+      digestiveHeadline(event.baselineComparison, dog.name, hasSafetyFlags)
+    ).replace(/Rocky/g, dog.name),
+  );
+  const summary = sanitizeOwnerCopy(
+    (event.consumerSummary ?? event.baselineComparison).replace(
+      /Rocky/g,
+      dog.name,
+    ),
+  );
+  const baselineText = sanitizeOwnerCopy(
+    event.baselineComparison.replace(/Rocky/g, dog.name),
+  );
+  const showBaseline = isPersonalBaselineNote(baselineText);
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
@@ -252,6 +269,7 @@ export default function DigestiveResultScreen() {
             color={needsAttention ? colors.danger : colors.accent}
           />
         </View>
+        <Text style={styles.thoughtKicker}>Cosa penso</Text>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
       </View>
@@ -270,27 +288,19 @@ export default function DigestiveResultScreen() {
         );
       })}
 
-      <Text style={styles.sectionTitle}>In breve</Text>
-      <View style={styles.metrics}>
-        <MetricCard
-          icon="shapes-outline"
-          label="Consistenza"
-          value={capitalize(event.consistency)}
-        />
-        <MetricCard
-          icon="color-palette-outline"
-          label="Colore"
-          value={capitalize(event.color)}
-        />
-      </View>
-
-      <Text style={styles.sectionTitle}>Rispetto al suo solito</Text>
-      <Card style={styles.comparisonCard}>
-        <Ionicons name="git-compare-outline" size={22} color={colors.primary} />
-        <Text style={styles.comparisonText}>
-          {event.baselineComparison.replace(/Rocky/g, dog.name)}
-        </Text>
-      </Card>
+      {showBaseline ? (
+        <>
+          <Text style={styles.sectionTitle}>Rispetto al suo solito</Text>
+          <Card style={styles.comparisonCard}>
+            <Ionicons
+              name="git-compare-outline"
+              size={22}
+              color={colors.primary}
+            />
+            <Text style={styles.comparisonText}>{baselineText}</Text>
+          </Card>
+        </>
+      ) : null}
 
       {(event.possibleAssociations?.length ?? 0) > 0 ? (
         <>
@@ -353,9 +363,15 @@ export default function DigestiveResultScreen() {
                 color={colors.primary}
               />
             </View>
-            <Text style={styles.questionEyebrow}>Un dettaglio utile</Text>
+            <Text style={styles.questionEyebrow}>
+              {usefulQuestionKicker(ownerDisplayName)}
+            </Text>
           </View>
-          <Text style={styles.questionText}>{event.followupQuestion}</Text>
+          <Text style={styles.questionText}>
+            {sanitizeOwnerCopy(
+              event.followupQuestion.replace(/Rocky/g, dog.name),
+            )}
+          </Text>
           <View style={styles.answerRow}>
             {[
               { label: 'Sì', value: true },
@@ -408,6 +424,15 @@ export default function DigestiveResultScreen() {
 
           {detailsOpen ? (
             <>
+              {event.consistency !== 'sconosciuta' ||
+              (event.color && event.color !== 'Non determinabile dalla foto') ? (
+                <Card style={styles.notableCard}>
+                  <Text style={styles.cardTitle}>Dettaglio della foto</Text>
+                  <Text style={styles.comparisonText}>
+                    {photoDetailCopy(event.consistency, event.color)}
+                  </Text>
+                </Card>
+              ) : null}
               {notableCandidates.length > 0 ? (
                 <Card style={styles.notableCard}>
                   <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
@@ -465,30 +490,20 @@ export default function DigestiveResultScreen() {
   );
 }
 
-function MetricCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.metricCard}>
-      <View style={styles.metricIcon}>
-        <Ionicons name={icon} size={20} color={colors.accent} />
-      </View>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue} numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function capitalize(value: string): string {
-  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+function photoDetailCopy(consistency: string, color: string): string {
+  const texture = consistency && consistency !== 'sconosciuta' ? consistency : null;
+  const tone =
+    color &&
+    color !== 'Non determinabile dalla foto' &&
+    color !== 'non determinato'
+      ? color
+      : null;
+  if (texture && tone) {
+    return `Dalla foto, la consistenza appare ${texture} e il colore ${tone}.`;
+  }
+  if (texture) return `Dalla foto, la consistenza appare ${texture}.`;
+  if (tone) return `Dalla foto, il colore appare ${tone}.`;
+  return 'La foto permette un confronto con le osservazioni precedenti.';
 }
 
 function digestiveHeadline(
@@ -497,14 +512,14 @@ function digestiveHeadline(
   hasSafetyFlags: boolean,
 ): string {
   if (hasSafetyFlags) return 'C’è qualcosa da tenere d’occhio';
-  if (comparison.startsWith('Più morbide')) {
-    return `Oggi sembrano più morbide del solito di ${dogName}`;
+  if (comparison.includes('più morbida')) {
+    return `Oggi è un po’ più morbida del solito di ${dogName}`;
   }
-  if (comparison.startsWith('Più compatte')) {
-    return `Oggi sembrano più compatte del solito di ${dogName}`;
+  if (comparison.includes('più compatta')) {
+    return `Oggi è un po’ più compatta del solito di ${dogName}`;
   }
-  if (comparison.startsWith('Simili')) {
-    return `Oggi sembrano simili al solito di ${dogName}`;
+  if (comparison.includes('in linea')) {
+    return `Oggi è in linea con le ultime osservazioni di ${dogName}`;
   }
   return `Ecco cosa noto oggi per ${dogName}`;
 }
@@ -541,6 +556,15 @@ const styles = StyleSheet.create({
   },
   resultIconAttention: {
     backgroundColor: colors.surface,
+  },
+  thoughtKicker: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: spacing.sm,
   },
   resultTitle: {
     color: colors.text,

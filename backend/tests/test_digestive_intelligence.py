@@ -98,7 +98,7 @@ def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "ABOVE_USUAL"
-    assert "più morbide" in result.consumer_headline
+    assert "più morbida" in result.consumer_headline
 
 
 def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
@@ -113,7 +113,7 @@ def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
 
     assert (
         result.consumer_headline
-        == "Le feci di Rocky sembrano più compatte del suo solito"
+        == "Oggi è un po’ più compatta del solito di Rocky"
     )
     assert "ben formata" in result.consumer_summary
     assert "marrone scuro" in result.consumer_summary
@@ -191,6 +191,30 @@ def test_season_is_not_mentioned_until_there_are_repeated_comparisons():
     assert not any("estate" in item for item in sparse.possible_associations)
     assert any("estate" in item for item in repeated.possible_associations)
     assert any("non una causa" in item for item in repeated.possible_associations)
+
+
+def test_quality_warnings_do_not_leak_internal_codes():
+    result = build_digestive_intelligence(
+        observation(warnings=["filmed_screen", "audio_degraded"]),
+        context(),
+    )
+
+    assert "filmed_screen" not in result.observation_reliability
+    assert "audio_degraded" not in result.observation_reliability
+    assert "SAFE_" not in result.consumer_headline
+    assert "score" not in result.consumer_summary.lower()
+
+
+def test_second_soft_observation_asks_one_natural_followup():
+    result = build_digestive_intelligence(
+        observation(consistency="watery"),
+        context(recent_watery_count_24h=1, recent_episode_count_24h=1),
+    )
+
+    assert result.followup_key == "vomiting_today"
+    assert "seconda osservazione" in result.followup_question
+    assert result.followup_question.endswith("Rocky ha anche vomitato oggi?")
+    assert result.followup_question.count("?") == 1
 
 
 def test_clear_blood_candidate_cannot_be_downgraded_by_baseline():

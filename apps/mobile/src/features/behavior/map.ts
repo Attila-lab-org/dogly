@@ -5,6 +5,7 @@ import {
   type EvidenceSource,
 } from '../../contracts/types';
 import type { ApiBehaviorEvent, ApiEvidenceItem } from './api';
+import { consumerCopy } from '../core/conversationCopy';
 
 const SOURCE_MAP: Record<string, EvidenceSource> = {
   observation: 'OBSERVATION',
@@ -24,7 +25,7 @@ const SOURCE_MAP: Record<string, EvidenceSource> = {
 function mapEvidence(items: ApiEvidenceItem[]): EvidenceItem[] {
   return items.map((item) => ({
     source: SOURCE_MAP[item.source] ?? 'UNKNOWN',
-    label: item.label ?? item.description ?? 'Segnale osservato',
+    label: consumerCopy(item.label ?? item.description ?? 'Segnale osservato'),
     ref: item.ref ?? undefined,
   }));
 }
@@ -42,30 +43,45 @@ export function mapApiEventToResult(
     status: event.status,
     primary_intent: intent,
     confidence_band: event.confidence_band ?? null,
-    consumer_summary: event.summary ?? null,
+    consumer_summary: event.summary ? consumerCopy(event.summary) : null,
     evidence: mapEvidence(event.evidence ?? []),
     alternatives: (event.alternatives ?? []).map((alt) => ({
       intent: alt.intent as BehaviorIntent,
-      rationale: alt.rationale,
+      rationale: consumerCopy(alt.rationale),
     })),
     feedback: event.feedback ?? null,
     safety_flags: event.safety_flags ?? [],
     needs_context: event.needs_context,
-    context_question: event.context_question,
-    context_options: event.context_options ?? [],
-    context_effect: event.context_effect ?? null,
-    dog_voice: event.dog_voice ?? null,
-    sound_note: event.sound_note ?? null,
+    context_question: event.context_question
+      ? consumerCopy(event.context_question)
+      : event.context_question,
+    context_options: (event.context_options ?? []).map((option) => ({
+      ...option,
+      label: consumerCopy(option.label),
+    })),
+    context_effect: event.context_effect
+      ? consumerCopy(event.context_effect)
+      : null,
+    dog_voice: event.dog_voice ? consumerCopy(event.dog_voice) : null,
+    sound_note: event.sound_note ? consumerCopy(event.sound_note) : null,
     schema_version: event.schema_version,
     policy_version: event.policy_version ?? null,
     taxonomy_version: event.taxonomy_version ?? null,
     created_at: event.created_at,
     completed_at: event.completed_at,
-    consumer_headline: event.consumer_headline ?? null,
-    baseline_note: event.baseline_note ?? null,
+    consumer_headline: event.consumer_headline
+      ? consumerCopy(event.consumer_headline)
+      : null,
+    baseline_note: event.baseline_note
+      ? consumerCopy(event.baseline_note)
+      : null,
     baseline_comparison: event.baseline_comparison ?? null,
-    recommended_next_step: event.recommended_next_step ?? null,
-    what_to_watch: event.what_to_watch ?? null,
+    recommended_next_step: event.recommended_next_step
+      ? consumerCopy(event.recommended_next_step)
+      : null,
+    what_to_watch: event.what_to_watch
+      ? consumerCopy(event.what_to_watch)
+      : null,
     safety: event.safety ?? null,
   };
 }

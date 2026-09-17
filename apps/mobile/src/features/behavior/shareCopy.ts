@@ -1,5 +1,5 @@
 import type { BehaviorEventResult } from '../../contracts/types';
-import { intentHeadline } from '../core/copy';
+import { intentHeadline, sanitizeOwnerCopy } from '../core/copy';
 
 export type BehaviorShareCard = {
   title: string;
@@ -11,7 +11,7 @@ export function buildBehaviorShareCard(
   dogName: string,
 ): BehaviorShareCard {
   const personalize = (copy: string | null | undefined) =>
-    (copy ?? '').replace(/Rocky/g, dogName);
+    sanitizeOwnerCopy((copy ?? '').replace(/Rocky/g, dogName));
   const headline =
     personalize(result.consumer_headline) ||
     intentHeadline(dogName, result.primary_intent);

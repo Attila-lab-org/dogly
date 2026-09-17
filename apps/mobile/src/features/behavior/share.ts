@@ -7,7 +7,7 @@ import { Share } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import type { BehaviorEventResult } from '../../contracts/types';
-import { intentHeadline } from '../core/copy';
+import { intentHeadline, sanitizeOwnerCopy } from '../core/copy';
 import { buildBehaviorShareCard } from './shareCopy';
 export { buildBehaviorShareCard } from './shareCopy';
 export type { BehaviorShareCard } from './shareCopy';
@@ -97,8 +97,9 @@ async function buildGraphicShareCard(
   photoUri: string | null,
 ): Promise<string> {
   const headline =
-    (result.consumer_headline ?? '').replace(/Rocky/g, dogName) ||
-    intentHeadline(dogName, result.primary_intent);
+    sanitizeOwnerCopy(
+      (result.consumer_headline ?? '').replace(/Rocky/g, dogName),
+    ) || intentHeadline(dogName, result.primary_intent);
   const lines = wrapLines(headline);
   const image = await photoDataUri(photoUri);
   const initial = escapeXml(dogName.trim().charAt(0).toUpperCase() || 'D');

@@ -24,6 +24,7 @@ import {
   intentHeadline,
   sanitizeOwnerCopy,
 } from './copy';
+import { isPersonalBaselineNote } from './conversationCopy';
 import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
 import { getConsents } from '../privacy/consents';
@@ -407,16 +408,16 @@ export function BehaviorResultView({
             />
           </View>
         )}
+        <Text style={styles.thoughtKicker}>Cosa penso</Text>
         <Text style={styles.headline}>{headline}</Text>
         <View style={styles.translationBlock}>
           <Text style={styles.translationKicker}>
-            Cosa potrebbe volerti comunicare
+            Cosa potrebbe voler comunicare
           </Text>
           <Text style={styles.translationText}>
             {ownerCopy(result.dog_voice || dogVoiceLine(result.primary_intent))}
           </Text>
         </View>
-        <ConfidencePill band={result.confidence_band} />
         {result.consumer_summary ? (
           <Text style={styles.summary}>
             {ownerCopy(result.consumer_summary)}
@@ -435,9 +436,9 @@ export function BehaviorResultView({
         ) : null}
       </View>
 
-      {result.baseline_note ? (
+      {isPersonalBaselineNote(result.baseline_note) ? (
         <View style={styles.baselineCard} testID="per-rocky">
-          <Text style={styles.baselineKicker}>Per {dogName}</Text>
+          <Text style={styles.baselineKicker}>Rispetto al suo solito</Text>
           <Text style={styles.baselineNote}>
             {ownerCopy(result.baseline_note)}
           </Text>
@@ -468,7 +469,7 @@ export function BehaviorResultView({
 
       {result.recommended_next_step && !primaryAdvice && !safety ? (
         <View style={styles.nextStepCard} testID="recommended-next-step">
-          <Text style={styles.nextStepTitle}>Prova così</Text>
+          <Text style={styles.nextStepTitle}>Cosa puoi fare</Text>
           <Text style={styles.nextStepText}>
             {ownerCopy(result.recommended_next_step)}
           </Text>
@@ -481,7 +482,9 @@ export function BehaviorResultView({
         </Text>
       ) : null}
 
-      {result.evidence.length > 0 || result.alternatives.length > 0 ? (
+      {result.evidence.length > 0 ||
+      result.alternatives.length > 0 ||
+      result.confidence_band === 'LOW' ? (
         <View style={styles.detailsBlock}>
           <Pressable
             accessibilityRole="button"
@@ -499,6 +502,7 @@ export function BehaviorResultView({
 
           {detailsOpen ? (
             <>
+              <ConfidencePill band={result.confidence_band} />
               {result.evidence.length > 0 ? (
                 <View style={styles.evidenceSection}>
                   <Text style={styles.evidenceTitle}>Perché lo penso</Text>
@@ -724,6 +728,15 @@ const styles = StyleSheet.create({
     height: 210,
     borderRadius: radius.md,
     marginBottom: spacing.lg,
+  },
+  thoughtKicker: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: spacing.sm,
   },
   headline: {
     fontSize: typography.size.xxl,

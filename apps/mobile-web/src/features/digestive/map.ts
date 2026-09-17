@@ -5,6 +5,10 @@ import {
   type FecalEventResult,
   type SafetyFlagCode,
 } from '../secondary/types';
+import {
+  consumerCopy,
+  mediaQualityCopy,
+} from '../core/conversationCopy';
 
 export type ApiSafetyFlag = { code: string; severity?: string };
 
@@ -121,11 +125,11 @@ function mapCandidate(value: string | null | undefined): CandidateLevel {
 function mapBaselineComparison(value: string | null | undefined): string {
   switch (value) {
     case 'ABOVE_USUAL':
-      return 'Più morbide rispetto alle osservazioni recenti.';
+      return 'Oggi è un po’ più morbida rispetto alle ultime osservazioni.';
     case 'BELOW_USUAL':
-      return 'Più compatte rispetto alle osservazioni recenti.';
+      return 'Oggi è un po’ più compatta rispetto alle ultime osservazioni.';
     case 'NEAR_USUAL':
-      return 'Simili alle osservazioni recenti.';
+      return 'È in linea con le ultime osservazioni.';
     default:
       return 'Non conosco ancora abbastanza il suo solito digestivo.';
   }
@@ -148,7 +152,7 @@ export function mapApiDigestiveEventToResult(
       insufficient || event.image_quality === 'insufficient'
         ? 'insufficient'
         : 'sufficient',
-    qualityWarnings: event.quality_warnings ?? [],
+    qualityWarnings: (event.quality_warnings ?? []).map(mediaQualityCopy),
     fecalScoreEstimate: event.fecal_score_estimate,
     consistency: mapConsistency(event.consistency),
     color: mapColor(event.color),
@@ -162,15 +166,25 @@ export function mapApiDigestiveEventToResult(
     activeFoodName: event.active_food_name,
     baselineComparison: mapBaselineComparison(event.baseline_comparison),
     overallState: event.overall_state ?? undefined,
-    consumerHeadline: event.consumer_headline,
-    consumerSummary: event.consumer_summary,
-    relevantContext: event.relevant_context ?? [],
-    possibleAssociations: event.possible_associations ?? [],
-    recommendedNextStep: event.recommended_next_step,
+    consumerHeadline: event.consumer_headline
+      ? consumerCopy(event.consumer_headline)
+      : event.consumer_headline,
+    consumerSummary: event.consumer_summary
+      ? consumerCopy(event.consumer_summary)
+      : event.consumer_summary,
+    relevantContext: (event.relevant_context ?? []).map(consumerCopy),
+    possibleAssociations: (event.possible_associations ?? []).map(consumerCopy),
+    recommendedNextStep: event.recommended_next_step
+      ? consumerCopy(event.recommended_next_step)
+      : event.recommended_next_step,
     followupKey: event.followup_key,
-    followupQuestion: event.followup_question,
+    followupQuestion: event.followup_question
+      ? consumerCopy(event.followup_question)
+      : event.followup_question,
     whatToWatch: event.what_to_watch ?? [],
-    observationReliability: event.observation_reliability,
+    observationReliability: event.observation_reliability
+      ? consumerCopy(event.observation_reliability)
+      : event.observation_reliability,
     reasoningVersion: event.reasoning_version,
     baselineVersion: event.baseline_version,
     createdAt: event.created_at,

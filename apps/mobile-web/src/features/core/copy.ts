@@ -12,6 +12,7 @@ import type {
   ConfidenceBand,
 } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
+import { consumerCopy } from './conversationCopy';
 
 /** Pill di confidenza: stile mockup, testo a band (Spec O-07). */
 export const CONFIDENCE_BAND_LABELS: Record<ConfidenceBand, string> = {
@@ -58,10 +59,7 @@ export function dogVoiceLine(intent: BehaviorIntent | null): string {
 
 /** Ripulisce anche i risultati storici creati prima del copy consumer. */
 export function sanitizeOwnerCopy(value: string): string {
-  return value
-    .replace(/\bplay bow\b/gi, 'inchino di gioco')
-    .replace(/\barousal\b/gi, 'attivazione')
-    .replace(/\bconfidenza\s+(?:bassa|media|alta)\s*[;,.]?\s*/gi, '')
+  return consumerCopy(value)
     .replace(/\bPLAY_INTERACTION\b/g, 'invito al gioco')
     .replace(/\bATTENTION_REQUEST\b/g, 'richiesta di attenzione')
     .replace(/\bRELAX_REST\b/g, 'momento di relax')

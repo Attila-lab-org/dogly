@@ -40,14 +40,22 @@ import {
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
+import { useMeProfile } from '@/features/me/api';
+import { homeGreeting } from '@/features/core/conversationCopy';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const meQuery = useMeProfile();
   const stories = useStories(dog.id, dog.name);
   const birthdayToday = isBirthdayToday(dog.birthDate);
+  const greeting = homeGreeting({
+    ownerDisplayName: meQuery.data?.display_name,
+    dogName: dog.name,
+    birthdayToday,
+  });
   const {
     usage,
     lastInsight,
@@ -114,15 +122,9 @@ export default function HomeScreen() {
             <View style={styles.headerText}>
               <Text
                 style={styles.greeting}
-                accessibilityLabel={
-                  birthdayToday
-                    ? `Buon compleanno, ${dog.name}!`
-                    : 'Ciao!'
-                }
+                accessibilityLabel={greeting.replace('🎉', '').trim()}
               >
-                {birthdayToday
-                  ? `Buon compleanno, ${dog.name}! 🎉`
-                  : 'Ciao!'}
+                {greeting}
               </Text>
               <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
             </View>
