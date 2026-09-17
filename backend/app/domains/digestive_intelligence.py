@@ -41,6 +41,7 @@ class DigestiveContext(BaseModel):
     prior_scores: list[int] = Field(default_factory=list)
     prior_consistencies: list[str] = Field(default_factory=list)
     recent_episode_count_24h: int = Field(default=0, ge=0)
+    recent_watery_count_24h: int = Field(default=0, ge=0)
     vomiting_today: bool | None = None
     reduced_activity_today: bool | None = None
     unusual_food_48h: bool | None = None
@@ -108,13 +109,14 @@ def _safety_state(
         return DigestiveState.VET_CONTACT
     if (
         consistency == "watery"
-        and context.recent_episode_count_24h >= 2
+        and context.recent_watery_count_24h >= 1
         and context.vomiting_today is True
     ):
         return DigestiveState.VET_CONTACT
     if (
         blood == "possible"
         or melena == "possible"
+        or foreign == "possible"
         or foreign == "clear_candidate"
     ):
         return DigestiveState.ATTENTION
@@ -164,6 +166,11 @@ def build_digestive_intelligence(
         headline = f"Oggi sono simili al solito di {context.dog_name}"
         summary = baseline_text
         next_step = "Continua a osservare normalmente."
+    elif baseline_code == "INSUFFICIENT" and consistency == "formed":
+        state = DigestiveState.ROUTINE
+        headline = f"Questa osservazione di {context.dog_name} sembra formata"
+        summary = baseline_text
+        next_step = "Continua a registrare le prossime osservazioni."
     elif consistency in {"soft", "unformed", "watery"} or (score is not None and score >= 4):
         state = DigestiveState.MONITOR
         headline = f"Oggi le feci di {context.dog_name} sembrano più morbide"

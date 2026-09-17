@@ -181,7 +181,7 @@ def test_puppy_advice_never_forces_exposure():
         KnowledgeContext(registry_version="2.0", coverage="MEDIUM"),
     )
     assert advice is not None
-    assert "force" in advice.action.lower()
+    assert "forzar" in advice.action.lower()
     assert len([advice]) == 1
 
 

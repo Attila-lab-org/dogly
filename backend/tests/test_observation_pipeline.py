@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from app.contracts.interpretation import (
     EvidenceItem,
     InterpretationContract,
+    PersonalMemoryUsed,
     SafetyFlag,
 )
 from app.contracts.observation import (
@@ -46,7 +47,7 @@ from app.knowledge.safety import (
     fired_safety_ids,
     merge_safety_flags,
 )
-from app.providers.base import ProviderUsage
+from app.providers.base import EligiblePatternSummary, ProviderUsage
 from app.providers.mock import load_fixture
 
 
@@ -556,6 +557,35 @@ def test_rich_observation_is_high_coverage_when_quality_good():
     assert result.coverage == "HIGH"
 
 
+def test_bounded_retrieval_preserves_diverse_signal_families():
+    obs = ObservationContract.model_validate(
+        {
+            **_obs().model_dump(mode="json"),
+            "body": {
+                "body_height": "lowered",
+                "rigidity_candidate": "yes",
+                "approach_withdrawal_freeze": "withdrawal",
+            },
+            "tail": {
+                "neutral_relative_height": "tucked",
+                "movement": "wagging",
+            },
+            "ears": {"position": "flat_back"},
+            "vocalization": {"type_candidates": ["bark"]},
+            "scene": {"human_count": 1},
+        }
+    )
+
+    result = retrieve_evidence(obs, ContextBucket.HOME, _context())
+    ids = {card.card_id for card in result.cards}
+
+    assert len(result.cards) == 6
+    assert SAFE_ESCALATION_001 not in ids
+    assert "OBS_TAIL_001" in ids
+    assert "OBS_EAR_001" in ids
+    assert "AUD_BARK_001" in ids
+
+
 def test_degraded_quality_caps_coverage_at_medium():
     raw = load_fixture("observation.fixture.json")
     raw["capture_quality"]["overall_quality"] = "degraded"
@@ -652,6 +682,32 @@ def test_health_context_pain_fires_safe_pain():
     assert "SAFE_PAIN_001" in fired_safety_ids(obs, context)
 
 
+def test_health_context_does_not_treat_false_as_pain():
+    context = _context().model_copy(
+        update={
+            "health_context": [
+            LifestyleFact(key="reported_pain", value=False, provenance="OWNER_REPORTED")
+            ]
+        }
+    )
+    assert "SAFE_PAIN_001" not in fired_safety_ids(_obs(), context)
+
+
+def test_health_context_detects_pain_in_owner_report_value():
+    context = _context().model_copy(
+        update={
+            "health_context": [
+                LifestyleFact(
+                    key="owner_health",
+                    value="Sembra dolorante oggi",
+                    provenance="OWNER_REPORTED",
+                )
+            ]
+        }
+    )
+    assert "SAFE_PAIN_001" in fired_safety_ids(_obs(), context)
+
+
 def test_merge_safety_flags_deterministic_wins_on_severity():
     llm_flags = [
         SafetyFlag(code=SAFE_ESCALATION_001, severity="info"),
@@ -661,7 +717,96 @@ def test_merge_safety_flags_deterministic_wins_on_severity():
     merged = merge_safety_flags(llm_flags, det_flags)
     by_code = {flag.code: flag for flag in merged}
     assert by_code[SAFE_ESCALATION_001].severity == "urgent"
-    assert by_code["LLM_ONLY"].severity == "medium"
+    assert "LLM_ONLY" not in by_code
+
+
+def test_personal_memory_is_rehydrated_from_eligible_server_state():
+    from app.worker.handlers import _ground_personal_memory
+
+    interpretation = _interpretation(IntentCode.HIGH_AROUSAL, []).model_copy(
+        update={
+            "personal_memory_used": [
+                PersonalMemoryUsed(
+                    pattern_id="eligible-1",
+                    state="STRONG",
+                    support_summary="invented by model",
+                ),
+                PersonalMemoryUsed(
+                    pattern_id="not-in-prompt",
+                    state="ESTABLISHED",
+                    support_summary="invented pattern",
+                ),
+            ]
+        }
+    )
+    grounded = _ground_personal_memory(
+        interpretation,
+        [
+            EligiblePatternSummary(
+                pattern_id="eligible-1",
+                state="PRELIMINARY",
+                title="Server pattern",
+                support_summary="support=4 confirm=0",
+            )
+        ],
+    )
+
+    assert [item.pattern_id for item in grounded.personal_memory_used] == [
+        "eligible-1"
+    ]
+    assert grounded.personal_memory_used[0].state == "PRELIMINARY"
+    assert (
+        grounded.personal_memory_used[0].support_summary
+        == "support=4 confirm=0"
+    )
+
+
+def test_muted_capture_removes_model_generated_vocalizations():
+    from app.worker.handlers import _enforce_capture_modalities
+
+    obs = ObservationContract.model_validate(
+        {
+            **_obs().model_dump(mode="json"),
+            "capture_quality": {
+                "overall_quality": "good",
+                "audio_quality": "good",
+            },
+            "vocalization": {
+                "present": "yes",
+                "type_candidates": ["growl"],
+                "count": 1,
+            },
+        }
+    )
+    grounded = _enforce_capture_modalities(obs, has_audio=False)
+
+    assert grounded.capture_quality.audio_quality == "absent"
+    assert grounded.vocalization.present.value == "no"
+    assert grounded.vocalization.type_candidates == []
+
+
+def test_confidence_is_capped_by_quality_and_abstention():
+    from app.worker.handlers import _calibrated_confidence
+
+    degraded = ObservationContract.model_validate(
+        {
+            **_obs().model_dump(mode="json"),
+            "capture_quality": {"overall_quality": "degraded"},
+        }
+    )
+    high = _interpretation(IntentCode.PLAY_INTERACTION, []).model_copy(
+        update={"confidence_band": ConfidenceBand.HIGH}
+    )
+    abstained = high.model_copy(update={"primary_intent": IntentCode.INSUFFICIENT})
+
+    assert (
+        _calibrated_confidence(high, degraded, "MEDIUM")
+        is ConfidenceBand.MEDIUM
+    )
+    assert (
+        _calibrated_confidence(abstained, _obs(), "HIGH")
+        is ConfidenceBand.LOW
+    )
 
 
 def _interpretation(intent: IntentCode, flags: list[SafetyFlag]) -> InterpretationContract:

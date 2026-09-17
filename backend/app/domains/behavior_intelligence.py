@@ -177,7 +177,7 @@ def _baseline(
     established = [
         item
         for item in memory
-        if item.state.upper() in {"ESTABLISHED", "STRONG", "PRELIMINARY"}
+        if item.state.upper() in {"ESTABLISHED", "STRONG"}
     ]
     if contested:
         return (
@@ -193,15 +193,17 @@ def _baseline(
             f"Questa volta il comportamento è diverso dal solito di {dog_name}.",
         )
     if established:
-        summary = established[0].support_summary.strip()
-        if summary:
-            return (
-                BaselineComparison.RECOGNIZED,
-                f"È simile a ciò che hai già confermato per {dog_name}: {summary}.",
-            )
         return (
             BaselineComparison.RECOGNIZED,
             f"È simile ad altri episodi che hai già confermato per {dog_name}.",
+        )
+    if any(item.state.upper() == "PRELIMINARY" for item in memory):
+        return (
+            BaselineComparison.LEARNING,
+            (
+                f"Vedo alcune somiglianze con episodi recenti di {dog_name}, "
+                "ma servono ancora le tue conferme."
+            ),
         )
     return (
         BaselineComparison.LEARNING,

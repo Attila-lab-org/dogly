@@ -51,6 +51,13 @@ def test_watery_observation_asks_only_the_high_value_missing_question():
         "Merck Veterinary Manual",
         "VCA Animal Hospitals",
     }
+    assert "REPEATED_WATERY" not in {
+        item["code"]
+        for item in contextual_safety_flags(
+            observation(consistency="watery"),
+            context(),
+        )
+    }
 
 
 def test_same_photo_is_routine_when_it_matches_personal_baseline():
@@ -61,6 +68,25 @@ def test_same_photo_is_routine_when_it_matches_personal_baseline():
 
     assert result.overall_state is DigestiveState.ROUTINE
     assert result.baseline_comparison == "NEAR_USUAL"
+
+
+def test_first_formed_photo_does_not_claim_similarity_to_usual():
+    result = build_digestive_intelligence(
+        observation(consistency="formed", fecal_score_estimate=3),
+        context(),
+    )
+
+    assert result.baseline_comparison == "INSUFFICIENT"
+    assert "simili al solito" not in result.consumer_headline
+    assert "sto ancora costruendo" in result.consumer_summary.lower()
+
+
+def test_possible_foreign_material_requires_attention():
+    result = build_digestive_intelligence(
+        observation(foreign_material_candidate="possible"),
+        context(prior_scores=[4, 4, 4]),
+    )
+    assert result.overall_state is DigestiveState.ATTENTION
 
 
 def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
@@ -109,7 +135,11 @@ def test_owner_confirmed_symptoms_and_foreign_material_have_fixed_flags():
             consistency="watery",
             foreign_material_candidate="clear_candidate",
         ),
-        context(recent_episode_count_24h=2, vomiting_today=True),
+        context(
+            recent_episode_count_24h=2,
+            recent_watery_count_24h=1,
+            vomiting_today=True,
+        ),
     )
 
     assert {flag["code"] for flag in flags} >= {

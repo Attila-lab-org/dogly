@@ -18,13 +18,26 @@ def _observation(**scene_updates) -> ObservationContract:
     return ObservationContract.model_validate(raw)
 
 
-def test_explicit_client_bucket_is_kept():
+def test_observed_context_overrides_client_hint():
     assert (
         resolve_context_bucket(
             ContextBucket.WALK, observation=_observation()
         )
-        is ContextBucket.WALK
+        is ContextBucket.PLAY
     )
+
+
+def test_client_hint_is_kept_when_observation_is_ambiguous():
+    obs = _observation(
+        environment_class="unknown",
+        visible_objects=[],
+        spatial_relations=[],
+        dog_count=1,
+    )
+    obs = obs.model_copy(
+        update={"body": obs.body.model_copy(update={"posture": "unknown"})}
+    )
+    assert resolve_context_bucket(ContextBucket.WALK, observation=obs) is ContextBucket.WALK
 
 
 def test_toy_in_scene_resolves_play():

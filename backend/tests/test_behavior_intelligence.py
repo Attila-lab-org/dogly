@@ -126,6 +126,25 @@ def test_confirmed_pattern_is_recognized():
     assert "già confermato" in result.baseline_note
 
 
+def test_preliminary_pattern_never_claims_owner_confirmation():
+    result = build_behavior_consumer(
+        _interpretation(
+            personal_memory_used=[
+                PersonalMemoryUsed(
+                    pattern_id="p1",
+                    state="PRELIMINARY",
+                    support_summary="support=4 confirm=0",
+                )
+            ]
+        ),
+        dog_name="Rocky",
+        dog_context=build_dog_context(_dog()),
+    )
+    assert result.baseline_comparison is BaselineComparison.LEARNING
+    assert "servono ancora le tue conferme" in result.baseline_note
+    assert "support=" not in result.baseline_note
+
+
 def test_escalation_flag_commands_distance_not_a_code():
     result = build_behavior_consumer(
         _interpretation(

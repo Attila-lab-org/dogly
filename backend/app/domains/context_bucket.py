@@ -105,15 +105,18 @@ def resolve_context_bucket(
     without converting it back to a lifestyle dict (unused for derivation).
     """
     del dog_context
-    if requested != ContextBucket.UNKNOWN:
-        return requested
-
-    logger.info("behavior.context_bucket.unknown_from_client")
     from_obs = derive_from_observation(observation)
     if from_obs is not None:
         logger.info("behavior.context_bucket.resolved_from_observation %s", from_obs.value)
         return from_obs
+    if requested != ContextBucket.UNKNOWN:
+        logger.info(
+            "behavior.context_bucket.using_client_hint %s",
+            requested.value,
+        )
+        return requested
 
+    logger.info("behavior.context_bucket.unknown_from_client")
     from_clock = derive_from_clock(now, lifestyle)
     if from_clock is not None:
         logger.info("behavior.context_bucket.resolved_from_clock %s", from_clock.value)

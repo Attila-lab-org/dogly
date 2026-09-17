@@ -536,6 +536,11 @@ async def load_digestive_context(
             (event.created_at - row["created_at"]).total_seconds() <= 86_400
             for row in prior
         ),
+        recent_watery_count_24h=sum(
+            str(row["consistency"]).lower() == "watery"
+            and (event.created_at - row["created_at"]).total_seconds() <= 86_400
+            for row in prior
+        ),
         vomiting_today=answers.get("vomiting_today"),
         reduced_activity_today=answers.get("reduced_activity_today"),
         unusual_food_48h=answers.get("unusual_food_48h"),
@@ -804,6 +809,7 @@ async def digestive_summary(engine: AsyncEngine, *, user_id: str, dog_id: str) -
             "safety_flags": [],
         }
 
+    rows = rows[-12:]
     scores = [int(row["fecal_score_estimate"]) for row in rows]
     rolling = sum(scores) / len(scores)
     variability = max(scores) - min(scores) if len(scores) > 1 else 0.0
@@ -811,7 +817,7 @@ async def digestive_summary(engine: AsyncEngine, *, user_id: str, dog_id: str) -
     trend = None
     if len(scores) >= 2:
         delta = scores[-1] - scores[0]
-        trend = "improving" if delta < 0 else ("worsening" if delta > 0 else "stable")
+        trend = "firmer" if delta < 0 else ("softer" if delta > 0 else "stable")
     flags: list[dict] = []
     for row in rows[-3:]:
         flags.extend(row["safety_flags"] or [])

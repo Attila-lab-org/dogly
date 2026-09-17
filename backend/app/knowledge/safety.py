@@ -29,6 +29,23 @@ _SEVERITY_BY_ID = {
 _SEVERITY_RANK = {"info": 0, "low": 0, "medium": 1, "high": 2, "urgent": 3, "critical": 4}
 
 
+def _fact_reports_pain(fact: object) -> bool:
+    key = str(getattr(fact, "key", "")).lower()
+    value = getattr(fact, "value", None)
+    if value is None or value is False:
+        return False
+    text = f"{key} {value}".lower()
+    if any(
+        phrase in text
+        for phrase in ("no pain", "without pain", "nessun dolore", "senza dolore")
+    ):
+        return False
+    return any(
+        term in text
+        for term in ("pain", "dolor", "zopp", "lameness", "claudic")
+    )
+
+
 def fired_safety_ids(
     observation: ObservationContract,
     dog_context: DogContextSnapshot,
@@ -52,7 +69,7 @@ def fired_safety_ids(
         ids.append(SAFE_DISTRESS_001)
     if body.rigidity_candidate == TriState.YES and "growl" in vocalizations:
         ids.append(SAFE_ESCALATION_001)
-    if any("pain" in fact.key.lower() for fact in dog_context.health_context):
+    if any(_fact_reports_pain(fact) for fact in dog_context.health_context):
         ids.append(SAFE_PAIN_001)
     return ids
 
@@ -72,19 +89,19 @@ def merge_safety_flags(
     llm_flags: list[SafetyFlag],
     deterministic_flags: list[SafetyFlag],
 ) -> list[SafetyFlag]:
-    """Unione per code: il flag deterministico vince sul severity (sez. 19.3).
+    """Allow only safety codes independently fired by deterministic rules.
 
-    Flag LLM con code nuovi vengono preservati; su code condivisi resta il
-    severity più alto, con precedenza al deterministico in caso di parità.
+    The model may repeat or raise a known fired flag, but it cannot create a
+    new warning without an observable/server-side predicate.
     """
-    merged = {flag.code: flag for flag in llm_flags}
+    claimed = {flag.code: flag for flag in llm_flags}
+    merged: dict[str, SafetyFlag] = {}
     for flag in deterministic_flags:
-        existing = merged.get(flag.code)
+        existing = claimed.get(flag.code)
         if existing is None:
             merged[flag.code] = flag
             continue
         det_rank = _SEVERITY_RANK.get(flag.severity.lower(), 0)
         llm_rank = _SEVERITY_RANK.get(existing.severity.lower(), 0)
-        if det_rank >= llm_rank:
-            merged[flag.code] = flag
+        merged[flag.code] = flag if det_rank >= llm_rank else existing
     return list(merged.values())

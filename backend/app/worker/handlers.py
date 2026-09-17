@@ -21,6 +21,7 @@ from sqlalchemy import text
 
 from app.api.deps import AppState
 from app.contracts.errors import ApiError, ErrorCode
+from app.contracts.interpretation import InterpretationContract, PersonalMemoryUsed
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import (
     BEHAVIOR_EVENT_TRANSITIONS,
@@ -31,6 +32,7 @@ from app.contracts.taxonomy import (
     BehaviorEventStatus,
     ConfidenceBand,
     ContextBucket,
+    IntentCode,
     RetentionState,
 )
 from app.domains import (
@@ -416,6 +418,70 @@ async def _arm_behavior_raw_ttl(state: AppState, event: BehaviorEventRec) -> Non
         schedule_behavior_raw_expiry(capture, state.settings)
 
 
+def _ground_personal_memory(
+    interpretation: InterpretationContract,
+    eligible_memory: list[EligiblePatternSummary],
+) -> InterpretationContract:
+    """Accept only pattern IDs supplied to the model and restore server truth."""
+    eligible_by_id = {item.pattern_id: item for item in eligible_memory}
+    grounded: list[PersonalMemoryUsed] = []
+    seen: set[str] = set()
+    for claimed in interpretation.personal_memory_used:
+        source = eligible_by_id.get(claimed.pattern_id)
+        if source is None or source.pattern_id in seen:
+            continue
+        seen.add(source.pattern_id)
+        grounded.append(
+            PersonalMemoryUsed(
+                pattern_id=source.pattern_id,
+                state=source.state,
+                support_summary=source.support_summary,
+            )
+        )
+    return interpretation.model_copy(update={"personal_memory_used": grounded})
+
+
+def _enforce_capture_modalities(
+    observation: ObservationContract,
+    *,
+    has_audio: bool,
+) -> ObservationContract:
+    """Muted captures cannot create audible evidence or audio safety flags."""
+    if has_audio:
+        return observation
+    raw = observation.model_dump(mode="json")
+    raw["capture_quality"]["audio_quality"] = "absent"
+    raw["vocalization"] = {
+        "present": "no",
+        "type_candidates": [],
+        "count": 0,
+        "relative_pitch": "unknown",
+        "intensity": "unknown",
+        "rhythm": "unknown",
+        "interval_pattern": "unknown",
+        "timing": "unknown",
+    }
+    return ObservationContract.model_validate(raw)
+
+
+def _calibrated_confidence(
+    interpretation: InterpretationContract,
+    observation: ObservationContract,
+    knowledge_coverage: str,
+) -> ConfidenceBand:
+    if (
+        knowledge_coverage == "LOW"
+        or interpretation.primary_intent in {None, IntentCode.INSUFFICIENT}
+    ):
+        return ConfidenceBand.LOW
+    if (
+        observation.capture_quality.overall_quality != "good"
+        and interpretation.confidence_band == ConfidenceBand.HIGH
+    ):
+        return ConfidenceBand.MEDIUM
+    return interpretation.confidence_band
+
+
 async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retryable: bool) -> dict:
     event.last_error_code = code.value
     quota = QuotaService(state.store, engine=state.engine)
@@ -649,6 +715,11 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         )
         event.observation_json = observation.model_dump(mode="json")
 
+    observation = _enforce_capture_modalities(
+        observation,
+        has_audio=capture.has_audio,
+    )
+    event.observation_json = observation.model_dump(mode="json")
     # Server/provider quality gate (sez. 13): dog not observable -> reject
     # before meaningful AI work and refund the reservation (sez. 7.3).
     quality = observation.capture_quality
@@ -696,14 +767,19 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         # come vincoli stabiliti e il merge finale le rende effettive anche se
         # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
         det_flags = behavior_safety_flags(observation, dog_context)
+        eligible_memory = await _eligible_memory(state, event.dog_id)
         interpretation, rea_usage = await state.reasoner.interpret(
             observation=observation,
             context_bucket=context_bucket,
             policy_version=INTERPRETATION_POLICY_VERSION,
-            eligible_memory=await _eligible_memory(state, event.dog_id),
+            eligible_memory=eligible_memory,
             knowledge_context=knowledge_context,
             dog_context=dog_context,
             deterministic_safety_flags=det_flags,
+        )
+        interpretation = _ground_personal_memory(
+            interpretation,
+            eligible_memory,
         )
         interpretation = interpretation.model_copy(
             update={
@@ -712,12 +788,14 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                 )
             }
         )
-        if (
-            knowledge_context.coverage == "LOW"
-            and interpretation.confidence_band != ConfidenceBand.LOW
-        ):
+        confidence = _calibrated_confidence(
+            interpretation,
+            observation,
+            knowledge_context.coverage,
+        )
+        if confidence != interpretation.confidence_band:
             interpretation = interpretation.model_copy(
-                update={"confidence_band": ConfidenceBand.LOW}
+                update={"confidence_band": confidence}
             )
     except TimeoutError:
         return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)

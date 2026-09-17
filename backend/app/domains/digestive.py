@@ -47,8 +47,6 @@ def deterministic_safety_flags(observation: dict) -> list[dict]:
             flags.append({"code": code, "severity": "high"})
         elif observation.get(field) == "possible":
             flags.append({"code": code, "severity": "medium"})
-    if observation.get("consistency") == "watery":
-        flags.append({"code": "REPEATED_WATERY", "severity": "medium"})
     return flags
 
 
@@ -59,7 +57,12 @@ def contextual_safety_flags(
     flags = deterministic_safety_flags(observation)
     if (
         observation.get("consistency") == "watery"
-        and context.recent_episode_count_24h >= 2
+        and context.recent_watery_count_24h >= 1
+    ):
+        flags.append({"code": "REPEATED_WATERY", "severity": "medium"})
+    if (
+        observation.get("consistency") == "watery"
+        and context.recent_watery_count_24h >= 1
         and context.vomiting_today is True
     ):
         flags.append({"code": "DIGESTIVE_SYMPTOMS", "severity": "high"})
@@ -119,6 +122,11 @@ def build_inmemory_digestive_context(
         ],
         recent_episode_count_24h=sum(
             (event.created_at - item.created_at).total_seconds() <= 86_400
+            for item in prior_events
+        ),
+        recent_watery_count_24h=sum(
+            item.consistency == "watery"
+            and (event.created_at - item.created_at).total_seconds() <= 86_400
             for item in prior_events
         ),
         vomiting_today=event.owner_context_json.get("vomiting_today"),
@@ -347,14 +355,18 @@ def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dic
             "recent_trend": None,
             "safety_flags": [],
         }
-    scores = [e.fecal_score_estimate for e in events if e.fecal_score_estimate is not None]
+    scores = [
+        e.fecal_score_estimate
+        for e in events[-12:]
+        if e.fecal_score_estimate is not None
+    ]
     rolling = sum(scores) / len(scores)
     variability = max(scores) - min(scores) if len(scores) > 1 else 0.0
     sufficiency = "sufficient" if len(scores) >= 3 else "low"
     trend = None
     if len(scores) >= 2:
         delta = scores[-1] - scores[0]
-        trend = "improving" if delta < 0 else ("worsening" if delta > 0 else "stable")
+        trend = "firmer" if delta < 0 else ("softer" if delta > 0 else "stable")
     flags: list[dict] = []
     for e in events[-3:]:
         flags.extend(e.safety_flags)

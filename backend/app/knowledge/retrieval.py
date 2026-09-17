@@ -128,6 +128,44 @@ _CONTRADICTION_PAIRS = (
 )
 
 
+def _bounded_diverse_ids(candidate_ids: list[str], limit: int = 6) -> list[str]:
+    """Keep safety guardrails, then maximize independent signal families.
+
+    Taking the first six candidates biased retrieval toward body cards because
+    body is evaluated first. A rich observation could therefore discard tail,
+    ears or audio while still reporting high coverage.
+    """
+    selected: list[str] = []
+    mandatory = [
+        card_id
+        for card_id in candidate_ids
+        if card_id.startswith("SAFE_") or card_id == "ABSTAIN_001"
+    ]
+    for card_id in mandatory:
+        if card_id not in selected and len(selected) < limit:
+            selected.append(card_id)
+
+    represented = {
+        family
+        for card_id in selected
+        if (family := _CARD_FAMILY.get(card_id)) is not None
+    }
+    for card_id in candidate_ids:
+        family = _CARD_FAMILY.get(card_id)
+        if (
+            family is not None
+            and family not in represented
+            and len(selected) < limit
+        ):
+            selected.append(card_id)
+            represented.add(family)
+
+    for card_id in candidate_ids:
+        if card_id not in selected and len(selected) < limit:
+            selected.append(card_id)
+    return selected
+
+
 def _compute_coverage(
     cards: list[ScientificEvidenceSummary],
     observation: ObservationContract,
@@ -180,6 +218,9 @@ def retrieve_evidence(
 ) -> KnowledgeContext:
     registry = get_registry()
     by_id = {card.id: card for card in registry.base_knowledge_cards}
+    selected_ids = _bounded_diverse_ids(
+        _candidate_ids(observation, context_bucket, dog_context)
+    )
     cards = [
         ScientificEvidenceSummary(
             card_id=card.id,
@@ -190,7 +231,7 @@ def retrieve_evidence(
             forbidden_conclusion=card.not_conclude,
             source_ids=card.sources,
         )
-        for card_id in _candidate_ids(observation, context_bucket, dog_context)[:6]
+        for card_id in selected_ids
         if (card := by_id.get(card_id)) is not None
     ]
     return KnowledgeContext(

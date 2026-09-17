@@ -18,6 +18,41 @@ _PRIORITY = {
     "POLICY_GUARDRAIL": 99,
 }
 
+_ITALIAN_COPY: dict[str, tuple[str, str]] = {
+    "ADVICE_DISTANCE_CHOICE": (
+        "Aumenta la distanza dallo stimolo e lascia al cane una possibilità reale di allontanarsi, senza forzare il contatto.",
+        "Osserva se tensione, evitamento o vocalizzazioni diminuiscono quando aumenta la distanza.",
+    ),
+    "ADVICE_REWARD_BASED_REDIRECT": (
+        "Proponi un comportamento alternativo e premialo; evita punizioni, intimidazioni o correzioni fisiche.",
+        "Osserva se riesce a tornare calmo e se il comportamento diminuisce senza aumentare la tensione.",
+    ),
+    "ADVICE_SNIFF_EXPLORATION": (
+        "Se salute e ambiente lo consentono, proponi un’attività calma di fiuto ed esplorazione invece di aumentare soltanto l’intensità.",
+        "Confronta quanto facilmente si rilassa dopo l’attività rispetto al suo solito.",
+    ),
+    "ADVICE_RESTORE_FAMILIAR_ROUTINE": (
+        "Se oggi la routine è davvero diversa, prova prima a ripristinare una situazione familiare e poco stressante.",
+        "Confronta il comportamento quando la routine torna più vicina al normale.",
+    ),
+    "ADVICE_PUPPY_SAFE_EXPOSURE": (
+        "Con un cucciolo usa un’esposizione graduale e positiva, mantenendo una distanza alla quale resta a suo agio; non forzare l’avvicinamento.",
+        "Se la paura è intensa o persistente, chiedi supporto al veterinario o a un professionista del comportamento.",
+    ),
+    "ADVICE_SENIOR_CHANGE_VET": (
+        "Un cambiamento nuovo o persistente in un cane anziano merita un confronto con il veterinario, senza attribuirlo automaticamente all’età.",
+        "Contattalo prima se il cambiamento è improvviso, marcato o accompagnato da altri segnali fisici.",
+    ),
+    "ADVICE_MONITOR_BASELINE_CHANGE": (
+        "Registra l’episodio e confronta frequenza, durata e contesto con il suo solito prima di trarre conclusioni forti.",
+        "Usa le prossime osservazioni per capire se è una ricorrenza personale o un cambiamento nuovo.",
+    ),
+    "ADVICE_NO_GENERIC_EXERCISE_DOSE": (
+        "Non definire minuti di esercizio soltanto da età o razza: adatta l’attività a salute, temperamento, fase di vita, ambiente e abitudini.",
+        "Se salute o mobilità possono limitare l’attività, confrontati con il veterinario.",
+    ),
+}
+
 
 def _has_urgent_safety(flags: list[SafetyFlag]) -> bool:
     return any(
@@ -78,18 +113,20 @@ def build_advice(
         return None
 
     selected = min(candidates, key=lambda item: (_PRIORITY.get(item.category, 98), item.code))
-    evidence = ", ".join(card.card_id for card in knowledge_context.cards[:2])
+    action, follow_up = _ITALIAN_COPY.get(
+        selected.code,
+        (selected.action, selected.follow_up),
+    )
     rationale = (
-        f"Scelto dal catalogo Dogly usando le evidenze {evidence}."
-        if evidence
-        else "Scelto come azione prudente a basso rischio con copertura scientifica limitata."
+        "Azione prudente del catalogo Dogly, compatibile con questa possibile "
+        "lettura, il contesto disponibile e la fase di vita."
     )
     return AdviceItem(
         code=selected.code,
         category=selected.category,
-        action=selected.action,
+        action=action,
         rationale=rationale,
-        follow_up=selected.follow_up,
+        follow_up=follow_up,
         source_ids=selected.sources,
         risk=selected.risk,
     )
