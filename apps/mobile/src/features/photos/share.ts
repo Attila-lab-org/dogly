@@ -21,9 +21,8 @@ export async function pickAlbumPhoto(): Promise<string | null> {
   try {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.85,
-      allowsEditing: true,
-      aspect: [1, 1],
+      quality: 0.9,
+      allowsEditing: false,
     });
     if (result.canceled || !result.assets[0]) {
       return null;

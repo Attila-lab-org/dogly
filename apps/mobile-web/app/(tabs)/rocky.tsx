@@ -18,11 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
-import { albumsMock, photosForAlbum } from '@/mocks/photos';
-import {
-  fetchAlbumPhotos,
-  fetchAlbums,
-} from '@/features/photos/api';
+import { fetchDogPhotos } from '@/features/photos/api';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { relativeCareDate } from '@/features/care/date';
 import { nextCareEvent, useCareEvents } from '@/features/care/store';
@@ -77,16 +73,10 @@ export default function DogProfileTabScreen() {
   const activeFood = activePeriod
     ? foodProductsMock.find((food) => food.id === activePeriod.foodProductId)
     : undefined;
-  const albumsQuery = useQuery({
-    queryKey: ['gallery-albums', dog.id],
-    queryFn: () => fetchAlbums(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const firstAlbumId = albumsQuery.data?.[0]?.id;
   const photosQuery = useQuery({
-    queryKey: ['gallery-photos', firstAlbumId],
-    queryFn: () => fetchAlbumPhotos(firstAlbumId!),
-    enabled: !useDemoData && isPersistedId(firstAlbumId),
+    queryKey: ['gallery-dog-photos', dog.id, 3],
+    queryFn: () => fetchDogPhotos(dog.id, 3),
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
   const digestiveSummaryQuery = useQuery({
     queryKey: ['digestive-summary', dog.id],
@@ -116,9 +106,7 @@ export default function DogProfileTabScreen() {
   )
     .filter(Boolean)
     .join(' ');
-  const previewPhotos = useDemoData
-    ? photosForAlbum(albumsMock[0]?.id ?? '').slice(0, 3)
-    : (photosQuery.data ?? []).slice(0, 3);
+  const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
   const patternsQuery = usePersonalPatterns(dog.id);

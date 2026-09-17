@@ -10,22 +10,8 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Chip } from '../../components/Chip';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
-import type { AlbumPhoto, PhotoAlbum, PhotoVisibility } from './types';
-
-export function VisibilityBadge({
-  visibility,
-}: {
-  visibility: PhotoVisibility;
-}) {
-  return (
-    <Chip
-      label={visibility === 'private' ? 'Privata' : 'Visibile'}
-      tone={visibility === 'private' ? 'neutral' : 'accent'}
-    />
-  );
-}
+import type { AlbumPhoto, PhotoAlbum } from './types';
 
 export function PhotoThumbnail({
   photo,
@@ -39,18 +25,11 @@ export function PhotoThumbnail({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${photo.caption ?? 'Foto'}, ${
-        photo.visibility === 'private' ? 'privata' : 'visibile'
-      }`}
+      accessibilityLabel={photo.caption ?? 'Foto'}
       onPress={onPress}
       style={[styles.thumb, { width: size, height: size }]}
     >
       <Image source={{ uri: photo.thumbnailUri }} style={styles.thumbImage} />
-      {photo.visibility === 'published' ? (
-        <View style={styles.badgeCorner}>
-          <Ionicons name="eye-outline" size={14} color={colors.textOnPrimary} />
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -61,12 +40,14 @@ export function PhotoGrid({
   style,
   header,
   footer,
+  empty,
 }: {
   photos: AlbumPhoto[];
   onPressPhoto: (photo: AlbumPhoto) => void;
   style?: ViewStyle;
   header?: ReactElement;
   footer?: ReactElement;
+  empty?: ReactElement;
 }) {
   const { width } = useWindowDimensions();
   const size = Math.max(
@@ -87,6 +68,7 @@ export function PhotoGrid({
       columnWrapperStyle={styles.gridRow}
       ListHeaderComponent={header}
       ListFooterComponent={footer}
+      ListEmptyComponent={empty}
       renderItem={({ item: photo }) => (
         <PhotoThumbnail
           photo={photo}
@@ -110,7 +92,7 @@ export function AlbumCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${album.title}, ${album.photoCount} foto`}
+      accessibilityLabel={`${album.title}, ${album.photoCount} momenti`}
       onPress={onPress}
       style={styles.albumCard}
     >
@@ -123,9 +105,16 @@ export function AlbumCard({
       </View>
       <View style={styles.albumMeta}>
         <Text style={styles.albumTitle}>{album.title}</Text>
-        <Text style={styles.albumCount}>{album.photoCount} foto</Text>
+        <Text style={styles.albumCount}>
+          {album.photoCount === 1 ? '1 momento' : `${album.photoCount} momenti`}
+        </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={colors.textMuted}
+        style={styles.albumChevron}
+      />
     </Pressable>
   );
 }
@@ -149,14 +138,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  badgeCorner: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: colors.accent,
-    borderRadius: radius.full,
-    padding: 4,
-  },
   gridList: {
     flex: 1,
   },
@@ -171,13 +152,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
   },
   albumCover: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
+    width: 108,
+    height: 92,
     backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
@@ -199,6 +181,9 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  albumChevron: {
+    marginRight: spacing.md,
   },
   notice: {
     flexDirection: 'row',

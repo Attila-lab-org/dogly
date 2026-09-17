@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.api.deps import AppState, StateDep, UserIdDep
 from app.contracts.api import (
@@ -74,6 +75,34 @@ async def list_albums(dog_id: str, state: StateDep, user_id: UserIdDep) -> DogAl
             await asyncio.gather(
                 *(album_with_cover(item, state, user_id) for item in items)
             )
+        )
+    )
+
+
+@router.get("/dogs/{dog_id}/photos", response_model=DogPhotoListResponse)
+async def list_dog_photos(
+    dog_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+    limit: Annotated[int, Query(ge=1, le=60)] = 12,
+) -> DogPhotoListResponse:
+    if state.engine is not None:
+        items = await gallery_db.list_dog_photos(
+            state.engine,
+            user_id=user_id,
+            dog_id=dog_id,
+            limit=limit,
+        )
+    else:
+        items = gallery_domain.list_dog_photos(
+            state.store,
+            user_id=user_id,
+            dog_id=dog_id,
+            limit=limit,
+        )
+    return DogPhotoListResponse(
+        items=list(
+            await asyncio.gather(*(photo_with_url(photo, state) for photo in items))
         )
     )
 

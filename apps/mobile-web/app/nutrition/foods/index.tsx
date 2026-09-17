@@ -10,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
-import { feedingPeriodsMock, foodProductsMock } from '@/mocks/secondary';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -19,9 +18,9 @@ import { listFeedingPeriods, listFoods } from '@/features/nutrition/api';
 
 export default function FoodsScreen() {
   const router = useRouter();
-  const { usingMockGate, userId } = useSession();
+  const { userId } = useSession();
   const { dog } = useDogProfile();
-  const realEnabled = !usingMockGate && Boolean(userId);
+  const realEnabled = Boolean(userId);
 
   const foodsQuery = useQuery({
     queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id)],
@@ -50,24 +49,8 @@ export default function FoodsScreen() {
     );
   }
 
-  const foods = realEnabled
-    ? (foodsQuery.data ?? [])
-    : foodProductsMock.map((food) => ({
-        id: food.id,
-        brand: food.brand,
-        name: food.name,
-        verified_at: food.verifiedAt,
-      }));
-  const periods = realEnabled
-    ? (periodsQuery.data ?? [])
-    : feedingPeriodsMock.map((period) => ({
-        id: period.id,
-        dog_id: period.dogId,
-        food_product_id: period.foodProductId,
-        start_at: period.startedAt,
-        end_at: period.endedAt,
-        quantity_per_day: period.quantityPerDay,
-      }));
+  const foods = foodsQuery.data ?? [];
+  const periods = periodsQuery.data ?? [];
   const activePeriod = periods.find((period) => period.end_at == null);
 
   return (
@@ -120,7 +103,7 @@ export default function FoodsScreen() {
                 {verified ? (
                   <Chip label="Verificato" tone="success" />
                 ) : (
-                  <Chip label="Da verificare" tone="warning" />
+                  <Chip label="Da controllare" tone="warning" />
                 )}
               </View>
               {isActive && activePeriod?.quantity_per_day && (
@@ -131,8 +114,7 @@ export default function FoodsScreen() {
               )}
               {!verified && (
                 <Text style={styles.verifyHint}>
-                  Tocca per inserire i valori dell'etichetta prima
-                  che diventino definitivi.
+                  Tocca per controllare i dati letti dall’etichetta.
                 </Text>
               )}
             </Card>
@@ -141,15 +123,15 @@ export default function FoodsScreen() {
       })}
 
       <Button
-        title="Aggiungi un alimento"
-        icon={<Ionicons name="add" size={20} color={colors.textOnPrimary} />}
-        onPress={() => router.push('/nutrition/foods/new' as never)}
+        title="Fotografa un’etichetta"
+        icon={<Ionicons name="scan-outline" size={18} color={colors.textOnPrimary} />}
+        onPress={() => router.push('/nutrition/foods/scan')}
       />
       <Button
-        title="Fotografa un’etichetta"
+        title="Inserisci senza etichetta"
         variant="outline"
-        icon={<Ionicons name="scan-outline" size={18} color={colors.accent} />}
-        onPress={() => router.push('/nutrition/foods/scan')}
+        icon={<Ionicons name="create-outline" size={18} color={colors.accent} />}
+        onPress={() => router.push('/nutrition/foods/new' as never)}
       />
     </ScreenContainer>
   );

@@ -6,28 +6,29 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, EmptyState, ScreenContainer } from '@/components';
+import { Button, Card, EmptyState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { VisibilityBadge } from '@/features/photos/components';
 import { PHOTO_COPY } from '@/features/photos/copy';
 import { sharePhoto } from '@/features/photos/share';
 import {
+  deleteAlbumPhoto,
   fetchAlbumPhotos,
-  updateAlbumPhotoVisibility,
+  updateAlbumPhotoCaption,
 } from '@/features/photos/api';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import type { PhotoVisibility } from '@/features/photos/types';
 
 export default function PhotoViewerScreen() {
   const { photoId, albumId } = useLocalSearchParams<{
     photoId: string;
     albumId: string;
   }>();
+  const router = useRouter();
   const { dog } = useDogProfile();
   const queryClient = useQueryClient();
   const photosQuery = useQuery({
@@ -36,10 +37,12 @@ export default function PhotoViewerScreen() {
     enabled: Boolean(albumId),
   });
   const base = photosQuery.data?.find((photo) => photo.id === photoId);
-  const [visibility, setVisibility] = useState<PhotoVisibility>('private');
+  const [caption, setCaption] = useState('');
+  const [savingCaption, setSavingCaption] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (base) setVisibility(base.visibility);
+    if (base) setCaption(base.caption ?? '');
   }, [base]);
 
   if (photosQuery.isLoading) {
@@ -62,48 +65,98 @@ export default function PhotoViewerScreen() {
 
   return (
     <ScreenContainer scroll>
-      <StackScreenHeader title={base.caption ?? 'Foto'} />
-      <Image source={{ uri: base.localUri }} style={styles.image} />
-      <View style={styles.meta}>
-        <VisibilityBadge visibility={visibility} />
-        {base.caption ? (
-          <Text style={styles.caption}>{base.caption}</Text>
-        ) : null}
+      <StackScreenHeader title="Un suo momento" />
+      <Image source={{ uri: base.localUri }} style={styles.image} resizeMode="contain" />
+      <View style={styles.privateRow}>
+        <Text style={styles.privateText}>Privata nel tuo album</Text>
       </View>
 
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityState={{ checked: visibility === 'published' }}
-        onPress={async () => {
-          const next = visibility === 'private' ? 'published' : 'private';
-          try {
-            await updateAlbumPhotoVisibility(base.id, next);
-            setVisibility(next);
-            await queryClient.invalidateQueries({
-              queryKey: ['gallery-photos', albumId],
-            });
-            Alert.alert(
-              next === 'published' ? 'Foto visibile' : 'Foto privata',
-              PHOTO_COPY.publishedHint,
-            );
-          } catch {
-            Alert.alert('Modifica non salvata', 'Riprova tra poco.');
-          }
-        }}
-        style={styles.toggle}
-      >
-        <Text style={styles.toggleText}>
-          {visibility === 'published'
-            ? 'Rendi privata'
-            : 'Rendi visibile (opt-in futuro)'}
-        </Text>
-      </Pressable>
+      <Card style={styles.memoryCard}>
+        <Text style={styles.fieldLabel}>Cosa vuoi ricordare?</Text>
+        <TextInput
+          value={caption}
+          onChangeText={setCaption}
+          placeholder={`Es. La prima passeggiata di ${dog.name}`}
+          placeholderTextColor={colors.textMuted}
+          maxLength={280}
+          multiline
+          style={styles.captionInput}
+        />
+        <Button
+          title="Salva il ricordo"
+          variant="secondary"
+          loading={savingCaption}
+          disabled={!caption.trim() || caption.trim() === (base.caption ?? '').trim()}
+          onPress={async () => {
+            setSavingCaption(true);
+            try {
+              await updateAlbumPhotoCaption(base.id, caption);
+              await Promise.all([
+                queryClient.invalidateQueries({
+                  queryKey: ['gallery-photos', albumId],
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: ['gallery-dog-photos', base.dogId],
+                }),
+              ]);
+            } catch {
+              Alert.alert('Ricordo non salvato', 'Riprova tra poco.');
+            } finally {
+              setSavingCaption(false);
+            }
+          }}
+        />
+      </Card>
 
       <Button
         title="Condividi"
-        onPress={() => sharePhoto({ ...base, visibility }, dog.name)}
+        onPress={() => sharePhoto({ ...base, caption: caption.trim() || undefined }, dog.name)}
       />
       <Text style={styles.hint}>{PHOTO_COPY.shareConfirm}</Text>
+      <Pressable
+        accessibilityRole="button"
+        disabled={deleting}
+        onPress={() =>
+          Alert.alert(
+            'Eliminare questa foto?',
+            'Verrà rimossa definitivamente dall’album.',
+            [
+              { text: 'Annulla', style: 'cancel' },
+              {
+                text: 'Elimina',
+                style: 'destructive',
+                onPress: () => {
+                  setDeleting(true);
+                  void deleteAlbumPhoto(base.id)
+                    .then(async () => {
+                      await Promise.all([
+                        queryClient.invalidateQueries({
+                          queryKey: ['gallery-photos', albumId],
+                        }),
+                        queryClient.invalidateQueries({
+                          queryKey: ['gallery-albums', base.dogId],
+                        }),
+                        queryClient.invalidateQueries({
+                          queryKey: ['gallery-dog-photos', base.dogId],
+                        }),
+                      ]);
+                      router.back();
+                    })
+                    .catch(() => {
+                      setDeleting(false);
+                      Alert.alert('Foto non eliminata', 'Riprova tra poco.');
+                    });
+                },
+              },
+            ],
+          )
+        }
+        style={styles.deleteButton}
+      >
+        <Text style={styles.deleteText}>
+          {deleting ? 'Eliminazione…' : 'Elimina foto'}
+        </Text>
+      </Pressable>
     </ScreenContainer>
   );
 }
@@ -113,29 +166,51 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#0F172A',
   },
-  meta: {
+  privateRow: {
     marginTop: spacing.md,
-    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  caption: {
-    fontSize: typography.size.md,
+  privateText: {
+    fontSize: typography.size.xs,
+    color: colors.textSecondary,
+  },
+  memoryCard: {
+    marginBottom: spacing.lg,
+  },
+  fieldLabel: {
     color: colors.text,
-  },
-  toggle: {
-    marginVertical: spacing.lg,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  toggleText: {
-    color: colors.accent,
+    fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
+    marginBottom: spacing.sm,
+  },
+  captionInput: {
+    minHeight: 76,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    color: colors.text,
+    backgroundColor: colors.surfaceMuted,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    textAlignVertical: 'top',
   },
   hint: {
     marginTop: spacing.md,
     fontSize: typography.size.xs,
     color: colors.textMuted,
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
+  },
+  deleteButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  deleteText: {
+    color: colors.danger,
+    fontWeight: typography.weight.semibold,
   },
 });

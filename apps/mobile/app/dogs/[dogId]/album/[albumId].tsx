@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, EmptyState, ScreenContainer } from '@/components';
+import { Button, EmptyState, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import {
@@ -56,6 +56,20 @@ export default function AlbumDetailScreen() {
     );
   }
 
+  if (photosQuery.isError) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title={album.title} />
+        <ErrorState
+          title="Momenti non caricati"
+          message="Non riesco a mostrare le foto. Controlla la connessione e riprova."
+          retryLabel="Riprova"
+          onRetry={() => void photosQuery.refetch()}
+        />
+      </ScreenContainer>
+    );
+  }
+
   return (
     <ScreenContainer>
       <PhotoGrid
@@ -65,6 +79,16 @@ export default function AlbumDetailScreen() {
             <StackScreenHeader title={album.title} />
             <PrivacyNoticeBanner text={PHOTO_COPY.privateDefault} />
           </>
+        }
+        empty={
+          photosQuery.isLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <EmptyState
+              title="Qui iniziano i suoi momenti"
+              message="Aggiungi una foto che vuoi conservare di questo album."
+            />
+          )
         }
         onPressPhoto={(photo) =>
           router.push(
@@ -88,6 +112,9 @@ export default function AlbumDetailScreen() {
                   }),
                   queryClient.invalidateQueries({
                     queryKey: ['gallery-albums', dogId],
+                  }),
+                  queryClient.invalidateQueries({
+                    queryKey: ['gallery-dog-photos', dogId],
                   }),
                 ]);
                 Alert.alert(

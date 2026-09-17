@@ -1,5 +1,5 @@
-import React from 'react';
-import { ActivityIndicator, StyleSheet, Text } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EmptyState, ErrorState, ScreenContainer } from '@/components';
@@ -10,7 +10,12 @@ import {
   PrivacyNoticeBanner,
 } from '@/features/photos/components';
 import { PHOTO_COPY } from '@/features/photos/copy';
-import { fetchAlbums } from '@/features/photos/api';
+import {
+  createAlbum,
+  fetchAlbums,
+  uploadAlbumPhoto,
+} from '@/features/photos/api';
+import { pickAlbumPhoto } from '@/features/photos/share';
 import type { AlbumPhoto, PhotoAlbum } from '@/features/photos/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
@@ -21,12 +26,42 @@ export default function AlbumIndexScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
+  const [addingFirst, setAddingFirst] = useState(false);
   const albumsQuery = useQuery({
     queryKey: ['gallery-albums', dogId],
     queryFn: () => fetchAlbums(dogId!),
     enabled: isPersistedId(dogId),
   });
   const albums = albumsQuery.data ?? [];
+
+  const addFirstMoment = async () => {
+    if (!dogId) return;
+    const uri = await pickAlbumPhoto();
+    if (!uri) return;
+    setAddingFirst(true);
+    try {
+      const album = await createAlbum(dogId, 'Momenti');
+      const photo = await uploadAlbumPhoto(album.id, uri);
+      queryClient.setQueryData<AlbumPhoto[]>(
+        ['gallery-photos', album.id],
+        [photo],
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
+        queryClient.invalidateQueries({
+          queryKey: ['gallery-dog-photos', dogId],
+        }),
+      ]);
+      router.replace(`/dogs/${dogId}/album/${album.id}` as never);
+    } catch {
+      Alert.alert(
+        'Foto non salvata',
+        'Non sono riuscito a conservare questo momento. Riprova tra poco.',
+      );
+    } finally {
+      setAddingFirst(false);
+    }
+  };
 
   // Copertina firmata restituita dal backend; la cache locale evita un flash
   // quando l'utente ha appena aggiunto la foto.
@@ -43,6 +78,9 @@ export default function AlbumIndexScreen() {
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Album foto" />
+      <Text style={styles.intro}>
+        I momenti di {dog.name}, raccolti da te e sempre privati.
+      </Text>
       <PrivacyNoticeBanner text={PHOTO_COPY.privateDefault} />
 
       {albumsQuery.isLoading ? (
@@ -55,10 +93,18 @@ export default function AlbumIndexScreen() {
           onRetry={() => void albumsQuery.refetch()}
         />
       ) : albums.length === 0 ? (
-        <EmptyState
-          title="Nessun album"
-          message={PHOTO_COPY.emptyAlbum.replace('{dogName}', dog.name)}
-        />
+        <>
+          <EmptyState
+            title={`Il primo momento di ${dog.name}`}
+            message="Scegli una foto che ami. Creerò io il primo album."
+          />
+          <Button
+            title="Aggiungi il primo momento"
+            loading={addingFirst}
+            onPress={() => void addFirstMoment()}
+            style={styles.firstCta}
+          />
+        </>
       ) : (
         albums.map((album) => (
           <AlbumCard
@@ -73,26 +119,26 @@ export default function AlbumIndexScreen() {
       )}
 
       <Button
-        title="Nuovo album"
-        variant="secondary"
+        title={albums.length === 0 ? 'Preferisco creare un album' : 'Nuovo album'}
+        variant="outline"
         onPress={() => router.push(`/dogs/${dogId}/album/create` as never)}
         style={styles.cta}
       />
-      <Text style={styles.footer}>
-        I video delle analisi non vengono aggiunti automaticamente qui.
-      </Text>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  cta: {
+  intro: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    marginBottom: spacing.md,
+  },
+  firstCta: {
     marginTop: spacing.lg,
   },
-  footer: {
+  cta: {
     marginTop: spacing.md,
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    textAlign: 'center',
   },
 });

@@ -1,6 +1,6 @@
 export const PHOTO_COPY = {
   privateDefault:
-    'Le foto restano private finché non le condividi tu. I video delle analisi vengono eliminati dopo 24 ore e non entrano in album.',
+    'Queste foto restano private. Solo tu puoi scegliere di condividerle.',
   shareConfirm:
     'Stai per condividere fuori da Dogly (Instagram, Facebook o altre app). Non verrà inviato il video originale dell’analisi.',
   publishedHint:

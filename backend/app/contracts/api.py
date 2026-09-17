@@ -737,11 +737,25 @@ class FoodScanInitResponse(BaseModel):
 class GuaranteedAnalysis(BaseModel):
     """Guaranteed-analysis schema (sez. 20.2). Percentages nullable."""
 
-    crude_protein_min: float | None = None
-    crude_fat_min: float | None = None
-    crude_fiber_max: float | None = None
-    moisture_max: float | None = None
+    crude_protein_min: float | None = Field(default=None, ge=0, le=100)
+    crude_fat_min: float | None = Field(default=None, ge=0, le=100)
+    crude_fiber_max: float | None = Field(default=None, ge=0, le=100)
+    moisture_max: float | None = Field(default=None, ge=0, le=100)
     calories: str | None = None
+
+
+class FoodLabelExtraction(BaseModel):
+    """Unverified fields read from a label photo; owner confirmation is required."""
+
+    brand: str | None = Field(default=None, max_length=120)
+    name: str | None = Field(default=None, max_length=200)
+    ingredients_raw: str | None = None
+    guaranteed_analysis: GuaranteedAnalysis = Field(default_factory=GuaranteedAnalysis)
+    feeding_directions: str | None = None
+    extraction_confidence: dict[
+        str, Annotated[float, Field(ge=0.0, le=1.0)]
+    ] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list, max_length=8)
 
 
 class FoodVerifyRequest(BaseModel):
@@ -769,10 +783,13 @@ class FoodManualCreateRequest(BaseModel):
 class FoodProductOut(BaseModel):
     id: str
     dog_id: str | None = None
+    label_image_url: str | None = None
     brand: str | None = None
     name: str | None = None
     ingredients_raw: str | None = None
     guaranteed_analysis: dict[str, Any] = Field(default_factory=dict)
+    feeding_directions: str | None = None
+    extraction_confidence: dict[str, float] = Field(default_factory=dict)
     verified_at: datetime | None = None
 
 

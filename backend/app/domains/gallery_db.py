@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 GALLERY_BUCKET = "dog-gallery"
 
 
+def _image_extension(content_type: str) -> str:
+    return {"image/png": "png", "image/webp": "webp"}.get(content_type, "jpg")
+
+
 def _uuid_id() -> str:
     value = new_id()
     if len(value) == 32:
@@ -190,6 +194,38 @@ async def list_photos(engine: AsyncEngine, *, user_id: str, album_id: str) -> li
     return [_photo_out(row) for row in rows]
 
 
+async def list_dog_photos(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    dog_id: str,
+    limit: int,
+) -> list[DogPhotoOut]:
+    """Return recent lasting photos without mixing in ephemeral stories."""
+    await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=dog_id)
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    """
+                    select p.id, p.album_id, p.dog_id, p.storage_path, p.caption,
+                           p.visibility, p.taken_at, p.created_at
+                    from public.dog_photos p
+                    join public.dog_albums a on a.id = p.album_id
+                    where p.dog_id = :dog_id
+                      and p.owner_id = :user_id
+                      and p.deleted_at is null
+                      and lower(btrim(a.title)) <> 'storie'
+                    order by coalesce(p.taken_at, p.created_at) desc, p.id desc
+                    limit :limit
+                    """
+                ),
+                {"dog_id": dog_id, "user_id": user_id, "limit": limit},
+            )
+        ).mappings().all()
+    return [_photo_out(row) for row in rows]
+
+
 async def init_photo_upload(
     engine: AsyncEngine,
     *,
@@ -217,7 +253,11 @@ async def init_photo_upload(
 
         photo_id = _uuid_id()
         dog_id = str(album["dog_id"])
-        path = f"users/{user_id}/dogs/{dog_id}/gallery/{album_id}/{photo_id}.jpg"
+        extension = _image_extension(payload.content_type)
+        path = (
+            f"users/{user_id}/dogs/{dog_id}/gallery/"
+            f"{album_id}/{photo_id}.{extension}"
+        )
         row = (
             await conn.execute(
                 text(

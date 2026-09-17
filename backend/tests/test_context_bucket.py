@@ -60,7 +60,10 @@ def test_bowl_resolves_feeding():
 
 def test_unknown_without_observation_stays_unknown_until_worker():
     assert (
-        resolve_context_bucket(ContextBucket.UNKNOWN)
+        resolve_context_bucket(
+            ContextBucket.UNKNOWN,
+            now=datetime(2026, 9, 7, 12, 0, tzinfo=UTC),
+        )
         is ContextBucket.UNKNOWN
     )
 
@@ -77,7 +80,11 @@ def test_unknown_with_ambiguous_observation_falls_back_to_home():
     )
     assert derive_from_observation(obs) is None
     assert (
-        resolve_context_bucket(ContextBucket.UNKNOWN, observation=obs)
+        resolve_context_bucket(
+            ContextBucket.UNKNOWN,
+            observation=obs,
+            now=datetime(2026, 9, 7, 12, 0, tzinfo=UTC),
+        )
         is ContextBucket.HOME
     )
 

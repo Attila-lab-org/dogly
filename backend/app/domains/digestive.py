@@ -11,6 +11,7 @@ from app.config import Settings
 from app.contracts.api import (
     FecalInitRequest,
     FeedingPeriodCreate,
+    FoodLabelExtraction,
     FoodManualCreateRequest,
     FoodScanInitRequest,
     FoodVerifyRequest,
@@ -31,6 +32,11 @@ from app.providers.base import JobQueue, StorageProvider
 
 DIGESTIVE_BUCKET = "digestive-raw"
 FOOD_BUCKET = "food-labels"
+
+
+def _image_extension(content_type: str) -> str:
+    return {"image/png": "png", "image/webp": "webp"}.get(content_type, "jpg")
+
 
 # Deterministic safety routing (sez. 19.3): these observation candidates route
 # to fixed reviewed copy; generated text can never downgrade them.
@@ -319,7 +325,11 @@ async def init_food_scan(
         return product, url, expires
 
     product_id = new_id()
-    path = f"users/{user_id}/dogs/{dog.id}/food_labels/{product_id}/{new_id()}.jpg"
+    extension = _image_extension(payload.content_type)
+    path = (
+        f"users/{user_id}/dogs/{dog.id}/food_labels/"
+        f"{product_id}/{new_id()}.{extension}"
+    )
     product = FoodProductRec(
         id=product_id,
         owner_id=user_id,
@@ -354,6 +364,33 @@ def verify_food_product(
             "guaranteed_analysis": payload.guaranteed_analysis.model_dump(),
             "feeding_directions": payload.feeding_directions,
             "verified_at": now_utc(),
+        }
+    )
+    store.food_products[food_id] = updated
+    return updated
+
+
+def apply_food_label_extraction(
+    store: InMemoryStore,
+    *,
+    user_id: str,
+    food_id: str,
+    extraction: FoodLabelExtraction,
+) -> FoodProductRec:
+    """Store provider-read fields as an unverified draft for owner review."""
+    product = store.food_products.get(food_id)
+    if product is None or product.owner_id != user_id:
+        raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
+    if product.verified_at is not None:
+        return product
+    updated = product.model_copy(
+        update={
+            "brand": extraction.brand,
+            "name": extraction.name,
+            "ingredients_raw": extraction.ingredients_raw,
+            "guaranteed_analysis": extraction.guaranteed_analysis.model_dump(),
+            "feeding_directions": extraction.feeding_directions,
+            "extraction_confidence": extraction.extraction_confidence,
         }
     )
     store.food_products[food_id] = updated

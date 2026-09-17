@@ -6,20 +6,21 @@
  * precedente senza riscrivere la storia.
  */
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
-import { foodProductsMock } from '@/mocks/secondary';
-import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import {
-  ConfidenceBandPill,
-  StackScreenHeader,
-} from '@/features/secondary/components';
-import type { ConfidenceBand } from '@/contracts/types';
+import { StackScreenHeader } from '@/features/secondary/components';
 import {
   activateFeedingPeriod,
   getFood,
@@ -30,14 +31,14 @@ function EditableField({
   label,
   value,
   onChangeText,
-  band,
+  needsReview,
   multiline,
   keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
-  band?: ConfidenceBand;
+  needsReview?: boolean;
   multiline?: boolean;
   keyboardType?: 'default' | 'decimal-pad';
 }) {
@@ -45,7 +46,7 @@ function EditableField({
     <View style={styles.field}>
       <View style={styles.fieldHeader}>
         <Text style={styles.fieldLabel}>{label}</Text>
-        {band ? <ConfidenceBandPill band={band} /> : null}
+        {needsReview ? <Text style={styles.reviewBadge}>Da controllare</Text> : null}
       </View>
       <TextInput
         value={value}
@@ -60,35 +61,20 @@ function EditableField({
 }
 
 export default function FoodVerifyScreen() {
-  const { foodId } = useLocalSearchParams<{ foodId: string }>();
+  const { foodId, reading } = useLocalSearchParams<{
+    foodId: string;
+    reading?: string;
+  }>();
   const router = useRouter();
-  const { usingMockGate } = useSession();
   const { dog } = useDogProfile();
-  const mockFood = foodProductsMock.find((f) => f.id === foodId);
-  const realEnabled = !usingMockGate && Boolean(foodId);
 
   const foodQuery = useQuery({
     queryKey: ['nutrition-food', foodId],
     queryFn: () => getFood(foodId!),
-    enabled: realEnabled,
+    enabled: Boolean(foodId),
   });
 
-  const food = realEnabled ? foodQuery.data : mockFood
-    ? {
-        id: mockFood.id,
-        brand: mockFood.brand,
-        name: mockFood.name,
-        ingredients_raw: mockFood.ingredientsRaw,
-        guaranteed_analysis: {
-          crude_protein_min: mockFood.guaranteedAnalysis.crudeProteinMin,
-          crude_fat_min: mockFood.guaranteedAnalysis.crudeFatMin,
-          crude_fiber_max: mockFood.guaranteedAnalysis.crudeFiberMax,
-          moisture_max: mockFood.guaranteedAnalysis.moistureMax,
-          calories: mockFood.calories,
-        },
-        verified_at: mockFood.verifiedAt,
-      }
-    : undefined;
+  const food = foodQuery.data;
 
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
@@ -98,6 +84,7 @@ export default function FoodVerifyScreen() {
   const [fiber, setFiber] = useState('');
   const [moisture, setMoisture] = useState('');
   const [calories, setCalories] = useState('');
+  const [feedingDirections, setFeedingDirections] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -112,9 +99,19 @@ export default function FoodVerifyScreen() {
     setFiber(food.guaranteed_analysis?.crude_fiber_max?.toString() ?? '');
     setMoisture(food.guaranteed_analysis?.moisture_max?.toString() ?? '');
     setCalories(food.guaranteed_analysis?.calories ?? '');
+    setFeedingDirections(food.feeding_directions ?? '');
   }, [food]);
 
-  if (realEnabled && foodQuery.isError) {
+  if (foodQuery.isLoading) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Controlla etichetta" />
+        <ActivityIndicator color={colors.primary} />
+      </ScreenContainer>
+    );
+  }
+
+  if (foodQuery.isError) {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Verifica etichetta" />
@@ -127,7 +124,7 @@ export default function FoodVerifyScreen() {
     );
   }
 
-  if (!food && !realEnabled) {
+  if (!food) {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Verifica etichetta" />
@@ -141,16 +138,23 @@ export default function FoodVerifyScreen() {
     );
   }
 
-  const band = (key: string): ConfidenceBand | undefined =>
-    mockFood?.fieldConfidence[key];
+  const needsReview = (key: string): boolean => {
+    const score = food.extraction_confidence?.[key];
+    return typeof score === 'number' && score < 0.72;
+  };
 
   const confirm = async () => {
     if (!brand.trim() || !name.trim()) {
       setSaveError('Servono almeno marca e nome del prodotto.');
       return;
     }
-    if (usingMockGate) {
-      setConfirmed(true);
+    const invalidPercentage = [protein, fat, fiber, moisture].some((value) => {
+      if (!value.trim()) return false;
+      const parsed = Number(value.replace(',', '.'));
+      return !Number.isFinite(parsed) || parsed < 0 || parsed > 100;
+    });
+    if (invalidPercentage) {
+      setSaveError('Controlla le percentuali: devono essere comprese tra 0 e 100.');
       return;
     }
     if (!foodId) return;
@@ -167,6 +171,7 @@ export default function FoodVerifyScreen() {
         fiber,
         moisture,
         calories,
+        feedingDirections,
       });
       await activateFeedingPeriod({ dogId: dog.id, foodId });
       setConfirmed(true);
@@ -206,23 +211,31 @@ export default function FoodVerifyScreen() {
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Verifica etichetta" />
+      {food.label_image_url ? (
+        <Image
+          source={{ uri: food.label_image_url }}
+          resizeMode="contain"
+          style={styles.labelImage}
+          accessibilityLabel="Foto dell’etichetta acquisita"
+        />
+      ) : null}
       <Text style={styles.intro}>
-        {usingMockGate
-          ? "Controlla e correggi i campi letti dall'etichetta."
-          : "Usa la foto come riferimento e inserisci i valori riportati sull'etichetta."}{' '}
-        Solo ciò che confermi diventa definitivo: i valori servono a
-        confrontare la digestione di {dog.name} nel tempo.
+        {reading === 'manual'
+          ? 'La foto è salva, ma non sono riuscito a leggere bene i dati. Puoi completarli guardando l’etichetta qui sopra.'
+          : 'Ho compilato ciò che era leggibile. Controlla soprattutto i campi segnati.'}{' '}
+        Solo ciò che confermi verrà usato per seguire la digestione di {dog.name}{' '}
+        nel tempo.
       </Text>
 
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Prodotto</Text>
-        <EditableField label="Nome prodotto" value={name} onChangeText={setName} band={band('name')} />
-        <EditableField label="Marca" value={brand} onChangeText={setBrand} band={band('brand')} />
+        <EditableField label="Nome prodotto" value={name} onChangeText={setName} needsReview={!name.trim() || needsReview('name')} />
+        <EditableField label="Marca" value={brand} onChangeText={setBrand} needsReview={!brand.trim() || needsReview('brand')} />
         <EditableField
           label="Ingredienti (testo dell'etichetta)"
           value={ingredients}
           onChangeText={setIngredients}
-          band={band('ingredients')}
+          needsReview={needsReview('ingredients')}
           multiline
         />
       </Card>
@@ -233,35 +246,42 @@ export default function FoodVerifyScreen() {
           label="Proteine grezze min (%)"
           value={protein}
           onChangeText={setProtein}
-          band={band('protein')}
+          needsReview={needsReview('protein')}
           keyboardType="decimal-pad"
         />
         <EditableField
           label="Grassi grezzi min (%)"
           value={fat}
           onChangeText={setFat}
-          band={band('fat')}
+          needsReview={needsReview('fat')}
           keyboardType="decimal-pad"
         />
         <EditableField
           label="Fibra grezza max (%)"
           value={fiber}
           onChangeText={setFiber}
-          band={band('fiber')}
+          needsReview={needsReview('fiber')}
           keyboardType="decimal-pad"
         />
         <EditableField
           label="Umidità max (%)"
           value={moisture}
           onChangeText={setMoisture}
-          band={band('moisture')}
+          needsReview={needsReview('moisture')}
           keyboardType="decimal-pad"
         />
         <EditableField
           label="Calorie (come stampato)"
           value={calories}
           onChangeText={setCalories}
-          band={band('calories')}
+          needsReview={needsReview('calories')}
+        />
+        <EditableField
+          label="Indicazioni sulle quantità"
+          value={feedingDirections}
+          onChangeText={setFeedingDirections}
+          needsReview={needsReview('feeding_directions')}
+          multiline
         />
       </Card>
 
@@ -284,6 +304,13 @@ export default function FoodVerifyScreen() {
 }
 
 const styles = StyleSheet.create({
+  labelImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceMuted,
+    marginBottom: spacing.md,
+  },
   intro: {
     fontSize: typography.size.sm,
     color: colors.textSecondary,
@@ -313,6 +340,15 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
     color: colors.text,
+  },
+  reviewBadge: {
+    color: colors.warning,
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
   },
   input: {
     backgroundColor: colors.surfaceMuted,

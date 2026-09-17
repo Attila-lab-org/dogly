@@ -75,12 +75,20 @@ function mapPhoto(photo: GalleryPhotoDto, fallbackUri = ''): AlbumPhoto {
   };
 }
 
-export async function fetchAlbums(dogId: string): Promise<PhotoAlbum[]> {
+export async function fetchAlbums(
+  dogId: string,
+  options: { includeStories?: boolean } = {},
+): Promise<PhotoAlbum[]> {
   if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryAlbumDto[] }>(
     `/v1/dogs/${dogId}/albums`,
   );
-  return body.items.map(mapAlbum);
+  const albums = body.items.map(mapAlbum);
+  return options.includeStories
+    ? albums
+    : albums.filter(
+        (album) => album.title.trim().toLocaleLowerCase() !== 'storie',
+      );
 }
 
 export async function createAlbum(dogId: string, title: string): Promise<PhotoAlbum> {
@@ -100,6 +108,17 @@ export async function fetchAlbumPhotos(albumId: string): Promise<AlbumPhoto[]> {
   if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
     `/v1/albums/${albumId}/photos`,
+  );
+  return body.items.map((photo) => mapPhoto(photo));
+}
+
+export async function fetchDogPhotos(
+  dogId: string,
+  limit = 12,
+): Promise<AlbumPhoto[]> {
+  if (!apiConfigured()) return [];
+  const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
+    `/v1/dogs/${dogId}/photos?limit=${limit}`,
   );
   return body.items.map((photo) => mapPhoto(photo));
 }
@@ -165,6 +184,21 @@ export async function updateAlbumPhotoVisibility(
     },
   });
   return mapPhoto(photo);
+}
+
+export async function updateAlbumPhotoCaption(
+  photoId: string,
+  caption: string,
+): Promise<AlbumPhoto> {
+  const photo = await apiRequest<GalleryPhotoDto>(`/v1/photos/${photoId}`, {
+    method: 'PATCH',
+    body: { caption: caption.trim() },
+  });
+  return mapPhoto(photo);
+}
+
+export async function deleteAlbumPhoto(photoId: string): Promise<void> {
+  await apiRequest<void>(`/v1/photos/${photoId}`, { method: 'DELETE' });
 }
 
 /**

@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 GALLERY_BUCKET = "dog-gallery"
 
 
+def _image_extension(content_type: str) -> str:
+    return {"image/png": "png", "image/webp": "webp"}.get(content_type, "jpg")
+
+
 def _album_out(album: DogAlbumRec, store: InMemoryStore) -> DogAlbumOut:
     count = sum(
         1
@@ -104,6 +108,34 @@ def list_photos(store: InMemoryStore, *, user_id: str, album_id: str) -> list[Do
     return [_photo_out(p) for p in photos]
 
 
+def list_dog_photos(
+    store: InMemoryStore,
+    *,
+    user_id: str,
+    dog_id: str,
+    limit: int,
+) -> list[DogPhotoOut]:
+    """Return the dog's latest lasting moments, excluding 24-hour stories."""
+    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    story_album_ids = {
+        album.id
+        for album in store.dog_albums.values()
+        if album.dog_id == dog_id
+        and album.owner_id == user_id
+        and album.title.strip().casefold() == "storie"
+    }
+    photos = [
+        photo
+        for photo in store.dog_photos.values()
+        if photo.dog_id == dog_id
+        and photo.owner_id == user_id
+        and photo.deleted_at is None
+        and photo.album_id not in story_album_ids
+    ]
+    photos.sort(key=lambda photo: photo.taken_at or photo.created_at, reverse=True)
+    return [_photo_out(photo) for photo in photos[:limit]]
+
+
 async def init_photo_upload(
     store: InMemoryStore,
     *,
@@ -117,8 +149,10 @@ async def init_photo_upload(
     if album is None or album.owner_id != user_id:
         raise ApiError(ErrorCode.NOT_FOUND, "Album not found.")
     photo_id = new_id()
+    extension = _image_extension(payload.content_type)
     path = (
-        f"users/{user_id}/dogs/{album.dog_id}/gallery/{album.id}/{photo_id}.jpg"
+        f"users/{user_id}/dogs/{album.dog_id}/gallery/"
+        f"{album.id}/{photo_id}.{extension}"
     )
     photo = DogPhotoRec(
         id=photo_id,

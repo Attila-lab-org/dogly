@@ -43,7 +43,7 @@ function storyFromPhoto(photo: AlbumPhoto, dogName: string): DogStory {
 }
 
 async function storyAlbum(dogId: string): Promise<PhotoAlbum> {
-  const albums = await fetchAlbums(dogId);
+  const albums = await fetchAlbums(dogId, { includeStories: true });
   const existing = albums.find(
     (album) => album.title.trim().toLocaleLowerCase() ===
       STORIES_ALBUM_TITLE.toLocaleLowerCase(),
@@ -52,7 +52,7 @@ async function storyAlbum(dogId: string): Promise<PhotoAlbum> {
   try {
     return await createAlbum(dogId, STORIES_ALBUM_TITLE);
   } catch (error) {
-    const refreshed = await fetchAlbums(dogId);
+    const refreshed = await fetchAlbums(dogId, { includeStories: true });
     const raced = refreshed.find(
       (album) =>
         album.title.trim().toLocaleLowerCase() ===
@@ -67,7 +67,7 @@ async function fetchRealStories(
   dogId: string,
   dogName: string,
 ): Promise<DogStory[]> {
-  const albums = await fetchAlbums(dogId);
+  const albums = await fetchAlbums(dogId, { includeStories: true });
   const album = albums.find(
     (item) => item.title.trim().toLocaleLowerCase() ===
       STORIES_ALBUM_TITLE.toLocaleLowerCase(),

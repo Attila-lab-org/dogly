@@ -4,10 +4,12 @@ import { Platform } from 'react-native';
 import { api } from '../../lib/apiClient';
 import { putSignedUpload } from '../../lib/signedUpload';
 import { contentTypeFromUri } from '../dogs/photoUri';
+import { hasReadableFoodLabelData } from './label';
 
 export type ApiFoodProduct = {
   id: string;
   dog_id?: string | null;
+  label_image_url?: string | null;
   brand: string | null;
   name: string | null;
   ingredients_raw?: string | null;
@@ -18,6 +20,8 @@ export type ApiFoodProduct = {
     moisture_max?: number | null;
     calories?: string | null;
   };
+  feeding_directions?: string | null;
+  extraction_confidence?: Record<string, number>;
   verified_at: string | null;
 };
 
@@ -77,7 +81,7 @@ export async function listFeedingPeriods(
 export async function scanAndUploadFoodLabel(options: {
   dogId: string;
   localUri: string;
-}): Promise<string> {
+}): Promise<{ foodId: string; readAutomatically: boolean }> {
   const contentType = contentTypeFromUri(options.localUri);
   const bytes = await fileBytes(options.localUri);
   const clientRequestId = newId('food');
@@ -95,7 +99,18 @@ export async function scanAndUploadFoodLabel(options: {
     { headers: { 'X-Idempotency-Key': clientRequestId } },
   );
   await putSignedUpload(init.upload.url, options.localUri, contentType);
-  return init.food_product_id;
+  try {
+    const extracted = await api.post<ApiFoodProduct>(
+      `/v1/nutrition/foods/${init.food_product_id}/extract`,
+      {},
+    );
+    return {
+      foodId: init.food_product_id,
+      readAutomatically: hasReadableFoodLabelData(extracted),
+    };
+  } catch {
+    return { foodId: init.food_product_id, readAutomatically: false };
+  }
 }
 
 export async function verifyFood(options: {
@@ -108,6 +123,7 @@ export async function verifyFood(options: {
   fiber: string;
   moisture: string;
   calories: string;
+  feedingDirections?: string;
 }): Promise<ApiFoodProduct> {
   const numberOrNull = (value: string): number | null => {
     const parsed = Number(value.replace(',', '.'));
@@ -126,6 +142,7 @@ export async function verifyFood(options: {
         moisture_max: numberOrNull(options.moisture),
         calories: options.calories || null,
       },
+      feeding_directions: options.feedingDirections?.trim() || null,
     },
     { headers: { 'X-Idempotency-Key': `verify-${options.foodId}` } },
   );

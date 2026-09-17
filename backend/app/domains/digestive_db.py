@@ -13,6 +13,7 @@ from app.config import Settings
 from app.contracts.api import (
     FecalInitRequest,
     FeedingPeriodCreate,
+    FoodLabelExtraction,
     FoodManualCreateRequest,
     FoodScanInitRequest,
     FoodVerifyRequest,
@@ -91,8 +92,19 @@ def _storage_path(user_id: str, dog_id: str, event_id: str) -> str:
     return f"users/{user_id}/dogs/{dog_id}/digestive/{event_id}/{new_id()}.jpg"
 
 
-def _food_storage_path(user_id: str, dog_id: str, product_id: str) -> str:
-    return f"users/{user_id}/dogs/{dog_id}/food_labels/{product_id}/{new_id()}.jpg"
+def _food_storage_path(
+    user_id: str,
+    dog_id: str,
+    product_id: str,
+    content_type: str,
+) -> str:
+    extension = {"image/png": "png", "image/webp": "webp"}.get(
+        content_type, "jpg"
+    )
+    return (
+        f"users/{user_id}/dogs/{dog_id}/food_labels/"
+        f"{product_id}/{new_id()}.{extension}"
+    )
 
 
 async def init_fecal_event(
@@ -695,7 +707,12 @@ async def init_food_scan(
             return product, url, expires
 
         product_id = _uuid_id()
-        path = _food_storage_path(user_id, dog.id, product_id)
+        path = _food_storage_path(
+            user_id,
+            dog.id,
+            product_id,
+            payload.content_type,
+        )
         row = (
             await conn.execute(
                 text(
@@ -779,6 +796,54 @@ async def verify_food_product(
             {"food_id": food_id},
         )
     return _food_from_row(row)
+
+
+async def apply_food_label_extraction(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    food_id: str,
+    extraction: FoodLabelExtraction,
+) -> FoodProductRec:
+    """Persist extracted fields without marking them as owner-verified."""
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    update public.food_products
+                    set brand = :brand,
+                        name = :name,
+                        ingredients_raw = :ingredients_raw,
+                        guaranteed_analysis = cast(:guaranteed_analysis as jsonb),
+                        calories = :calories,
+                        feeding_directions = :feeding_directions,
+                        extraction_confidence = cast(:extraction_confidence as jsonb),
+                        updated_at = now()
+                    where id = :id
+                      and owner_id = :owner_id
+                      and verified_at is null
+                    returning *
+                    """
+                ),
+                {
+                    "id": food_id,
+                    "owner_id": user_id,
+                    "brand": extraction.brand,
+                    "name": extraction.name,
+                    "ingredients_raw": extraction.ingredients_raw,
+                    "guaranteed_analysis": extraction.guaranteed_analysis.model_dump_json(),
+                    "calories": extraction.guaranteed_analysis.calories,
+                    "feeding_directions": extraction.feeding_directions,
+                    "extraction_confidence": json.dumps(
+                        extraction.extraction_confidence
+                    ),
+                },
+            )
+        ).mappings().first()
+    if row:
+        return _food_from_row(row)
+    return await get_food_product(engine, user_id=user_id, food_id=food_id)
 
 
 async def create_manual_food_product(

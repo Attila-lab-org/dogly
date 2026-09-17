@@ -58,6 +58,13 @@ async def test_album_photo_and_visibility_flow(
     assert patched.status_code == 200
     assert patched.json()["visibility"] == "PUBLISHED"
 
+    moments = await client.get(
+        f"/v1/dogs/{dog_id}/photos?limit=3",
+        headers=auth_headers,
+    )
+    assert moments.status_code == 200
+    assert [item["id"] for item in moments.json()["items"]] == [photo_id]
+
     deleted = await client.delete(f"/v1/photos/{photo_id}", headers=auth_headers)
     assert deleted.status_code == 204
 
@@ -100,3 +107,40 @@ async def test_gallery_soft_delete_removes_storage_object(
     assert ("dog-gallery", path) not in state.storage.objects
     assert ("dog-gallery", kept_path) in state.storage.objects
     assert state.store.dog_photos[photo_id].deleted_at is not None
+
+
+async def test_recent_dog_photos_exclude_stories(
+    client: httpx.AsyncClient,
+    auth_headers,
+):
+    dog_id = await create_dog(client, auth_headers)
+    moments = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Momenti"},
+        headers=auth_headers,
+    )
+    stories = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Storie"},
+        headers=auth_headers,
+    )
+    moment = await client.post(
+        f"/v1/albums/{moments.json()['id']}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 1_024},
+        headers=auth_headers,
+    )
+    await client.post(
+        f"/v1/albums/{stories.json()['id']}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 1_024},
+        headers=auth_headers,
+    )
+
+    response = await client.get(
+        f"/v1/dogs/{dog_id}/photos",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == [
+        moment.json()["photo"]["id"]
+    ]
