@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Response
 
 from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.api import (
+    OwnerReportedFact,
     OwnerStoryAudioPrepareRequest,
     OwnerStoryConfirmedOut,
     OwnerStoryConfirmRequest,
@@ -19,7 +20,10 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains import dogs_db, idempotency_db, owner_stories_db
 from app.domains.dogs import get_owned_dog
-from app.domains.owner_stories import extract_owner_reported_facts
+from app.domains.owner_stories import (
+    extract_owner_reported_facts,
+    is_useful_owner_statement,
+)
 from app.domains.personal_engine import (
     recalculate_knowledge_score_db,
     recalculate_knowledge_score_memory,
@@ -29,6 +33,20 @@ from app.providers.base import ProviderUsage
 from app.providers.openai_transcription import transcribe_owner_audio
 
 router = APIRouter()
+
+
+def _require_useful_facts(
+    facts: list[OwnerReportedFact],
+) -> list[OwnerReportedFact]:
+    useful = [
+        fact for fact in facts if is_useful_owner_statement(fact.statement)
+    ]
+    if not useful:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "The story does not contain a useful fact about the dog.",
+        )
+    return useful
 
 
 @router.get(
@@ -57,15 +75,25 @@ async def list_owner_stories(
             key=lambda observation: observation["confirmed_at"],
             reverse=True,
         )
-        rows = [
-            {
-                "id": observation["id"],
-                "dog_id": observation["dog_id"],
-                "facts": observation["facts"],
-                "confirmed_at": observation["confirmed_at"],
-            }
-            for observation in rows
-        ]
+        filtered_rows = []
+        for observation in rows:
+            facts = [
+                fact
+                for fact in observation["facts"]
+                if is_useful_owner_statement(
+                    str(fact.get("statement") or "")
+                )
+            ]
+            if facts:
+                filtered_rows.append(
+                    {
+                        "id": observation["id"],
+                        "dog_id": observation["dog_id"],
+                        "facts": facts,
+                        "confirmed_at": observation["confirmed_at"],
+                    }
+                )
+        rows = filtered_rows
     return OwnerStoryListOut(
         items=[OwnerStoryObservationOut.model_validate(row) for row in rows]
     )
@@ -185,13 +213,14 @@ async def confirm_owner_story(
     state: StateDep,
     user_id: UserIdDep,
 ) -> OwnerStoryConfirmedOut:
+    facts = _require_useful_facts(payload.facts)
     if state.engine is not None:
         await owner_stories_db.confirm_draft(
             state.engine,
             user_id=user_id,
             dog_id=dog_id,
             draft_id=draft_id,
-            facts=payload.facts,
+            facts=facts,
         )
         await recalculate_knowledge_score_db(state.engine, dog_id=dog_id)
     else:
@@ -204,7 +233,7 @@ async def confirm_owner_story(
         ):
             raise ApiError(ErrorCode.NOT_FOUND, "Owner story draft not found")
         draft["facts"] = [
-            fact.model_dump(mode="json") for fact in payload.facts
+            fact.model_dump(mode="json") for fact in facts
         ]
         draft["transcript"] = None
         draft["status"] = "CONFIRMED"
@@ -213,7 +242,7 @@ async def confirm_owner_story(
     return OwnerStoryConfirmedOut(
         observation_id=draft_id,
         dog_id=dog_id,
-        facts=payload.facts,
+        facts=facts,
     )
 
 
@@ -228,13 +257,14 @@ async def update_owner_story(
     state: StateDep,
     user_id: UserIdDep,
 ) -> OwnerStoryObservationOut:
+    facts = _require_useful_facts(payload.facts)
     if state.engine is not None:
         row = await owner_stories_db.update_confirmed(
             state.engine,
             user_id=user_id,
             dog_id=dog_id,
             observation_id=observation_id,
-            facts=payload.facts,
+            facts=facts,
         )
     else:
         observation = state.store.owner_reported_observations.get(
@@ -248,7 +278,7 @@ async def update_owner_story(
         ):
             raise ApiError(ErrorCode.NOT_FOUND, "Owner story not found")
         observation["facts"] = [
-            fact.model_dump(mode="json") for fact in payload.facts
+            fact.model_dump(mode="json") for fact in facts
         ]
         row = {
             "id": observation["id"],

@@ -2,14 +2,12 @@
  * Profilo cane: spazio personale, visivo e orientato alle azioni.
  * Le spiegazioni tecniche e le policy restano fuori da questa schermata.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -17,8 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card } from '@/components';
+import { useQuery } from '@tanstack/react-query';
 import {
   colors,
   gradients,
@@ -52,11 +49,7 @@ import {
   type DigestiveSummary,
 } from '@/features/digestive/api';
 import {
-  deleteOwnerStory,
   fetchOwnerStories,
-  updateOwnerStory,
-  type OwnerFact,
-  type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
 import {
   listFeedingPeriods,
@@ -69,7 +62,6 @@ export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
-  const queryClient = useQueryClient();
   const useDemoData = usingMockGate;
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
   useCareEvents(dog.id, dog.name);
@@ -129,62 +121,12 @@ export default function DogProfileTabScreen() {
     : (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
-  const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
-  const [storyDraft, setStoryDraft] = useState<OwnerFact[]>([]);
-  const [savingStory, setSavingStory] = useState(false);
-  const [storyError, setStoryError] = useState<string | null>(null);
   const storiesQuery = useQuery({
     queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
     queryFn: () => fetchOwnerStories(dog.id),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
-
-  const beginStoryEdit = (story: OwnerStoryObservation) => {
-    setEditingStoryId(story.id);
-    setStoryDraft(story.facts.map((fact) => ({ ...fact })));
-    setStoryError(null);
-  };
-  const saveStory = async () => {
-    if (!editingStoryId || storyDraft.some((fact) => fact.statement.trim().length < 2)) {
-      return;
-    }
-    setSavingStory(true);
-    setStoryError(null);
-    try {
-      await updateOwnerStory(dog.id, editingStoryId, storyDraft);
-      await storiesQuery.refetch();
-      setEditingStoryId(null);
-    } catch {
-      setStoryError('Non sono riuscito a salvare il ricordo.');
-    } finally {
-      setSavingStory(false);
-    }
-  };
-  const confirmStoryDelete = (storyId: string) => {
-    Alert.alert(
-      'Eliminare questo ricordo?',
-      'Dogly non la userà più per conoscere il tuo cane.',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: () => {
-            void deleteOwnerStory(dog.id, storyId)
-              .then(async () => {
-                await storiesQuery.refetch();
-                if (userId) {
-                  await queryClient.invalidateQueries({
-                    queryKey: queryKeys.knowledgeScore(userId, dog.id),
-                  });
-                }
-              })
-              .catch(() => setStoryError('Non sono riuscito a eliminare il ricordo.'));
-          },
-        },
-      ],
-    );
-  };
+  const storyFacts = (storiesQuery.data ?? []).flatMap((story) => story.facts);
 
   return (
     <View style={styles.root}>
@@ -354,7 +296,7 @@ export default function DogProfileTabScreen() {
         </Pressable>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Ricordi di {dog.name}</Text>
+          <Text style={styles.sectionTitle}>Quello che ricordo</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
@@ -365,7 +307,7 @@ export default function DogProfileTabScreen() {
           </Pressable>
         </View>
         {!useDemoData && storiesQuery.isLoading ? (
-          <Text style={styles.notesEmpty}>Carico i ricordi confermati…</Text>
+          <Text style={styles.notesEmpty}>Carico i ricordi…</Text>
         ) : null}
         {!useDemoData && storiesQuery.isError ? (
           <View style={styles.notesErrorRow}>
@@ -381,80 +323,60 @@ export default function DogProfileTabScreen() {
         !storiesQuery.isLoading &&
         !storiesQuery.isError &&
         (storiesQuery.data?.length ?? 0) === 0 ? (
-          <Text style={styles.notesEmpty}>
-            Qui ritroverai solo le cose che hai confermato.
-          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+            style={({ pressed }) => [
+              styles.detailsRow,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
+              <Ionicons name="heart-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.detailsText}>
+              <Text style={styles.detailsTitle}>Raccontami qualcosa di lui</Text>
+              <Text style={styles.detailsSubtitle}>
+                Conserverò soltanto ciò che scegli
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+          </Pressable>
         ) : null}
-        {(storiesQuery.data ?? []).map((story) => (
-          <Card key={story.id} style={styles.noteCard}>
-            {editingStoryId === story.id ? (
-              <>
-                {storyDraft.map((fact, index) => (
-                  <TextInput
-                    key={fact.id}
-                    value={fact.statement}
-                    multiline
-                    maxLength={280}
-                    onChangeText={(statement) =>
-                      setStoryDraft((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, statement } : item,
-                        ),
-                      )
-                    }
-                    style={styles.noteInput}
-                  />
-                ))}
-                <View style={styles.noteActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setEditingStoryId(null)}
-                  >
-                    <Text style={styles.noteActionSecondary}>Annulla</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={savingStory}
-                    onPress={() => void saveStory()}
-                  >
-                    <Text style={styles.noteActionPrimary}>
-                      {savingStory ? 'Salvo…' : 'Salva'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.noteMeta}>
-                  Dal tuo racconto ·{' '}
-                  {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
+        {storyFacts.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Apri tutti i ricordi di ${dog.name}`}
+            onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
+            style={({ pressed }) => [
+              styles.noteCard,
+              pressed && styles.pressed,
+            ]}
+          >
+            {storyFacts.slice(0, 2).map((fact) => (
+              <View key={fact.id} style={styles.memoryPreviewRow}>
+                <Ionicons name="heart-outline" size={17} color={colors.accent} />
+                <Text style={styles.noteText} numberOfLines={2}>
+                  {fact.statement}
                 </Text>
-                {story.facts.map((fact) => (
-                  <Text key={fact.id} style={styles.noteText}>
-                    {fact.statement}
-                  </Text>
-                ))}
-                <View style={styles.noteActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Elimina ricordo"
-                    onPress={() => confirmStoryDelete(story.id)}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Modifica ricordo"
-                    onPress={() => beginStoryEdit(story)}
-                  >
-                    <Text style={styles.noteActionPrimary}>Modifica</Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
-          </Card>
-        ))}
-        {storyError ? <Text style={styles.noteError}>{storyError}</Text> : null}
+              </View>
+            ))}
+            <View style={styles.memoryPreviewFooter}>
+              <Text style={styles.noteMeta}>
+                {storyFacts.length}{' '}
+                {storyFacts.length === 1 ? 'ricordo' : 'ricordi'}
+              </Text>
+              <View style={styles.memoryPreviewLink}>
+                <Text style={styles.noteActionPrimary}>Vedi tutti</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={17}
+                  color={colors.primary}
+                />
+              </View>
+            </View>
+          </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -794,6 +716,29 @@ const styles = StyleSheet.create({
   noteCard: {
     gap: spacing.sm,
     marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  memoryPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  memoryPreviewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+    marginTop: spacing.xs,
+  },
+  memoryPreviewLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
   },
   noteText: {
     color: colors.text,
@@ -805,30 +750,10 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },
-  noteInput: {
-    minHeight: 64,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    color: colors.text,
-    fontSize: typography.size.sm,
-    textAlignVertical: 'top',
-  },
-  noteActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.lg,
-    marginTop: spacing.xs,
-  },
   noteActionPrimary: {
     color: colors.primary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-  },
-  noteActionSecondary: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
   },
   noteError: {
     marginBottom: spacing.md,

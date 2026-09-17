@@ -11,6 +11,7 @@ from app.contracts.api import OwnerReportedFact
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import dogs_db
 from app.domains.ids import require_uuid
+from app.domains.owner_stories import is_useful_owner_statement
 from app.domains.repository import new_id
 
 
@@ -127,15 +128,24 @@ async def list_confirmed(
                 {"dog_id": dog_id, "user_id": user_id},
             )
         ).mappings().all()
-    return [
-        {
-            "id": str(row["id"]),
-            "dog_id": str(row["dog_id"]),
-            "facts": row["facts_json"],
-            "confirmed_at": row["confirmed_at"],
-        }
-        for row in rows
-    ]
+    result = []
+    for row in rows:
+        facts = [
+            fact
+            for fact in row["facts_json"]
+            if isinstance(fact, dict)
+            and is_useful_owner_statement(str(fact.get("statement") or ""))
+        ]
+        if facts:
+            result.append(
+                {
+                    "id": str(row["id"]),
+                    "dog_id": str(row["dog_id"]),
+                    "facts": facts,
+                    "confirmed_at": row["confirmed_at"],
+                }
+            )
+    return result
 
 
 async def update_confirmed(

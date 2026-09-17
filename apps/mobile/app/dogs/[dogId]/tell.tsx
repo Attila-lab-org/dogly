@@ -285,6 +285,17 @@ export default function TellDogScreen() {
             Controlla le informazioni, correggile oppure elimina quelle che non
             vuoi conservare.
           </Text>
+          {facts.length === 0 ? (
+            <Card style={styles.factCard}>
+              <Text style={styles.emptyFactTitle}>
+                Non ho trovato un ricordo su {dog.name}
+              </Text>
+              <Text style={styles.emptyFactText}>
+                Saluti, domande e conversazioni generiche non vengono salvati.
+                Raccontami invece qualcosa che hai notato su di lui.
+              </Text>
+            </Card>
+          ) : null}
           {facts.map((fact) => (
             <Card key={fact.id} style={styles.factCard}>
               <View style={styles.factTop}>
@@ -430,6 +441,16 @@ const styles = StyleSheet.create({
   },
   factCard: {
     gap: spacing.md,
+  },
+  emptyFactTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  emptyFactText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   factTop: {
     flexDirection: 'row',

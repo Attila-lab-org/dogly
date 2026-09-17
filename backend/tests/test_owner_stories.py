@@ -211,3 +211,61 @@ def test_owner_story_extracts_newlines_and_italian_health_terms():
 
     assert [fact.category for fact in facts] == ["HEALTH", "ROUTINE"]
     assert len(facts) == 2
+
+
+def test_owner_story_discards_greetings_and_generic_questions():
+    assert (
+        extract_owner_reported_facts(
+            "Ciao, tutto bene, come sta andando la situazione?"
+        )
+        == []
+    )
+    facts = extract_owner_reported_facts(
+        "Ciao. Sembra stanco. Come sta andando la situazione?"
+    )
+    assert [fact.statement for fact in facts] == ["Sembra stanco."]
+
+
+async def test_legacy_conversation_is_not_returned_as_a_memory(
+    client, auth_headers, state
+):
+    dog_id = await create_dog(client, auth_headers)
+    user_id = state.store.dogs[dog_id].owner_id
+    state.store.owner_reported_observations["useful"] = {
+        "id": "useful",
+        "dog_id": dog_id,
+        "user_id": user_id,
+        "status": "CONFIRMED",
+        "confirmed_at": "2026-09-17T19:27:36Z",
+        "facts": [
+            {
+                "id": "fact-useful",
+                "category": "GENERAL",
+                "statement": "Sembra stanco",
+                "provenance": "OWNER_REPORTED",
+            }
+        ],
+    }
+    state.store.owner_reported_observations["conversation"] = {
+        "id": "conversation",
+        "dog_id": dog_id,
+        "user_id": user_id,
+        "status": "CONFIRMED",
+        "confirmed_at": "2026-09-08T22:28:24Z",
+        "facts": [
+            {
+                "id": "fact-conversation",
+                "category": "GENERAL",
+                "statement": "Ciao, tutto bene, come sta andando la situazione?",
+                "provenance": "OWNER_REPORTED",
+            }
+        ],
+    }
+
+    response = await client.get(
+        f"/v1/dogs/{dog_id}/owner-stories",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == ["useful"]

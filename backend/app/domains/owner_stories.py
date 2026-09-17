@@ -35,6 +35,23 @@ def _category(statement: str) -> str:
     return "GENERAL"
 
 
+def is_useful_owner_statement(statement: str) -> bool:
+    """Reject greetings and questions that do not describe the dog."""
+    text = re.sub(r"\s+", " ", statement).strip()
+    lowered = text.casefold()
+    if len(re.findall(r"[a-zà-ÿ]+", lowered)) < 2 or text.endswith("?"):
+        return False
+    return not any(
+        re.fullmatch(pattern, lowered.rstrip(".!"))
+        for pattern in (
+            r"(ciao|salve|buongiorno|buonasera)( a tutti)?",
+            r"(tutto bene|come va|come stai|grazie|va bene)",
+            r"(ciao[, ]+)?tutto bene.*",
+            r"(ciao[, ]+)?come (va|stai|sta andando).*",
+        )
+    )
+
+
 def extract_owner_reported_facts(text: str) -> list[OwnerReportedFact]:
     """Split only explicit owner statements; never infer causes or patterns."""
     normalized = "\n".join(
@@ -45,9 +62,9 @@ def extract_owner_reported_facts(text: str) -> list[OwnerReportedFact]:
     sentences = [
         item.strip(" -")
         for item in re.split(r"(?<=[.!?])\s+|\n+", normalized)
-        if item.strip(" -")
+        if item.strip(" -") and is_useful_owner_statement(item.strip(" -"))
     ][:8]
-    if not sentences:
+    if not sentences and is_useful_owner_statement(normalized):
         sentences = [normalized]
     return [
         OwnerReportedFact(

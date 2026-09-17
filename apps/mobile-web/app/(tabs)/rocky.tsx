@@ -2,21 +2,19 @@
  * Profilo cane (Screen 3 mockup): spazio personale, visivo e orientato alle azioni.
  * Nessuna sezione "Quanto conosco {nome}".
  */
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
@@ -42,11 +40,7 @@ import {
   foodProductsMock,
 } from '@/mocks/secondary';
 import {
-  deleteOwnerStory,
   fetchOwnerStories,
-  updateOwnerStory,
-  type OwnerFact,
-  type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
 import { usePersonalPatterns } from '@/features/patterns/api';
 import {
@@ -67,7 +61,6 @@ export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
-  const queryClient = useQueryClient();
   const useDemoData = usingMockGate;
   useCareEvents(dog.id, dog.name);
   const { width } = useWindowDimensions();
@@ -133,67 +126,12 @@ export default function DogProfileTabScreen() {
     .filter((pattern) => pattern.state !== 'ARCHIVED')
     .slice(0, 2);
 
-  const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
-  const [storyDraft, setStoryDraft] = useState<OwnerFact[]>([]);
-  const [savingStory, setSavingStory] = useState(false);
-  const [storyError, setStoryError] = useState<string | null>(null);
   const storiesQuery = useQuery({
     queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
     queryFn: () => fetchOwnerStories(dog.id),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
-
-  const beginStoryEdit = (story: OwnerStoryObservation) => {
-    setEditingStoryId(story.id);
-    setStoryDraft(story.facts.map((fact) => ({ ...fact })));
-    setStoryError(null);
-  };
-  const saveStory = async () => {
-    if (
-      !editingStoryId ||
-      storyDraft.some((fact) => fact.statement.trim().length < 2)
-    ) {
-      return;
-    }
-    setSavingStory(true);
-    setStoryError(null);
-    try {
-      await updateOwnerStory(dog.id, editingStoryId, storyDraft);
-      await storiesQuery.refetch();
-      setEditingStoryId(null);
-    } catch {
-      setStoryError('Non sono riuscito a salvare il ricordo.');
-    } finally {
-      setSavingStory(false);
-    }
-  };
-  const confirmStoryDelete = (storyId: string) => {
-    Alert.alert(
-      'Eliminare questo ricordo?',
-      'Dogly non la userà più per conoscere il tuo cane.',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: () => {
-            void deleteOwnerStory(dog.id, storyId)
-              .then(async () => {
-                await storiesQuery.refetch();
-                if (userId) {
-                  await queryClient.invalidateQueries({
-                    queryKey: queryKeys.knowledgeScore(userId, dog.id),
-                  });
-                }
-              })
-              .catch(() =>
-                setStoryError('Non sono riuscito a eliminare il ricordo.'),
-              );
-          },
-        },
-      ],
-    );
-  };
+  const storyFacts = (storiesQuery.data ?? []).flatMap((story) => story.facts);
 
   return (
     <View style={styles.root}>
@@ -452,9 +390,9 @@ export default function DogProfileTabScreen() {
             </View>
           </Pressable>
 
-          {/* Ricordi confermati dal proprietario */}
+          {/* Anteprima compatta: la raccolta completa vive in una pagina dedicata. */}
           <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
-            <Text style={styles.secondaryTitle}>Ricordi di {dog.name}</Text>
+            <Text style={styles.secondaryTitle}>Quello che ricordo</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
@@ -466,7 +404,7 @@ export default function DogProfileTabScreen() {
             </Pressable>
           </View>
           {!useDemoData && storiesQuery.isLoading ? (
-            <Text style={styles.notesEmpty}>Carico i ricordi confermati…</Text>
+            <Text style={styles.notesEmpty}>Carico i ricordi…</Text>
           ) : null}
           {!useDemoData && storiesQuery.isError ? (
             <View style={styles.notesErrorRow}>
@@ -482,84 +420,62 @@ export default function DogProfileTabScreen() {
           !storiesQuery.isLoading &&
           !storiesQuery.isError &&
           (storiesQuery.data?.length ?? 0) === 0 ? (
-            <Text style={styles.notesEmpty}>
-              Qui ritroverai solo le cose che hai confermato.
-            </Text>
-          ) : null}
-          {(storiesQuery.data ?? []).map((story) => (
-            <View key={story.id} style={[styles.card, styles.noteCard]}>
-              {editingStoryId === story.id ? (
-                <>
-                  {storyDraft.map((fact, index) => (
-                    <TextInput
-                      key={fact.id}
-                      value={fact.statement}
-                      multiline
-                      maxLength={280}
-                      onChangeText={(statement) =>
-                        setStoryDraft((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, statement } : item,
-                          ),
-                        )
-                      }
-                      style={styles.noteInput}
-                    />
-                  ))}
-                  <View style={styles.noteActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setEditingStoryId(null)}
-                    >
-                      <Text style={styles.noteActionSecondary}>Annulla</Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      disabled={savingStory}
-                      onPress={() => void saveStory()}
-                    >
-                      <Text style={styles.noteActionPrimary}>
-                        {savingStory ? 'Salvo…' : 'Salva'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.noteMeta}>
-                    Dal tuo racconto ·{' '}
-                    {new Date(story.confirmed_at).toLocaleDateString('it-IT')}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            >
+              <View style={styles.linkRow}>
+                <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="heart-outline" size={20} color="#0D9488" />
+                </View>
+                <View style={styles.linkBody}>
+                  <Text style={styles.linkTitle}>Raccontami qualcosa di lui</Text>
+                  <Text style={styles.linkSubtitle}>
+                    Conserverò soltanto ciò che scegli
                   </Text>
-                  {story.facts.map((fact) => (
-                    <Text key={fact.id} style={styles.noteText}>
-                      {fact.statement}
-                    </Text>
-                  ))}
-                  <View style={styles.noteActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Elimina ricordo"
-                      onPress={() => confirmStoryDelete(story.id)}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color="#94A3B8"
-                      />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Modifica ricordo"
-                      onPress={() => beginStoryEdit(story)}
-                    >
-                      <Text style={styles.noteActionPrimary}>Modifica</Text>
-                    </Pressable>
-                  </View>
-                </>
-              )}
-            </View>
-          ))}
-          {storyError ? <Text style={styles.noteError}>{storyError}</Text> : null}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </View>
+            </Pressable>
+          ) : null}
+          {storyFacts.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Apri tutti i ricordi di ${dog.name}`}
+              onPress={() =>
+                router.push(`/dogs/${dog.id}/memories` as never)
+              }
+              style={({ pressed }) => [
+                styles.card,
+                styles.noteCard,
+                pressed && styles.pressed,
+              ]}
+            >
+              {storyFacts.slice(0, 2).map((fact) => (
+                <View key={fact.id} style={styles.memoryPreviewRow}>
+                  <Ionicons name="heart-outline" size={17} color="#0D9488" />
+                  <Text style={styles.noteText} numberOfLines={2}>
+                    {fact.statement}
+                  </Text>
+                </View>
+              ))}
+              <View style={styles.memoryPreviewFooter}>
+                <Text style={styles.noteMeta}>
+                  {storyFacts.length}{' '}
+                  {storyFacts.length === 1 ? 'ricordo' : 'ricordi'}
+                </Text>
+                <View style={styles.memoryPreviewLink}>
+                  <Text style={styles.noteActionPrimary}>Vedi tutti</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={17}
+                    color="#0284C7"
+                  />
+                </View>
+              </View>
+            </Pressable>
+          ) : null}
 
           <Pressable
             accessibilityRole="button"
@@ -855,6 +771,25 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
   },
+  memoryPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  memoryPreviewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  memoryPreviewLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   noteText: {
     color: '#1A2B48',
     fontSize: 14,
@@ -865,30 +800,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  noteInput: {
-    minHeight: 64,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    color: '#1A2B48',
-    fontSize: 14,
-    textAlignVertical: 'top',
-  },
-  noteActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 18,
-    marginTop: 4,
-  },
   noteActionPrimary: {
     color: '#0284C7',
     fontSize: 14,
     fontWeight: '600',
-  },
-  noteActionSecondary: {
-    color: '#64748B',
-    fontSize: 14,
   },
   noteError: {
     marginBottom: 12,
