@@ -294,6 +294,10 @@ def test_recent_partial_result_is_repaired_when_read_from_the_api():
             confidence_band=ConfidenceBand.LOW,
             summary=interpretation.consumer_summary,
             interpretation_json=payload,
+            observation_json={
+                "capture_quality": {"audio_quality": "degraded"},
+                "vocalization": {"type_candidates": ["bark"]},
+            },
             created_at=now,
             completed_at=now,
         )
@@ -302,3 +306,5 @@ def test_recent_partial_result_is_repaired_when_read_from_the_api():
     assert result.consumer_headline.startswith("Rocky appare teso")
     assert "agitato" in (result.dog_voice or "")
     assert result.recommended_next_step is None
+    assert "possibile abbaio" in (result.sound_note or "")
+    assert "non è abbastanza nitido" in (result.sound_note or "")

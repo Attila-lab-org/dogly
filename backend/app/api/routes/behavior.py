@@ -40,6 +40,39 @@ def _partial_reading_is_useful(interp: dict, consumer: dict) -> bool:
     )
 
 
+def _sound_note(event: BehaviorEventRec, interp: dict) -> str | None:
+    if interp.get("sound_note"):
+        return str(interp["sound_note"])
+    observation = event.observation_json or {}
+    vocalization = observation.get("vocalization") or {}
+    candidates = [
+        value
+        for value in vocalization.get("type_candidates", [])
+        if value in {"bark", "growl", "whine", "whimper", "howl"}
+    ]
+    if not candidates:
+        return None
+    label = {
+        "bark": "un possibile abbaio",
+        "growl": "un possibile ringhio",
+        "whine": "un possibile guaito",
+        "whimper": "un possibile lamento",
+        "howl": "un possibile ululato",
+    }[candidates[0]]
+    audio_quality = (observation.get("capture_quality") or {}).get(
+        "audio_quality"
+    )
+    if audio_quality in {"degraded", "insufficient", "unknown"}:
+        return (
+            f"L’audio sembra contenere {label}, ma non è abbastanza nitido "
+            "per descriverlo con precisione."
+        )
+    return (
+        f"Si sente {label}. Da solo non ha un significato fisso: "
+        "va letto insieme alla postura e a ciò che sta accadendo."
+    )
+
+
 def event_out(
     event: BehaviorEventRec,
     feedback: FeedbackValue | None = None,
@@ -68,7 +101,7 @@ def event_out(
             if partial_but_useful
             else consumer.get("dog_voice") or interp.get("dog_voice")
         ),
-        sound_note=interp.get("sound_note"),
+        sound_note=_sound_note(event, interp),
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
         feedback=feedback,
