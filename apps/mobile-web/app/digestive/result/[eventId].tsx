@@ -155,7 +155,8 @@ export default function DigestiveResultScreen() {
           </View>
           <Text style={styles.emptyTitle}>Serve un’altra foto</Text>
           <Text style={styles.emptySubtitle}>
-            Questa non è abbastanza nitida per un risultato affidabile.
+            Questa non è abbastanza nitida per un risultato affidabile. La
+            prova non viene conteggiata.
           </Text>
         </View>
 

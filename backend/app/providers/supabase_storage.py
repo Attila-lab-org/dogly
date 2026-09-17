@@ -107,8 +107,7 @@ class SupabaseStorageProvider:
             headers={**self._headers(), "Content-Type": "application/json"},
             json={"prefixes": [path]},
         )
-        if response.status_code not in (200, 404):
-            response.raise_for_status()
+        response.raise_for_status()
 
     async def upload_bytes(self, *, bucket: str, path: str, data: bytes, content_type: str) -> None:
         url = f"{self._base}/storage/v1/object/{bucket}/{quote(path, safe='/')}"

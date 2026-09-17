@@ -37,7 +37,7 @@ function EditableField({
   label: string;
   value: string;
   onChangeText: (v: string) => void;
-  band: ConfidenceBand;
+  band?: ConfidenceBand;
   multiline?: boolean;
   keyboardType?: 'default' | 'decimal-pad';
 }) {
@@ -45,7 +45,7 @@ function EditableField({
     <View style={styles.field}>
       <View style={styles.fieldHeader}>
         <Text style={styles.fieldLabel}>{label}</Text>
-        <ConfidenceBandPill band={band} />
+        {band ? <ConfidenceBandPill band={band} /> : null}
       </View>
       <TextInput
         value={value}
@@ -141,8 +141,8 @@ export default function FoodVerifyScreen() {
     );
   }
 
-  const band = (key: string): ConfidenceBand =>
-    mockFood?.fieldConfidence[key] ?? 'MEDIUM';
+  const band = (key: string): ConfidenceBand | undefined =>
+    mockFood?.fieldConfidence[key];
 
   const confirm = async () => {
     if (!brand.trim() || !name.trim()) {
@@ -207,9 +207,11 @@ export default function FoodVerifyScreen() {
     <ScreenContainer scroll>
       <StackScreenHeader title="Verifica etichetta" />
       <Text style={styles.intro}>
-        Controlla e correggi i campi letti dall'etichetta. Solo ciò che
-        confermi diventa definitivo: i valori servono a confrontare la
-        digestione di {dog.name} nel tempo.
+        {usingMockGate
+          ? "Controlla e correggi i campi letti dall'etichetta."
+          : "Usa la foto come riferimento e inserisci i valori riportati sull'etichetta."}{' '}
+        Solo ciò che confermi diventa definitivo: i valori servono a
+        confrontare la digestione di {dog.name} nel tempo.
       </Text>
 
       <Card style={styles.card}>

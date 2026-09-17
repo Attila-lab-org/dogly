@@ -97,7 +97,10 @@ export default function FoodScanScreen() {
             {phase === 'ready' && 'Nessuna etichetta acquisita'}
             {phase === 'scanning' &&
               (usingMockGate ? 'Sto leggendo il testo…' : 'Carico la foto…')}
-            {phase === 'done' && 'Testo letto: controlla i campi'}
+            {phase === 'done' &&
+              (usingMockGate
+                ? 'Testo letto: controlla i campi'
+                : 'Foto caricata: inserisci i dati dell’etichetta')}
           </Text>
         </View>
       </Card>

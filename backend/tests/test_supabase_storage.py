@@ -161,6 +161,28 @@ async def test_delete_missing_object_is_successful() -> None:
 
 
 @pytest.mark.asyncio
+async def test_delete_object_does_not_hide_missing_bucket() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="bucket not found")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await provider.delete_object(
+            bucket="missing-bucket",
+            path="users/u/photo.jpg",
+        )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_signed_read_maps_transient_storage_error_to_timeout() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(503, text="temporarily unavailable")

@@ -35,6 +35,29 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+  mobile-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+          run_install: false
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Production web export
+        run: pnpm run build:web
+
   backend:
     runs-on: ubuntu-latest
     defaults:
