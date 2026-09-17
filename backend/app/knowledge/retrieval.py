@@ -11,6 +11,7 @@ from app.contracts.observation import (
     TriState,
 )
 from app.contracts.taxonomy import ContextBucket
+from app.knowledge.breed_resolver import resolve_breed
 from app.knowledge.models import (
     DogContextSnapshot,
     KnowledgeContext,
@@ -19,37 +20,15 @@ from app.knowledge.models import (
 from app.knowledge.registry import get_registry
 from app.knowledge.safety import fired_safety_ids
 
-_UNKNOWN_BREED_LABELS = frozenset(
-    {
-        "",
-        "mix",
-        "misto",
-        "meticcio",
-        "incrocio",
-        "unknown",
-        "sconosciuto",
-        "non so",
-        "non lo so",
-        "non specificata",
-        "non specificato",
-        "altro",
-        "other",
-        "n/a",
-        "na",
-        "cane",
-        "dog",
-    }
-)
-
 
 def breed_prior_eligible(dog_context: DogContextSnapshot | None) -> bool:
-    """PRIOR_BREED_001 applies only to a named, non-mix breed label."""
-    if dog_context is None or dog_context.is_mix:
+    """PRIOR_BREED_001 follows the canonical breed resolver. Mix/unknown never."""
+    if dog_context is None:
         return False
-    label = (dog_context.breed_label or "").strip().lower()
-    if not label or label in _UNKNOWN_BREED_LABELS:
-        return False
-    return not any(token in label for token in ("mix", "misto", "meticcio", "incrocio"))
+    return resolve_breed(
+        dog_context.breed_label,
+        is_mix=dog_context.is_mix,
+    ).prior_eligible
 
 
 def _candidate_ids(

@@ -94,10 +94,9 @@ def build_dog_intelligence_context(
         dog_context.breed_label if dog_context is not None else dog.breed_label,
         is_mix=dog_context.is_mix if dog_context is not None else dog.is_mix,
     )
-    extra_when = [domain]
+    extra_when: list[str] = []
     if breed.status == "NAMED":
         extra_when.append("named_breed")
-    extra_when.extend(name for name, enabled in flags.items() if enabled)
     return DogIntelligenceContext(
         domain=domain,
         dog_id=dog.id,

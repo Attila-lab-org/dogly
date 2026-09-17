@@ -21,7 +21,7 @@ from app.domains.external_food import confirm_external_food, lookup_external_foo
 from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import DogRec
 from app.knowledge.breed_resolver import resolve_breed
-from app.knowledge.intelligence_v3 import get_intelligence_v3
+from app.knowledge.intelligence_v3 import get_intelligence_v3, select_claims
 from app.knowledge.retrieval import breed_prior_eligible, retrieve_evidence
 from app.providers.mock import load_fixture
 from app.providers.open_pet_food_facts import (
@@ -59,6 +59,7 @@ def test_mix_and_unknown_never_receive_breed_prior():
         _dog(breed_label="Mix"),
         _dog(breed_label="meticcio"),
         _dog(breed_label="Sconosciuto"),
+        _dog(breed_label="razza inventata xyz"),
         _dog(breed_label=None),
     ):
         context = build_dog_context(dog)
@@ -106,6 +107,101 @@ def test_breed_resolver(label, is_mix, status, group):
     assert resolved.status == status
     assert resolved.functional_group == group
     assert resolved.prior_eligible is (status == "NAMED")
+
+
+def test_unrecognized_breed_is_unknown_and_gets_no_named_prior():
+    from app.knowledge.retrieval import _candidate_ids
+
+    observation = ObservationContract.model_validate(
+        {
+            "observer_meta": {
+                "provider": "mock",
+                "model": "mock",
+                "request_id": "req-unknown-breed",
+            },
+            "capture_quality": {"overall_quality": "good"},
+        }
+    )
+    resolved = resolve_breed("razza inventata xyz")
+    context = build_dog_context(_dog(breed_label="razza inventata xyz"))
+    assert resolved.status == "UNKNOWN"
+    assert resolved.prior_eligible is False
+    assert breed_prior_eligible(context) is False
+    assert "PRIOR_BREED_001" not in _candidate_ids(
+        observation, ContextBucket.UNKNOWN, context
+    )
+    result = retrieve_evidence(observation, ContextBucket.UNKNOWN, context)
+    assert "PRIOR_BREED_001" not in {card.card_id for card in result.cards}
+
+
+def test_flagged_claims_require_their_feature_flag():
+    off = {
+        "breed_intelligence_v1": False,
+        "morphology_observer_context_v1": False,
+        "nutrition_intelligence_v1": False,
+        "digestive_longitudinal_v3": False,
+        "open_pet_food_facts_v1": False,
+    }
+    digestive_off = {
+        claim.claim_id
+        for claim in select_claims(
+            domain="digestive",
+            flags=off,
+            extra_when=[],
+            limit=20,
+        )
+    }
+    assert "DIGEST_LONGITUDINAL_001" not in digestive_off
+    assert "NUTR_TRANSITION_001" not in digestive_off
+    assert "POP_NO_AGGRESSION_001" in digestive_off
+
+    digestive_on = {
+        claim.claim_id
+        for claim in select_claims(
+            domain="digestive",
+            flags={**off, "digestive_longitudinal_v3": True},
+            extra_when=[],
+            limit=20,
+        )
+    }
+    assert "DIGEST_LONGITUDINAL_001" in digestive_on
+
+    nutrition_off = {
+        claim.claim_id
+        for claim in select_claims(domain="nutrition", flags=off, limit=20)
+    }
+    assert "NUTR_WEIGHT_001" not in nutrition_off
+    assert "OPFF_ATTRIBUTION_001" not in nutrition_off
+
+    nutrition_on = {
+        claim.claim_id
+        for claim in select_claims(
+            domain="nutrition",
+            flags={**off, "nutrition_intelligence_v1": True},
+            limit=20,
+        )
+    }
+    assert "NUTR_WEIGHT_001" in nutrition_on
+    assert "OPFF_ATTRIBUTION_001" not in nutrition_on
+
+    behavior_off = {
+        claim.claim_id
+        for claim in select_claims(
+            domain="behavior",
+            flags=off,
+            extra_when=["named_breed"],
+            limit=20,
+        )
+    }
+    assert "POP_VARIATION_001" not in behavior_off
+    assert "MORPH_VERIFY_001" not in behavior_off
+
+    intel = build_dog_intelligence_context(
+        _dog(breed_label="Luna mix", is_mix=False),
+        domain="digestive",
+        settings=_settings(),
+    )
+    assert "DIGEST_LONGITUDINAL_001" not in {claim.claim_id for claim in intel.claims}
 
 
 def test_observer_payload_never_includes_breed_name():

@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     nutrition_intelligence_v1: bool = False
     digestive_longitudinal_v3: bool = False
     open_pet_food_facts_v1: bool = False
+    open_pet_food_facts_user_agent: str = "DOGly/1.0 (+https://dogly.app)"
 
     # --- CORS (sez. 9.1) ---
     # Comma-separated list of allowed origins for the public API. The mobile

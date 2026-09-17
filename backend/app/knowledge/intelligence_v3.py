@@ -24,6 +24,17 @@ class IntelligenceSource(BaseModel):
     use: str
 
 
+FEATURE_FLAGS = frozenset(
+    {
+        "breed_intelligence_v1",
+        "morphology_observer_context_v1",
+        "nutrition_intelligence_v1",
+        "digestive_longitudinal_v3",
+        "open_pet_food_facts_v1",
+    }
+)
+
+
 class IntelligenceClaim(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -32,6 +43,7 @@ class IntelligenceClaim(BaseModel):
     statement: str
     forbidden: str
     applies_when: list[str] = Field(default_factory=list)
+    requires_flags: list[str] = Field(default_factory=list)
     evidence_grade: Literal["A", "B", "C"]
     source_ids: list[str]
 
@@ -69,7 +81,22 @@ def get_intelligence_v3() -> IntelligenceV3Document:
         unknown = set(claim.source_ids) - source_ids
         if unknown:
             raise ValueError(f"{claim.id}: unknown sources {unknown}")
+        unknown_flags = set(claim.requires_flags) - FEATURE_FLAGS
+        if unknown_flags:
+            raise ValueError(f"{claim.id}: unknown flags {unknown_flags}")
     return document
+
+
+def _required_flags(claim: IntelligenceClaim) -> list[str]:
+    names = [
+        *claim.requires_flags,
+        *(item for item in claim.applies_when if item in FEATURE_FLAGS),
+    ]
+    return list(dict.fromkeys(names))
+
+
+def _applicability(claim: IntelligenceClaim) -> list[str]:
+    return [item for item in claim.applies_when if item not in FEATURE_FLAGS]
 
 
 def select_claims(
@@ -79,18 +106,19 @@ def select_claims(
     extra_when: list[str] | None = None,
     limit: int = 3,
 ) -> list[ClaimSummary]:
+    """Select claims only when every required flag is on and applicability matches.
+
+    A domain match never makes a required feature flag optional.
+    """
     document = get_intelligence_v3()
-    active = {"always", domain, *(extra_when or [])}
-    active.update(name for name, enabled in flags.items() if enabled)
+    applicability = {"always", domain, *(extra_when or [])}
     selected: list[ClaimSummary] = []
     for claim in document.claims:
-        if not set(claim.applies_when) & active:
+        required = _required_flags(claim)
+        if required and not all(flags.get(name) for name in required):
             continue
-        if (
-            claim.domain == "population"
-            and "always" not in claim.applies_when
-            and not flags.get("breed_intelligence_v1")
-        ):
+        predicates = _applicability(claim)
+        if predicates and not set(predicates) & applicability:
             continue
         selected.append(
             ClaimSummary(

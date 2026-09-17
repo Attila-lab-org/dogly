@@ -13,6 +13,7 @@ from app.contracts.api import (
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive_db, dogs_db
+from app.domains.external_food import default_opff_client, fetch_candidate
 from app.domains.ids import require_uuid
 from app.domains.models import FoodProductRec
 from app.domains.repository import new_id
@@ -48,13 +49,7 @@ async def lookup_external_food(
     _require_feature(enabled)
     require_uuid(payload.dog_id, not_found="Dog not found")
     await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=payload.dog_id)
-    adapter = client or OpenPetFoodFactsClient()
-    candidate = await adapter.lookup_barcode(payload.barcode)
-    if candidate is None or not candidate.name:
-        raise ApiError(
-            ErrorCode.NOT_FOUND,
-            "Non ho trovato un alimento confermabile per questo codice.",
-        )
+    candidate = await fetch_candidate(client or default_opff_client(), payload.barcode)
     lookup_id = _uuid_id()
     async with engine.begin() as conn:
         existing = (

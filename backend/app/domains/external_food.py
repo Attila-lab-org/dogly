@@ -16,10 +16,42 @@ from app.domains.digestive import create_manual_food_product
 from app.domains.dogs import get_owned_dog
 from app.domains.models import FoodProductRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
+from app.providers.base import ProviderRateLimitError
 from app.providers.open_pet_food_facts import (
     ExternalFoodCandidate,
     OpenPetFoodFactsClient,
 )
+
+
+def default_opff_client() -> OpenPetFoodFactsClient:
+    from app.config import get_settings
+
+    return OpenPetFoodFactsClient(
+        user_agent=get_settings().open_pet_food_facts_user_agent
+    )
+
+
+async def fetch_candidate(
+    adapter: OpenPetFoodFactsClient, barcode: str
+) -> ExternalFoodCandidate:
+    try:
+        candidate = await adapter.lookup_barcode(barcode)
+    except ProviderRateLimitError as exc:
+        raise ApiError(
+            ErrorCode.RATE_LIMITED,
+            "Troppe richieste in questo momento.",
+        ) from exc
+    except TimeoutError as exc:
+        raise ApiError(
+            ErrorCode.PROVIDER_TIMEOUT,
+            "Il catalogo alimenti non è raggiungibile.",
+        ) from exc
+    if candidate is None or not candidate.name:
+        raise ApiError(
+            ErrorCode.NOT_FOUND,
+            "Non ho trovato un alimento confermabile per questo codice.",
+        )
+    return candidate
 
 
 def _require_feature(enabled: bool) -> None:
@@ -40,13 +72,7 @@ async def lookup_external_food(
 ) -> tuple[str, ExternalFoodCandidate]:
     _require_feature(enabled)
     get_owned_dog(store, user_id=user_id, dog_id=payload.dog_id)
-    adapter = client or OpenPetFoodFactsClient()
-    candidate = await adapter.lookup_barcode(payload.barcode)
-    if candidate is None or not candidate.name:
-        raise ApiError(
-            ErrorCode.NOT_FOUND,
-            "Non ho trovato un alimento confermabile per questo codice.",
-        )
+    candidate = await fetch_candidate(client or default_opff_client(), payload.barcode)
     lookup_id = new_id()
     store.external_food_lookups[lookup_id] = {
         "id": lookup_id,

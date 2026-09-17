@@ -617,6 +617,134 @@
         }
       }
     },
+    "/v1/dogs/{dog_id}/weight-events": {
+      "get": {
+        "tags": [
+          "dogs"
+        ],
+        "summary": "List Weight Events",
+        "operationId": "list_weight_events_v1_dogs__dog_id__weight_events_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WeightEventOut"
+                  },
+                  "title": "Response List Weight Events V1 Dogs  Dog Id  Weight Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "dogs"
+        ],
+        "summary": "Create Weight Event",
+        "operationId": "create_weight_event_v1_dogs__dog_id__weight_events_post",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeightEventCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/dogs/{dog_id}/avatar/init": {
       "post": {
         "tags": [
@@ -904,6 +1032,17 @@
               "minimum": 1,
               "default": 12,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           },
           {
@@ -3784,6 +3923,156 @@
         }
       }
     },
+    "/v1/nutrition/foods/external/lookup": {
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Lookup External Food",
+        "operationId": "lookup_external_food_v1_nutrition_foods_external_lookup_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalFoodLookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalFoodCandidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nutrition/foods/external/confirm": {
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Confirm External Food",
+        "operationId": "confirm_external_food_v1_nutrition_foods_external_confirm_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalFoodConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodProductOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/subscription/status": {
       "get": {
         "tags": [
@@ -5392,6 +5681,39 @@
               }
             ],
             "title": "Unusual Food 48H"
+          },
+          "appetite_reduced": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appetite Reduced"
+          },
+          "straining_or_urgency": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Straining Or Urgency"
+          },
+          "supplements_or_medication": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplements Or Medication"
           }
         },
         "type": "object",
@@ -6804,6 +7126,180 @@
         ],
         "title": "EvidenceSource"
       },
+      "ExternalFoodCandidateOut": {
+        "properties": {
+          "lookup_id": {
+            "type": "string",
+            "title": "Lookup Id"
+          },
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ingredients_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients Raw"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "attribution": {
+            "type": "string",
+            "title": "Attribution"
+          },
+          "confirmation_required": {
+            "type": "boolean",
+            "title": "Confirmation Required",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "lookup_id",
+          "barcode",
+          "attribution"
+        ],
+        "title": "ExternalFoodCandidateOut"
+      },
+      "ExternalFoodConfirmRequest": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "lookup_id": {
+            "type": "string",
+            "title": "Lookup Id"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "ingredients_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients Raw"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories"
+          },
+          "activate": {
+            "type": "boolean",
+            "title": "Activate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "lookup_id",
+          "name"
+        ],
+        "title": "ExternalFoodConfirmRequest"
+      },
+      "ExternalFoodLookupRequest": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "barcode": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 8,
+            "title": "Barcode"
+          },
+          "client_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Client Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "barcode",
+          "client_request_id"
+        ],
+        "title": "ExternalFoodLookupRequest"
+      },
       "FecalCompleteResponse": {
         "properties": {
           "event_id": {
@@ -7175,6 +7671,28 @@
               }
             ],
             "title": "Verified At"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "external_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Source"
           }
         },
         "type": "object",
@@ -8983,6 +9501,97 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WeightEventCreate": {
+        "properties": {
+          "weight_kg": {
+            "type": "number",
+            "exclusiveMaximum": 200.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Weight Kg"
+          },
+          "body_condition_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Condition Score"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "weight_kg"
+        ],
+        "title": "WeightEventCreate"
+      },
+      "WeightEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "weight_kg": {
+            "type": "number",
+            "title": "Weight Kg"
+          },
+          "body_condition_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Condition Score"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "OWNER"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dog_id",
+          "weight_kg",
+          "recorded_at",
+          "created_at"
+        ],
+        "title": "WeightEventOut"
       }
     }
   }

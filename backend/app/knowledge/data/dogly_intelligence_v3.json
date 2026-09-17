@@ -56,7 +56,8 @@
       "domain": "population",
       "statement": "Breed explains only a small share of individual behavioral variation. A named breed is a weak population prior, never a personality.",
       "forbidden": "Do not treat breed as destiny, temperament, or an aggression label.",
-      "applies_when": ["named_breed", "breed_intelligence_v1"],
+      "applies_when": ["named_breed"],
+      "requires_flags": ["breed_intelligence_v1"],
       "evidence_grade": "A",
       "source_ids": ["MORRILL_2022_SCIENCE", "DARWINS_ARK_DRYAD"]
     },
@@ -65,7 +66,8 @@
       "domain": "population",
       "statement": "Ancestral working function may weakly align with some motion or attention patterns at population level only.",
       "forbidden": "Do not infer intent, drive, or training need from functional group alone.",
-      "applies_when": ["named_breed", "breed_intelligence_v1"],
+      "applies_when": ["named_breed"],
+      "requires_flags": ["breed_intelligence_v1"],
       "evidence_grade": "B",
       "source_ids": ["MORRILL_2022_SCIENCE"]
     },
@@ -75,6 +77,7 @@
       "statement": "No breed or mix receives an aggression, bite-risk, or dangerousness prior.",
       "forbidden": "Never introduce aggression, guilt, or breed ban language from taxonomy.",
       "applies_when": ["always"],
+      "requires_flags": [],
       "evidence_grade": "A",
       "source_ids": ["MORRILL_2022_SCIENCE"]
     },
@@ -83,7 +86,8 @@
       "domain": "behavior",
       "statement": "Visible anatomy in the clip is the only morphology evidence. Hints may resolve ambiguous ear, tail or muzzle views when they match the video.",
       "forbidden": "Do not infer breed, mix composition, or temperament from morphology.",
-      "applies_when": ["morphology_observer_context_v1"],
+      "applies_when": ["behavior"],
+      "requires_flags": ["morphology_observer_context_v1"],
       "evidence_grade": "C",
       "source_ids": ["MORRILL_2022_SCIENCE"]
     },
@@ -92,7 +96,8 @@
       "domain": "digestive",
       "statement": "Seven- and thirty-day episode counts describe frequency for this dog, not a diagnosis or a food verdict.",
       "forbidden": "Do not claim a food caused the change or name a disease from photo frequency.",
-      "applies_when": ["digestive", "digestive_longitudinal_v3"],
+      "applies_when": ["digestive"],
+      "requires_flags": ["digestive_longitudinal_v3"],
       "evidence_grade": "B",
       "source_ids": ["VCA_DIARRHEA_CONTEXT"]
     },
@@ -101,7 +106,8 @@
       "domain": "nutrition",
       "statement": "Owner-recorded weight and body-condition scores are monitoring facts. Change over time is context for appetite and digestion, not a clinical diagnosis.",
       "forbidden": "Do not diagnose obesity, malnutrition, or endocrine disease from a home weight.",
-      "applies_when": ["nutrition_intelligence_v1"],
+      "applies_when": ["nutrition"],
+      "requires_flags": ["nutrition_intelligence_v1"],
       "evidence_grade": "B",
       "source_ids": ["WSAVA_NUTRITION_2011"]
     },
@@ -110,7 +116,8 @@
       "domain": "nutrition",
       "statement": "A recent food change is useful coincidence to watch. It does not prove the food caused a digestive change.",
       "forbidden": "Do not blame or clear a product without owner-confirmed diet history.",
-      "applies_when": ["nutrition_intelligence_v1", "digestive"],
+      "applies_when": ["digestive", "nutrition"],
+      "requires_flags": ["nutrition_intelligence_v1"],
       "evidence_grade": "B",
       "source_ids": ["AAHA_NUTRITION_2021"]
     },
@@ -119,7 +126,8 @@
       "domain": "nutrition",
       "statement": "Open Pet Food Facts candidates stay unverified until the owner confirms the product. Attribution and share-alike apply to reused product data.",
       "forbidden": "Do not persist barcode data as the dog's food without confirmation.",
-      "applies_when": ["open_pet_food_facts_v1"],
+      "applies_when": ["nutrition"],
+      "requires_flags": ["open_pet_food_facts_v1"],
       "evidence_grade": "A",
       "source_ids": ["OPEN_PET_FOOD_FACTS"]
     }
