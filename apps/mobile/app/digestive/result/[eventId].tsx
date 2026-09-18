@@ -63,6 +63,7 @@ export default function DigestiveResultScreen() {
   const { usingMockGate } = useSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [vetShareError, setVetShareError] = useState(false);
+  const [feedback, setFeedback] = useState<'useful' | 'not_useful' | null>(null);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
   const query = useQuery({
@@ -274,23 +275,18 @@ export default function DigestiveResultScreen() {
         </View>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
+        {event.recommendedNextStep &&
+        action?.key !== 'ask_followup' &&
+        action?.key !== 'contact_vet' ? (
+          <Text style={styles.resultAdvice}>
+            {sanitizeOwnerCopy(
+              event.recommendedNextStep.replace(/Rocky/g, dog.name),
+            )}
+          </Text>
+        ) : null}
       </View>
 
-      {digestiveActionCardKind(action?.key) === 'nutrition' ? (
-        <Card style={styles.actionCard}>
-          {action?.title ? (
-            <Text style={styles.actionTitle}>
-              {sanitizeOwnerCopy(action.title.replace(/Rocky/g, dog.name))}
-            </Text>
-          ) : null}
-          <Button
-            title={action?.label ?? 'Apri alimentazione'}
-            onPress={() =>
-              router.push(digestiveNutritionHref(action?.href) as Href)
-            }
-          />
-        </Card>
-      ) : digestiveActionCardKind(action?.key) === 'vet' ? (
+      {digestiveActionCardKind(action?.key) === 'vet' ? (
         <Card style={styles.actionCard}>
           <Button
             title={DIGESTIVE_VET_SHARE_CTA}
@@ -456,10 +452,65 @@ export default function DigestiveResultScreen() {
         </>
       ) : null}
 
-      <Button
-        title="Fatto"
-        onPress={() => router.replace('/(tabs)/home')}
-      />
+      {digestiveActionCardKind(action?.key) === 'nutrition' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${action?.title ?? 'Alimentazione'} ${action?.label ?? ''}`.trim()}
+          onPress={() =>
+            router.push(digestiveNutritionHref(action?.href) as Href)
+          }
+          style={styles.nutritionChip}
+        >
+          <Text style={styles.nutritionChipTitle}>
+            {sanitizeOwnerCopy(
+              (action?.title ?? 'Alimentazione non impostata').replace(
+                /Rocky/g,
+                dog.name,
+              ),
+            )}
+          </Text>
+          <Text style={styles.nutritionChipAction}>
+            {action?.label ?? 'Aggiungi'}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.footerRow}>
+        <View style={styles.thumbsRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Utile"
+            accessibilityState={{ selected: feedback === 'useful' }}
+            onPress={() => setFeedback('useful')}
+            style={[
+              styles.thumbButton,
+              feedback === 'useful' && styles.thumbButtonSelected,
+            ]}
+          >
+            <Text style={styles.thumbGlyph}>👍</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Non utile"
+            accessibilityState={{ selected: feedback === 'not_useful' }}
+            onPress={() => setFeedback('not_useful')}
+            style={[
+              styles.thumbButton,
+              feedback === 'not_useful' && styles.thumbButtonSelected,
+            ]}
+          >
+            <Text style={styles.thumbGlyph}>👎</Text>
+          </Pressable>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Fatto"
+          onPress={() => router.replace('/(tabs)/home')}
+          hitSlop={8}
+        >
+          <Text style={styles.doneText}>Fatto</Text>
+        </Pressable>
+      </View>
     </ScreenContainer>
   );
 }
@@ -563,6 +614,64 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     textAlign: 'center',
+  },
+  resultAdvice: {
+    marginTop: spacing.md,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.size.md * typography.lineHeight.normal,
+    textAlign: 'center',
+  },
+  nutritionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.md,
+  },
+  nutritionChipTitle: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+  },
+  nutritionChipAction: {
+    color: colors.accent,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  thumbsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  thumbButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  thumbButtonSelected: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  thumbGlyph: {
+    fontSize: 18,
+  },
+  doneText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
   },
   safetyCard: {
     padding: spacing.lg,

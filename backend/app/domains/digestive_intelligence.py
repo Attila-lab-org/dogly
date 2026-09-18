@@ -27,7 +27,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v8"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v9"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -228,15 +228,31 @@ def _food_stability_phrase(context: DigestiveContext) -> str | None:
     return f"Il cibo è lo stesso da {days} giorni"
 
 
+def _repeat_counts(context: DigestiveContext) -> tuple[int, int]:
+    """Prior events already stored; the current observation is not included."""
+
+    count_7d = max(context.episode_count_7d, 0)
+    count_24h = max(
+        context.recent_episode_count_24h,
+        context.recent_watery_count_24h,
+        0,
+    )
+    return count_7d, count_24h
+
+
 def _repetition_phrase(context: DigestiveContext, consistency: str) -> str | None:
-    if context.episode_count_7d >= 1 and consistency in {
-        "soft",
-        "unformed",
-        "watery",
-    }:
-        return "È la seconda volta questa settimana."
-    if context.recent_watery_count_24h >= 1 or context.recent_episode_count_24h >= 1:
-        return "È la seconda volta in poche ore."
+    loose = consistency in {"soft", "unformed", "watery"}
+    count_7d, count_24h = _repeat_counts(context)
+    if count_24h >= 2 and (loose or context.recent_watery_count_24h >= 1):
+        return "Si sta ripetendo in poche ore."
+    if count_24h == 1 and (loose or context.recent_watery_count_24h >= 1):
+        return "Si è già presentata un’altra volta in poche ore."
+    if not loose:
+        return None
+    if count_7d >= 2:
+        return "Negli ultimi giorni si sta ripetendo."
+    if count_7d == 1:
+        return "Negli ultimi giorni si è già presentata un’altra volta."
     return None
 
 
@@ -314,16 +330,12 @@ def _useful_info(
             fragment = f"{fragment}."
         sentences.append(fragment)
 
-    if baseline_code == "INSUFFICIENT" and len(sentences) < 2:
-        sentences.append(
-            f"Sto ancora imparando il solito digestivo di {context.dog_name}."
-        )
+    if baseline_code == "INSUFFICIENT" and not sentences:
+        sentences.append("Ho ancora poche osservazioni per un confronto personale.")
     if not sentences:
         if baseline_code == "NEAR_USUAL":
             return "Niente di diverso dalle ultime osservazioni."
-        if baseline_code == "ABOVE_USUAL":
-            return "È un cambiamento rispetto alle ultime osservazioni."
-        if baseline_code == "BELOW_USUAL":
+        if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
             return "È un cambiamento rispetto alle ultime osservazioni."
         return "Per ora niente altro da aggiungere."
     return " ".join(sentences[:2])
@@ -547,6 +559,41 @@ def _choose_useful_action(
     return DigestiveUsefulAction(key="none"), None, None
 
 
+def _final_advice(
+    *,
+    observation: dict[str, Any],
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    safety: DigestiveState,
+    followup_question: str | None,
+) -> str:
+    if safety is DigestiveState.VET_CONTACT or _visual_safety_action(observation):
+        return "Contatta il veterinario e descrivi ciò che hai osservato."
+    if verification_unavailable(observation):
+        return (
+            "Se il dubbio resta, senti il veterinario e descrivi ciò che hai visto."
+        )
+    if followup_question:
+        return followup_question
+    if context.vomiting_today is True or context.reduced_activity_today is True:
+        return (
+            "Tieni d’occhio i prossimi episodi e senti il veterinario "
+            "se peggiora."
+        )
+    loose = consistency in {"soft", "unformed", "watery"}
+    repeating = _repetition_phrase(context, consistency) is not None
+    if repeating and loose:
+        return "Osserva i prossimi episodi e segnala vomito o calo di attività."
+    if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
+        return "Confronta le prossime osservazioni prima di cambiare qualcosa."
+    if _recent_food_change(context) or context.unusual_food_48h is True:
+        return "Confronta le prossime osservazioni senza cambiare altro per ora."
+    if baseline_code == "INSUFFICIENT":
+        return "Serve qualche osservazione in più per capire l’andamento personale."
+    return "Per ora va così."
+
+
 def count_recent_windows(
     created_at,
     rows: list,
@@ -704,15 +751,14 @@ def build_digestive_intelligence(
         followup_key=followup_key,
         followup_question=followup_question,
     )
-
-    if useful_action.key == "contact_vet":
-        next_step = "Contatta il veterinario e descrivi ciò che hai osservato."
-    elif useful_action.key in {"add_nutrition", "complete_nutrition"}:
-        next_step = useful_action.title or useful_action.label or ""
-    elif useful_action.key == "ask_followup":
-        next_step = followup_question or ""
-    else:
-        next_step = "Per ora va bene così."
+    next_step = _final_advice(
+        observation=observation,
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        followup_question=followup_question,
+    )
 
     knowledge = retrieve_digestive_knowledge(
         observation,

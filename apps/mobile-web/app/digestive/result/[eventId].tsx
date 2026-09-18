@@ -267,23 +267,18 @@ export default function DigestiveResultScreen() {
         </View>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
+        {event.recommendedNextStep &&
+        action?.key !== 'ask_followup' &&
+        action?.key !== 'contact_vet' ? (
+          <Text style={styles.resultAdvice}>
+            {sanitizeOwnerCopy(
+              event.recommendedNextStep.replace(/Rocky/g, dog.name),
+            )}
+          </Text>
+        ) : null}
       </View>
 
-      {digestiveActionCardKind(action?.key) === 'nutrition' ? (
-        <Card style={styles.actionCard}>
-          {action?.title ? (
-            <Text style={styles.actionTitle}>
-              {sanitizeOwnerCopy(action.title.replace(/Rocky/g, dog.name))}
-            </Text>
-          ) : null}
-          <Button
-            title={action?.label ?? 'Apri alimentazione'}
-            onPress={() =>
-              router.push(digestiveNutritionHref(action?.href) as Href)
-            }
-          />
-        </Card>
-      ) : digestiveActionCardKind(action?.key) === 'vet' ? (
+      {digestiveActionCardKind(action?.key) === 'vet' ? (
         <Card style={styles.actionCard}>
           <Button
             title={DIGESTIVE_VET_SHARE_CTA}
@@ -449,41 +444,64 @@ export default function DigestiveResultScreen() {
         </>
       ) : null}
 
-      <View style={styles.actionPills}>
+      {digestiveActionCardKind(action?.key) === 'nutrition' ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ selected: feedback === 'useful' }}
-          onPress={() => setFeedback('useful')}
-          style={[
-            styles.feedbackPill,
-            styles.feedbackUseful,
-            feedback === 'useful' && styles.feedbackUsefulSelected,
-          ]}
+          accessibilityLabel={`${action?.title ?? 'Alimentazione'} ${action?.label ?? ''}`.trim()}
+          onPress={() =>
+            router.push(digestiveNutritionHref(action?.href) as Href)
+          }
+          style={styles.nutritionChip}
         >
-          <Ionicons name="thumbs-up-outline" size={18} color={colors.teal} />
-          <Text style={[styles.feedbackPillText, { color: colors.teal }]}>
-            Mi è stato utile
+          <Text style={styles.nutritionChipTitle}>
+            {sanitizeOwnerCopy(
+              (action?.title ?? 'Alimentazione non impostata').replace(
+                /Rocky/g,
+                dog.name,
+              ),
+            )}
+          </Text>
+          <Text style={styles.nutritionChipAction}>
+            {action?.label ?? 'Aggiungi'}
           </Text>
         </Pressable>
+      ) : null}
+
+      <View style={styles.footerRow}>
+        <View style={styles.thumbsRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Utile"
+            accessibilityState={{ selected: feedback === 'useful' }}
+            onPress={() => setFeedback('useful')}
+            style={[
+              styles.thumbButton,
+              feedback === 'useful' && styles.thumbButtonSelected,
+            ]}
+          >
+            <Text style={styles.thumbGlyph}>👍</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Non utile"
+            accessibilityState={{ selected: feedback === 'not_useful' }}
+            onPress={() => setFeedback('not_useful')}
+            style={[
+              styles.thumbButton,
+              feedback === 'not_useful' && styles.thumbButtonSelected,
+            ]}
+          >
+            <Text style={styles.thumbGlyph}>👎</Text>
+          </Pressable>
+        </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ selected: feedback === 'not_useful' }}
-          onPress={() => setFeedback('not_useful')}
-          style={[
-            styles.feedbackPill,
-            styles.feedbackNotUseful,
-            feedback === 'not_useful' && styles.feedbackNotUsefulSelected,
-          ]}
-        >
-          <Ionicons name="thumbs-down-outline" size={18} color={colors.coral} />
-          <Text style={[styles.feedbackPillText, { color: colors.coral }]}>
-            Non mi aiuta
-          </Text>
-        </Pressable>
-        <Button
-          title="Fatto"
+          accessibilityLabel="Fatto"
           onPress={() => router.replace('/(tabs)/home')}
-        />
+          hitSlop={8}
+        >
+          <Text style={styles.doneText}>Fatto</Text>
+        </Pressable>
       </View>
     </ScreenContainer>
   );
@@ -585,6 +603,66 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     textAlign: 'center',
+  },
+  resultAdvice: {
+    marginTop: spacing.md,
+    color: '#1A2B48',
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+    lineHeight: typography.size.md * typography.lineHeight.normal,
+    textAlign: 'center',
+  },
+  nutritionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    marginBottom: spacing.md,
+  },
+  nutritionChipTitle: {
+    flex: 1,
+    color: '#64748B',
+    fontSize: typography.size.sm,
+  },
+  nutritionChipAction: {
+    color: colors.teal,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  thumbsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  thumbButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  thumbButtonSelected: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  thumbGlyph: {
+    fontSize: 18,
+  },
+  doneText: {
+    color: '#64748B',
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
   },
   safetyCard: {
     padding: spacing.lg,
@@ -874,43 +952,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.size.xs,
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
-  },
-  actionPills: {
-    gap: spacing.sm,
-  },
-  feedbackPill: {
-    height: 50,
-    borderRadius: radius.full,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    borderWidth: 1.5,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0E2A47',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  feedbackUseful: {
-    borderColor: colors.teal,
-  },
-  feedbackNotUseful: {
-    borderColor: colors.coral,
-  },
-  feedbackUsefulSelected: {
-    backgroundColor: colors.tealSoft,
-    transform: [{ scale: 0.99 }],
-  },
-  feedbackNotUsefulSelected: {
-    backgroundColor: colors.coralSoft,
-    transform: [{ scale: 0.99 }],
-  },
-  feedbackPillText: {
-    fontSize: 15,
-    fontWeight: typography.weight.bold,
   },
   secondaryAction: {
     marginTop: spacing.sm,

@@ -37,11 +37,15 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "imparando" in result.consumer_summary
+    assert "confronto personale" in result.consumer_summary.lower()
+    assert "solito" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
     assert result.useful_action.label == "Aggiungi"
     assert result.useful_action.title == "Alimentazione non impostata"
     assert result.useful_action.href == "/nutrition/foods"
+    assert result.recommended_next_step
+    assert result.recommended_next_step != result.useful_action.title
+    assert "alimentazione" not in result.recommended_next_step.lower()
 
 
 def test_watery_observation_asks_only_the_high_value_missing_question():
@@ -85,7 +89,8 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
 
     assert result.baseline_comparison == "INSUFFICIENT"
     assert "simili al solito" not in result.consumer_headline
-    assert "imparando" in result.consumer_summary.lower()
+    assert "solito" not in result.consumer_headline.lower()
+    assert "confronto personale" in result.consumer_summary.lower()
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -516,8 +521,47 @@ def test_repeated_event_changes_meaning_versus_isolated_episode():
         context(prior_scores=[2, 2, 2, 2], episode_count_7d=1),
     )
     assert "seconda volta" not in isolated.consumer_summary.lower()
-    assert "seconda volta questa settimana" in repeated.consumer_summary.lower()
+    assert "seconda volta" not in repeated.consumer_summary.lower()
+    assert "altra volta" in repeated.consumer_summary.lower()
     assert isolated.consumer_headline == repeated.consumer_headline
+
+
+def test_recent_event_counts_do_not_invent_a_second_time():
+    photo = observation(consistency="soft")
+    texts = []
+    for count in (1, 2, 5):
+        result = build_digestive_intelligence(
+            photo,
+            context(prior_scores=[2, 2, 2, 2], episode_count_7d=count),
+        )
+        blob = f"{result.consumer_headline} {result.consumer_summary} {result.recommended_next_step}".lower()
+        texts.append((count, result.consumer_summary, blob))
+        assert "seconda volta" not in blob
+        assert "imparando" not in blob
+    one, two, many = texts
+    assert "altra volta" in one[1].lower()
+    assert "si sta ripetendo" in two[1].lower()
+    assert "si sta ripetendo" in many[1].lower()
+    assert "altra volta" not in two[1].lower()
+    assert "altra volta" not in many[1].lower()
+    assert one[1] != two[1]
+    assert two[1] == many[1]
+
+
+def test_insufficient_baseline_does_not_mix_trend_with_pretend_usual():
+    result = build_digestive_intelligence(
+        observation(consistency="soft"),
+        context(episode_count_7d=2),
+    )
+    blob = (
+        f"{result.consumer_headline} {result.consumer_summary} "
+        f"{result.recommended_next_step}"
+    ).lower()
+    assert result.baseline_comparison == "INSUFFICIENT"
+    assert "si sta ripetendo" in result.consumer_summary.lower()
+    assert "solito" not in blob
+    assert "imparando" not in blob
+    assert "osserva i prossimi episodi" in result.recommended_next_step.lower()
 
 
 def test_routine_without_food_still_offers_brief_nutrition_cta():
