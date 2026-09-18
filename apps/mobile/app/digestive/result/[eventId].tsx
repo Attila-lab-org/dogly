@@ -35,6 +35,10 @@ import {
   digestiveActionCardKind,
   digestiveNutritionHref,
 } from '@/features/digestive/map';
+import {
+  DIGESTIVE_VET_SHARE_CTA,
+  shareDigestiveWithVet,
+} from '@/features/digestive/share';
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
 import type {
@@ -58,6 +62,7 @@ export default function DigestiveResultScreen() {
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [vetShareError, setVetShareError] = useState(false);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
   const query = useQuery({
@@ -309,7 +314,28 @@ export default function DigestiveResultScreen() {
               }
             />
           ) : (
-            <Button title={action?.label ?? 'Contatta il veterinario'} />
+            <>
+              <Button
+                title={DIGESTIVE_VET_SHARE_CTA}
+                onPress={() => {
+                  void (async () => {
+                    const shared = await shareDigestiveWithVet({
+                      dogName: dog.name,
+                      headline,
+                      summary,
+                      actionBody: action?.body,
+                    });
+                    setVetShareError(!shared);
+                  })();
+                }}
+              />
+              {vetShareError ? (
+                <Text style={styles.questionError}>
+                  Non sono riuscito ad aprire la condivisione. Puoi copiare il
+                  testo e inviarlo al veterinario.
+                </Text>
+              ) : null}
+            </>
           )}
         </Card>
       ) : null}
