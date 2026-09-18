@@ -153,6 +153,20 @@ def test_play_advice_matches_the_observed_moment():
     assert "corpo resta sciolto" in sock_play.follow_up
 
 
+def test_alert_advice_helps_owner_respond_in_the_current_moment():
+    advice = build_advice(
+        _interpretation(IntentCode.ALERT_VIGILANCE),
+        build_dog_context(_dog()),
+        KnowledgeContext(registry_version="2.1", coverage="MEDIUM"),
+    )
+
+    assert advice is not None
+    assert advice.code == "ADVICE_REWARD_BASED_REDIRECT"
+    assert "Controlla con calma" in advice.action
+    assert "richiamalo" in advice.action
+    assert "evita di sgridarlo" in advice.action
+
+
 def test_life_stage_derivation_and_unknown_fallback():
     months, puppy = derive_life_stage(
         _dog(birth_date="2026-03-01", size="MEDIUM"),

@@ -12,6 +12,7 @@ from app.contracts.interpretation import (
 )
 from app.contracts.taxonomy import ConfidenceBand, IntentCode
 from app.domains.behavior_intelligence import (
+    BEHAVIOR_CONSUMER_VERSION,
     BaselineComparison,
     build_behavior_consumer,
 )
@@ -56,7 +57,8 @@ def test_new_dog_says_still_learning():
     )
     assert result.baseline_comparison is BaselineComparison.LEARNING
     assert "imparando" in result.baseline_note
-    assert "Rocky cerca il tuo sguardo" == result.consumer_headline
+    assert "Rocky sta cercando la tua attenzione" == result.consumer_headline
+    assert "coinvolgerti" in result.consumer_summary
     assert result.safety is None
 
 
@@ -241,9 +243,34 @@ def test_partial_reading_keeps_useful_signals_instead_of_generic_abstention():
         dog_context=build_dog_context(_dog()),
     )
 
-    assert result.consumer_headline.startswith("Rocky appare teso")
-    assert "osservare" in result.dog_voice
+    assert result.consumer_headline == "Rocky è in allerta e sta segnalando qualcosa"
+    assert "qualcosa" in result.dog_voice
+    assert "allerta" in result.consumer_summary
+    assert "corpo è rigido" not in result.consumer_summary
     assert result.recommended_next_step is None
+
+
+def test_alert_result_explains_meaning_instead_of_repeating_video_description():
+    result = build_behavior_consumer(
+        _interpretation(
+            primary_intent=IntentCode.ALERT_VIGILANCE,
+            consumer_headline=(
+                "Rocky è rigido e abbaia verso qualcosa a sinistra fuori campo"
+            ),
+            consumer_summary=(
+                "Il corpo è rigido, il peso è in avanti e produce tre abbai bassi."
+            ),
+            dog_voice="«Vedo qualcosa a sinistra.»",
+        ),
+        dog_name="Rocky",
+        dog_context=build_dog_context(_dog()),
+    )
+
+    assert result.consumer_headline == "Rocky è in allerta e sta segnalando qualcosa"
+    assert "ti sta avvisando" in result.consumer_summary
+    assert "più compatibile con allerta" in result.consumer_summary
+    assert "tre abbai" not in result.consumer_summary
+    assert "sinistra" not in result.consumer_summary
 
 
 def test_recent_partial_result_is_repaired_when_read_from_the_api():
@@ -277,8 +304,12 @@ def test_recent_partial_result_is_repaired_when_read_from_the_api():
     )
     payload = interpretation.model_dump(mode="json")
     payload["consumer"] = {
-        "consumer_headline": "Non ho abbastanza elementi per capirlo bene",
-        "dog_voice": "«Non si vede abbastanza per parlare al posto mio.»",
+        "consumer_headline": "Rocky è in allerta e sta segnalando qualcosa",
+        "consumer_summary": (
+            "Rocky ha probabilmente percepito qualcosa e ti sta avvisando."
+        ),
+        "dog_voice": "«C’è qualcosa qui: voglio che tu lo sappia.»",
+        "composer_version": BEHAVIOR_CONSUMER_VERSION,
         "recommended_next_step": "Registra un altro video.",
     }
     now = datetime.now(UTC)
@@ -303,8 +334,62 @@ def test_recent_partial_result_is_repaired_when_read_from_the_api():
         )
     )
 
-    assert result.consumer_headline.startswith("Rocky appare teso")
-    assert "agitato" in (result.dog_voice or "")
+    assert result.consumer_headline == "Rocky è in allerta e sta segnalando qualcosa"
+    assert "qualcosa" in (result.dog_voice or "")
+    assert "ti sta avvisando" in (result.summary or "")
     assert result.recommended_next_step is None
     assert "possibile abbaio" in (result.sound_note or "")
     assert "non è abbastanza nitido" in (result.sound_note or "")
+
+
+def test_legacy_alert_result_is_upgraded_when_read_from_the_api():
+    interpretation = _interpretation(
+        primary_intent=IntentCode.ALERT_VIGILANCE,
+        consumer_headline=(
+            "Oreo osserva una persona fuori campo e abbaia con postura tesa"
+        ),
+        consumer_summary=(
+            "Oreo ha il corpo rigido, il peso in avanti e produce tre abbai bassi."
+        ),
+    )
+    payload = interpretation.model_dump(mode="json")
+    payload["consumer"] = {
+        "consumer_headline": interpretation.consumer_headline,
+        "consumer_summary": interpretation.consumer_summary,
+        "dog_voice": interpretation.dog_voice,
+        "composer_version": "behavior-consumer/v1",
+        "recommended_next_step": "Se ricapita, registra un altro video.",
+    }
+    now = datetime.now(UTC)
+
+    result = event_out(
+        BehaviorEventRec(
+            id="event-legacy",
+            capture_id="capture-legacy",
+            dog_id="dog-1",
+            user_id="user-1",
+            status="COMPLETED",
+            primary_intent=IntentCode.ALERT_VIGILANCE,
+            confidence_band=ConfidenceBand.MEDIUM,
+            summary=interpretation.consumer_summary,
+            interpretation_json=payload,
+            advice_json={
+                "code": "ADVICE_MONITOR_BASELINE_CHANGE",
+                "category": "MONITOR",
+                "action": "Se ricapita, registra un altro video.",
+                "rationale": "Confronta più episodi.",
+                "follow_up": "Osserva se ricapita.",
+                "source_ids": ["S13"],
+                "risk": "LOW",
+            },
+            created_at=now,
+            completed_at=now,
+        )
+    )
+
+    assert result.consumer_headline == "Oreo è in allerta e sta segnalando qualcosa"
+    assert "ti sta avvisando" in (result.summary or "")
+    assert "tre abbai" not in (result.summary or "")
+    assert result.advice is not None
+    assert result.advice.code == "ADVICE_REWARD_BASED_REDIRECT"
+    assert "Controlla con calma" in result.advice.action

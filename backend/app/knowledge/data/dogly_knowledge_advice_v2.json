@@ -1423,6 +1423,7 @@
       "action": "Use a reward-based alternative behavior or redirect; avoid punishment, intimidation or physical correction.",
       "applies_to_intents": [
         "ATTENTION_REQUEST",
+        "ALERT_VIGILANCE",
         "FRUSTRATION",
         "HIGH_AROUSAL",
         "PLAY_INTERACTION"

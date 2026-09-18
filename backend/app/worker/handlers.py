@@ -927,7 +927,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     event.interpretation_json = interpretation_json
     event.primary_intent = interpretation.primary_intent
     event.confidence_band = interpretation.confidence_band
-    event.summary = interpretation.consumer_summary
+    event.summary = consumer.consumer_summary
     event.policy_version = interpretation.policy_version
     event.taxonomy_version = interpretation.taxonomy_version
     event.knowledge_version = knowledge_context.registry_version
@@ -1164,7 +1164,7 @@ async def refine_behavior_event_context(
     event.interpretation_json = interpretation_json
     event.primary_intent = interpretation.primary_intent
     event.confidence_band = interpretation.confidence_band
-    event.summary = interpretation.consumer_summary
+    event.summary = consumer.consumer_summary
     event.policy_version = interpretation.policy_version
     event.taxonomy_version = interpretation.taxonomy_version
     event.knowledge_version = knowledge_context.registry_version

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends
 
 from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
@@ -22,6 +24,7 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import (
     INTERPRETATION_SCHEMA_VERSION,
     FeedbackValue,
+    IntentCode,
 )
 from app.domains import behavior as behavior_domain
 from app.domains import (
@@ -30,6 +33,10 @@ from app.domains import (
     lifestyle,
     lifestyle_db,
     processing_context_store,
+)
+from app.domains.behavior_intelligence import (
+    BEHAVIOR_CONSUMER_VERSION,
+    behavior_meaning_copy,
 )
 from app.domains.context_bucket import resolve_context_bucket
 from app.domains.models import BehaviorEventRec
@@ -41,6 +48,7 @@ from app.domains.processing_context import (
     plan_next_question,
     resolve_question,
 )
+from app.knowledge.advice import alert_vigilance_advice
 from app.knowledge.models import AdviceOutcomeValue
 
 router = APIRouter()
@@ -60,6 +68,42 @@ def _partial_reading_is_useful(interp: dict, consumer: dict) -> bool:
         and bool(interp.get("dog_voice"))
         and not consumer.get("safety")
     )
+
+
+def _legacy_dog_name(interp: dict, consumer: dict) -> str:
+    copy = str(
+        consumer.get("consumer_headline")
+        or interp.get("consumer_headline")
+        or ""
+    )
+    match = re.match(r"^([A-ZÀ-Ý][A-Za-zÀ-ÿ'’-]{1,30})\b", copy)
+    if not match or match.group(1).casefold() in {
+        "potrebbe",
+        "sembra",
+        "non",
+        "ci",
+    }:
+        return "Il cane"
+    return match.group(1)
+
+
+def _effective_legacy_intent(
+    event: BehaviorEventRec,
+    interp: dict,
+    *,
+    partial_but_useful: bool,
+) -> IntentCode | None:
+    raw = event.primary_intent
+    if partial_but_useful:
+        alternatives = interp.get("alternatives") or []
+        if alternatives and isinstance(alternatives[0], dict):
+            raw = alternatives[0].get("intent")
+    if raw is None:
+        return None
+    try:
+        return IntentCode(raw)
+    except ValueError:
+        return None
 
 
 def _sound_note(event: BehaviorEventRec, interp: dict) -> str | None:
@@ -101,8 +145,41 @@ def event_out(
     advice_outcome: AdviceOutcomeValue | None = None,
 ) -> BehaviorEventOut:
     interp = event.interpretation_json or {}
-    consumer = interp.get("consumer") or {}
+    consumer = dict(interp.get("consumer") or {})
     partial_but_useful = _partial_reading_is_useful(interp, consumer)
+    effective_intent = _effective_legacy_intent(
+        event,
+        interp,
+        partial_but_useful=partial_but_useful,
+    )
+    legacy_consumer = (
+        bool(consumer)
+        and consumer.get("composer_version") != BEHAVIOR_CONSUMER_VERSION
+    )
+    if legacy_consumer:
+        headline, summary, dog_voice = behavior_meaning_copy(
+            _legacy_dog_name(interp, consumer),
+            effective_intent,
+        )
+    else:
+        headline = consumer.get("consumer_headline")
+        summary = consumer.get("consumer_summary") or event.summary
+        dog_voice = consumer.get("dog_voice") or interp.get("dog_voice")
+    advice = event.advice_json or interp.get("advice")
+    recommended_next_step = (
+        None
+        if partial_but_useful and interp.get("needs_context")
+        else consumer.get("recommended_next_step")
+    )
+    if (
+        legacy_consumer
+        and effective_intent is IntentCode.ALERT_VIGILANCE
+        and not interp.get("needs_context")
+        and not consumer.get("safety")
+    ):
+        upgraded_advice = alert_vigilance_advice()
+        advice = upgraded_advice.model_dump(mode="json")
+        recommended_next_step = upgraded_advice.action
     return BehaviorEventOut(
         id=event.id,
         dog_id=event.dog_id,
@@ -110,7 +187,7 @@ def event_out(
         schema_version=interp.get("schema_version", INTERPRETATION_SCHEMA_VERSION),
         primary_intent=event.primary_intent,
         confidence_band=event.confidence_band,
-        summary=event.summary,
+        summary=summary,
         alternatives=(
             consumer["consumer_alternatives"]
             if "consumer_alternatives" in consumer
@@ -126,29 +203,17 @@ def event_out(
         context_question=interp.get("context_question"),
         context_options=interp.get("context_options", []),
         context_effect=interp.get("context_effect"),
-        dog_voice=(
-            interp.get("dog_voice")
-            if partial_but_useful
-            else consumer.get("dog_voice") or interp.get("dog_voice")
-        ),
+        dog_voice=dog_voice,
         sound_note=_sound_note(event, interp),
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
         feedback=feedback,
-        advice=event.advice_json or interp.get("advice"),
+        advice=advice,
         advice_outcome=advice_outcome,
-        consumer_headline=(
-            interp.get("consumer_headline")
-            if partial_but_useful
-            else consumer.get("consumer_headline")
-        ),
+        consumer_headline=headline,
         baseline_comparison=consumer.get("baseline_comparison"),
         baseline_note=consumer.get("baseline_note"),
-        recommended_next_step=(
-            None
-            if partial_but_useful and interp.get("needs_context")
-            else consumer.get("recommended_next_step")
-        ),
+        recommended_next_step=recommended_next_step,
         what_to_watch=consumer.get("what_to_watch"),
         safety=consumer.get("safety"),
         personal_memory_used=consumer.get("personal_memory_used")

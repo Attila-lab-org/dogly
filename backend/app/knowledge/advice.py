@@ -100,6 +100,32 @@ _RATIONALE_COPY: dict[str, str] = {
     ),
 }
 
+_ALERT_ACTION = (
+    "Controlla con calma ciò che sta segnalando. Se non c’è un pericolo, "
+    "richiamalo lontano dallo stimolo e premialo appena torna a guardarti; "
+    "evita di sgridarlo o di aumentare l’agitazione."
+)
+_ALERT_RATIONALE = (
+    "Riconosci il suo avviso senza alimentarlo e gli mostri come tornare "
+    "a una condizione più tranquilla."
+)
+_ALERT_FOLLOW_UP = (
+    "Osserva se il corpo si rilassa e se riesce a staccare l’attenzione "
+    "dallo stimolo."
+)
+
+
+def alert_vigilance_advice(source_ids: list[str] | None = None) -> AdviceItem:
+    return AdviceItem(
+        code="ADVICE_REWARD_BASED_REDIRECT",
+        category="TRAINING",
+        action=_ALERT_ACTION,
+        rationale=_ALERT_RATIONALE,
+        follow_up=_ALERT_FOLLOW_UP,
+        source_ids=source_ids or ["S32"],
+        risk="LOW",
+    )
+
 
 def _has_urgent_safety(flags: list[SafetyFlag]) -> bool:
     return any(
@@ -235,6 +261,11 @@ def build_advice(
             "Osserva se passa volentieri al suo gioco e se il corpo resta "
             "sciolto durante lo scambio."
         )
+    elif (
+        intent == IntentCode.ALERT_VIGILANCE
+        and selected.code == "ADVICE_REWARD_BASED_REDIRECT"
+    ):
+        return alert_vigilance_advice(selected.sources)
 
     # A stable recognized routine must not auto-ask to record another moment.
     if selected.code == "ADVICE_MONITOR_BASELINE_CHANGE":

@@ -102,7 +102,14 @@ EvidenceSource.observation, and never downgrade deterministic safety.
 Translate technical observables into everyday Italian: write "inchino di gioco"
 instead of "play bow", "molto attivato" instead of "arousal", and never mention
 "intent", "context bucket" or "baseline".
-The headline must be specific to this clip, not a generic intent label. dog_voice
+When a dog stays rigid, keeps its head or gaze oriented toward the same target
+and barks in that direction, ALERT_VIGILANCE is supported even if the target is
+outside the frame. Low-pitched, repeated or forceful vocalization may strengthen
+a reading of tension only when body and orientation agree; it never proves anger
+or aggression by itself. Do not choose INSUFFICIENT merely because the trigger
+or tail is outside the frame.
+The headline must state what the behavior most likely means, not list posture,
+sound, direction or other observations. dog_voice
 is a short, gentle, explicitly hypothetical translation in Italian guillemets.
 dog_voice translates the whole observed moment, never one bark as if it were a
 word. If a vocalization is audible, sound_note must briefly say what was heard
@@ -111,8 +118,10 @@ when combined with body and context. Never assign one fixed meaning to a bark,
 growl, whine or whimper. A known vocalization type candidate counts as audible
 even if another acoustic field is unknown. If no sound is observable,
 sound_note must be null.
-The summary must explain in 2-3 short sentences: what may be happening, the visible
-signals supporting it, and the main uncertainty. Do not repeat the headline.
+The summary must explain in 2 short sentences what may be happening and what it
+means for the owner. Do not turn it into a chronological or technical description
+of the clip. Keep visible and audible supporting signals in evidence descriptions
+and sound_note, not in the main summary. Do not repeat the headline.
 Explain what the dog may be communicating without claiming literal translation,
 certainty, diagnosis, personality, or a hidden emotion. Do not call a dog angry,
 aggressive, happy or guilty from a clip alone: describe the supported state in

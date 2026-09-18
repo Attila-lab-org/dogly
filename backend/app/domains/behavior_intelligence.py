@@ -28,7 +28,7 @@ from app.knowledge.safety import (
     SAFE_PAIN_001,
 )
 
-BEHAVIOR_CONSUMER_VERSION = "behavior-consumer/v1"
+BEHAVIOR_CONSUMER_VERSION = "behavior-consumer/v2"
 
 _SEVERITY_RANK = {
     "info": 0,
@@ -62,7 +62,7 @@ class BehaviorSafetyCopy(BaseModel):
 class BehaviorConsumerResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: str = "behavior_consumer.v1"
+    schema_version: str = "behavior_consumer.v2"
     consumer_headline: str
     dog_voice: str
     consumer_summary: str
@@ -106,18 +106,85 @@ SAFETY_COPY: dict[str, tuple[str, str, str]] = {
 }
 
 _HEADLINES: dict[IntentCode, str] = {
-    IntentCode.PLAY_INTERACTION: "{name} sembra voler giocare con te",
-    IntentCode.ATTENTION_REQUEST: "{name} sembra voler attirare la tua attenzione",
-    IntentCode.OUTSIDE_REQUEST: "Potrebbe voler uscire",
-    IntentCode.ALERT_VIGILANCE: "{name} è molto attento a qualcosa",
-    IntentCode.DISCOMFORT_AVOIDANCE: "{name} sembra poco a suo agio",
-    IntentCode.FEAR_INSECURITY: "{name} sembra poco a suo agio",
-    IntentCode.HIGH_AROUSAL: "{name} è molto attivato in questo momento",
-    IntentCode.FRUSTRATION: "Potrebbe essere frustrato",
+    IntentCode.PLAY_INTERACTION: "{name} ti sta probabilmente invitando a giocare",
+    IntentCode.ATTENTION_REQUEST: "{name} sta cercando la tua attenzione",
+    IntentCode.OUTSIDE_REQUEST: "{name} probabilmente ti sta chiedendo di uscire",
+    IntentCode.ALERT_VIGILANCE: "{name} è in allerta e sta segnalando qualcosa",
+    IntentCode.DISCOMFORT_AVOIDANCE: "{name} non è a suo agio e preferisce più spazio",
+    IntentCode.FEAR_INSECURITY: "{name} si sente insicuro e cerca protezione",
+    IntentCode.HIGH_AROUSAL: "{name} è molto agitato e ha bisogno di rallentare",
+    IntentCode.FRUSTRATION: "{name} sembra frustrato e fatica a calmarsi",
     IntentCode.RELAX_REST: "{name} sembra tranquillo e rilassato",
     IntentCode.RESOURCE_TENSION: "{name} sembra chiedere più spazio intorno a questa risorsa",
     IntentCode.AMBIGUOUS: "Ci sono due spiegazioni possibili",
     IntentCode.INSUFFICIENT: "Non ho abbastanza elementi per capirlo bene",
+}
+
+_SUMMARIES: dict[IntentCode, str] = {
+    IntentCode.PLAY_INTERACTION: (
+        "{name} sta probabilmente cercando uno scambio piacevole con te. "
+        "È un invito all’interazione, non soltanto movimento o eccitazione."
+    ),
+    IntentCode.ATTENTION_REQUEST: (
+        "{name} sta probabilmente cercando di coinvolgerti o di farti notare "
+        "qualcosa. La sua attenzione è rivolta a ottenere una risposta da te."
+    ),
+    IntentCode.OUTSIDE_REQUEST: (
+        "{name} sta probabilmente collegando questo momento all’uscita. "
+        "La lettura più plausibile è una richiesta concreta, non semplice agitazione."
+    ),
+    IntentCode.ALERT_VIGILANCE: (
+        "{name} ha probabilmente percepito qualcosa che considera importante e "
+        "ti sta avvisando. È concentrato e teso: questa lettura è più compatibile "
+        "con allerta e controllo dello stimolo che con un abbaio casuale."
+    ),
+    IntentCode.DISCOMFORT_AVOIDANCE: (
+        "{name} sta comunicando che questa situazione non gli piace e preferirebbe "
+        "allontanarsi. Rispettare questa richiesta evita di aumentare la pressione."
+    ),
+    IntentCode.FEAR_INSECURITY: (
+        "{name} sembra sentirsi insicuro in questa situazione. In questo momento "
+        "ha bisogno di poter prendere distanza e ritrovare calma."
+    ),
+    IntentCode.HIGH_AROUSAL: (
+        "{name} è molto coinvolto e fa fatica a regolare l’intensità del momento. "
+        "Prima di chiedergli altro, è utile aiutarlo a rallentare."
+    ),
+    IntentCode.FRUSTRATION: (
+        "{name} sembra sapere cosa vorrebbe ottenere, ma non riesce a raggiungerlo. "
+        "La tensione può quindi crescere se il momento continua nello stesso modo."
+    ),
+    IntentCode.RELAX_REST: (
+        "{name} appare a suo agio e non sta chiedendo un cambiamento. "
+        "Puoi lasciargli continuare questo momento tranquillo."
+    ),
+    IntentCode.RESOURCE_TENSION: (
+        "{name} sta probabilmente chiedendo che nessuno si avvicini a ciò che "
+        "considera importante. È una richiesta di distanza da rispettare."
+    ),
+    IntentCode.AMBIGUOUS: (
+        "I segnali sostengono due letture diverse che porterebbero a risposte "
+        "differenti. Una sola informazione sul contesto può chiarire quale è più probabile."
+    ),
+    IntentCode.INSUFFICIENT: (
+        "Il video non contiene abbastanza segnali coerenti per scegliere una lettura "
+        "utile senza inventare."
+    ),
+}
+
+_DOG_VOICES: dict[IntentCode, str] = {
+    IntentCode.PLAY_INTERACTION: "«Ti va di fare qualcosa insieme?»",
+    IntentCode.ATTENTION_REQUEST: "«Guardami un momento: ho bisogno di una tua risposta.»",
+    IntentCode.OUTSIDE_REQUEST: "«Vorrei uscire: mi accompagni?»",
+    IntentCode.ALERT_VIGILANCE: "«C’è qualcosa qui: voglio che tu lo sappia.»",
+    IntentCode.DISCOMFORT_AVOIDANCE: "«Questa situazione non mi piace: lasciami spazio.»",
+    IntentCode.FEAR_INSECURITY: "«Non mi sento sicuro: aiutami a prendere distanza.»",
+    IntentCode.HIGH_AROUSAL: "«È tutto molto intenso: aiutami a rallentare.»",
+    IntentCode.FRUSTRATION: "«Non riesco a ottenere ciò che cerco e mi sto innervosendo.»",
+    IntentCode.RELAX_REST: "«Sto bene così: lasciami godere questo momento.»",
+    IntentCode.RESOURCE_TENSION: "«Non avvicinarti a questa cosa: ho bisogno di spazio.»",
+    IntentCode.AMBIGUOUS: "«Potrei volere due cose diverse: guarda cosa succede intorno a me.»",
+    IntentCode.INSUFFICIENT: "«Non si vede abbastanza per parlare al posto mio.»",
 }
 
 
@@ -162,6 +229,41 @@ def _headline(dog_name: str, intent: IntentCode | None, safety: BehaviorSafetyCo
         return _HEADLINES[IntentCode.INSUFFICIENT]
     template = _HEADLINES.get(intent, "{name} — sto ancora leggendo i segnali")
     return template.format(name=dog_name)
+
+
+def _effective_intent(
+    interpretation: InterpretationContract,
+    *,
+    partial_but_useful: bool,
+) -> IntentCode | None:
+    if partial_but_useful and interpretation.alternatives:
+        return interpretation.alternatives[0].intent
+    return interpretation.primary_intent
+
+
+def _meaning_summary(dog_name: str, intent: IntentCode | None) -> str:
+    resolved = intent or IntentCode.INSUFFICIENT
+    return _SUMMARIES.get(resolved, _SUMMARIES[IntentCode.INSUFFICIENT]).format(
+        name=dog_name
+    )
+
+
+def _meaning_voice(dog_name: str, intent: IntentCode | None) -> str:
+    del dog_name
+    resolved = intent or IntentCode.INSUFFICIENT
+    return _DOG_VOICES.get(resolved, _DOG_VOICES[IntentCode.INSUFFICIENT])
+
+
+def behavior_meaning_copy(
+    dog_name: str,
+    intent: IntentCode | None,
+) -> tuple[str, str, str]:
+    """Stable consumer result: meaning first, model observations stay in details."""
+    return (
+        _headline(dog_name, intent, None),
+        _meaning_summary(dog_name, intent),
+        _meaning_voice(dog_name, intent),
+    )
 
 
 def _owner_reported_off(dog_context: DogContextSnapshot) -> bool:
@@ -273,25 +375,19 @@ def build_behavior_consumer(
         and observed_evidence_count >= 2
         and bool(interpretation.alternatives)
     )
-    headline = (
-        _headline(dog_name, interpretation.primary_intent, safety)
-        if safety is not None
-        else (
-            interpretation.consumer_headline
-            if not insufficient or partial_but_useful
-            else _headline(dog_name, interpretation.primary_intent, safety)
-        )
+    effective_intent = _effective_intent(
+        interpretation,
+        partial_but_useful=partial_but_useful,
     )
+    headline = _headline(dog_name, effective_intent, safety)
     if safety is not None:
         dog_voice = {
             SAFE_ESCALATION_001: "«Ho bisogno di più spazio, senza essere forzato.»",
             SAFE_DISTRESS_001: "«Qualcosa mi mette in difficoltà: aiutami a fare una pausa.»",
             SAFE_PAIN_001: "«Potrei non stare bene: osservami con attenzione.»",
         }.get(safety.code, "«Dammi spazio e osserva come sto.»")
-    elif insufficient and not partial_but_useful:
-        dog_voice = "«Non si vede abbastanza per parlare al posto mio.»"
     else:
-        dog_voice = interpretation.dog_voice
+        dog_voice = _meaning_voice(dog_name, effective_intent)
     comparison, baseline_note = _baseline(dog_name, interpretation, dog_context)
     next_step = safety.action if safety is not None else (advice.action if advice else None)
     if insufficient and not partial_but_useful and next_step is None:
@@ -308,7 +404,7 @@ def build_behavior_consumer(
     return BehaviorConsumerResult(
         consumer_headline=headline,
         dog_voice=dog_voice,
-        consumer_summary=interpretation.consumer_summary,
+        consumer_summary=_meaning_summary(dog_name, effective_intent),
         baseline_comparison=comparison,
         baseline_note=baseline_note,
         recommended_next_step=next_step,
