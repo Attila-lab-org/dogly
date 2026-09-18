@@ -24,6 +24,12 @@ from app.contracts.digestive import (
 from app.contracts.taxonomy import ConfidenceBand
 from app.domains.db import get_engine
 from app.domains.digestive_observation import DIGESTIVE_OBSERVER_PROMPT_VERSION
+from app.domains.digestive_verification import (
+    DIGESTIVE_ANOMALY_VERIFIER_VERSION,
+    FOCUSED_VERIFIER_FIELDS,
+    VERIFICATION_VERDICTS,
+    anomaly_hint,
+)
 from app.providers.base import ProviderUsage
 from app.providers.budget import check_daily_budget
 
@@ -200,6 +206,127 @@ class OpenAIDigestiveVision:
             request_id=request_id,
         )
         return contract, usage
+
+    async def verify_anomaly_focus(
+        self,
+        *,
+        image_ref: str,
+        fields: list[str],
+    ) -> tuple[dict[str, str], ProviderUsage]:
+        """Cheap second look at one indicated anomaly. Not a full re-analysis."""
+
+        requested = [
+            field for field in fields if field in FOCUSED_VERIFIER_FIELDS
+        ]
+        if not requested:
+            return {}, ProviderUsage(
+                provider="openai",
+                model=self._model,
+                request_id=f"oai-digestive-verify-{uuid.uuid4().hex[:12]}",
+            )
+        if (
+            self._settings.ai_kill_switch
+            or self._settings.digestive_vision_kill_switch
+        ):
+            raise ProviderDisabled("Digestive vision kill switch is active")
+        await check_daily_budget(
+            get_engine(self._settings),
+            role="digestive_vision",
+            budget_usd=self._settings.digestive_vision_budget_usd_per_day,
+            operation="digestive_vision.verify_anomaly_focus",
+        )
+        if not self._api_key:
+            raise RuntimeError("OPENAI_API_KEY is not configured")
+        if not image_ref.startswith(("http://", "https://")):
+            raise RuntimeError("OpenAI digestive vision requires an HTTPS image_ref")
+
+        request_id = f"oai-digestive-verify-{uuid.uuid4().hex[:12]}"
+        started = time.perf_counter()
+        targets = {
+            field: anomaly_hint(field) for field in requested
+        }
+        try:
+            response = await self._client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._model,
+                    "response_format": {"type": "json_object"},
+                    "max_tokens": 80,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You verify one indicated visual anomaly on a dog "
+                                "stool photograph. Look only at that feature. Do not "
+                                "describe consistency, color, score, volume, or other "
+                                "findings. Do not diagnose or advise.\n"
+                                "Return JSON only, with one verdict per requested "
+                                "field: confirmed, not_confirmed, or unknown.\n"
+                                "confirmed: the indicated feature is clearly visible.\n"
+                                "not_confirmed: you looked and do not see a compatible "
+                                "feature.\n"
+                                "unknown: the photo cannot support a judgement.\n"
+                                f"Verifier {DIGESTIVE_ANOMALY_VERIFIER_VERSION}."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Verify only these fields on the same image. "
+                                        "Do not re-analyze the whole photo. "
+                                        f"{json.dumps(targets)}"
+                                    ),
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": image_ref, "detail": "low"},
+                                },
+                            ],
+                        },
+                    ],
+                },
+            )
+        except httpx.TransportError as exc:
+            raise TimeoutError(
+                "OpenAI digestive verifier is temporarily unavailable"
+            ) from exc
+        if response.status_code in (408, 429) or response.status_code >= 500:
+            raise TimeoutError(f"OpenAI upstream {response.status_code}")
+        response.raise_for_status()
+        payload = response.json()
+        raw = _json_content(payload)
+        verdicts = {
+            field: (
+                str(raw.get(field) or "unknown").lower()
+                if str(raw.get(field) or "").lower() in VERIFICATION_VERDICTS
+                else "unknown"
+            )
+            for field in requested
+        }
+        usage_raw = payload.get("usage") or {}
+        usage = ProviderUsage(
+            provider="openai",
+            model=self._model,
+            input_tokens=int(usage_raw.get("prompt_tokens") or 0),
+            output_tokens=int(usage_raw.get("completion_tokens") or 0),
+            media_bytes=0,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            cost_usd=_estimate_cost(
+                usage_raw,
+                input_usd_per_million=self._settings.digestive_input_usd_per_million,
+                output_usd_per_million=self._settings.digestive_output_usd_per_million,
+                safety_margin=self._settings.ai_cost_safety_margin,
+            ),
+            request_id=request_id,
+        )
+        return verdicts, usage
 
     async def _repair(
         self, raw: dict[str, Any], request_id: str

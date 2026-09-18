@@ -47,12 +47,6 @@ export const SAFETY_COPY: Record<SafetyFlagCode, SafetyCopy> = {
       'Hai segnalato vomito insieme a episodi liquidi recenti. È meglio chiedere un parere professionale.',
     action: 'Contatta il veterinario',
   },
-  RAPID_WORSENING: {
-    title: 'Peggioramento rapido rispetto al solito',
-    message:
-      "Le ultime osservazioni sembrano peggiorare in fretta rispetto alla baseline del tuo cane.",
-    action: 'Contatta il veterinario',
-  },
 };
 
 /** Disclaimer gentile, fisso, mostrato in capture e result (sez. 19 / O-02). */

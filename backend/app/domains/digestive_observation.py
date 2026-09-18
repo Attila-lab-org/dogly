@@ -181,11 +181,46 @@ def derive_fecal_score(observation: dict[str, Any]) -> tuple[int | None, str]:
     return None, "none"
 
 
+def persistable_image_quality(value: object) -> str | None:
+    """Top-level fecal_events.image_quality uses SUFFICIENT / INSUFFICIENT only."""
+
+    raw = str(value or "").strip().lower()
+    if raw == "sufficient":
+        return "SUFFICIENT"
+    if raw == "insufficient":
+        return "INSUFFICIENT"
+    return None
+
+
+def api_image_quality(
+    observation: dict[str, Any], persisted: str | None = None
+) -> str:
+    raw = str(observation.get("image_quality") or persisted or "").strip().lower()
+    if raw in {"sufficient", "insufficient"}:
+        return raw
+    return "unknown"
+
+
 def is_display_eligible(observation: dict[str, Any]) -> bool:
     return str(observation.get("image_quality") or "").lower() == "sufficient"
 
 
+_LEARNING_ANOMALY_FIELDS = (
+    "fresh_blood_candidate",
+    "melena_candidate",
+    "foreign_material_candidate",
+    "mucus_candidate",
+    "undigested_food_candidate",
+)
+
+
 def is_learning_eligible(observation: dict[str, Any]) -> bool:
+    """Eligible to teach the personal baseline. Diary display is separate.
+
+    Legacy rows with learning_eligible NULL are not equivalent to True.
+    Safety-relevant or otherwise anomalous observations stay visible but
+    must not define the dog's digestive normal.
+    """
     if not is_display_eligible(observation):
         return False
     if observation.get("fecal_score_estimate") is None:
@@ -193,19 +228,19 @@ def is_learning_eligible(observation: dict[str, Any]) -> bool:
     confidence = str(observation.get("confidence_band") or "LOW").upper()
     if confidence == "LOW":
         return False
+    consistency = str(observation.get("consistency") or "unknown").lower()
+    if consistency in {"watery", "unformed"}:
+        return False
     safety = observation.get("safety_candidates") or {}
-    unstable = {
+    blocking = {
+        "possible",
         "possible_unverified",
-        "unknown",
+        "clear_candidate",
     }
-    sensitive = (
-        "fresh_blood_candidate",
-        "melena_candidate",
-        "foreign_material_candidate",
-    )
-    for field in sensitive:
-        gated = str(safety.get(field) or observation.get(field) or "").lower()
-        if gated in unstable and str(observation.get(field) or "").lower() == "possible":
+    for field in _LEARNING_ANOMALY_FIELDS:
+        raw = str(observation.get(field) or "").lower()
+        gated = str(safety.get(field) or "").lower()
+        if raw in blocking or gated in blocking:
             return False
     return True
 

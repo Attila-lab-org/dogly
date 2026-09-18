@@ -293,7 +293,7 @@ def test_digestive_longitudinal_is_frequency_not_diagnosis():
     )
     text = " ".join(result.possible_associations).lower()
     assert "7 giorni" in text
-    assert "diagnosi" in text
+    assert "diagnosi" not in text
     assert result.overall_state in {
         DigestiveState.MONITOR,
         DigestiveState.ATTENTION,

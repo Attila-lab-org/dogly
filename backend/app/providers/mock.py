@@ -174,6 +174,19 @@ class MockDigestiveVision:
         )
         return contract, usage
 
+    async def verify_anomaly_focus(
+        self, *, image_ref: str, fields: list[str]
+    ) -> tuple[dict[str, str], ProviderUsage]:
+        del image_ref
+        return (
+            {field: "unknown" for field in fields},
+            ProviderUsage(
+                provider=self._provider,
+                model=self._model,
+                request_id=f"mock-verify-{uuid.uuid4().hex[:12]}",
+            ),
+        )
+
 
 class InMemoryCostMeter:
     """Mock CostMeter: records cost events in memory (persisted to

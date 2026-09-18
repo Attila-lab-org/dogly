@@ -122,13 +122,16 @@ def build_inmemory_digestive_context(
         if active_periods
         else None
     )
-    active_food = (
+    period_food = (
         store.food_products.get(active_period.food_product_id)
         if active_period
         else None
     )
-    if active_food is not None and active_food.verified_at is None:
-        active_food = None
+    verified_food = (
+        period_food
+        if period_food is not None and period_food.verified_at is not None
+        else None
+    )
     season_key, season_label = digestive_period_label(event.created_at.month)
 
     def food_id_at(item: FecalEventRec) -> str | None:
@@ -149,19 +152,27 @@ def build_inmemory_digestive_context(
         item
         for item in prior_events
         if item.fecal_score_estimate is not None
-        and item.learning_eligible is not False
+        and item.learning_eligible is True
     ]
-    active_food_id = active_food.id if active_food else None
+    active_food_id = verified_food.id if verified_food else None
     nutrition = nutrition_history_snapshot(store, dog_id=event.dog_id)
     return DigestiveContext(
         dog_name=dog.name,
         age_stage=dog.age_stage,
         size=dog.size,
         weight_kg=dog.weight_kg,
-        active_food_name=active_food.name if active_food else None,
+        active_food_name=(
+            period_food.name
+            if period_food is not None and period_food.name
+            else None
+        ),
+        has_active_food=active_period is not None,
+        quantity_per_day=(
+            active_period.quantity_per_day if active_period is not None else None
+        ),
         food_started_days_ago=(
             max(0, (event.created_at - active_period.start_at).days)
-            if active_period and (active_period.transition_notes or "").strip()
+            if active_period is not None
             else None
         ),
         current_food_prior_scores=[

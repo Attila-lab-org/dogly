@@ -9,6 +9,7 @@ from app.contracts.api import (
     DigestiveContextUpdateRequest,
     DigestiveEventOut,
     DigestiveSummaryOut,
+    DigestiveUsefulActionOut,
     FecalCompleteResponse,
     FecalInitRequest,
     FecalInitResponse,
@@ -19,6 +20,10 @@ from app.domains import digestive_db, idempotency_db
 from app.domains.digestive_intelligence import (
     DIGESTIVE_REASONING_VERSION,
     build_digestive_intelligence,
+)
+from app.domains.digestive_observation import (
+    api_image_quality,
+    persistable_image_quality,
 )
 from app.domains.models import FecalEventRec
 
@@ -50,6 +55,9 @@ async def _ensure_digestive_intelligence(
     intelligence = build_digestive_intelligence(event.observation_json, context)
     event.intelligence_json = intelligence.model_dump(mode="json")
     event.summary = intelligence.consumer_summary
+    event.image_quality = persistable_image_quality(
+        event.observation_json.get("image_quality")
+    ) or event.image_quality
     event.safety_flags = digestive_domain.contextual_safety_flags(
         event.observation_json, context
     )
@@ -186,7 +194,7 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         fecal_score_estimate=e.fecal_score_estimate,
         consistency=e.consistency,
         color=e.color,
-        image_quality=observation.get("image_quality", "unknown"),
+        image_quality=api_image_quality(observation, e.image_quality),
         quality_warnings=observation.get("warnings", []),
         mucus_candidate=observation.get("mucus_candidate", "unknown"),
         fresh_blood_candidate=observation.get("fresh_blood_candidate", "unknown"),
@@ -212,6 +220,11 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         recommended_next_step=intelligence.get("recommended_next_step"),
         followup_key=intelligence.get("followup_key"),
         followup_question=intelligence.get("followup_question"),
+        useful_action=(
+            DigestiveUsefulActionOut.model_validate(intelligence["useful_action"])
+            if intelligence.get("useful_action")
+            else None
+        ),
         what_to_watch=intelligence.get("what_to_watch", []),
         observation_reliability=intelligence.get("observation_reliability"),
         knowledge_references=intelligence.get("knowledge_references", []),

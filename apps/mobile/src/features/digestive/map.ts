@@ -2,6 +2,8 @@ import type { ConfidenceBand } from '../../contracts/types';
 import {
   SAFETY_FLAG_CODES,
   type CandidateLevel,
+  type DigestiveUsefulAction,
+  type DigestiveUsefulActionKey,
   type FecalEventResult,
   type SafetyFlagCode,
 } from '../secondary/types';
@@ -43,6 +45,13 @@ export type ApiDigestiveEvent = {
     | 'unusual_food_48h'
     | null;
   followup_question?: string | null;
+  useful_action?: {
+    key?: DigestiveUsefulActionKey | null;
+    label?: string | null;
+    href?: string | null;
+    title?: string | null;
+    body?: string | null;
+  } | null;
   what_to_watch?: string[];
   observation_reliability?: string | null;
   reasoning_version?: string | null;
@@ -151,6 +160,30 @@ const CANDIDATE_LEVELS: CandidateLevel[] = [
   'unknown',
 ];
 
+const USEFUL_ACTION_KEYS: DigestiveUsefulActionKey[] = [
+  'contact_vet',
+  'add_nutrition',
+  'complete_nutrition',
+  'ask_followup',
+  'contextual',
+  'none',
+];
+
+function mapUsefulAction(
+  action: ApiDigestiveEvent['useful_action'],
+): DigestiveUsefulAction | null {
+  if (!action?.key || !USEFUL_ACTION_KEYS.includes(action.key)) {
+    return null;
+  }
+  return {
+    key: action.key,
+    label: action.label ?? null,
+    href: action.href ?? null,
+    title: action.title ? consumerCopy(action.title) : action.title,
+    body: action.body ? consumerCopy(action.body) : action.body,
+  };
+}
+
 function mapCandidate(value: string | null | undefined): CandidateLevel {
   return CANDIDATE_LEVELS.includes(value as CandidateLevel)
     ? (value as CandidateLevel)
@@ -216,6 +249,7 @@ export function mapApiDigestiveEventToResult(
     followupQuestion: event.followup_question
       ? consumerCopy(event.followup_question)
       : event.followup_question,
+    usefulAction: mapUsefulAction(event.useful_action),
     whatToWatch: event.what_to_watch ?? [],
     observationReliability: event.observation_reliability
       ? consumerCopy(event.observation_reliability)

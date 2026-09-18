@@ -17,6 +17,7 @@ from app.domains.digestive_observation import (
     canonicalize_color,
     derive_fecal_score,
     is_learning_eligible,
+    persistable_image_quality,
     prepare_digestive_observation,
 )
 from app.domains.digestive_observation_cache import (
@@ -25,7 +26,12 @@ from app.domains.digestive_observation_cache import (
     lookup_cached_observation,
     store_cached_observation,
 )
-from app.domains.digestive_verification import safety_candidate
+from app.domains.digestive_verification import (
+    apply_anomaly_verification,
+    gate_candidate,
+    needed_anomaly_verifications,
+    safety_candidate,
+)
 from app.domains.repository import InMemoryStore
 
 
@@ -149,6 +155,120 @@ def test_unstable_possible_candidate_is_not_learning_eligible():
 def test_clean_observation_is_learning_eligible():
     prepared = prepare_digestive_observation(_obs())
     assert prepared["learning_eligible"] is True
+
+
+def test_possible_blood_is_not_corroborated_by_observer_confidence():
+    prepared = prepare_digestive_observation(
+        _obs(fresh_blood_candidate="possible", confidence_band="HIGH")
+    )
+    assert needed_anomaly_verifications(prepared) == ["fresh_blood_candidate"]
+    assert gate_candidate(prepared, "fresh_blood_candidate") == "possible_unverified"
+    assert prepared["learning_eligible"] is False
+    result = build_digestive_intelligence(
+        prepared,
+        DigestiveContext(dog_name="Oreo", prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.safety_state is DigestiveState.ROUTINE
+
+
+def test_confirmed_possible_blood_can_enter_safety():
+    observation = apply_anomaly_verification(
+        _obs(fresh_blood_candidate="possible", confidence_band="HIGH"),
+        {"fresh_blood_candidate": "confirmed"},
+    )
+    prepared = prepare_digestive_observation(observation)
+    assert safety_candidate(prepared, "fresh_blood_candidate") == "possible"
+    result = build_digestive_intelligence(
+        prepared,
+        DigestiveContext(dog_name="Oreo", prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.safety_state is DigestiveState.ATTENTION
+    assert prepared["learning_eligible"] is False
+
+
+def test_not_confirmed_possible_blood_does_not_escalate():
+    observation = apply_anomaly_verification(
+        _obs(fresh_blood_candidate="possible"),
+        {"fresh_blood_candidate": "not_confirmed"},
+    )
+    prepared = prepare_digestive_observation(observation)
+    assert safety_candidate(prepared, "fresh_blood_candidate") == "possible_unverified"
+    result = build_digestive_intelligence(
+        prepared,
+        DigestiveContext(dog_name="Oreo", prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.safety_state is DigestiveState.ROUTINE
+
+
+def test_clear_blood_is_never_lowered_by_verifier():
+    observation = apply_anomaly_verification(
+        _obs(fresh_blood_candidate="clear_candidate"),
+        {"fresh_blood_candidate": "not_confirmed"},
+    )
+    prepared = prepare_digestive_observation(observation)
+    assert safety_candidate(prepared, "fresh_blood_candidate") == "clear_candidate"
+    assert needed_anomaly_verifications(prepared) == []
+
+
+def test_safety_anomalies_are_not_learning_eligible():
+    for field in (
+        "fresh_blood_candidate",
+        "melena_candidate",
+        "foreign_material_candidate",
+    ):
+        prepared = prepare_digestive_observation(_obs(**{field: "clear_candidate"}))
+        assert prepared["display_eligible"] is True
+        assert prepared["learning_eligible"] is False
+    watery = prepare_digestive_observation(_obs(consistency="watery", fecal_score_estimate=7))
+    assert watery["learning_eligible"] is False
+
+
+def test_legacy_null_learning_eligible_is_not_baseline_valid():
+    from datetime import UTC, datetime, timedelta
+
+    from app.domains.digestive import build_inmemory_digestive_context
+    from app.domains.models import DogRec, FecalEventRec
+
+    store = InMemoryStore()
+    now = datetime.now(UTC)
+    store.dogs["dog-1"] = DogRec(
+        id="dog-1",
+        owner_id="user-1",
+        name="Oreo",
+        created_at=now,
+    )
+    current = FecalEventRec(
+        id="now",
+        dog_id="dog-1",
+        user_id="user-1",
+        client_request_id="now",
+        image_path="path",
+        created_at=now,
+        status="COMPLETED",
+        fecal_score_estimate=4,
+        learning_eligible=True,
+    )
+    store.fecal_events["now"] = current
+    for index, score in enumerate((2, 2, 2, 2)):
+        store.fecal_events[f"legacy-{index}"] = FecalEventRec(
+            id=f"legacy-{index}",
+            dog_id="dog-1",
+            user_id="user-1",
+            client_request_id=f"legacy-{index}",
+            image_path="path",
+            created_at=now - timedelta(days=index + 1),
+            status="COMPLETED",
+            fecal_score_estimate=score,
+            learning_eligible=None,
+        )
+    context = build_inmemory_digestive_context(store, event=current)
+    assert context.prior_scores == []
+
+
+def test_image_quality_persists_as_sufficient_or_insufficient():
+    assert persistable_image_quality("sufficient") == "SUFFICIENT"
+    assert persistable_image_quality("insufficient") == "INSUFFICIENT"
+    assert persistable_image_quality("unknown") is None
 
 
 def test_cache_does_not_cross_user_or_dog_boundary():

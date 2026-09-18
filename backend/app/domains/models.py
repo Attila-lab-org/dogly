@@ -208,6 +208,7 @@ class FecalEventRec(BaseModel):
     last_error_code: str | None = None
     image_sha256: str | None = None
     learning_eligible: bool | None = None
+    image_quality: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
 

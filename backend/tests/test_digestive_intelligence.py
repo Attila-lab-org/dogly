@@ -37,21 +37,25 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "costruendo" in result.consumer_summary
+    assert "imparando" in result.consumer_summary
+    assert result.useful_action.key == "add_nutrition"
+    assert result.useful_action.href == "/nutrition/foods"
 
 
 def test_watery_observation_asks_only_the_high_value_missing_question():
     result = build_digestive_intelligence(
-        observation(consistency="watery"), context()
+        observation(consistency="watery"),
+        context(active_food_name="Crocchette", quantity_per_day="200g", has_active_food=True),
     )
 
     assert result.followup_key == "vomiting_today"
     assert result.followup_question == "Rocky ha vomitato oggi?"
-    assert {item.publisher for item in result.knowledge_references} == {
+    assert result.useful_action.key == "ask_followup"
+    assert {
         "Merck Veterinary Manual",
         "VCA Animal Hospitals",
         "Journal of Small Animal Practice",
-    }
+    }.issubset({item.publisher for item in result.knowledge_references})
     assert "REPEATED_WATERY" not in {
         item["code"]
         for item in contextual_safety_flags(
@@ -79,7 +83,7 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
 
     assert result.baseline_comparison == "INSUFFICIENT"
     assert "simili al solito" not in result.consumer_headline
-    assert "servono ancora" in result.consumer_summary.lower()
+    assert "imparando" in result.consumer_summary.lower()
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -115,7 +119,7 @@ def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "ABOVE_USUAL"
-    assert "più morbida" in result.consumer_headline
+    assert "morbida" in result.consumer_headline.lower()
 
 
 def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
@@ -128,13 +132,10 @@ def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
         context(prior_scores=[4, 4, 4, 4]),
     )
 
-    assert (
-        result.consumer_headline
-        == "Oggi è un po’ più compatta del solito di Rocky"
-    )
+    assert result.consumer_headline == "Più compatta del solito"
     assert "ben formate" in result.consumer_summary
     assert "marrone scuro" in result.consumer_summary
-    assert "per ora non serve cambiare nulla" in result.recommended_next_step
+    assert result.useful_action.key == "add_nutrition"
 
 
 def test_recent_food_change_is_context_not_a_causal_claim():
@@ -143,12 +144,15 @@ def test_recent_food_change_is_context_not_a_causal_claim():
         context(
             prior_scores=[2, 2, 2],
             active_food_name="Royal Canin Labrador Adult",
+            has_active_food=True,
+            quantity_per_day="280g",
             food_started_days_ago=3,
         ),
     )
 
     assert result.possible_associations
-    assert "non dimostra" in result.possible_associations[0]
+    assert "3 giorni" in result.possible_associations[0]
+    assert "causa" not in result.possible_associations[0].lower()
     assert any(
         item.publisher == "World Small Animal Veterinary Association"
         for item in result.knowledge_references
@@ -157,7 +161,8 @@ def test_recent_food_change_is_context_not_a_causal_claim():
         item.publisher == "American Animal Hospital Association"
         for item in result.knowledge_references
     )
-    assert "gradualmente" in result.recommended_next_step
+    assert result.useful_action.key == "contextual"
+    assert "3 giorni" in result.recommended_next_step
 
 
 def test_missing_active_food_never_becomes_a_food_change_today():
@@ -182,9 +187,7 @@ def test_repeated_food_association_requires_both_periods_and_stays_cautious():
     )
 
     assert any("Salmone" in item for item in result.possible_associations)
-    assert any(
-        "non dimostra" in item for item in result.possible_associations
-    )
+    assert not any("causa" in item.lower() for item in result.possible_associations)
 
 
 def test_season_is_not_mentioned_until_there_are_repeated_comparisons():
@@ -207,7 +210,7 @@ def test_season_is_not_mentioned_until_there_are_repeated_comparisons():
 
     assert not any("estate" in item for item in sparse.possible_associations)
     assert any("estate" in item for item in repeated.possible_associations)
-    assert any("non una causa" in item for item in repeated.possible_associations)
+    assert not any("causa" in item.lower() for item in repeated.possible_associations)
 
 
 def test_quality_warnings_do_not_leak_internal_codes():
@@ -229,8 +232,8 @@ def test_second_soft_observation_asks_one_natural_followup():
     )
 
     assert result.followup_key == "vomiting_today"
-    assert "seconda osservazione" in result.followup_question
-    assert result.followup_question.endswith("Rocky ha anche vomitato oggi?")
+    assert result.followup_question == "Rocky ha vomitato oggi?"
+    assert result.useful_action.key == "ask_followup"
     assert result.followup_question.count("?") == 1
 
 
@@ -311,9 +314,8 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
 
     assert contextualized.status_code == 200
     assert contextualized_body["possible_associations"]
-    assert "non una causa accertata" in contextualized_body[
-        "possible_associations"
-    ][0]
+    assert "48 ore" in contextualized_body["possible_associations"][0]
+    assert contextualized_body["useful_action"]["key"]
 
 
 @pytest.mark.asyncio
@@ -349,4 +351,50 @@ async def test_get_rebuilds_missing_intelligence_for_completed_events(
     assert response.status_code == 200
     assert body["consumer_headline"]
     assert body["recommended_next_step"]
+    assert body["image_quality"] == "sufficient"
     assert state.store.fecal_events[event_id].intelligence_json
+    assert state.store.fecal_events[event_id].image_quality == "SUFFICIENT"
+
+
+def test_missing_food_on_a_change_asks_to_add_nutrition():
+    result = build_digestive_intelligence(
+        observation(),
+        context(prior_scores=[2, 2, 2, 2]),
+    )
+    assert result.baseline_comparison == "ABOVE_USUAL"
+    assert result.useful_action.key == "add_nutrition"
+    assert result.useful_action.label == "Aggiungi alimentazione"
+    assert result.followup_key is None
+
+
+def test_food_without_quantity_asks_only_for_that():
+    result = build_digestive_intelligence(
+        observation(),
+        context(
+            prior_scores=[2, 2, 2, 2],
+            active_food_name="Royal Canin",
+            has_active_food=True,
+        ),
+    )
+    assert result.useful_action.key == "complete_nutrition"
+    assert result.useful_action.label == "Completa alimentazione"
+    assert result.followup_key is None
+
+
+def test_stable_routine_has_no_useful_cta():
+    result = build_digestive_intelligence(
+        observation(consistency="formed", fecal_score_estimate=4),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.overall_state is DigestiveState.ROUTINE
+    assert result.useful_action.key == "none"
+    assert result.followup_key is None
+
+
+def test_safety_blocks_nutrition_cta():
+    result = build_digestive_intelligence(
+        observation(fresh_blood_candidate="clear_candidate"),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.useful_action.key == "contact_vet"
+    assert result.followup_key is None

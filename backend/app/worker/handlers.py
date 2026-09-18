@@ -64,7 +64,10 @@ from app.domains.digestive import (
     contextual_safety_flags,
 )
 from app.domains.digestive_intelligence import build_digestive_intelligence
-from app.domains.digestive_observation import prepare_digestive_observation
+from app.domains.digestive_observation import (
+    persistable_image_quality,
+    prepare_digestive_observation,
+)
 from app.domains.digestive_observation_cache import (
     engine_identity,
     image_sha256,
@@ -72,6 +75,10 @@ from app.domains.digestive_observation_cache import (
     lookup_cached_observation_db,
     store_cached_observation,
     store_cached_observation_db,
+)
+from app.domains.digestive_verification import (
+    apply_anomaly_verification,
+    needed_anomaly_verifications,
 )
 from app.domains.dog_context import build_dog_context
 from app.domains.intelligence_context import build_dog_intelligence_context
@@ -1198,6 +1205,45 @@ async def _digestive_image_digest(image_ref: str) -> str | None:
     return None
 
 
+async def _verify_sensitive_anomalies(
+    state: AppState,
+    observation_json: dict,
+    *,
+    image_ref: str,
+    event_id: str,
+    user_id: str,
+) -> dict:
+    """Focused blood/melena check. Never a second full photo analysis."""
+
+    fields = needed_anomaly_verifications(observation_json)
+    if not fields:
+        return observation_json
+    verify = getattr(state.digestive_vision, "verify_anomaly_focus", None)
+    verdicts: dict[str, str]
+    usage = None
+    if not callable(verify):
+        verdicts = {field: "unknown" for field in fields}
+    else:
+        try:
+            verdicts, usage = await verify(image_ref=image_ref, fields=fields)
+        except Exception:
+            logger.exception(
+                "Focused digestive anomaly verification failed for %s",
+                event_id,
+            )
+            verdicts = {field: "unknown" for field in fields}
+    apply_anomaly_verification(observation_json, verdicts)
+    if usage is not None and not str(usage.request_id).startswith("cache-reuse-"):
+        await state.cost_meter.record(
+            usage=usage,
+            operation="digestive_vision.verify_anomaly_focus",
+            domain=AnalysisDomain.DIGESTIVE,
+            event_id=event_id,
+            user_id=user_id,
+        )
+    return observation_json
+
+
 async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     """Digestive analysis handler (sez. 19). Observation is separate from the
     deterministic safety layer; completed events are a no-op on redelivery."""
@@ -1267,12 +1313,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
                     identity=identity,
                 )
         if cached is not None:
-            observation_json = prepare_digestive_observation(
-                cached,
-                image_sha256=digest,
-                observer_provider=identity["observer_provider"],
-                observer_model=identity["observer_model"],
-            )
+            observation_json = dict(cached)
             usage = ProviderUsage(
                 provider=identity["observer_provider"],
                 model=identity["observer_model"],
@@ -1287,33 +1328,41 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             observation, usage = await state.digestive_vision.observe_stool(
                 image_ref=image_ref
             )
-            observation_json = prepare_digestive_observation(
-                observation.model_dump(mode="json"),
-                image_sha256=digest,
-                observer_provider=identity["observer_provider"],
-                observer_model=identity["observer_model"],
-            )
-            if digest:
-                if state.engine is not None:
-                    await store_cached_observation_db(
-                        state.engine,
-                        user_id=event.user_id,
-                        dog_id=event.dog_id,
-                        image_sha256_hex=digest,
-                        identity=identity,
-                        observation=observation_json,
-                        source_event_id=event.id,
-                    )
-                else:
-                    store_cached_observation(
-                        state.store,
-                        user_id=event.user_id,
-                        dog_id=event.dog_id,
-                        image_sha256_hex=digest,
-                        identity=identity,
-                        observation=observation_json,
-                        source_event_id=event.id,
-                    )
+            observation_json = observation.model_dump(mode="json")
+        observation_json = await _verify_sensitive_anomalies(
+            state,
+            observation_json,
+            image_ref=image_ref,
+            event_id=event.id,
+            user_id=event.user_id,
+        )
+        observation_json = prepare_digestive_observation(
+            observation_json,
+            image_sha256=digest,
+            observer_provider=identity["observer_provider"],
+            observer_model=identity["observer_model"],
+        )
+        if digest and cached is None:
+            if state.engine is not None:
+                await store_cached_observation_db(
+                    state.engine,
+                    user_id=event.user_id,
+                    dog_id=event.dog_id,
+                    image_sha256_hex=digest,
+                    identity=identity,
+                    observation=observation_json,
+                    source_event_id=event.id,
+                )
+            else:
+                store_cached_observation(
+                    state.store,
+                    user_id=event.user_id,
+                    dog_id=event.dog_id,
+                    image_sha256_hex=digest,
+                    identity=identity,
+                    observation=observation_json,
+                    source_event_id=event.id,
+                )
     except TimeoutError:
         event.last_error_code = ErrorCode.PROVIDER_TIMEOUT.value
         if event.attempt_count < MAX_TASK_ATTEMPTS:
@@ -1438,8 +1487,10 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
 
     obs_json = observation_json
     event.observation_json = obs_json
+    event.image_quality = persistable_image_quality(obs_json.get("image_quality"))
     event.learning_eligible = bool(obs_json.get("learning_eligible"))
     if obs_json.get("image_quality") == "insufficient":
+        event.image_quality = "INSUFFICIENT"
         event.learning_eligible = False
         event.status = "REJECTED_QUALITY"
         if not event.quota_refunded and not event.quota_committed:

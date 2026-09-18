@@ -103,6 +103,46 @@ async def test_openai_digestive_observer_sends_signed_image_and_validates(
 
 
 @pytest.mark.asyncio
+async def test_openai_digestive_verifier_is_focused_and_cheap(monkeypatch):
+    captured: list[dict] = []
+    fake = _FakeClient(
+        [
+            _FakeResponse(
+                200,
+                _payload({"fresh_blood_candidate": "not_confirmed"}),
+            )
+        ],
+        captured,
+    )
+    monkeypatch.setattr(
+        openai_digestive_vision.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: fake,
+    )
+    observer = openai_digestive_vision.OpenAIDigestiveVision(
+        Settings(
+            app_env="local",
+            digestive_vision_provider="openai",
+            digestive_vision_model="gpt-5-mini",
+            openai_api_key="test-key",
+        )
+    )
+
+    verdicts, usage = await observer.verify_anomaly_focus(
+        image_ref="https://storage.example.test/stool.jpg?token=signed",
+        fields=["fresh_blood_candidate"],
+    )
+
+    message = captured[0]["messages"][0]["content"]
+    assert "consistency" in message.lower()
+    assert "do not describe consistency" in message.lower()
+    assert captured[0]["max_tokens"] == 80
+    assert captured[0]["messages"][1]["content"][1]["image_url"]["detail"] == "low"
+    assert verdicts == {"fresh_blood_candidate": "not_confirmed"}
+    assert usage.provider == "openai"
+
+
+@pytest.mark.asyncio
 async def test_openai_digestive_observer_retries_rate_limits(monkeypatch):
     fake = _FakeClient([_FakeResponse(429, {})], [])
     monkeypatch.setattr(

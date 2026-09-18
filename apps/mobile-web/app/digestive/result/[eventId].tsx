@@ -24,12 +24,7 @@ import {
   SAFETY_COPY,
 } from '@/features/secondary/safetyCopy';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { useMeProfile } from '@/features/me/api';
 import { sanitizeOwnerCopy } from '@/features/core/copy';
-import {
-  isPersonalBaselineNote,
-  usefulQuestionKicker,
-} from '@/features/core/conversationCopy';
 import {
   getDigestiveEvent,
   mapApiDigestiveEventToResult,
@@ -75,8 +70,6 @@ export default function DigestiveResultScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
-  const meQuery = useMeProfile();
-  const ownerDisplayName = meQuery.data?.display_name;
   const { usingMockGate } = useSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [feedback, setFeedback] = useState<LocalFeedback>(null);
@@ -234,10 +227,6 @@ export default function DigestiveResultScreen() {
       (level === 'possible' || level === 'clear_candidate') &&
       (!coveredBy || !event.safetyFlags.includes(coveredBy)),
   );
-  const needsAttention =
-    hasSafetyFlags ||
-    event.overallState === 'ATTENTION' ||
-    event.overallState === 'VET_CONTACT';
   const headline = sanitizeOwnerCopy(
     (event.consumerHeadline ??
       digestiveHeadline(event.baselineComparison, dog.name, hasSafetyFlags)
@@ -249,10 +238,12 @@ export default function DigestiveResultScreen() {
       dog.name,
     ),
   );
-  const baselineText = sanitizeOwnerCopy(
-    event.baselineComparison.replace(/Rocky/g, dog.name),
-  );
-  const showBaseline = isPersonalBaselineNote(baselineText);
+  const action = event.usefulAction;
+  const showFollowup =
+    useApi &&
+    action?.key === 'ask_followup' &&
+    event.followupQuestion &&
+    event.followupKey;
   const statusPill = statusPillFor(event);
 
   return (
@@ -265,7 +256,6 @@ export default function DigestiveResultScreen() {
             {statusPill.label}
           </Text>
         </View>
-        <Text style={styles.thoughtKicker}>Cosa penso</Text>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
       </View>
@@ -284,80 +274,36 @@ export default function DigestiveResultScreen() {
         );
       })}
 
-      {showBaseline ? (
-        <>
-          <Text style={styles.sectionTitle}>Rispetto al suo solito</Text>
-          <View style={styles.whiteCardRow}>
-            <Ionicons name="git-compare-outline" size={22} color={colors.teal} />
-            <Text style={styles.comparisonText}>{baselineText}</Text>
-          </View>
-        </>
-      ) : null}
-
-      {(event.possibleAssociations?.length ?? 0) > 0 ? (
-        <>
-          <Text style={styles.sectionTitle}>Contesto utile</Text>
-          <View style={[styles.whiteCard, styles.contextCard]}>
-            {event.possibleAssociations?.map((item) => (
-              <Text key={item} style={styles.contextText}>
-                {item}
-              </Text>
-            ))}
-          </View>
-        </>
-      ) : null}
-
-      <Text style={styles.sectionTitle}>Cosa puoi fare</Text>
-      <View
-        style={[
-          styles.monitorCard,
-          event.overallState === 'ROUTINE' && styles.routineCard,
-        ]}
-      >
-        <Ionicons
-          name={
-            needsAttention
-              ? 'medkit-outline'
-              : event.overallState === 'ROUTINE'
-                ? 'checkmark-circle-outline'
-                : 'eye-outline'
-          }
-          size={22}
-          color={
-            needsAttention
-              ? colors.danger
-              : event.overallState === 'ROUTINE'
-                ? colors.teal
-                : colors.warning
-          }
-        />
-        <View style={styles.monitorCopy}>
-          <Text style={styles.monitorTitle}>
-            {event.recommendedNextStep ?? 'Controlla la prossima volta'}
-          </Text>
-          {!needsAttention ? (
-            <Text style={styles.monitorText}>
-              {event.overallState === 'ROUTINE'
-                ? 'Continuerò a confrontare le prossime osservazioni con il suo solito.'
-                : 'Se il cambiamento continua, registra la prossima evacuazione.'}
+      {action?.key === 'add_nutrition' || action?.key === 'complete_nutrition' ? (
+        <Card style={styles.actionCard}>
+          {action.title ? (
+            <Text style={styles.actionTitle}>
+              {sanitizeOwnerCopy(action.title.replace(/Rocky/g, dog.name))}
             </Text>
           ) : null}
-        </View>
-      </View>
-
-      {useApi && event.followupQuestion && event.followupKey ? (
-        <Card style={styles.questionCard}>
-          <View style={styles.questionHeading}>
-            <View style={styles.questionIcon}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
-            </View>
-            <Text style={styles.questionEyebrow}>
-              {usefulQuestionKicker(ownerDisplayName)}
+          {action.body ? (
+            <Text style={styles.actionBody}>
+              {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
             </Text>
-          </View>
+          ) : null}
+          <Button
+            title={action.label ?? 'Apri alimentazione'}
+            onPress={() => router.push('/nutrition/foods')}
+          />
+        </Card>
+      ) : null}
+
+      {action?.key === 'contextual' && action.body ? (
+        <Text style={styles.contextualText}>
+          {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
+        </Text>
+      ) : null}
+
+      {showFollowup ? (
+        <Card style={styles.questionCard}>
           <Text style={styles.questionText}>
             {sanitizeOwnerCopy(
-              event.followupQuestion.replace(/Rocky/g, dog.name),
+              event.followupQuestion!.replace(/Rocky/g, dog.name),
             )}
           </Text>
           <View style={styles.answerRow}>
@@ -368,6 +314,7 @@ export default function DigestiveResultScreen() {
               <Pressable
                 key={answer.label}
                 accessibilityRole="button"
+                accessibilityLabel={answer.label}
                 disabled={contextMutation.isPending}
                 onPress={() =>
                   contextMutation.mutate({
@@ -392,82 +339,86 @@ export default function DigestiveResultScreen() {
         </Card>
       ) : null}
 
-      {notableCandidates.length > 0 ||
-      event.activeFoodName ||
-      event.observationReliability ? (
-        <>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: detailsOpen }}
-            onPress={() => setDetailsOpen((open) => !open)}
-            style={styles.detailsToggle}
-          >
-            <Text style={styles.detailsToggleText}>Approfondisci</Text>
-            <Ionicons
-              name={detailsOpen ? 'chevron-up' : 'chevron-down'}
-              size={20}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-
-          {detailsOpen ? (
-            <>
-              {event.consistency !== 'sconosciuta' ||
-              (event.color && event.color !== 'Non determinabile dalla foto') ? (
-                <View style={styles.whiteCard}>
-                  <Text style={styles.cardTitle}>Dettaglio della foto</Text>
-                  <Text style={styles.comparisonText}>
-                    {photoDetailCopy(event.consistency, event.color)}
-                  </Text>
-                </View>
-              ) : null}
-              {notableCandidates.length > 0 ? (
-                <View style={styles.whiteCard}>
-                  <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
-                  {notableCandidates.map((candidate) => (
-                    <View key={candidate.label} style={styles.notableRow}>
-                      <View style={styles.notableDot} />
-                      <Text style={styles.notableLabel}>{candidate.label}</Text>
-                      <Text style={styles.notableValue}>
-                        {candidateText(candidate.level)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {event.activeFoodName ? (
-                <View style={styles.foodRow}>
-                  <View style={styles.foodIcon}>
-                    <Ionicons
-                      name="nutrition-outline"
-                      size={20}
-                      color={colors.teal}
-                    />
-                  </View>
-                  <View style={styles.foodCopy}>
-                    <Text style={styles.foodLabel}>Alimento registrato</Text>
-                    <Text style={styles.foodValue} numberOfLines={2}>
-                      {event.activeFoodName}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </>
-      ) : null}
-
-      <View style={styles.disclaimer}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: detailsOpen }}
+        onPress={() => setDetailsOpen((open) => !open)}
+        style={styles.detailsToggle}
+      >
+        <Text style={styles.detailsToggleText}>Approfondisci</Text>
         <Ionicons
-          name="information-circle-outline"
-          size={18}
+          name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+          size={20}
           color={colors.textSecondary}
         />
-        <View style={styles.disclaimerCopy}>
-          <Text style={styles.disclaimerText}>{DIGESTIVE_DISCLAIMER}</Text>
-        </View>
-      </View>
+      </Pressable>
+
+      {detailsOpen ? (
+        <>
+          {event.consistency !== 'sconosciuta' ||
+          (event.color && event.color !== 'Non determinabile dalla foto') ? (
+            <View style={styles.whiteCard}>
+              <Text style={styles.cardTitle}>Dettaglio della foto</Text>
+              <Text style={styles.comparisonText}>
+                {photoDetailCopy(event.consistency, event.color)}
+              </Text>
+            </View>
+          ) : null}
+          {notableCandidates.length > 0 ? (
+            <View style={styles.whiteCard}>
+              <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
+              {notableCandidates.map((candidate) => (
+                <View key={candidate.label} style={styles.notableRow}>
+                  <View style={styles.notableDot} />
+                  <Text style={styles.notableLabel}>{candidate.label}</Text>
+                  <Text style={styles.notableValue}>
+                    {candidateText(candidate.level)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {event.activeFoodName ? (
+            <View style={styles.foodRow}>
+              <View style={styles.foodIcon}>
+                <Ionicons
+                  name="nutrition-outline"
+                  size={20}
+                  color={colors.teal}
+                />
+              </View>
+              <View style={styles.foodCopy}>
+                <Text style={styles.foodLabel}>Alimento registrato</Text>
+                <Text style={styles.foodValue} numberOfLines={2}>
+                  {event.activeFoodName}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+          {(event.possibleAssociations?.length ?? 0) > 0
+            ? event.possibleAssociations?.map((item) => (
+                <Text key={item} style={styles.contextText}>
+                  {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
+                </Text>
+              ))
+            : null}
+          {event.observationReliability ? (
+            <Text style={styles.comparisonText}>
+              {sanitizeOwnerCopy(event.observationReliability)}
+            </Text>
+          ) : null}
+          <View style={styles.disclaimer}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color={colors.textSecondary}
+            />
+            <View style={styles.disclaimerCopy}>
+              <Text style={styles.disclaimerText}>{DIGESTIVE_DISCLAIMER}</Text>
+            </View>
+          </View>
+        </>
+      ) : null}
 
       <View style={styles.actionPills}>
         <Pressable
@@ -573,14 +524,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: typography.weight.bold,
   },
-  thoughtKicker: {
+  actionCard: {
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  actionTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  actionBody: {
     color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: spacing.sm,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  contextualText: {
+    marginBottom: spacing.lg,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   resultTitle: {
     color: '#1A2B48',

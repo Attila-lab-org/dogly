@@ -742,6 +742,21 @@ class OwnerStoryUpdateRequest(BaseModel):
     facts: list[OwnerReportedFact] = Field(min_length=1, max_length=8)
 
 
+class DigestiveUsefulActionOut(BaseModel):
+    key: Literal[
+        "contact_vet",
+        "add_nutrition",
+        "complete_nutrition",
+        "ask_followup",
+        "contextual",
+        "none",
+    ] = "none"
+    label: str | None = None
+    href: str | None = None
+    title: str | None = None
+    body: str | None = None
+
+
 class DigestiveEventOut(BaseModel):
     id: str
     dog_id: str
@@ -775,6 +790,7 @@ class DigestiveEventOut(BaseModel):
         "vomiting_today", "reduced_activity_today", "unusual_food_48h"
     ] | None = None
     followup_question: str | None = None
+    useful_action: DigestiveUsefulActionOut | None = None
     what_to_watch: list[str] = Field(default_factory=list)
     observation_reliability: str | None = None
     knowledge_references: list[dict[str, str]] = Field(default_factory=list)

@@ -6165,6 +6165,16 @@
             ],
             "title": "Followup Question"
           },
+          "useful_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DigestiveUsefulActionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "what_to_watch": {
             "items": {
               "type": "string"
@@ -6287,6 +6297,69 @@
           "dog_id"
         ],
         "title": "DigestiveSummaryOut"
+      },
+      "DigestiveUsefulActionOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "contact_vet",
+              "add_nutrition",
+              "complete_nutrition",
+              "ask_followup",
+              "contextual",
+              "none"
+            ],
+            "title": "Key",
+            "default": "none"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Href"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "title": "DigestiveUsefulActionOut"
       },
       "DogAlbumCreate": {
         "properties": {

@@ -456,6 +456,7 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                   last_error_code = :last_error_code,
                   image_sha256 = :image_sha256,
                   learning_eligible = :learning_eligible,
+                  image_quality = :image_quality,
                   expires_at = :expires_at,
                   completed_at = :completed_at
                 where id = :id and user_id = :user_id
@@ -484,6 +485,7 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 "last_error_code": event.last_error_code,
                 "image_sha256": event.image_sha256,
                 "learning_eligible": event.learning_eligible,
+                "image_quality": event.image_quality,
                 "expires_at": event.expires_at,
                 "completed_at": event.completed_at,
             },
@@ -502,9 +504,10 @@ async def load_digestive_context(
                     select d.name, d.age_stage, d.size, d.weight_kg,
                            food.id as active_food_product_id,
                            food.name as active_food_name,
+                           period.food_product_id is not null as has_active_food,
+                           period.quantity_per_day,
                            case
-                             when nullif(trim(period.transition_notes), '') is null
-                               then null
+                             when period.start_at is null then null
                              else greatest(
                                0,
                                floor(extract(epoch from (event.created_at - period.start_at)) / 86400)
@@ -513,7 +516,8 @@ async def load_digestive_context(
                     from public.fecal_events event
                     join public.dogs d on d.id = event.dog_id
                     left join lateral (
-                      select fp.food_product_id, fp.start_at, fp.transition_notes
+                      select fp.food_product_id, fp.start_at, fp.transition_notes,
+                             fp.quantity_per_day
                       from public.feeding_periods fp
                       where fp.dog_id = event.dog_id
                         and fp.start_at <= event.created_at
@@ -523,7 +527,6 @@ async def load_digestive_context(
                     ) period on true
                     left join public.food_products food
                       on food.id = period.food_product_id
-                     and food.verified_at is not null
                     where event.id = cast(:event_id as uuid)
                     """
                 ),
@@ -574,7 +577,7 @@ async def load_digestive_context(
         row
         for row in ordered
         if row["fecal_score_estimate"] is not None
-        and row.get("learning_eligible") is not False
+        and row.get("learning_eligible") is True
     ]
     nutrition = await weight_db.nutrition_history_snapshot(
         engine, dog_id=event.dog_id
@@ -585,6 +588,8 @@ async def load_digestive_context(
         size=profile["size"],
         weight_kg=profile["weight_kg"],
         active_food_name=profile["active_food_name"],
+        has_active_food=bool(profile.get("has_active_food")),
+        quantity_per_day=profile.get("quantity_per_day"),
         food_started_days_ago=profile["food_started_days_ago"],
         current_food_prior_scores=[
             int(row["fecal_score_estimate"])
@@ -659,7 +664,7 @@ async def refresh_digestive_baseline(
                     where dog_id = cast(:dog_id as uuid)
                       and status = 'COMPLETED'
                       and fecal_score_estimate is not null
-                      and coalesce(learning_eligible, true)
+                      and learning_eligible is true
                     order by created_at desc, id desc
                     limit 12
                     """

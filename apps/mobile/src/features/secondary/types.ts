@@ -46,8 +46,23 @@ export const SAFETY_FLAG_CODES = [
   'FOREIGN_MATERIAL_CANDIDATE',
   'REPEATED_WATERY',
   'DIGESTIVE_SYMPTOMS',
-  'RAPID_WORSENING',
 ] as const;
+
+export type DigestiveUsefulActionKey =
+  | 'contact_vet'
+  | 'add_nutrition'
+  | 'complete_nutrition'
+  | 'ask_followup'
+  | 'contextual'
+  | 'none';
+
+export interface DigestiveUsefulAction {
+  key: DigestiveUsefulActionKey;
+  label?: string | null;
+  href?: string | null;
+  title?: string | null;
+  body?: string | null;
+}
 export type SafetyFlagCode = (typeof SAFETY_FLAG_CODES)[number];
 
 /** Osservazione fecale strutturata mostrata al consumer (sez. 19.1). */
@@ -83,6 +98,7 @@ export interface FecalEventResult {
   recommendedNextStep?: string | null;
   followupKey?: 'vomiting_today' | 'reduced_activity_today' | 'unusual_food_48h' | null;
   followupQuestion?: string | null;
+  usefulAction?: DigestiveUsefulAction | null;
   whatToWatch?: string[];
   observationReliability?: string | null;
   reasoningVersion?: string | null;
