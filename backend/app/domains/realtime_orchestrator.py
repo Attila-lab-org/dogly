@@ -53,6 +53,15 @@ _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
         "Questo segnale merita un contatto veterinario tempestivo, soprattutto se si ripete o il cane appare abbattuto. Se sta peggiorando, contatta subito una struttura veterinaria.",
     ),
 )
+_GREETING = re.compile(
+    r"^\s*(ciao|salve|buongiorno|buonasera|ehi|hey|ciao dogly)[!.?\s]*$",
+    re.IGNORECASE,
+)
+_TECHNICAL_COPY = re.compile(
+    r"\b(modello|database|prompt|elaborazione|invio il (tuo )?messaggio|"
+    r"strumento|chiamata api)\b",
+    re.IGNORECASE,
+)
 
 
 def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
@@ -117,6 +126,74 @@ def openai_realtime_decision_schema() -> dict[str, Any]:
     return schema
 
 
+def _provider_decision(
+    content: str,
+    *,
+    domains: list[RealtimeDomain],
+) -> RealtimeDecision | None:
+    try:
+        raw = json.loads(content)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    answer = raw.get("assistant_text")
+    if not isinstance(answer, str) or not answer.strip() or _TECHNICAL_COPY.search(answer):
+        return None
+    question = raw.get("question") if isinstance(raw.get("question"), str) else None
+    information_gain = raw.get("question_information_gain")
+    allowed_gain = {
+        "CHANGES_MEANING",
+        "CHANGES_ACTION",
+        "CHANGES_SAFETY",
+    }
+    if question and information_gain not in allowed_gain:
+        question = None
+        information_gain = "NONE"
+    terminal = raw.get("terminal_state")
+    if terminal not in {
+        "ANSWERED",
+        "ABSTAINED",
+        "SAFETY_INTERRUPT",
+        "BEHAVIOR_VIDEO_HANDOFF",
+        "MEMORY_CONFIRMATION_REQUIRED",
+    }:
+        terminal = "ANSWERED"
+    candidate = (
+        raw.get("memory_candidate")
+        if isinstance(raw.get("memory_candidate"), str)
+        else None
+    )
+    category = raw.get("memory_category")
+    if category not in {"ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL"}:
+        candidate = None
+        category = None
+    try:
+        return RealtimeDecision(
+            assistant_text=answer.strip(),
+            question=question,
+            terminal_state=terminal,
+            domains=[
+                value
+                for value in raw.get("domains", domains)
+                if value in {"BEHAVIOR", "DIGESTIVE", "NUTRITION", "CARE", "GENERAL"}
+            ][:3]
+            or domains,
+            safety_flags=[
+                str(value) for value in raw.get("safety_flags", []) if value
+            ][:4],
+            used_source_ids=[
+                str(value) for value in raw.get("used_source_ids", []) if value
+            ][:12],
+            memory_candidate=candidate,
+            memory_category=category,
+            question_information_gain=information_gain or "NONE",
+            behavior_handoff=bool(raw.get("behavior_handoff", False)),
+        )
+    except (TypeError, ValidationError):
+        return None
+
+
 def _fallback_decision(
     *,
     text: str,
@@ -173,6 +250,20 @@ async def orchestrate_realtime_turn(
     if safety:
         return safety, {"provider": "deterministic", "version": REALTIME_ORCHESTRATOR_VERSION}
 
+    if _GREETING.fullmatch(user_text):
+        owner = (context.owner_display_name or "").strip().split(" ", 1)[0].capitalize()
+        hello = f"Ciao {owner}," if owner else "Ciao,"
+        return RealtimeDecision(
+            assistant_text=(
+                f"{hello} ci sono. Dimmi pure cosa vuoi capire di "
+                f"{context.dog_name} oggi."
+            ),
+            domains=["GENERAL"],
+        ), {
+            "provider": "deterministic_greeting",
+            "version": REALTIME_ORCHESTRATOR_VERSION,
+        }
+
     if (
         settings.ai_kill_switch
         or settings.realtime_kill_switch
@@ -225,11 +316,16 @@ async def orchestrate_realtime_turn(
             "version": REALTIME_ORCHESTRATOR_VERSION,
         }
     try:
-        decision = RealtimeDecision.model_validate_json(
-            raw["choices"][0]["message"]["content"]
-        )
-    except (KeyError, TypeError, ValidationError) as exc:
-        raise RuntimeError("Invalid Realtime decision response") from exc
+        content = raw["choices"][0]["message"]["content"]
+    except (KeyError, TypeError):
+        content = ""
+    decision = _provider_decision(content, domains=domains)
+    if decision is None:
+        return _fallback_decision(text=user_text, context=context, domains=domains), {
+            "provider": "deterministic_fallback",
+            "failed_provider": "openai_schema",
+            "version": REALTIME_ORCHESTRATOR_VERSION,
+        }
 
     allowed_ids = {item.source_id for item in context.items}
     decision.used_source_ids = [

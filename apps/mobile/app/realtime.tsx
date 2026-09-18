@@ -40,8 +40,9 @@ export default function RealtimeScreen() {
   const active = ['connecting', 'listening', 'thinking', 'speaking'].includes(
     realtime.voiceState,
   );
+  const ownerName = realtime.session?.owner_display_name?.trim().split(' ')[0];
   const status = {
-    idle: `Sono qui per ${dog.name}`,
+    idle: ownerName ? `Ciao ${ownerName}` : 'Ciao, sono qui',
     connecting: 'Apro la conversazione…',
     listening: 'Ti ascolto',
     thinking: `Sto pensando a ${dog.name}`,
@@ -86,8 +87,9 @@ export default function RealtimeScreen() {
           <ScrollView contentContainerStyle={styles.content}>
             <Text style={styles.title}>{status}</Text>
             <Text style={styles.subtitle}>
-              Chiedimi cosa può voler dire un comportamento o cosa vale la pena
-              osservare per il suo benessere.
+              {realtime.voiceState === 'idle'
+                ? `Sono qui per te e ${dog.name}. Cosa vuoi capire oggi?`
+                : `Possiamo parlare del comportamento, della digestione o di cosa vale la pena osservare per ${dog.name}.`}
             </Text>
             <View style={styles.orbStage}>
               <Animated.View

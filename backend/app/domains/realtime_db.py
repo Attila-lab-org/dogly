@@ -33,12 +33,20 @@ async def create_session_db(
             await conn.execute(
                 text(
                     """
-                    insert into public.realtime_sessions(user_id, dog_id, modality, model)
-                    select cast(:user_id as uuid), d.id, :modality, :model
-                    from public.dogs d
-                    where d.id=cast(:dog_id as uuid)
-                      and d.owner_id=cast(:user_id as uuid)
-                    returning *
+                    with inserted as (
+                      insert into public.realtime_sessions(
+                        user_id, dog_id, modality, model
+                      )
+                      select cast(:user_id as uuid), d.id, :modality, :model
+                      from public.dogs d
+                      where d.id=cast(:dog_id as uuid)
+                        and d.owner_id=cast(:user_id as uuid)
+                      returning *
+                    )
+                    select inserted.*, d.name as dog_name, p.display_name
+                    from inserted
+                    join public.dogs d on d.id=inserted.dog_id
+                    left join public.profiles p on p.user_id=inserted.user_id
                     """
                 ),
                 {
@@ -332,6 +340,8 @@ def create_session_memory(
         "started_at": now,
         "last_active_at": now,
         "expires_at": now + timedelta(hours=24),
+        "dog_name": dog.name,
+        "display_name": getattr(store.profiles.get(user_id), "display_name", None),
     }
     store.realtime_sessions[row["id"]] = row
     store.realtime_turns[row["id"]] = []

@@ -65,8 +65,9 @@ export default function RealtimeScreen() {
     realtime.voiceState === 'speaking' ||
     realtime.voiceState === 'connecting';
   const safety = realtime.lastTurn?.terminal_state === 'SAFETY_INTERRUPT';
+  const ownerName = realtime.session?.owner_display_name?.trim().split(' ')[0];
   const statusLabel = {
-    idle: `Sono qui per ${dog.name}`,
+    idle: ownerName ? `Ciao ${ownerName}` : `Ciao, sono qui`,
     connecting: 'Un attimo, apro la conversazione…',
     listening: 'Ti ascolto',
     thinking: `Sto pensando a ${dog.name}`,
@@ -101,8 +102,9 @@ export default function RealtimeScreen() {
           >
             <Text style={styles.title}>{statusLabel}</Text>
             <Text style={styles.subtitle}>
-              Chiedimi cosa può voler dire un comportamento, come sta andando la
-              digestione o cosa vale la pena osservare oggi.
+              {realtime.voiceState === 'idle'
+                ? `Sono qui per te e ${dog.name}. Cosa vuoi capire oggi?`
+                : `Possiamo parlare del comportamento, della digestione o di cosa vale la pena osservare per ${dog.name}.`}
             </Text>
 
             <View style={styles.orbStage}>

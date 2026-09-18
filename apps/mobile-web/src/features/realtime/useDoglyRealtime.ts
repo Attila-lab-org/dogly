@@ -6,6 +6,7 @@ import {
   decideRealtimeMemory,
   endRealtimeSession,
   getRealtimeClientSecret,
+  type RealtimeSession,
   type RealtimeTurn,
 } from './api';
 
@@ -29,6 +30,7 @@ type RealtimeServerEvent = {
 
 export function useDoglyRealtime(dogId: string) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [session, setSession] = useState<RealtimeSession | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [assistantDraft, setAssistantDraft] = useState('');
@@ -41,6 +43,7 @@ export function useDoglyRealtime(dogId: string) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const handledCallsRef = useRef(new Set<string>());
   const sessionRef = useRef<string | null>(null);
+  const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -53,6 +56,22 @@ export function useDoglyRealtime(dogId: string) {
     audioRef.current = null;
     handledCallsRef.current.clear();
   }, []);
+
+  const ensureSession = useCallback(async () => {
+    if (sessionRef.current && session) return session;
+    if (sessionPromiseRef.current) return sessionPromiseRef.current;
+    const promise = createRealtimeSession(dogId, 'VOICE');
+    sessionPromiseRef.current = promise;
+    try {
+      const created = await promise;
+      sessionRef.current = created.id;
+      setSessionId(created.id);
+      setSession(created);
+      return created;
+    } finally {
+      sessionPromiseRef.current = null;
+    }
+  }, [dogId, session]);
 
   const handleToolCall = useCallback(async (event: RealtimeServerEvent) => {
     const activeSession = sessionRef.current;
@@ -145,10 +164,8 @@ export function useDoglyRealtime(dogId: string) {
     setError(null);
     setVoiceState('connecting');
     try {
-      const session = await createRealtimeSession(dogId, 'VOICE');
-      sessionRef.current = session.id;
-      setSessionId(session.id);
-      const secret = await getRealtimeClientSecret(session.id);
+      const prepared = await ensureSession();
+      const secret = await getRealtimeClientSecret(prepared.id);
 
       const peer = new RTCPeerConnection();
       peerRef.current = peer;
@@ -170,7 +187,21 @@ export function useDoglyRealtime(dogId: string) {
       channel.addEventListener('message', (message) => {
         handleServerEvent(JSON.parse(message.data) as RealtimeServerEvent);
       });
-      channel.addEventListener('open', () => setVoiceState('listening'));
+      channel.addEventListener('open', () => {
+        setVoiceState('speaking');
+        channel.send(
+          JSON.stringify({
+            type: 'response.create',
+            response: {
+              output_modalities: ['audio'],
+              tool_choice: 'none',
+              instructions: `Pronuncia esattamente questa frase e nulla di più: ${JSON.stringify(
+                prepared.welcome_text,
+              )}`,
+            },
+          }),
+        );
+      });
       channel.addEventListener('close', () => setVoiceState('idle'));
 
       const offer = await peer.createOffer();
@@ -200,13 +231,14 @@ export function useDoglyRealtime(dogId: string) {
       );
       setVoiceState('error');
     }
-  }, [closeMedia, dogId, handleServerEvent, voiceState]);
+  }, [closeMedia, dogId, ensureSession, handleServerEvent, voiceState]);
 
   const disconnect = useCallback(async () => {
     closeMedia();
     const activeSession = sessionRef.current;
     sessionRef.current = null;
     setSessionId(null);
+    setSession(null);
     setVoiceState('idle');
     if (activeSession) await endRealtimeSession(activeSession).catch(() => undefined);
   }, [closeMedia]);
@@ -217,13 +249,8 @@ export function useDoglyRealtime(dogId: string) {
       setError(null);
       setVoiceState('thinking');
       try {
-        let activeSession = sessionRef.current;
-        if (!activeSession) {
-          const session = await createRealtimeSession(dogId, 'TEXT');
-          activeSession = session.id;
-          sessionRef.current = session.id;
-          setSessionId(session.id);
-        }
+        const prepared = await ensureSession();
+        const activeSession = prepared.id;
         setTranscript(text.trim());
         const turn = await createRealtimeTurn(activeSession, text.trim());
         setLastTurn(turn);
@@ -234,7 +261,7 @@ export function useDoglyRealtime(dogId: string) {
         setVoiceState('error');
       }
     },
-    [dogId],
+    [dogId, ensureSession],
   );
 
   const toggleMute = useCallback(() => {
@@ -256,11 +283,15 @@ export function useDoglyRealtime(dogId: string) {
     [lastTurn],
   );
 
-  useEffect(() => () => closeMedia(), [closeMedia]);
+  useEffect(() => {
+    if (dogId) void ensureSession();
+    return () => closeMedia();
+  }, [closeMedia, dogId, ensureSession]);
 
   return {
     voiceSupported: Platform.OS === 'web' && typeof RTCPeerConnection !== 'undefined',
     voiceState,
+    session,
     sessionId,
     transcript,
     assistantDraft,

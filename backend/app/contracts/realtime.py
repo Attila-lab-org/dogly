@@ -25,6 +25,9 @@ class RealtimeSessionCreate(BaseModel):
 class RealtimeSessionOut(BaseModel):
     id: str
     dog_id: str
+    dog_name: str
+    owner_display_name: str | None = None
+    welcome_text: str
     status: Literal["ACTIVE", "ENDED", "EXPIRED"]
     modality: Literal["VOICE", "TEXT"]
     model: str

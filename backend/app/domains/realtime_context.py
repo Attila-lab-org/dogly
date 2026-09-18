@@ -27,6 +27,7 @@ class RealtimeDogContext(BaseModel):
     version: str = REALTIME_CONTEXT_VERSION
     dog_id: str
     dog_name: str
+    owner_display_name: str | None = None
     identity: dict[str, Any]
     stable_facts: list[dict[str, Any]] = Field(default_factory=list)
     items: list[RealtimeContextItem] = Field(default_factory=list)
@@ -78,11 +79,13 @@ async def load_realtime_context_db(
             await conn.execute(
                 text(
                     """
-                    select id, name, sex, birth_date, age_stage, size, breed_label,
-                           is_mix, weight_kg
-                    from public.dogs
-                    where id=cast(:dog_id as uuid)
-                      and owner_id=cast(:user_id as uuid)
+                    select d.id, d.name, d.sex, d.birth_date, d.age_stage,
+                           d.size, d.breed_label, d.is_mix, d.weight_kg,
+                           p.display_name
+                    from public.dogs d
+                    left join public.profiles p on p.user_id=d.owner_id
+                    where d.id=cast(:dog_id as uuid)
+                      and d.owner_id=cast(:user_id as uuid)
                     """
                 ),
                 {"dog_id": dog_id, "user_id": user_id},
@@ -318,7 +321,7 @@ async def load_realtime_context_db(
     identity = {
         key: value
         for key, value in dict(dog).items()
-        if key not in {"id", "name"} and value is not None
+        if key not in {"id", "name", "display_name"} and value is not None
     }
     missing: list[str] = []
     if not any(item.source_type == "FEEDING_PERIOD" for item in items):
@@ -330,6 +333,9 @@ async def load_realtime_context_db(
     return RealtimeDogContext(
         dog_id=str(dog["id"]),
         dog_name=str(dog["name"]),
+        owner_display_name=(
+            str(dog["display_name"]) if dog.get("display_name") else None
+        ),
         identity=identity,
         stable_facts=stable_facts[:10],
         items=sorted(
@@ -351,6 +357,7 @@ def load_realtime_context_memory(
     return RealtimeDogContext(
         dog_id=dog.id,
         dog_name=dog.name,
+        owner_display_name=getattr(store.profiles.get(dog.owner_id), "display_name", None),
         identity={
             "sex": dog.sex,
             "age_stage": dog.age_stage,

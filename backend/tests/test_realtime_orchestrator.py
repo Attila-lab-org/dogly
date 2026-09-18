@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.api.routes.realtime import _is_owned_active_voice_session
+from app.api.routes.realtime import _is_owned_active_voice_session, _welcome_text
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
 from app.domains.realtime_context import (
@@ -47,6 +47,14 @@ def test_voice_session_accepts_database_uuid_owner() -> None:
         {"user_id": uuid.UUID(user_id), "status": "ACTIVE", "modality": "VOICE"},
         user_id,
     )
+
+
+def test_welcome_is_personal_and_never_technical() -> None:
+    welcome = _welcome_text("attilio", "Oreo")
+    assert welcome == (
+        "Ciao Attilio, sono qui per te e Oreo. Cosa vuoi capire oggi?"
+    )
+    assert "modello" not in welcome
 
 
 def test_deterministic_safety_interrupt_precedes_ai() -> None:
@@ -115,6 +123,9 @@ async def test_realtime_api_session_turn_and_close(
         json={"dog_id": dog_id, "modality": "TEXT"},
     )
     assert session_response.status_code == 201
+    assert session_response.json()["welcome_text"] == (
+        "Ciao, sono qui per te e Oreo. Cosa vuoi capire oggi?"
+    )
     session_id = session_response.json()["id"]
 
     turn_response = await client.post(

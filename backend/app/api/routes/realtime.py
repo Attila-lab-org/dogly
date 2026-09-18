@@ -45,6 +45,16 @@ def _is_owned_active_voice_session(
     )
 
 
+def _welcome_text(owner_name: str | None, dog_name: str) -> str:
+    first_name = (owner_name or "").strip().split(" ", 1)[0].capitalize()
+    if first_name:
+        return (
+            f"Ciao {first_name}, sono qui per te e {dog_name}. "
+            "Cosa vuoi capire oggi?"
+        )
+    return f"Ciao, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"
+
+
 @router.post("/sessions", response_model=RealtimeSessionOut, status_code=201)
 async def create_realtime_session(
     body: RealtimeSessionCreate,
@@ -76,6 +86,11 @@ async def create_realtime_session(
     return RealtimeSessionOut(
         id=str(row["id"]),
         dog_id=str(row["dog_id"]),
+        dog_name=str(row["dog_name"]),
+        owner_display_name=(
+            str(row["display_name"]) if row.get("display_name") else None
+        ),
+        welcome_text=_welcome_text(row.get("display_name"), str(row["dog_name"])),
         status=row["status"],
         modality=row["modality"],
         model=row["model"],

@@ -3,6 +3,9 @@ import { api } from '../../lib/apiClient';
 export type RealtimeSession = {
   id: string;
   dog_id: string;
+  dog_name: string;
+  owner_display_name: string | null;
+  welcome_text: string;
   status: 'ACTIVE' | 'ENDED' | 'EXPIRED';
   modality: 'VOICE' | 'TEXT';
   model: string;
