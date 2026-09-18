@@ -62,7 +62,15 @@ async def create_realtime_session(
         )
     if row is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.")
-    return RealtimeSessionOut.model_validate(row)
+    return RealtimeSessionOut(
+        id=str(row["id"]),
+        dog_id=str(row["dog_id"]),
+        status=row["status"],
+        modality=row["modality"],
+        model=row["model"],
+        started_at=row["started_at"],
+        expires_at=row["expires_at"],
+    )
 
 
 @router.post(
