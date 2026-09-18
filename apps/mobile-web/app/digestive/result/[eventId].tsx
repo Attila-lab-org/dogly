@@ -16,7 +16,6 @@ import {
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { fecalEventsMock } from '@/mocks/secondary';
 import {
-  candidateText,
   StackScreenHeader,
 } from '@/features/secondary/components';
 import {
@@ -40,35 +39,9 @@ import {
 } from '@/features/digestive/share';
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
-import type {
-  CandidateLevel,
-  SafetyFlagCode,
-} from '@/features/secondary/types';
-
-type Candidate = {
-  label: string;
-  level: CandidateLevel;
-  coveredBy?: SafetyFlagCode;
-};
+import type { CandidateLevel, SafetyFlagCode } from '@/features/secondary/types';
 
 type LocalFeedback = 'useful' | 'not_useful' | null;
-
-function statusPillFor(event: {
-  overallState?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT';
-  safetyFlags: SafetyFlagCode[];
-}): { label: string; bg: string; fg: string } {
-  const needsAttention =
-    event.safetyFlags.length > 0 ||
-    event.overallState === 'ATTENTION' ||
-    event.overallState === 'VET_CONTACT';
-  if (needsAttention) {
-    return { label: 'Attenzione', bg: '#FFF1EE', fg: colors.coral };
-  }
-  if (event.overallState === 'MONITOR') {
-    return { label: 'Da osservare', bg: '#FFF7D6', fg: '#9A6700' };
-  }
-  return { label: 'Regolare', bg: '#E0F7F6', fg: colors.teal };
-}
 
 export default function DigestiveResultScreen() {
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
@@ -213,29 +186,7 @@ export default function DigestiveResultScreen() {
   }
 
   const hasSafetyFlags = event.safetyFlags.length > 0;
-  const candidates: Candidate[] = [
-    { label: 'Possibile muco', level: event.mucusCandidate },
-    {
-      label: 'Possibile sangue',
-      level: event.bloodCandidate,
-      coveredBy: 'BLOOD_CANDIDATE',
-    },
-    {
-      label: 'Colore molto scuro',
-      level: event.melenaCandidate,
-      coveredBy: 'MELENA_CANDIDATE',
-    },
-    { label: 'Possibile materiale estraneo', level: event.foreignMaterialCandidate },
-    {
-      label: 'Possibili residui di alimento',
-      level: event.undigestedFoodCandidate ?? 'unknown',
-    },
-  ];
-  const notableCandidates = candidates.filter(
-    ({ level, coveredBy }) =>
-      (level === 'possible' || level === 'clear_candidate') &&
-      (!coveredBy || !event.safetyFlags.includes(coveredBy)),
-  );
+  const status = statusOrientation(event.overallState);
   const headline = sanitizeOwnerCopy(
     (event.consumerHeadline ??
       digestiveHeadline(event.baselineComparison, dog.name, hasSafetyFlags)
@@ -247,34 +198,57 @@ export default function DigestiveResultScreen() {
       dog.name,
     ),
   );
+  const advice = event.recommendedNextStep
+    ? sanitizeOwnerCopy(event.recommendedNextStep.replace(/Rocky/g, dog.name))
+    : '';
   const action = event.usefulAction;
   const showFollowup =
     useApi &&
     action?.key === 'ask_followup' &&
     event.followupQuestion &&
     event.followupKey;
-  const statusPill = statusPillFor(event);
+  const showAdvice = Boolean(advice) && action?.key !== 'ask_followup';
+  const nutritionKind = digestiveActionCardKind(action?.key) === 'nutrition';
+  const whyLines = whyITellYou(event.relevantContext);
+  const uncertainNotes = uncertainVisualNotes(event, dog.name).filter(
+    (note) => !whyLines.some((line) => line.toLowerCase().includes('muco')),
+  );
 
   return (
     <ScreenContainer style={styles.screen} scroll contentStyle={styles.content}>
       <StackScreenHeader title={`Digestione di ${dog.name}`} />
 
       <View style={styles.heroCard}>
-        <View style={[styles.statusPill, { backgroundColor: statusPill.bg }]}>
-          <Text style={[styles.statusPillText, { color: statusPill.fg }]}>
-            {statusPill.label}
+        <View
+          style={[
+            styles.statusPill,
+            status.kind === 'attention'
+              ? styles.statusPillAttention
+              : status.kind === 'watch'
+                ? styles.statusPillWatch
+                : styles.statusPillOk,
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusPillText,
+              status.kind === 'attention'
+                ? styles.statusPillTextAttention
+                : status.kind === 'watch'
+                  ? styles.statusPillTextWatch
+                  : styles.statusPillTextOk,
+            ]}
+          >
+            {status.label}
           </Text>
         </View>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
-        {event.recommendedNextStep &&
-        action?.key !== 'ask_followup' &&
-        action?.key !== 'contact_vet' ? (
-          <Text style={styles.resultAdvice}>
-            {sanitizeOwnerCopy(
-              event.recommendedNextStep.replace(/Rocky/g, dog.name),
-            )}
-          </Text>
+        {showAdvice ? (
+          <View style={styles.nextBlock}>
+            <Text style={styles.nextKicker}>Cosa fare ora</Text>
+            <Text style={styles.resultAdvice}>{advice}</Text>
+          </View>
         ) : null}
       </View>
 
@@ -343,13 +317,32 @@ export default function DigestiveResultScreen() {
         </Card>
       ) : null}
 
+      {nutritionKind ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${action?.title ?? 'Alimentazione non impostata'} ${action?.label ?? 'Aggiungi'}`}
+          onPress={() =>
+            router.push(digestiveNutritionHref(action?.href) as Href)
+          }
+          style={styles.nutritionQuiet}
+        >
+          <Text style={styles.nutritionQuietText}>
+            {action?.title ?? 'Alimentazione non impostata'}
+            {' · '}
+            <Text style={styles.nutritionQuietAction}>
+              {action?.label ?? 'Aggiungi'}
+            </Text>
+          </Text>
+        </Pressable>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: detailsOpen }}
         onPress={() => setDetailsOpen((open) => !open)}
         style={styles.detailsToggle}
       >
-        <Text style={styles.detailsToggleText}>Approfondisci</Text>
+        <Text style={styles.detailsToggleText}>Perché te lo dico</Text>
         <Ionicons
           name={detailsOpen ? 'chevron-up' : 'chevron-down'}
           size={20}
@@ -372,6 +365,15 @@ export default function DigestiveResultScreen() {
               </View>
             );
           })}
+          {whyLines.length > 0 ? (
+            <View style={styles.whiteCard}>
+              {whyLines.map((item) => (
+                <Text key={item} style={styles.comparisonText}>
+                  {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           {event.consistency !== 'sconosciuta' ||
           (event.color && event.color !== 'Non determinabile dalla foto') ? (
             <View style={styles.whiteCard}>
@@ -381,17 +383,13 @@ export default function DigestiveResultScreen() {
               </Text>
             </View>
           ) : null}
-          {notableCandidates.length > 0 ? (
+          {uncertainNotes.length > 0 ? (
             <View style={styles.whiteCard}>
-              <Text style={styles.cardTitle}>Da tenere d’occhio</Text>
-              {notableCandidates.map((candidate) => (
-                <View key={candidate.label} style={styles.notableRow}>
-                  <View style={styles.notableDot} />
-                  <Text style={styles.notableLabel}>{candidate.label}</Text>
-                  <Text style={styles.notableValue}>
-                    {candidateText(candidate.level)}
-                  </Text>
-                </View>
+              <Text style={styles.cardTitle}>Dettagli visivi incerti</Text>
+              {uncertainNotes.map((note) => (
+                <Text key={note} style={styles.comparisonText}>
+                  {note}
+                </Text>
               ))}
             </View>
           ) : null}
@@ -444,29 +442,6 @@ export default function DigestiveResultScreen() {
         </>
       ) : null}
 
-      {digestiveActionCardKind(action?.key) === 'nutrition' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${action?.title ?? 'Alimentazione'} ${action?.label ?? ''}`.trim()}
-          onPress={() =>
-            router.push(digestiveNutritionHref(action?.href) as Href)
-          }
-          style={styles.nutritionChip}
-        >
-          <Text style={styles.nutritionChipTitle}>
-            {sanitizeOwnerCopy(
-              (action?.title ?? 'Alimentazione non impostata').replace(
-                /Rocky/g,
-                dog.name,
-              ),
-            )}
-          </Text>
-          <Text style={styles.nutritionChipAction}>
-            {action?.label ?? 'Aggiungi'}
-          </Text>
-        </Pressable>
-      ) : null}
-
       <View style={styles.footerRow}>
         <View style={styles.thumbsRow}>
           <Pressable
@@ -505,6 +480,71 @@ export default function DigestiveResultScreen() {
       </View>
     </ScreenContainer>
   );
+}
+
+function statusOrientation(
+  state?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT',
+): { label: string; kind: 'ok' | 'watch' | 'attention' } {
+  if (state === 'ATTENTION' || state === 'VET_CONTACT') {
+    return { label: 'Attenzione', kind: 'attention' };
+  }
+  if (state === 'MONITOR') {
+    return { label: 'Da seguire', kind: 'watch' };
+  }
+  return { label: 'Regolare', kind: 'ok' };
+}
+
+function whyITellYou(items?: string[]): string[] {
+  return (items ?? []).filter(
+    (item) =>
+      !item.includes('appaiono') &&
+      !item.startsWith('Alimento registrato') &&
+      !item.startsWith('Quantità indicata'),
+  );
+}
+
+function uncertainVisualNotes(
+  event: {
+    mucusCandidate: CandidateLevel;
+    foreignMaterialCandidate: CandidateLevel;
+    undigestedFoodCandidate?: CandidateLevel;
+    bloodCandidate: CandidateLevel;
+    melenaCandidate: CandidateLevel;
+    safetyFlags: SafetyFlagCode[];
+  },
+  _dogName: string,
+): string[] {
+  const visualAlarm =
+    event.safetyFlags.includes('BLOOD_CANDIDATE') ||
+    event.safetyFlags.includes('MELENA_CANDIDATE') ||
+    event.safetyFlags.includes('FOREIGN_MATERIAL_CANDIDATE') ||
+    event.bloodCandidate === 'clear_candidate' ||
+    event.melenaCandidate === 'clear_candidate' ||
+    event.foreignMaterialCandidate === 'clear_candidate';
+  if (visualAlarm) return [];
+  const notes: string[] = [];
+  if (
+    event.mucusCandidate === 'possible' ||
+    event.mucusCandidate === 'clear_candidate'
+  ) {
+    notes.push(
+      'Dalla foto c’è un possibile alone vischioso. Da solo non permette una conclusione.',
+    );
+  }
+  if (event.foreignMaterialCandidate === 'possible') {
+    notes.push(
+      'Nella foto c’è un possibile dettaglio insolito, ma non è abbastanza chiaro da cambiare la conclusione.',
+    );
+  }
+  if (
+    event.undigestedFoodCandidate === 'possible' ||
+    event.undigestedFoodCandidate === 'clear_candidate'
+  ) {
+    notes.push(
+      'Si vedono possibili residui di alimento: da soli non dicono come sta digerendo.',
+    );
+  }
+  return notes;
 }
 
 function photoDetailCopy(consistency: string, color: string): string {
@@ -567,9 +607,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: spacing.md,
   },
+  statusPillOk: {
+    backgroundColor: colors.tealSoft,
+  },
+  statusPillWatch: {
+    backgroundColor: '#FFF7D6',
+  },
+  statusPillAttention: {
+    backgroundColor: '#FFF1EE',
+  },
   statusPillText: {
     fontSize: 13,
     fontWeight: typography.weight.bold,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  statusPillTextOk: {
+    color: colors.teal,
+  },
+  statusPillTextWatch: {
+    color: '#9A6700',
+  },
+  statusPillTextAttention: {
+    color: colors.coral,
   },
   actionCard: {
     marginBottom: spacing.lg,
@@ -605,35 +665,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   resultAdvice: {
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
     color: '#1A2B48',
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
     lineHeight: typography.size.md * typography.lineHeight.normal,
     textAlign: 'center',
   },
-  nutritionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    marginBottom: spacing.md,
+  nextBlock: {
+    marginTop: spacing.lg,
+    alignSelf: 'stretch',
   },
-  nutritionChipTitle: {
-    flex: 1,
+  nextKicker: {
+    color: '#64748B',
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  nutritionQuiet: {
+    alignSelf: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  nutritionQuietText: {
     color: '#64748B',
     fontSize: typography.size.sm,
+    textAlign: 'center',
   },
-  nutritionChipAction: {
+  nutritionQuietAction: {
     color: colors.teal,
-    fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
   footerRow: {

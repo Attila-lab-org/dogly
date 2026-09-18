@@ -27,7 +27,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v9"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v11"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -201,14 +201,25 @@ def _complete_nutrition_href(context: DigestiveContext) -> str:
     return NUTRITION_HREF
 
 
-def _food_started_sentence(context: DigestiveContext) -> str:
+def _food_started_span(context: DigestiveContext) -> str | None:
     days = context.food_started_days_ago
+    if days is None:
+        return None
     if days == 0:
+        return "oggi"
+    if days == 1:
+        return "ieri"
+    return f"{days} giorni"
+
+
+def _food_started_sentence(context: DigestiveContext) -> str:
+    span = _food_started_span(context)
+    if span == "oggi":
         started = "l’alimento iniziato oggi"
-    elif days == 1:
+    elif span == "ieri":
         started = "l’alimento iniziato ieri"
     else:
-        started = f"l’alimento iniziato da {days} giorni"
+        started = f"l’alimento iniziato da {span}"
     return f"Il cambiamento coincide temporalmente con {started}."
 
 
@@ -228,31 +239,69 @@ def _food_stability_phrase(context: DigestiveContext) -> str | None:
     return f"Il cibo è lo stesso da {days} giorni"
 
 
-def _repeat_counts(context: DigestiveContext) -> tuple[int, int]:
-    """Prior events already stored; the current observation is not included."""
+_LOOSE = frozenset({"soft", "unformed", "watery"})
+_FIRM = frozenset({"formed", "hard"})
 
-    count_7d = max(context.episode_count_7d, 0)
-    count_24h = max(
-        context.recent_episode_count_24h,
-        context.recent_watery_count_24h,
-        0,
-    )
-    return count_7d, count_24h
+
+def _similar_kind(consistency: str) -> frozenset[str]:
+    if consistency == "watery":
+        return frozenset({"watery"})
+    if consistency in _LOOSE:
+        return _LOOSE
+    if consistency in _FIRM:
+        return _FIRM
+    if consistency and consistency != "unknown":
+        return frozenset({consistency})
+    return frozenset()
+
+
+def _similar_prior_count(context: DigestiveContext, consistency: str) -> int:
+    """Count prior events of the same kind. Never use total analysis volume."""
+
+    if consistency == "watery":
+        from_list = sum(
+            str(item).lower() == "watery" for item in context.prior_consistencies
+        )
+        return max(
+            from_list,
+            context.watery_count_7d,
+            context.recent_watery_count_24h,
+            0,
+        )
+    kind = _similar_kind(consistency)
+    if not kind:
+        return 0
+    return sum(str(item).lower() in kind for item in context.prior_consistencies)
+
+
+def _similar_hours_count(context: DigestiveContext, consistency: str) -> int:
+    """24h similarity is persisted only for watery events."""
+
+    if consistency == "watery":
+        return max(context.recent_watery_count_24h, 0)
+    return 0
+
+
+def _repetition_level(context: DigestiveContext, consistency: str) -> str | None:
+    hours = _similar_hours_count(context, consistency)
+    similar = _similar_prior_count(context, consistency)
+    if hours >= 1:
+        return "hours"
+    if similar >= 2:
+        return "trend"
+    if similar == 1:
+        return "once"
+    return None
 
 
 def _repetition_phrase(context: DigestiveContext, consistency: str) -> str | None:
-    loose = consistency in {"soft", "unformed", "watery"}
-    count_7d, count_24h = _repeat_counts(context)
-    if count_24h >= 2 and (loose or context.recent_watery_count_24h >= 1):
-        return "Si sta ripetendo in poche ore."
-    if count_24h == 1 and (loose or context.recent_watery_count_24h >= 1):
-        return "Si è già presentata un’altra volta in poche ore."
-    if not loose:
-        return None
-    if count_7d >= 2:
-        return "Negli ultimi giorni si sta ripetendo."
-    if count_7d == 1:
-        return "Negli ultimi giorni si è già presentata un’altra volta."
+    level = _repetition_level(context, consistency)
+    if level == "hours":
+        return "Questo tipo di cambiamento si è ripetuto nelle ultime ore."
+    if level == "trend":
+        return "Questo tipo di cambiamento si sta ripetendo."
+    if level == "once":
+        return "Un cambiamento di questo tipo si è già presentato."
     return None
 
 
@@ -283,6 +332,223 @@ def _weight_phrase(context: DigestiveContext) -> str | None:
     )
 
 
+def _is_loose(consistency: str) -> bool:
+    return consistency in _LOOSE
+
+
+def _texture_phrase(consistency: str) -> str | None:
+    if consistency == "watery":
+        return "più liquide"
+    if consistency in {"soft", "unformed"}:
+        return "più morbide"
+    if consistency == "hard":
+        return "più compatte"
+    if consistency == "formed":
+        return "ben formate"
+    return None
+
+
+def _candidate_level(observation: dict[str, Any], field: str) -> str:
+    return str(observation.get(field) or "").lower()
+
+
+def _visual_safety_why(observation: dict[str, Any], name: str) -> str | None:
+    blood = safety_candidate(observation, "fresh_blood_candidate")
+    melena = safety_candidate(observation, "melena_candidate")
+    foreign = safety_candidate(observation, "foreign_material_candidate")
+    if blood == "clear_candidate":
+        return (
+            f"Nella foto di {name} c’è un segnale rosso che merita "
+            "una valutazione professionale."
+        )
+    if melena == "clear_candidate":
+        return (
+            f"Nella foto di {name} il colore è molto scuro: va descritto "
+            "al veterinario, senza trarne una conclusione da qui."
+        )
+    if blood == "possible":
+        return (
+            f"Nella foto di {name} c’è una possibile traccia rossa: "
+            "la tratto con prudenza, non come una certezza."
+        )
+    if melena == "possible":
+        return (
+            f"Nella foto di {name} il colore è insolitamente scuro: "
+            "non basta per una conclusione, ma non lo ignoro."
+        )
+    if foreign == "clear_candidate":
+        return (
+            f"Nella foto di {name} si vede qualcosa di insolito. "
+            "Non è una conclusione, ma va tenuto presente."
+        )
+    if foreign == "possible":
+        return (
+            f"Nella foto di {name} c’è un dettaglio che non riconosco "
+            "con certezza: non è un allarme da etichetta, ma non lo scarto."
+        )
+    return None
+
+
+def _uncertain_visual_note(observation: dict[str, Any]) -> str | None:
+    if _visual_safety_action(observation):
+        return None
+    mucus = _candidate_level(observation, "mucus_candidate")
+    if mucus in {"possible", "clear_candidate"}:
+        return (
+            "Dalla foto c’è un possibile alone vischioso, ma da solo non cambia "
+            "la lettura."
+        )
+    foreign = safety_candidate(observation, "foreign_material_candidate")
+    if foreign == "possible_unverified" or _candidate_level(
+        observation, "foreign_material_candidate"
+    ) == "possible":
+        return (
+            "Nella foto c’è un possibile dettaglio insolito, ma non è abbastanza "
+            "chiaro da cambiare la conclusione."
+        )
+    undigested = _candidate_level(observation, "undigested_food_candidate")
+    if undigested in {"possible", "clear_candidate"}:
+        return (
+            "Si vedono possibili residui di alimento: da soli non dicono come sta "
+            "digerendo."
+        )
+    return None
+
+
+def _unusual_color_note(observation: dict[str, Any]) -> str | None:
+    family = str(observation.get("color_family") or "").upper()
+    if family in {"GREEN", "GREEN_BROWN", "YELLOW", "ORANGE", "PALE_GRAY"}:
+        return (
+            "Il colore è un po’ diverso dal marrone più comune, ma da solo "
+            "non spiega il resto."
+        )
+    return None
+
+
+def _owner_symptom_sentence(context: DigestiveContext) -> str | None:
+    vomits = context.vomiting_today is True
+    quieter = context.reduced_activity_today is True
+    less_appetite = context.appetite_reduced is True
+    if vomits and quieter:
+        return (
+            f"Hai segnalato vomito e che {context.dog_name} è meno attivo."
+        )
+    if vomits:
+        return f"Hai segnalato che {context.dog_name} ha vomitato oggi."
+    if quieter:
+        return (
+            f"Hai segnalato che {context.dog_name} è meno attivo del solito."
+        )
+    if less_appetite:
+        return f"Hai segnalato che {context.dog_name} ha mangiato meno."
+    return None
+
+
+def _personal_factor(
+    context: DigestiveContext,
+    *,
+    baseline_code: str,
+    consistency: str,
+) -> str | None:
+    if context.vomiting_today is True:
+        return f"Hai segnalato che {context.dog_name} ha vomitato oggi."
+    if context.reduced_activity_today is True:
+        return f"Hai segnalato che {context.dog_name} è meno attivo del solito."
+    if context.appetite_reduced is True:
+        return f"Hai segnalato che {context.dog_name} ha mangiato meno."
+    if _recent_food_change(context):
+        span = _food_started_span(context)
+        if span == "oggi":
+            started = "iniziato oggi"
+        elif span == "ieri":
+            started = "iniziato ieri"
+        else:
+            started = f"iniziato da {span}"
+        return (
+            f"Il cambiamento è comparso nei giorni successivi all’alimento "
+            f"{started}: è una coincidenza temporale da seguire."
+        )
+    if (
+        _food_known(context)
+        and context.food_started_days_ago is not None
+        and context.food_started_days_ago > 7
+        and (
+            baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}
+            or _is_loose(consistency)
+        )
+    ):
+        stable = _food_stability_phrase(context)
+        if stable:
+            return (
+                f"{stable}, quindi non c’è un cambio recente che coincida "
+                "con questo episodio."
+            )
+    if context.unusual_food_48h is True:
+        return (
+            f"Hai segnalato qualcosa di insolito mangiato da {context.dog_name} "
+            "nelle ultime 48 ore."
+        )
+    if context.vomiting_today is False and context.reduced_activity_today is False:
+        return "Non hai segnalato vomito o calo di attività."
+    if context.vomiting_today is False:
+        return "Non hai segnalato vomito."
+    weight = _weight_phrase(context)
+    if weight:
+        return f"{weight}."
+    return None
+
+
+def _why_sentences(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    observation: dict[str, Any],
+) -> list[str]:
+    del observation
+    name = context.dog_name
+    texture = _texture_phrase(consistency)
+    level = _repetition_level(context, consistency)
+    sentences: list[str] = []
+
+    if baseline_code == "ABOVE_USUAL" and texture or baseline_code == "BELOW_USUAL" and texture:
+        first = f"Sono {texture} rispetto al suo andamento abituale"
+    elif baseline_code == "NEAR_USUAL":
+        first = f"Per {name} corrisponde al suo andamento abituale"
+    elif texture:
+        first = f"Le feci di {name} sono {texture}"
+    else:
+        first = f"Ho una nuova osservazione per {name}"
+
+    if level == "hours":
+        first = f"{first} e questo tipo di cambiamento si è ripetuto nelle ultime ore."
+    elif level == "trend":
+        first = f"{first} e il cambiamento si sta ripetendo."
+    elif level == "once":
+        first = f"{first} e un cambiamento di questo tipo si è già presentato."
+    elif not first.endswith("."):
+        first = f"{first}."
+    sentences.append(first)
+
+    if baseline_code == "INSUFFICIENT" and level or baseline_code == "INSUFFICIENT":
+        sentences.append(
+            "Non abbiamo ancora abbastanza storico per confrontarlo con il suo "
+            "andamento abituale."
+        )
+    else:
+        factor = _personal_factor(
+            context, baseline_code=baseline_code, consistency=consistency
+        )
+        if factor and factor.rstrip(".") not in first:
+            sentences.append(factor)
+
+    unique: list[str] = []
+    for item in sentences:
+        if item not in unique:
+            unique.append(item)
+    return unique[:2]
+
+
 def _useful_info(
     *,
     context: DigestiveContext,
@@ -296,49 +562,30 @@ def _useful_info(
             "Non riesco a confermare bene questo dettaglio dalla foto. "
             f"{unavailable_caution_detail(observation)}"
         )
+    visual = _visual_safety_why(observation, context.dog_name)
     if safety is DigestiveState.VET_CONTACT:
-        return "C’è un segnale che merita una valutazione professionale."
+        return visual or (
+            f"C’è un segnale su {context.dog_name} che merita una "
+            "valutazione professionale."
+        )
+    if visual and (
+        safety is DigestiveState.ATTENTION or _visual_safety_action(observation)
+    ):
+        extra = _owner_symptom_sentence(context) or _repetition_phrase(
+            context, consistency
+        )
+        if extra:
+            return f"{visual} {extra}"
+        return visual
 
-    sentences: list[str] = []
-    repetition = _repetition_phrase(context, consistency)
-    if repetition:
-        sentences.append(repetition)
-
-    second_bits: list[str] = []
-    if _recent_food_change(context):
-        second_bits.append(_food_started_sentence(context).rstrip("."))
-    else:
-        stable = _food_stability_phrase(context)
-        if stable:
-            second_bits.append(stable)
-    owner = _owner_negative_phrase(context)
-    if owner:
-        if second_bits:
-            second_bits.append(owner)
-        else:
-            second_bits.append(owner.capitalize() if owner[:1].islower() else owner)
-    weight = _weight_phrase(context)
-    if weight and not second_bits and not sentences:
-        second_bits.append(weight)
-
-    if second_bits:
-        if len(second_bits) == 1:
-            fragment = second_bits[0]
-        else:
-            fragment = f"{second_bits[0]} e {second_bits[1]}"
-        if not fragment.endswith("."):
-            fragment = f"{fragment}."
-        sentences.append(fragment)
-
-    if baseline_code == "INSUFFICIENT" and not sentences:
-        sentences.append("Ho ancora poche osservazioni per un confronto personale.")
-    if not sentences:
-        if baseline_code == "NEAR_USUAL":
-            return "Niente di diverso dalle ultime osservazioni."
-        if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
-            return "È un cambiamento rispetto alle ultime osservazioni."
-        return "Per ora niente altro da aggiungere."
-    return " ".join(sentences[:2])
+    return " ".join(
+        _why_sentences(
+            context=context,
+            consistency=consistency,
+            baseline_code=baseline_code,
+            observation=observation,
+        )
+    )
 
 
 def _consumer_headline(
@@ -349,25 +596,26 @@ def _consumer_headline(
     safety: DigestiveState,
     observation: dict[str, Any],
 ) -> str:
+    level = _repetition_level(context, consistency)
     if safety is DigestiveState.VET_CONTACT:
         return "È prudente sentire il veterinario"
     if verification_unavailable(observation):
         return "Non riesco a confermare un dettaglio"
-    if safety is DigestiveState.ATTENTION:
-        return "C’è qualcosa da tenere d’occhio"
-    if baseline_code == "ABOVE_USUAL":
-        return "Più morbide del suo solito"
-    if baseline_code == "BELOW_USUAL":
-        return "Più compatte del suo solito"
+    if safety is DigestiveState.ATTENTION and (
+        _visual_safety_action(observation)
+        or context.vomiting_today is True
+        or context.reduced_activity_today is True
+    ):
+        return "Un cambiamento da valutare con più attenzione"
+    if level in {"hours", "trend"} and baseline_code != "INSUFFICIENT":
+        return "Questo andamento si sta ripetendo"
+    if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
+        return "Un cambiamento da seguire"
     if baseline_code == "NEAR_USUAL":
-        return "In linea con il suo solito"
-    if consistency == "watery":
-        return "Più liquide"
-    if consistency in {"soft", "unformed"}:
-        return "Più morbide"
-    if consistency == "formed":
-        return "Prima osservazione utile"
-    return f"Ecco cosa noto oggi per {context.dog_name}"
+        return "In linea con il suo andamento"
+    if _is_loose(consistency):
+        return "Un cambiamento da seguire"
+    return "Un primo riferimento per il suo andamento"
 
 
 def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
@@ -535,6 +783,10 @@ def _choose_useful_action(
                 label="Aggiungi",
                 href=NUTRITION_HREF,
                 title="Alimentazione non impostata",
+                body=(
+                    f"Se aggiungi cosa mangia {context.dog_name}, "
+                    "le prossime letture saranno più precise."
+                ),
             ),
             None,
             None,
@@ -546,6 +798,10 @@ def _choose_useful_action(
                 label="Completa",
                 href=_complete_nutrition_href(context),
                 title="Quantità non impostata",
+                body=(
+                    f"Se completi la quantità, le prossime letture di "
+                    f"{context.dog_name} saranno più precise."
+                ),
             ),
             None,
             None,
@@ -568,30 +824,113 @@ def _final_advice(
     safety: DigestiveState,
     followup_question: str | None,
 ) -> str:
+    name = context.dog_name
     if safety is DigestiveState.VET_CONTACT or _visual_safety_action(observation):
-        return "Contatta il veterinario e descrivi ciò che hai osservato."
+        return (
+            f"Contatta il veterinario e descrivi ciò che hai visto oggi per {name}."
+        )
     if verification_unavailable(observation):
         return (
-            "Se il dubbio resta, senti il veterinario e descrivi ciò che hai visto."
+            f"Se il dubbio resta, senti il veterinario e descrivi ciò che hai visto "
+            f"sulla foto di {name}."
         )
     if followup_question:
         return followup_question
-    if context.vomiting_today is True or context.reduced_activity_today is True:
+    if context.vomiting_today is True:
         return (
-            "Tieni d’occhio i prossimi episodi e senti il veterinario "
-            "se peggiora."
+            f"Hai segnalato vomito: senti il veterinario se {name} non torna "
+            "come prima o se peggiora."
         )
-    loose = consistency in {"soft", "unformed", "watery"}
-    repeating = _repetition_phrase(context, consistency) is not None
-    if repeating and loose:
-        return "Osserva i prossimi episodi e segnala vomito o calo di attività."
+    if context.reduced_activity_today is True:
+        return (
+            f"Hai segnalato meno attività: senti il veterinario se {name} "
+            "resta spento o se gli episodi continuano."
+        )
+    level = _repetition_level(context, consistency)
+    if level in {"hours", "trend"} and _is_loose(consistency):
+        return (
+            "Dato che questo tipo di cambiamento si sta ripetendo, segui anche "
+            "vomito, appetito e attività nelle prossime ore."
+        )
+    if _recent_food_change(context) and _is_loose(consistency):
+        return (
+            "Il cambiamento coincide con il nuovo alimento: osserva l’andamento "
+            "senza attribuirlo al cibo."
+        )
     if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
-        return "Confronta le prossime osservazioni prima di cambiare qualcosa."
-    if _recent_food_change(context) or context.unusual_food_48h is True:
-        return "Confronta le prossime osservazioni senza cambiare altro per ora."
+        return (
+            "Controlla la prossima evacuazione: se torna più formata, "
+            "il cambiamento può restare un episodio occasionale."
+        )
     if baseline_code == "INSUFFICIENT":
-        return "Serve qualche osservazione in più per capire l’andamento personale."
-    return "Per ora va così."
+        return (
+            f"Continua a registrare le prossime osservazioni: ci serve ancora "
+            f"storico per capire se questo è abituale per {name}."
+        )
+    if baseline_code == "NEAR_USUAL":
+        return (
+            f"Non c’è nulla di urgente: per {name} corrisponde al suo andamento "
+            "abituale."
+        )
+    if level == "once":
+        return (
+            "Controlla la prossima evacuazione: se torna più formata, "
+            "il cambiamento può restare un episodio occasionale."
+        )
+    return (
+        f"Continua a registrare le prossime osservazioni di {name} per confrontarle "
+        "con questa."
+    )
+
+
+def _evidence_lines(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    observation: dict[str, Any],
+    observed_summary: str,
+) -> list[str]:
+    lines: list[str] = []
+    texture = _texture_phrase(consistency)
+    if baseline_code == "ABOVE_USUAL" and texture or baseline_code == "BELOW_USUAL" and texture:
+        lines.append(
+            f"{texture.capitalize()} rispetto alle osservazioni utili precedenti"
+        )
+    elif baseline_code == "NEAR_USUAL":
+        lines.append("In linea con le osservazioni utili precedenti")
+    level = _repetition_level(context, consistency)
+    if level == "hours":
+        lines.append("Andamento ripetuto nelle ultime ore")
+    elif level == "trend":
+        lines.append("Andamento ripetuto nelle osservazioni simili precedenti")
+    elif level == "once":
+        lines.append("Un precedente cambiamento dello stesso tipo")
+    stable = _food_stability_phrase(context)
+    if stable:
+        lines.append(stable)
+    elif _recent_food_change(context):
+        span = _food_started_span(context)
+        lines.append(f"Alimento iniziato da {span}")
+    if context.vomiting_today is False:
+        lines.append("Nessun vomito segnalato")
+    if context.reduced_activity_today is False:
+        lines.append("Nessun calo di attività segnalato")
+    mucus = _candidate_level(observation, "mucus_candidate")
+    if mucus in {"possible", "clear_candidate"} and not _visual_safety_action(
+        observation
+    ):
+        lines.append(
+            "La foto suggerisce un po’ di muco, ma il dettaglio non è abbastanza "
+            "chiaro da considerarlo confermato."
+        )
+    if observed_summary:
+        lines.append(observed_summary)
+    unique: list[str] = []
+    for item in lines:
+        if item not in unique:
+            unique.append(item)
+    return unique[:6]
 
 
 def count_recent_windows(
@@ -670,9 +1009,13 @@ def build_digestive_intelligence(
         observation=observation,
     )
 
-    relevant_context: list[str] = []
-    if observed_summary:
-        relevant_context.append(observed_summary)
+    relevant_context = _evidence_lines(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        observation=observation,
+        observed_summary=observed_summary,
+    )
     if context.active_food_name:
         relevant_context.append(f"Alimento registrato: {context.active_food_name}.")
     if context.has_active_food and _has_quantity(context) and context.quantity_per_day:

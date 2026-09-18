@@ -1,0 +1,46 @@
+---
+description: Digestive result speaks meaning to the owner, not engine data
+alwaysApply: true
+---
+
+# Digestive meaning, not engine dump
+
+L’Observer produce dati. La Digestive Intelligence produce significato. La UI parla al proprietario.
+
+Do not change Behavior Intelligence. Do not redo Observer, scoring, verifier, Knowledge Registry, safety, learning eligibility, persistence, or audit/version/checksum to “fix” copy.
+
+The consumer result must answer, in a few seconds:
+
+1. Cosa significa per il mio cane?
+2. Perché DOGly lo pensa, considerando proprio lui?
+3. Cosa ha senso fare adesso?
+
+## Screen hierarchy
+
+- Discrete status only: Regolare / Da seguire / Attenzione
+- Title = meaning, never the raw observation (`Più morbide`, color, reliability)
+- Explanation: at most 2 sentences that join the observation to this dog
+- One personal factor, not a list
+- One concrete next step derived from the case
+- Missing nutrition after the result as a quiet completion, never blocking analysis
+- Uncertain anomalies (possible mucus) stay in “Perché te lo dico” unless they change safety
+- Safety always wins
+
+## Trend rule
+
+Never use total recent analysis count to say something is repeating. Compare semantically similar events only:
+
+- soft/unformed/watery → softer trend
+- watery → liquid trend
+- score/direction vs personal baseline
+- the same confirmed anomaly
+
+Five recent analyses with four formed and one soft are not five soft episodes.
+
+## Copy constraints
+
+- No diagnosis from a photo
+- No invented food causality
+- No phrases like “Sto ancora imparando il solito digestivo”
+- Same photo + different personal context must produce different meaning and advice
+- One primary action; mobile and mobile-web stay in parity

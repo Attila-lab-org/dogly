@@ -37,7 +37,7 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "confronto personale" in result.consumer_summary.lower()
+    assert "andamento abituale" in result.consumer_summary.lower()
     assert "solito" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
     assert result.useful_action.label == "Aggiungi"
@@ -46,6 +46,7 @@ def test_new_dog_monitors_without_inventing_a_baseline():
     assert result.recommended_next_step
     assert result.recommended_next_step != result.useful_action.title
     assert "alimentazione" not in result.recommended_next_step.lower()
+    assert "per ora va così" not in result.recommended_next_step.lower()
 
 
 def test_watery_observation_asks_only_the_high_value_missing_question():
@@ -90,7 +91,7 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert result.baseline_comparison == "INSUFFICIENT"
     assert "simili al solito" not in result.consumer_headline
     assert "solito" not in result.consumer_headline.lower()
-    assert "confronto personale" in result.consumer_summary.lower()
+    assert "andamento abituale" in result.consumer_summary.lower()
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -126,7 +127,7 @@ def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "ABOVE_USUAL"
-    assert "morbide" in result.consumer_headline.lower()
+    assert result.consumer_headline == "Un cambiamento da seguire"
 
 
 def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
@@ -139,7 +140,7 @@ def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
         context(prior_scores=[4, 4, 4, 4]),
     )
 
-    assert result.consumer_headline == "Più compatte del suo solito"
+    assert result.consumer_headline == "Un cambiamento da seguire"
     assert "ben formate" in " ".join(result.relevant_context)
     assert "marrone scuro" in " ".join(result.relevant_context)
     assert "appaiono" not in result.consumer_summary.lower()
@@ -503,9 +504,8 @@ def test_same_photo_means_different_things_with_different_personal_context():
     photo = observation(consistency="soft")
     softer = build_digestive_intelligence(photo, context(prior_scores=[2, 2, 2, 2]))
     usual = build_digestive_intelligence(photo, context(prior_scores=[4, 4, 4, 4]))
-    assert softer.consumer_headline != usual.consumer_headline
-    assert "morbide" in softer.consumer_headline.lower()
-    assert "linea" in usual.consumer_headline.lower()
+    assert softer.consumer_headline == "Un cambiamento da seguire"
+    assert usual.consumer_headline == "In linea con il suo andamento"
     assert "appaiono" not in softer.consumer_summary.lower()
     assert "appaiono" not in usual.consumer_summary.lower()
 
@@ -514,54 +514,111 @@ def test_repeated_event_changes_meaning_versus_isolated_episode():
     photo = observation(consistency="soft")
     isolated = build_digestive_intelligence(
         photo,
-        context(prior_scores=[2, 2, 2, 2]),
+        context(prior_scores=[2, 2, 2, 2], prior_consistencies=["formed", "formed"]),
     )
     repeated = build_digestive_intelligence(
         photo,
-        context(prior_scores=[2, 2, 2, 2], episode_count_7d=1),
+        context(
+            prior_scores=[2, 2, 2, 2],
+            prior_consistencies=["soft", "soft"],
+        ),
     )
     assert "seconda volta" not in isolated.consumer_summary.lower()
     assert "seconda volta" not in repeated.consumer_summary.lower()
-    assert "altra volta" in repeated.consumer_summary.lower()
-    assert isolated.consumer_headline == repeated.consumer_headline
+    assert isolated.consumer_headline == "Un cambiamento da seguire"
+    assert repeated.consumer_headline == "Questo andamento si sta ripetendo"
+    assert "ripetendo" in repeated.consumer_summary.lower()
+
+
+def test_total_recent_analyses_are_not_a_soft_trend():
+    photo = observation(consistency="soft")
+    mixed = build_digestive_intelligence(
+        photo,
+        context(
+            prior_scores=[3, 3, 3, 3],
+            episode_count_7d=5,
+            recent_episode_count_24h=5,
+            prior_consistencies=["formed", "formed", "formed", "formed", "soft"],
+        ),
+    )
+    blob = (
+        f"{mixed.consumer_headline} {mixed.consumer_summary} "
+        f"{mixed.recommended_next_step}"
+    ).lower()
+    assert "poche ore" not in blob
+    assert mixed.consumer_headline != "Questo andamento si sta ripetendo"
+    assert "già presentato" in mixed.consumer_summary.lower()
+    repeated = build_digestive_intelligence(
+        photo,
+        context(
+            prior_scores=[2, 2, 2, 2],
+            prior_consistencies=["soft", "unformed", "soft"],
+            episode_count_7d=3,
+        ),
+    )
+    assert repeated.consumer_headline == "Questo andamento si sta ripetendo"
+    watery = build_digestive_intelligence(
+        observation(consistency="watery"),
+        context(
+            active_food_name="Crocchette",
+            quantity_per_day="200g",
+            has_active_food=True,
+            vomiting_today=False,
+            prior_scores=[2, 2, 2, 2],
+            recent_watery_count_24h=1,
+            watery_count_7d=1,
+            prior_consistencies=["watery"],
+        ),
+    )
+    assert "ultime ore" in watery.consumer_summary.lower()
+    assert watery.consumer_headline == "Questo andamento si sta ripetendo"
 
 
 def test_recent_event_counts_do_not_invent_a_second_time():
     photo = observation(consistency="soft")
     texts = []
+    priors = {
+        1: ["soft"],
+        2: ["soft", "soft"],
+        5: ["soft", "soft", "soft", "soft", "soft"],
+    }
     for count in (1, 2, 5):
         result = build_digestive_intelligence(
             photo,
-            context(prior_scores=[2, 2, 2, 2], episode_count_7d=count),
+            context(prior_scores=[2, 2, 2, 2], prior_consistencies=priors[count]),
         )
         blob = f"{result.consumer_headline} {result.consumer_summary} {result.recommended_next_step}".lower()
-        texts.append((count, result.consumer_summary, blob))
+        texts.append((count, result.consumer_headline, result.consumer_summary, blob))
         assert "seconda volta" not in blob
         assert "imparando" not in blob
+        assert "poche ore" not in blob
     one, two, many = texts
-    assert "altra volta" in one[1].lower()
-    assert "si sta ripetendo" in two[1].lower()
-    assert "si sta ripetendo" in many[1].lower()
-    assert "altra volta" not in two[1].lower()
-    assert "altra volta" not in many[1].lower()
-    assert one[1] != two[1]
-    assert two[1] == many[1]
+    assert one[1] == "Un cambiamento da seguire"
+    assert two[1] == "Questo andamento si sta ripetendo"
+    assert many[1] == "Questo andamento si sta ripetendo"
+    assert "già presentato" in one[2].lower()
+    assert "ripetendo" in two[2].lower()
+    assert one[2] != two[2]
 
 
 def test_insufficient_baseline_does_not_mix_trend_with_pretend_usual():
     result = build_digestive_intelligence(
         observation(consistency="soft"),
-        context(episode_count_7d=2),
+        context(prior_consistencies=["soft", "soft"]),
     )
     blob = (
         f"{result.consumer_headline} {result.consumer_summary} "
         f"{result.recommended_next_step}"
     ).lower()
     assert result.baseline_comparison == "INSUFFICIENT"
+    assert result.consumer_headline == "Un cambiamento da seguire"
     assert "si sta ripetendo" in result.consumer_summary.lower()
     assert "solito" not in blob
     assert "imparando" not in blob
-    assert "osserva i prossimi episodi" in result.recommended_next_step.lower()
+    assert "osserva i prossimi episodi" not in blob
+    assert "per ora va così" not in blob
+    assert "da tenere d" not in blob
+    assert "si sta ripetendo" in result.recommended_next_step.lower()
 
 
 def test_routine_without_food_still_offers_brief_nutrition_cta():
@@ -573,7 +630,7 @@ def test_routine_without_food_still_offers_brief_nutrition_cta():
     assert result.useful_action.key == "add_nutrition"
     assert result.useful_action.title == "Alimentazione non impostata"
     assert result.useful_action.label == "Aggiungi"
-    assert result.useful_action.body is None
+    assert result.useful_action.body
 
 
 def test_vomiting_true_selects_claim_unknown_and_false_do_not():
@@ -610,3 +667,115 @@ def test_vomiting_true_selects_claim_unknown_and_false_do_not():
         item.publisher == "Merck Veterinary Manual"
         for item in present.knowledge_references
     )
+
+
+def _blob(result) -> str:
+    return (
+        f"{result.consumer_headline} {result.consumer_summary} "
+        f"{result.recommended_next_step}"
+    ).lower()
+
+
+def test_possible_mucus_is_contextualized_not_an_alarm():
+    result = build_digestive_intelligence(
+        observation(mucus_candidate="possible"),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+    blob = _blob(result)
+    assert result.overall_state is not DigestiveState.ATTENTION
+    assert result.overall_state is not DigestiveState.VET_CONTACT
+    assert "vischioso" not in result.consumer_summary.lower()
+    assert "muco" not in blob
+    assert any("muco" in item.lower() for item in result.relevant_context)
+    assert "colite" not in blob
+    assert "da tenere d" not in blob
+    assert result.consumer_headline == "In linea con il suo andamento"
+
+
+def test_oreo_like_soft_repeat_answers_meaning_why_and_next_step():
+    result = build_digestive_intelligence(
+        observation(mucus_candidate="possible", consistency="soft"),
+        context(dog_name="Oreo", prior_consistencies=["soft", "soft"]),
+    )
+    blob = _blob(result)
+    assert result.consumer_headline == "Un cambiamento da seguire"
+    assert "oreo" in result.consumer_summary.lower()
+    assert "più morbide" in result.consumer_summary.lower()
+    assert "ripetendo" in result.consumer_summary.lower()
+    assert "andamento abituale" in result.consumer_summary.lower()
+    assert "muco" not in blob
+    assert "possibile muco" not in blob
+    assert any("non è abbastanza" in item.lower() for item in result.relevant_context)
+    assert "vomito" in result.recommended_next_step.lower()
+    assert "attività" in result.recommended_next_step.lower()
+    assert "alimentazione" not in result.recommended_next_step.lower()
+
+
+def test_same_photo_changes_with_food_history_and_symptoms():
+    photo = observation(consistency="soft")
+    first = build_digestive_intelligence(photo, context())
+    repeating = build_digestive_intelligence(
+        photo,
+        context(prior_consistencies=["soft", "soft"]),
+    )
+    new_food = build_digestive_intelligence(
+        photo,
+        context(
+            prior_scores=[2, 2, 2, 2],
+            active_food_name="Salmone",
+            has_active_food=True,
+            quantity_per_day="200g",
+            food_started_days_ago=3,
+        ),
+    )
+    stable_food = build_digestive_intelligence(
+        photo,
+        context(
+            prior_scores=[2, 2, 2, 2],
+            active_food_name="Salmone",
+            has_active_food=True,
+            quantity_per_day="200g",
+            food_started_days_ago=90,
+        ),
+    )
+    with_vomiting = build_digestive_intelligence(
+        photo,
+        context(
+            prior_scores=[2, 2, 2, 2],
+            active_food_name="Salmone",
+            has_active_food=True,
+            quantity_per_day="200g",
+            vomiting_today=True,
+        ),
+    )
+    usual = build_digestive_intelligence(
+        photo,
+        context(
+            prior_scores=[4, 4, 4, 4],
+            active_food_name="Salmone",
+            has_active_food=True,
+            quantity_per_day="200g",
+            food_started_days_ago=90,
+        ),
+    )
+    assert "andamento abituale" in first.consumer_summary.lower()
+    assert repeating.consumer_headline == "Un cambiamento da seguire"
+    assert "ripetendo" in repeating.consumer_summary.lower()
+    assert "3 giorni" in new_food.consumer_summary
+    assert "causa" not in new_food.consumer_summary.lower()
+    assert "mesi" in stable_food.consumer_summary.lower()
+    assert "coincida" in stable_food.consumer_summary.lower()
+    assert new_food.consumer_summary != stable_food.consumer_summary
+    assert "vomitato" in with_vomiting.consumer_summary.lower()
+    assert "veterinario" in with_vomiting.recommended_next_step.lower()
+    assert usual.consumer_headline == "In linea con il suo andamento"
+    assert "andamento abituale" in usual.recommended_next_step.lower()
+    assert first.recommended_next_step != repeating.recommended_next_step
+    assert repeating.recommended_next_step != with_vomiting.recommended_next_step
+    for result in (first, repeating, new_food, stable_food, usual):
+        blob = _blob(result)
+        assert "per ora va così" not in blob
+        assert "osserva i prossimi episodi" not in blob
+        assert "da tenere d" not in blob
+        assert "appaiono" not in result.consumer_summary.lower()
+

@@ -8,25 +8,28 @@ const resultScreen = readFileSync(
 );
 
 describe('digestive result UX', () => {
-  it('keeps nutrition missing as a compact secondary chip', () => {
-    expect(resultScreen).toContain('nutritionChip');
-    expect(resultScreen).toContain("digestiveActionCardKind(action?.key) === 'nutrition'");
+  it('keeps nutrition as a quiet completion after the analysis', () => {
+    expect(resultScreen).toContain('nutritionQuiet');
+    expect(resultScreen).toContain('Alimentazione non impostata');
+    expect(resultScreen).not.toContain('nutritionChip');
     expect(resultScreen).not.toMatch(
       /digestiveActionCardKind\(action\?\.key\) === 'nutrition' \? \(\s*<Card/,
     );
   });
 
-  it('uses discreet thumbs and a quiet done action', () => {
-    expect(resultScreen).toContain('👍');
-    expect(resultScreen).toContain('👎');
-    expect(resultScreen).toContain('styles.doneText');
-    expect(resultScreen).not.toContain('Mi è stato utile');
-    expect(resultScreen).not.toContain('Non mi aiuta');
-    expect(resultScreen).not.toMatch(/title=["']Fatto["']/);
+  it('does not list uncertain anomalies as engine alarms', () => {
+    expect(resultScreen).not.toContain('Possibile muco');
+    expect(resultScreen).not.toContain('Da tenere d’occhio');
+    expect(resultScreen).toContain('Perché te lo dico');
+    expect(resultScreen).toContain('whyITellYou');
   });
 
-  it('shows one observational advice line in the hero', () => {
-    expect(resultScreen).toContain('resultAdvice');
-    expect(resultScreen).toContain('recommendedNextStep');
+  it('uses a discrete status and one next-step block', () => {
+    expect(resultScreen).toContain('statusOrientation');
+    expect(resultScreen).toContain('Da seguire');
+    expect(resultScreen).toContain('Cosa fare ora');
+    expect(resultScreen).toContain('👍');
+    expect(resultScreen).toContain('👎');
+    expect(resultScreen).not.toContain('Mi è stato utile');
   });
 });
