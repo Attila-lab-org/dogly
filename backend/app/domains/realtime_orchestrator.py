@@ -96,6 +96,27 @@ Regole non negoziabili:
 10. Restituisci esclusivamente JSON conforme allo schema."""
 
 
+def openai_realtime_decision_schema() -> dict[str, Any]:
+    """Convert Pydantic defaults into OpenAI strict nullable fields."""
+    schema = RealtimeDecision.model_json_schema()
+
+    def normalize(node: Any) -> None:
+        if isinstance(node, dict):
+            node.pop("default", None)
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                node["required"] = list(properties)
+                node["additionalProperties"] = False
+            for value in node.values():
+                normalize(value)
+        elif isinstance(node, list):
+            for value in node:
+                normalize(value)
+
+    normalize(schema)
+    return schema
+
+
 def _fallback_decision(
     *,
     text: str,
@@ -184,7 +205,7 @@ async def orchestrate_realtime_turn(
             "json_schema": {
                 "name": "dogly_realtime_decision",
                 "strict": True,
-                "schema": RealtimeDecision.model_json_schema(),
+                "schema": openai_realtime_decision_schema(),
             },
         },
     }

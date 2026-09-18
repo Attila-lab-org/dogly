@@ -11,6 +11,7 @@ from app.domains.realtime_context import (
 )
 from app.domains.realtime_orchestrator import (
     deterministic_safety_interrupt,
+    openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
 from tests.conftest import create_dog
@@ -28,6 +29,13 @@ def test_question_requires_real_information_gain() -> None:
             assistant_text="Posso aiutarti.",
             question="Mi racconti altro?",
         )
+
+
+def test_openai_schema_requires_every_nullable_field() -> None:
+    schema = openai_realtime_decision_schema()
+    assert set(schema["required"]) == set(schema["properties"])
+    assert schema["additionalProperties"] is False
+    assert "default" not in str(schema)
 
 
 def test_deterministic_safety_interrupt_precedes_ai() -> None:
