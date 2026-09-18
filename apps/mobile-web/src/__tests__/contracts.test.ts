@@ -12,6 +12,7 @@ import {
   mapApiDigestiveEventToResult,
   type ApiDigestiveEvent,
 } from '../features/digestive/map';
+import type { DigestiveFollowupKey } from '../features/secondary/types';
 
 describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
   it('contiene esattamente i 12 codici V0', () => {
@@ -147,6 +148,21 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
 });
 
 describe('digestive mapping — valori reali del backend, non mock', () => {
+  it('accetta e conserva tutte le chiavi follow-up consumer', () => {
+    const keys = [
+      'vomiting_today',
+      'reduced_activity_today',
+      'unusual_food_48h',
+      'appetite_reduced',
+      'straining_or_urgency',
+      'supplements_or_medication',
+    ] satisfies DigestiveFollowupKey[];
+
+    expect(keys).toContain('appetite_reduced');
+    expect(keys).toContain('straining_or_urgency');
+    expect(keys).toContain('supplements_or_medication');
+  });
+
   it('mappa i tre livelli senza esporre metadata audit alla UI', () => {
     const event = {
       id: 'evt-layers',
@@ -166,6 +182,11 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
       summary: null,
       active_food_name: null,
       baseline_comparison: 'INSUFFICIENT',
+      consumer_headline: 'Oggi Rocky ha feci più morbide',
+      consumer_summary: 'Il risultato merita un po’ di attenzione.',
+      followup_key: 'appetite_reduced',
+      followup_question: 'Rocky ha meno appetito?',
+      what_to_watch: ['Osserva l’appetito di Rocky.'],
       interpretation_layers: [
         {
           key: 'general',
@@ -201,6 +222,12 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
     ]);
     expect(result.interpretationLayers?.[0]).not.toHaveProperty('claim_ids');
     expect(result.interpretationLayers?.[0]).not.toHaveProperty('factors_used');
+    expect(result.consumerHeadline).toBe('Oggi Rocky ha feci più morbide');
+    expect(result.consumerSummary).toBe(
+      'Il risultato merita un po’ di attenzione.',
+    );
+    expect(result.followupKey).toBe('appetite_reduced');
+    expect(result.whatToWatch).toEqual(['Osserva l’appetito di Rocky.']);
   });
 
   it('traduce SOFT/FORMED inglese in consistenza consumer', () => {

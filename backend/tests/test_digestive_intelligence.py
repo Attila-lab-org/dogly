@@ -94,7 +94,52 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert result.consumer_summary.count(".") <= 2
     assert "ben formate" in result.consumer_summary.lower()
     assert "andamento abituale" not in result.consumer_summary.lower()
+    assert "primo riferimento" not in result.consumer_headline.lower()
+    assert "abbastanza storico" in result.consumer_summary.lower()
     assert result.recommended_next_step is None
+
+
+def test_general_layer_reports_reliable_visible_details_with_score_caveat():
+    result = build_digestive_intelligence(
+        observation(
+            consistency="formed",
+            color="dark brown",
+            fecal_score_estimate=3,
+            confidence_band="HIGH",
+            shape="log",
+            apparent_moisture="normal",
+            apparent_volume="normal",
+        ),
+        context(),
+    )
+    general = result.interpretation_layers[0].summary.lower()
+    assert "consistenza ben formate" in general
+    assert "colore apparente marrone scuro" in general
+    assert "score fecale visivo stimato 3/7" in general
+    assert "non diagnostico" in general
+    assert "forma cilindrica" in general
+    assert "umidità apparente" in general
+    assert "volume apparente" in general
+
+
+def test_general_layer_omits_secondary_details_when_confidence_is_not_high():
+    result = build_digestive_intelligence(
+        observation(
+            consistency="formed",
+            color="brown",
+            fecal_score_estimate=3,
+            confidence_band="MEDIUM",
+            shape="log",
+            apparent_moisture="normal",
+            apparent_volume="normal",
+        ),
+        context(),
+    )
+    general = result.interpretation_layers[0].summary.lower()
+    assert "score fecale visivo stimato 3/7" in general
+    assert "forma cilindrica" not in general
+    assert "umidità apparente" not in general
+    assert "volume apparente" not in general
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -251,6 +296,57 @@ def test_second_soft_observation_asks_one_natural_followup():
     assert result.followup_question.count("?") == 1
 
 
+def test_loose_stool_asks_appetite_after_vomiting_is_known_absent():
+    result = build_digestive_intelligence(
+        observation(consistency="unformed"),
+        context(
+            vomiting_today=False,
+            active_food_name="Crocchette",
+            quantity_per_day="200g",
+            has_active_food=True,
+        ),
+    )
+    assert result.followup_key == "appetite_reduced"
+    assert result.followup_question == "Rocky ha mangiato meno del solito?"
+    assert result.followup_question.count("?") == 1
+    assert result.useful_action.key == "ask_followup"
+    with_reduced_appetite = build_digestive_intelligence(
+        observation(consistency="unformed"),
+        context(vomiting_today=False, appetite_reduced=True),
+    )
+    assert with_reduced_appetite.safety_state is DigestiveState.ATTENTION
+
+
+def test_hard_stool_asks_about_straining_before_nutrition():
+    result = build_digestive_intelligence(
+        observation(consistency="hard", fecal_score_estimate=2),
+        context(),
+    )
+    assert result.followup_key == "straining_or_urgency"
+    assert "sforzo o urgenza" in result.followup_question.lower()
+    assert result.followup_question.count("?") == 1
+    assert result.useful_action.key == "ask_followup"
+    with_straining = build_digestive_intelligence(
+        observation(consistency="hard", fecal_score_estimate=2),
+        context(straining_or_urgency=True),
+    )
+    assert with_straining.safety_state is DigestiveState.ATTENTION
+
+
+def test_visual_safety_keeps_precedence_over_context_followups():
+    result = build_digestive_intelligence(
+        observation(
+            consistency="hard",
+            fecal_score_estimate=2,
+            fresh_blood_candidate="clear_candidate",
+        ),
+        context(),
+    )
+    assert result.useful_action.key == "contact_vet"
+    assert result.followup_key is None
+    assert result.followup_question is None
+
+
 def test_clear_blood_candidate_cannot_be_downgraded_by_baseline():
     result = build_digestive_intelligence(
         observation(fresh_blood_candidate="clear_candidate"),
@@ -280,6 +376,25 @@ def test_owner_confirmed_symptoms_and_foreign_material_have_fixed_flags():
         "REPEATED_WATERY",
         "DIGESTIVE_SYMPTOMS",
     }
+
+
+def test_confirmed_possible_blood_and_symptoms_align_flags_with_safety_state():
+    from app.domains.digestive_verification import apply_anomaly_verification
+
+    obs = apply_anomaly_verification(
+        observation(
+            consistency="unformed",
+            fresh_blood_candidate="possible",
+        ),
+        {"fresh_blood_candidate": "confirmed"},
+    )
+    ctx = context(appetite_reduced=True)
+    result = build_digestive_intelligence(obs, ctx)
+    flags = contextual_safety_flags(obs, ctx)
+
+    assert result.safety_state is DigestiveState.ATTENTION
+    assert {"code": "BLOOD_CANDIDATE", "severity": "medium"} in flags
+    assert {"code": "DIGESTIVE_SYMPTOMS", "severity": "medium"} in flags
 
 
 @pytest.mark.asyncio

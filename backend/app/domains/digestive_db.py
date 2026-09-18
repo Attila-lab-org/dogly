@@ -352,7 +352,12 @@ async def update_owner_context(
                     set owner_context_json = owner_context_json || cast(:answers as jsonb)
                     where id = cast(:event_id as uuid)
                       and user_id = cast(:user_id as uuid)
-                      and status = 'COMPLETED'
+                      and status not in (
+                        'REJECTED_QUALITY',
+                        'FAILED_TERMINAL',
+                        'FAILED',
+                        'CANCELLED'
+                      )
                     returning *
                     """
                 ),
@@ -364,7 +369,7 @@ async def update_owner_context(
             )
         ).mappings().first()
     if not row:
-        raise ApiError(ErrorCode.NOT_FOUND, "Completed digestive event not found")
+        raise ApiError(ErrorCode.NOT_FOUND, "Active digestive event not found")
     return _fecal_from_row(row)
 
 
@@ -444,7 +449,8 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                   status = :status,
                   observation_json = CAST(:observation_json AS jsonb),
                   intelligence_json = CAST(:intelligence_json AS jsonb),
-                  owner_context_json = CAST(:owner_context_json AS jsonb),
+                  owner_context_json = owner_context_json
+                    || CAST(:owner_context_json AS jsonb),
                   fecal_score_estimate = :fecal_score_estimate,
                   consistency = :consistency,
                   color = :color,
@@ -542,6 +548,7 @@ async def load_digestive_context(
                            prior.consistency,
                            prior.created_at,
                            prior.learning_eligible,
+                           prior.image_sha256,
                            (
                              select fp.food_product_id
                              from public.feeding_periods fp
@@ -559,6 +566,10 @@ async def load_digestive_context(
                       and prior.status = 'COMPLETED'
                       and prior.id <> cast(:event_id as uuid)
                       and prior.created_at < :created_at
+                      and (
+                        cast(:image_sha256 as text) is null
+                        or prior.image_sha256 is distinct from cast(:image_sha256 as text)
+                      )
                     order by prior.created_at desc, prior.id desc
                     limit 36
                     """
@@ -567,10 +578,19 @@ async def load_digestive_context(
                     "dog_id": event.dog_id,
                     "event_id": event.id,
                     "created_at": event.created_at,
+                    "image_sha256": event.image_sha256,
                 },
             )
         ).mappings().all()
-    ordered = list(reversed(prior))
+    ordered: list[Any] = []
+    seen_hashes: set[str] = set()
+    for row in reversed(prior):
+        fingerprint = str(row.get("image_sha256") or "")
+        if fingerprint:
+            if fingerprint in seen_hashes:
+                continue
+            seen_hashes.add(fingerprint)
+        ordered.append(row)
     answers = event.owner_context_json
     active_food_id = profile["active_food_product_id"]
     season_key, season_label = _digestive_period_label(event.created_at.month)
@@ -633,12 +653,12 @@ async def load_digestive_context(
         ],
         recent_episode_count_24h=sum(
             (event.created_at - row["created_at"]).total_seconds() <= 86_400
-            for row in prior
+            for row in ordered
         ),
         recent_watery_count_24h=sum(
             str(row["consistency"]).lower() == "watery"
             and (event.created_at - row["created_at"]).total_seconds() <= 86_400
-            for row in prior
+            for row in ordered
         ),
         vomiting_today=answers.get("vomiting_today"),
         reduced_activity_today=answers.get("reduced_activity_today"),
@@ -648,7 +668,7 @@ async def load_digestive_context(
         supplements_or_medication=answers.get("supplements_or_medication"),
         **count_recent_windows(
             event.created_at,
-            prior,
+            ordered,
             consistency_of=lambda row: str(row["consistency"] or "").lower(),
             created_of=lambda row: row["created_at"],
         ),
@@ -666,12 +686,23 @@ async def refresh_digestive_baseline(
             await conn.execute(
                 text(
                     """
+                    with ranked as (
+                      select fecal_score_estimate,
+                             created_at,
+                             id,
+                             row_number() over (
+                               partition by coalesce(image_sha256, id::text)
+                               order by created_at desc, id desc
+                             ) as fingerprint_rank
+                      from public.fecal_events
+                      where dog_id = cast(:dog_id as uuid)
+                        and status = 'COMPLETED'
+                        and fecal_score_estimate is not null
+                        and learning_eligible is true
+                    )
                     select fecal_score_estimate
-                    from public.fecal_events
-                    where dog_id = cast(:dog_id as uuid)
-                      and status = 'COMPLETED'
-                      and fecal_score_estimate is not null
-                      and learning_eligible is true
+                    from ranked
+                    where fingerprint_rank = 1
                     order by created_at desc, id desc
                     limit 12
                     """

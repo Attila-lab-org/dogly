@@ -158,6 +158,27 @@ def test_clean_observation_is_learning_eligible():
     assert prepared["learning_eligible"] is True
 
 
+def test_possible_food_residue_does_not_block_learning_by_itself():
+    prepared = prepare_digestive_observation(
+        _obs(undigested_food_candidate="possible")
+    )
+    assert prepared["learning_eligible"] is True
+
+
+def test_possible_mucus_is_cautious_but_clear_mucus_blocks_learning():
+    possible = prepare_digestive_observation(_obs(mucus_candidate="possible"))
+    clear = prepare_digestive_observation(_obs(mucus_candidate="clear_candidate"))
+    assert possible["learning_eligible"] is True
+    assert clear["learning_eligible"] is False
+
+
+def test_clear_food_residue_remains_anomalous_for_learning():
+    prepared = prepare_digestive_observation(
+        _obs(undigested_food_candidate="clear_candidate")
+    )
+    assert prepared["learning_eligible"] is False
+
+
 def test_possible_blood_is_not_corroborated_by_observer_confidence():
     prepared = prepare_digestive_observation(
         _obs(fresh_blood_candidate="possible", confidence_band="HIGH")

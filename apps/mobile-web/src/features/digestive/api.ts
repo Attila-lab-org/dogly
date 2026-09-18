@@ -7,6 +7,7 @@
  */
 import { api } from '../../lib/apiClient';
 import type { ApiDigestiveEvent } from './map';
+import type { DigestiveFollowupKey } from '../secondary/types';
 
 export type { ApiDigestiveEvent, ApiSafetyFlag } from './map';
 export { mapApiDigestiveEventToResult } from './map';
@@ -73,10 +74,7 @@ export async function getDigestiveSummary(
 export async function updateDigestiveContext(
   eventId: string,
   body: Partial<
-    Record<
-      'vomiting_today' | 'reduced_activity_today' | 'unusual_food_48h',
-      boolean
-    >
+    Record<DigestiveFollowupKey, boolean>
   >,
 ): Promise<ApiDigestiveEvent> {
   return api.patch<ApiDigestiveEvent>(

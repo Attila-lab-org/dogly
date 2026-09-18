@@ -10,18 +10,14 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from copy import deepcopy
 from typing import Any
 
 import httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.config import Settings
-from app.contracts.digestive import (
-    CandidateLevel,
-    FecalConsistency,
-    StoolObservationContract,
-)
-from app.contracts.taxonomy import ConfidenceBand
+from app.contracts.digestive import StoolObservationContract
 from app.domains.db import get_engine
 from app.domains.digestive_observation import DIGESTIVE_OBSERVER_PROMPT_VERSION
 from app.domains.digestive_verification import (
@@ -75,9 +71,71 @@ fecal_score_estimate to null.
 Return one JSON object only, matching the supplied closed vocabulary.
 """
 
+_SERVER_STAMPED_FIELDS = frozenset({"schema_version", "meta"})
+
 
 class ProviderDisabled(RuntimeError):
     pass
+
+
+def _strict_schema_for(
+    model: type[BaseModel], *, exclude: frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Derive an OpenAI strict schema while omitting server-owned fields."""
+
+    schema = deepcopy(model.model_json_schema(mode="validation"))
+    properties = schema.get("properties", {})
+    for field in exclude:
+        properties.pop(field, None)
+    schema["required"] = list(properties)
+
+    def close_objects(node: Any) -> None:
+        if isinstance(node, dict):
+            node.pop("default", None)
+            if node.get("type") == "object" or "properties" in node:
+                node["additionalProperties"] = False
+                if "properties" in node:
+                    node["required"] = list(node["properties"])
+            for value in node.values():
+                close_objects(value)
+        elif isinstance(node, list):
+            for value in node:
+                close_objects(value)
+
+    close_objects(schema)
+    return schema
+
+
+def _response_format(name: str, schema: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "strict": True,
+            "schema": schema,
+        },
+    }
+
+
+_STOOL_OBSERVATION_SCHEMA = _strict_schema_for(
+    StoolObservationContract,
+    exclude=_SERVER_STAMPED_FIELDS,
+)
+
+
+def _verifier_schema(fields: list[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            field: {
+                "type": "string",
+                "enum": sorted(VERIFICATION_VERDICTS),
+            }
+            for field in fields
+        },
+        "required": fields,
+        "additionalProperties": False,
+    }
 
 
 def _json_content(payload: dict[str, Any]) -> dict[str, Any]:
@@ -99,6 +157,9 @@ class OpenAIDigestiveVision:
         self._settings = settings
         self._api_key = settings.openai_api_key
         self._model = settings.digestive_vision_model
+        self._verifier_model = (
+            settings.digestive_verifier_model or settings.digestive_vision_model
+        )
         self._client = httpx.AsyncClient(timeout=90.0)
 
     async def observe_stool(
@@ -122,26 +183,6 @@ class OpenAIDigestiveVision:
 
         request_id = f"oai-digestive-{uuid.uuid4().hex[:12]}"
         started = time.perf_counter()
-        schema_hint = {
-            "schema_version": "stool_observation.v0",
-            "image_quality": ["sufficient", "insufficient"],
-            "warnings": ["short machine-readable strings"],
-            "fecal_score_estimate": "integer 1-7 visual impression or null",
-            "consistency": [value.value for value in FecalConsistency],
-            "shape": ["pellets", "log", "piled", "flat", "irregular", "unknown"],
-            "apparent_moisture": ["low", "normal", "high", "unknown"],
-            "segmentation": ["present", "reduced", "absent", "unknown"],
-            "color": "short visible descriptor or unknown",
-            "color_uncertainty": "low, medium, high, or unknown",
-            "color_uniformity": ["uniform", "non_uniform", "unknown"],
-            "mucus_candidate": [value.value for value in CandidateLevel],
-            "fresh_blood_candidate": [value.value for value in CandidateLevel],
-            "melena_candidate": [value.value for value in CandidateLevel],
-            "foreign_material_candidate": [value.value for value in CandidateLevel],
-            "undigested_food_candidate": [value.value for value in CandidateLevel],
-            "apparent_volume": ["low", "normal", "high", "not_assessable"],
-            "confidence_band": [value.value for value in ConfidenceBand],
-        }
         try:
             response = await self._client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -151,7 +192,10 @@ class OpenAIDigestiveVision:
                 },
                 json={
                     "model": self._model,
-                    "response_format": {"type": "json_object"},
+                    "response_format": _response_format(
+                        "stool_observation_contract",
+                        _STOOL_OBSERVATION_SCHEMA,
+                    ),
                     "messages": [
                         {"role": "system", "content": _SYSTEM},
                         {
@@ -161,8 +205,8 @@ class OpenAIDigestiveVision:
                                     "type": "text",
                                     "text": (
                                         "Observe only visible stool properties. "
-                                        "Do not diagnose. Return JSON only. "
-                                        f"Closed schema: {json.dumps(schema_hint)}"
+                                        "Do not diagnose. Return the requested "
+                                        "structured observation only."
                                     ),
                                 },
                                 {
@@ -221,7 +265,7 @@ class OpenAIDigestiveVision:
         if not requested:
             return {}, ProviderUsage(
                 provider="openai",
-                model=self._model,
+                model=self._verifier_model,
                 request_id=f"oai-digestive-verify-{uuid.uuid4().hex[:12]}",
             )
         if (
@@ -253,8 +297,11 @@ class OpenAIDigestiveVision:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": self._model,
-                    "response_format": {"type": "json_object"},
+                    "model": self._verifier_model,
+                    "response_format": _response_format(
+                        "digestive_anomaly_verdicts",
+                        _verifier_schema(requested),
+                    ),
                     "max_tokens": 80,
                     "messages": [
                         {
@@ -313,15 +360,25 @@ class OpenAIDigestiveVision:
         usage_raw = payload.get("usage") or {}
         usage = ProviderUsage(
             provider="openai",
-            model=self._model,
+            model=self._verifier_model,
             input_tokens=int(usage_raw.get("prompt_tokens") or 0),
             output_tokens=int(usage_raw.get("completion_tokens") or 0),
             media_bytes=0,
             latency_ms=int((time.perf_counter() - started) * 1000),
             cost_usd=_estimate_cost(
                 usage_raw,
-                input_usd_per_million=self._settings.digestive_input_usd_per_million,
-                output_usd_per_million=self._settings.digestive_output_usd_per_million,
+                input_usd_per_million=(
+                    self._settings.digestive_verifier_input_usd_per_million
+                    if self._settings.digestive_verifier_input_usd_per_million
+                    is not None
+                    else self._settings.digestive_input_usd_per_million
+                ),
+                output_usd_per_million=(
+                    self._settings.digestive_verifier_output_usd_per_million
+                    if self._settings.digestive_verifier_output_usd_per_million
+                    is not None
+                    else self._settings.digestive_output_usd_per_million
+                ),
                 safety_margin=self._settings.ai_cost_safety_margin,
             ),
             request_id=request_id,
@@ -340,7 +397,10 @@ class OpenAIDigestiveVision:
                 },
                 json={
                     "model": self._model,
-                    "response_format": {"type": "json_object"},
+                    "response_format": _response_format(
+                        "stool_observation_contract",
+                        _STOOL_OBSERVATION_SCHEMA,
+                    ),
                     "messages": [
                         {
                             "role": "system",

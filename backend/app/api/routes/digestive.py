@@ -229,6 +229,19 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         recommended_next_step=intelligence.get("recommended_next_step"),
         followup_key=intelligence.get("followup_key"),
         followup_question=intelligence.get("followup_question"),
+        context_answered_keys=sorted(
+            key
+            for key in e.owner_context_json
+            if key
+            in {
+                "vomiting_today",
+                "reduced_activity_today",
+                "unusual_food_48h",
+                "appetite_reduced",
+                "straining_or_urgency",
+                "supplements_or_medication",
+            }
+        ),
         useful_action=(
             DigestiveUsefulActionOut.model_validate(intelligence["useful_action"])
             if intelligence.get("useful_action")
@@ -258,7 +271,7 @@ async def update_digestive_context(
     state: StateDep,
     user_id: UserIdDep,
 ) -> DigestiveEventOut:
-    """Save one sparse owner answer and deterministically refresh the result."""
+    """Save sparse owner context during processing or refresh a completed result."""
     answers = payload.model_dump(exclude_none=True)
     if state.engine is not None:
         event = await digestive_db.update_owner_context(
@@ -267,19 +280,30 @@ async def update_digestive_context(
             event_id=event_id,
             answers=answers,
         )
-        context = await digestive_db.load_digestive_context(
-            state.engine, event=event
-        )
     else:
         event = digestive_domain.get_fecal_event(
             state.store, user_id=user_id, event_id=event_id
         )
-        if event.status != "COMPLETED":
+        if event.status in {
+            "REJECTED_QUALITY",
+            "FAILED_TERMINAL",
+            "FAILED",
+            "CANCELLED",
+        }:
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
-                "Digestive context can only be added to a completed event.",
+                "Digestive context cannot be added to a terminal failed event.",
             )
         event.owner_context_json.update(answers)
+
+    if event.status != "COMPLETED":
+        return await get_digestive_event(event_id, state, user_id)
+
+    if state.engine is not None:
+        context = await digestive_db.load_digestive_context(
+            state.engine, event=event
+        )
+    else:
         context = digestive_domain.build_inmemory_digestive_context(
             state.store, event=event
         )

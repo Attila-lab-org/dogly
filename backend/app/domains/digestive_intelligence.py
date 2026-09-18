@@ -14,6 +14,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domains.digestive_observation import (
+    color_family_copy,
     observation_summary,
     prepare_digestive_observation,
 )
@@ -27,7 +28,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v12"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v13"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -474,6 +475,8 @@ def _owner_symptom_sentence(context: DigestiveContext) -> str | None:
         )
     if less_appetite:
         return f"Hai segnalato che {context.dog_name} ha mangiato meno."
+    if context.straining_or_urgency is True:
+        return "Hai segnalato sforzo o urgenza durante l’evacuazione."
     return None
 
 
@@ -489,6 +492,8 @@ def _personal_factor(
         return f"Hai segnalato che {context.dog_name} è meno attivo del solito."
     if context.appetite_reduced is True:
         return f"Hai segnalato che {context.dog_name} ha mangiato meno."
+    if context.straining_or_urgency is True:
+        return "Hai segnalato sforzo o urgenza durante l’evacuazione."
     if _recent_food_change(context):
         span = _food_started_span(context)
         if span == "oggi":
@@ -638,6 +643,8 @@ def _consumer_headline(
         _visual_safety_action(observation)
         or context.vomiting_today is True
         or context.reduced_activity_today is True
+        or context.appetite_reduced is True
+        or context.straining_or_urgency is True
     ):
         return "Un cambiamento da valutare con più attenzione"
     if level in {"hours", "trend"} and baseline_code != "INSUFFICIENT":
@@ -648,7 +655,9 @@ def _consumer_headline(
         return "In linea con il suo andamento"
     if _is_loose(consistency):
         return "Un cambiamento da seguire"
-    return "Un primo riferimento per il suo andamento"
+    if consistency == "hard":
+        return "Feci più compatte da osservare"
+    return "La foto offre indicazioni utili"
 
 
 def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
@@ -718,8 +727,15 @@ def _safety_state(
     recent_watery = sum(value.lower() == "watery" for value in context.prior_consistencies[-3:])
     if consistency == "watery" and recent_watery >= 1:
         return DigestiveState.ATTENTION
-    if consistency in {"unformed", "watery"} and (
-        context.vomiting_today is True or context.reduced_activity_today is True
+    if consistency in _LOOSE and (
+        context.vomiting_today is True
+        or context.reduced_activity_today is True
+        or context.appetite_reduced is True
+    ):
+        return DigestiveState.ATTENTION
+    if (
+        consistency in {"hard", "formed", "soft", "unformed", "watery"}
+        and context.straining_or_urgency is True
     ):
         return DigestiveState.ATTENTION
     if verification_unavailable(observation):
@@ -752,10 +768,31 @@ def _choose_followup(
         and (context.recent_episode_count_24h >= 1 or context.episode_count_7d >= 2)
     ):
         return "vomiting_today", f"{context.dog_name} ha vomitato oggi?"
-    if state is DigestiveState.ATTENTION and context.reduced_activity_today is None:
+    if (
+        state is DigestiveState.ATTENTION
+        and context.reduced_activity_today is None
+        and context.vomiting_today is not True
+        and context.appetite_reduced is not True
+        and context.straining_or_urgency is not True
+    ):
         return (
             "reduced_activity_today",
             f"{context.dog_name} appare meno attivo del solito?",
+        )
+    if (
+        consistency in {"soft", "unformed", "watery"}
+        and state in {DigestiveState.MONITOR, DigestiveState.ATTENTION}
+        and context.vomiting_today is False
+        and context.appetite_reduced is None
+    ):
+        return (
+            "appetite_reduced",
+            f"{context.dog_name} ha mangiato meno del solito?",
+        )
+    if consistency == "hard" and context.straining_or_urgency is None:
+        return (
+            "straining_or_urgency",
+            f"{context.dog_name} ha mostrato sforzo o urgenza durante l’evacuazione?",
         )
     return None, None
 
@@ -794,19 +831,11 @@ def _choose_useful_action(
             None,
         )
 
-    consistency = str(observation.get("consistency") or "unknown").lower()
-    if consistency in {"unformed", "watery"} and context.vomiting_today is None:
+    if followup_key and followup_question:
         return (
             DigestiveUsefulAction(key="ask_followup"),
-            "vomiting_today",
-            f"{context.dog_name} ha vomitato oggi?",
-        )
-
-    if state is DigestiveState.ATTENTION and context.reduced_activity_today is None:
-        return (
-            DigestiveUsefulAction(key="ask_followup"),
-            "reduced_activity_today",
-            f"{context.dog_name} appare meno attivo del solito?",
+            followup_key,
+            followup_question,
         )
 
     if not _food_known(context):
@@ -838,12 +867,6 @@ def _choose_useful_action(
             ),
             None,
             None,
-        )
-    if followup_key and followup_question:
-        return (
-            DigestiveUsefulAction(key="ask_followup"),
-            followup_key,
-            followup_question,
         )
     return DigestiveUsefulAction(key="none"), None, None
 
@@ -878,6 +901,16 @@ def _final_advice(
         return (
             f"Hai segnalato meno attività: senti il veterinario se {name} "
             "resta spento o se gli episodi continuano."
+        )
+    if context.appetite_reduced is True:
+        return (
+            f"Hai segnalato appetito ridotto: senti il veterinario se {name} "
+            "continua a mangiare meno o se compaiono altri sintomi."
+        )
+    if context.straining_or_urgency is True:
+        return (
+            "Hai segnalato sforzo o urgenza: senti il veterinario se continua "
+            f"o se {name} appare in difficoltà."
         )
     level = _repetition_level(context, consistency)
     if level in {"hours", "trend"} and _is_loose(consistency):
@@ -992,6 +1025,66 @@ def count_recent_windows(
     return counts
 
 
+_SHAPE_COPY = {
+    "pellets": "a palline",
+    "log": "cilindrica",
+    "piled": "ammassata",
+    "flat": "appiattita",
+    "irregular": "irregolare",
+}
+_MOISTURE_COPY = {
+    "low": "bassa",
+    "normal": "nella norma visiva",
+    "high": "elevata",
+}
+_VOLUME_COPY = {
+    "low": "ridotto",
+    "normal": "nella norma visiva",
+    "high": "abbondante",
+}
+
+
+def _visible_observation_details(
+    consistency: str, observation: dict[str, Any]
+) -> str:
+    """Describe visible facts, keeping estimates distinct from measurements."""
+
+    details: list[str] = []
+    texture = _texture_phrase(consistency)
+    if texture:
+        details.append(f"consistenza {texture}")
+    color = color_family_copy(
+        observation.get("color_family") or observation.get("color") or ""
+    )
+    if color:
+        details.append(f"colore apparente {color}")
+    score = observation.get("fecal_score_estimate")
+    if isinstance(score, int | float):
+        details.append(
+            f"score fecale visivo stimato {int(score)}/7, indicativo e non diagnostico"
+        )
+
+    confidence = str(observation.get("confidence_band") or "LOW").upper()
+    if confidence == "HIGH":
+        shape = _SHAPE_COPY.get(str(observation.get("shape") or "").lower())
+        moisture = _MOISTURE_COPY.get(
+            str(observation.get("apparent_moisture") or "").lower()
+        )
+        volume = _VOLUME_COPY.get(
+            str(observation.get("apparent_volume") or "").lower()
+        )
+        if shape:
+            details.append(f"forma {shape}")
+        if moisture:
+            details.append(f"umidità apparente {moisture}")
+        if volume:
+            details.append(f"volume apparente {volume}")
+
+    if not details:
+        return ""
+    return "Dalla foto: " + "; ".join(details) + "."
+
+
 
 def _general_layer_summary(
     *,
@@ -1001,22 +1094,27 @@ def _general_layer_summary(
 ) -> str:
     name = context.dog_name
     texture = _texture_phrase(consistency)
+    details = _visible_observation_details(consistency, observation)
     if verification_unavailable(observation):
-        return (
+        caution = (
             f"Non riesco a confermare bene questo dettaglio dalla foto di {name}. "
             f"{unavailable_caution_detail(observation)}"
         )
+        return f"{details} {caution}".strip()
     visual = _visual_safety_why(observation, name)
     if visual:
-        return visual
+        return f"{details} {visual}".strip()
     if consistency == "formed":
-        return f"Le feci di {name} sono ben formate."
+        meaning = f"Le feci di {name} sono ben formate."
+        return f"{details} {meaning}".strip()
     if texture:
-        return f"Le feci di {name} sono {texture}."
-    return (
+        meaning = f"Le feci di {name} sono {texture}."
+        return f"{details} {meaning}".strip()
+    fallback = (
         f"Ho una nuova osservazione digestiva per {name}, descritta con la "
         "scala fecale canina generale."
     )
+    return f"{details} {fallback}".strip()
 
 
 def _profile_layer(
@@ -1237,14 +1335,25 @@ def _synthesize_from_layers(
             )
         else:
             summary = (
-                "Le feci sono ben formate. "
-                "Non vedo segnali che richiedano attenzione."
+                "La foto mostra feci ben formate e un aspetto regolare. "
+                "Non c’è ancora abbastanza storico per definirlo il suo solito."
             )
     else:
         ordered = [layer for layer in (longitudinal, profile, general) if layer]
         sentences: list[str] = []
         for layer in ordered:
-            for part in layer.summary.replace("!", ".").split("."):
+            layer_summary = layer.summary
+            if layer.key == "general":
+                # The general layer retains observation detail for inspection;
+                # consumer copy answers what the observation means for this dog.
+                layer_summary = _useful_info(
+                    context=context,
+                    consistency=consistency,
+                    baseline_code=baseline_code,
+                    safety=safety,
+                    observation=observation,
+                )
+            for part in layer_summary.replace("!", ".").split("."):
                 sentence = part.strip()
                 if sentence:
                     sentences.append(f"{sentence}.")

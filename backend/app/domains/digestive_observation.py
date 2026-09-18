@@ -13,7 +13,7 @@ from typing import Any
 from app.domains.digestive_verification import verify_anomaly_candidates
 
 DIGESTIVE_OBSERVER_PROMPT_VERSION = "digestive-observer/v2"
-DIGESTIVE_NORMALIZER_VERSION = "digestive-normalizer/v2"
+DIGESTIVE_NORMALIZER_VERSION = "digestive-normalizer/v3"
 
 
 class ColorFamily(StrEnum):
@@ -242,12 +242,10 @@ def is_display_eligible(observation: dict[str, Any]) -> bool:
     return str(observation.get("image_quality") or "").lower() == "sufficient"
 
 
-_LEARNING_ANOMALY_FIELDS = (
+_LEARNING_SAFETY_FIELDS = (
     "fresh_blood_candidate",
     "melena_candidate",
     "foreign_material_candidate",
-    "mucus_candidate",
-    "undigested_food_candidate",
 )
 
 
@@ -269,15 +267,23 @@ def is_learning_eligible(observation: dict[str, Any]) -> bool:
     if consistency in {"watery", "unformed"}:
         return False
     safety = observation.get("safety_candidates") or {}
-    blocking = {
+    safety_blocking = {
         "possible",
         "possible_unverified",
         "clear_candidate",
     }
-    for field in _LEARNING_ANOMALY_FIELDS:
+    for field in _LEARNING_SAFETY_FIELDS:
         raw = str(observation.get(field) or "").lower()
         gated = str(safety.get(field) or "").lower()
-        if raw in blocking or gated in blocking:
+        if raw in safety_blocking or gated in safety_blocking:
+            return False
+    # Possible mucus or food residue is too uncertain to redefine the result
+    # as unsafe. A clear visual candidate remains anomalous and does not teach
+    # the personal baseline.
+    for field in ("mucus_candidate", "undigested_food_candidate"):
+        raw = str(observation.get(field) or "").lower()
+        gated = str(safety.get(field) or "").lower()
+        if raw == "clear_candidate" or gated == "clear_candidate":
             return False
     return True
 

@@ -64,6 +64,13 @@ export interface DigestiveUsefulAction {
   body?: string | null;
 }
 export type SafetyFlagCode = (typeof SAFETY_FLAG_CODES)[number];
+export type DigestiveFollowupKey =
+  | 'vomiting_today'
+  | 'reduced_activity_today'
+  | 'unusual_food_48h'
+  | 'appetite_reduced'
+  | 'straining_or_urgency'
+  | 'supplements_or_medication';
 
 /** Osservazione fecale strutturata mostrata al consumer (sez. 19.1). */
 export interface FecalEventResult {
@@ -101,7 +108,7 @@ export interface FecalEventResult {
   relevantContext?: string[];
   possibleAssociations?: string[];
   recommendedNextStep?: string | null;
-  followupKey?: 'vomiting_today' | 'reduced_activity_today' | 'unusual_food_48h' | null;
+  followupKey?: DigestiveFollowupKey | null;
   followupQuestion?: string | null;
   usefulAction?: DigestiveUsefulAction | null;
   whatToWatch?: string[];

@@ -1,5 +1,10 @@
 import { correctionOptions } from '../features/core/correctionOptions';
 import { deriveContextBucketHint } from '../features/behavior/contextBucket';
+import {
+  behaviorPrudenceCopy,
+  consumerEvidenceSections,
+  showPrimaryAdvice,
+} from '../features/behavior/consumerPresentation';
 
 describe('deriveContextBucketHint', () => {
   it('di notte suggerisce REST, di giorno lascia UNKNOWN al backend', () => {
@@ -27,5 +32,40 @@ describe('correctionOptions after Non proprio', () => {
     expect(withAlts[0]).toBe('PLAY_INTERACTION');
     expect(without).not.toContain('INSUFFICIENT');
     expect(without).not.toContain('AMBIGUOUS');
+  });
+});
+
+describe('risultato comportamento consumer', () => {
+  it('separa osservazioni, contesto owner e memoria personale', () => {
+    const sections = consumerEvidenceSections([
+      { source: 'OBSERVATION', label: 'Corpo rigido vicino alla ciotola' },
+      { source: 'CONTEXT', label: 'Mi hai detto che aveva appena mangiato' },
+      { source: 'PERSONAL_PATTERN', label: 'Simile a un episodio confermato' },
+      { source: 'SCIENTIFIC_KB', label: 'claim interno' },
+    ]);
+
+    expect(sections.observed.map((item) => item.label)).toEqual([
+      'Corpo rigido vicino alla ciotola',
+    ]);
+    expect(sections.ownerContext).toHaveLength(1);
+    expect(sections.personalMemory).toHaveLength(1);
+    expect(Object.values(sections).flat()).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'SCIENTIFIC_KB' }),
+      ]),
+    );
+  });
+
+  it('spiega sempre la prudenza senza percentuali o nomi di band', () => {
+    for (const band of ['LOW', 'MEDIUM', 'HIGH', null] as const) {
+      const copy = behaviorPrudenceCopy(band);
+      expect(copy).toMatch(/lettura|possibil|certezza/i);
+      expect(copy).not.toMatch(/LOW|MEDIUM|HIGH|\d+%/);
+    }
+  });
+
+  it('la safety esclude un secondo consiglio', () => {
+    expect(showPrimaryAdvice({ hasSafety: true, hasAdvice: true })).toBe(false);
+    expect(showPrimaryAdvice({ hasSafety: false, hasAdvice: true })).toBe(true);
   });
 });

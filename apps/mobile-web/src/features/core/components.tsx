@@ -16,16 +16,18 @@ import type {
   EvidenceItem,
   FeedbackValue,
 } from '../../contracts/types';
-import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 import {
   CONFIDENCE_BAND_LABELS,
-  dogVoiceLine,
-  intentHeadline,
   sanitizeOwnerCopy,
 } from './copy';
 import { isPersonalBaselineNote } from './conversationCopy';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
+import {
+  behaviorPrudenceCopy,
+  consumerEvidenceSections,
+  showPrimaryAdvice,
+} from '../behavior/consumerPresentation';
 
 const puppyPlaySource = require('../../../assets/images/puppy-play.png');
 const NAVY = '#1A2B48';
@@ -299,13 +301,28 @@ export function BehaviorResultView({
       .replace(/\bal (?:tuo )?cane\b/gi, `a ${dogName}`)
       .replace(/\b(?:il|un) (?:tuo )?cane\b/gi, dogName);
   const headline = ownerCopy(
-    result.consumer_headline || intentHeadline(dogName, result.primary_intent),
+    result.consumer_headline ||
+      result.consumer_summary ||
+      `Ecco cosa emerge dal video di ${dogName}`,
   );
   const safety = result.safety;
+  const evidenceSections = consumerEvidenceSections(result.evidence);
+  const hasPrimaryAdvice = Boolean(primaryAdvice);
   const celebrate = !safety && !isInsufficient && !isAmbiguous;
 
   return (
     <View>
+      {safety ? (
+        <View style={styles.safetyCard} testID="behavior-safety">
+          <View style={styles.safetyHeading}>
+            <Ionicons name="alert-circle" size={20} color={colors.danger} />
+            <Text style={styles.safetyTitle}>{ownerCopy(safety.title)}</Text>
+          </View>
+          <Text style={styles.safetyMessage}>{ownerCopy(safety.message)}</Text>
+          <Text style={styles.safetyAction}>{ownerCopy(safety.action)}</Text>
+        </View>
+      ) : null}
+
       <View
         style={[
           styles.resultHero,
@@ -360,19 +377,21 @@ export function BehaviorResultView({
             </>
           ) : null}
         </View>
-        <Text style={styles.thoughtKicker}>Cosa penso</Text>
+        <Text style={styles.thoughtKicker}>Cosa può significare</Text>
         <View style={styles.headlineRow}>
           <Text style={styles.headline}>{headline}</Text>
           {celebrate ? <Text style={styles.headlineSparkle}> ✨</Text> : null}
         </View>
-        <View style={styles.translationBlock}>
-          <Text style={styles.translationKicker}>
-            Cosa potrebbe voler comunicare
-          </Text>
-          <Text style={styles.translationText}>
-            {ownerCopy(result.dog_voice || dogVoiceLine(result.primary_intent))}
-          </Text>
-        </View>
+        {result.dog_voice ? (
+          <View style={styles.translationBlock}>
+            <Text style={styles.translationKicker}>
+              Cosa potrebbe voler comunicare
+            </Text>
+            <Text style={styles.translationText}>
+              {ownerCopy(result.dog_voice)}
+            </Text>
+          </View>
+        ) : null}
 
         {result.consumer_summary ? (
           <Text style={styles.summary}>
@@ -393,9 +412,55 @@ export function BehaviorResultView({
         ) : null}
       </View>
 
+      <View style={styles.prudenceCard} testID="behavior-prudence">
+        <Text style={styles.prudenceTitle}>Quanto è prudente questa lettura</Text>
+        <Text style={styles.prudenceText}>
+          {behaviorPrudenceCopy(result.confidence_band)}
+        </Text>
+      </View>
+
+      {evidenceSections.observed.length > 0 ? (
+        <View style={styles.evidenceSection} testID="observed-evidence">
+          <Text style={styles.evidenceTitle}>Cosa ho osservato nel video</Text>
+          {evidenceSections.observed.map((item, index) => (
+            <EvidenceRow
+              key={`${item.label}-${index}`}
+              item={{ ...item, label: ownerCopy(item.label) }}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {evidenceSections.ownerContext.length > 0 ? (
+        <View style={styles.contextEvidenceCard} testID="owner-context-evidence">
+          <Text style={styles.baselineKicker}>Contesto che mi hai dato</Text>
+          {evidenceSections.ownerContext.map((item, index) => (
+            <Text key={`${item.label}-${index}`} style={styles.baselineNote}>
+              {ownerCopy(item.label)}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
+      {evidenceSections.personalMemory.length > 0 &&
+      !isPersonalBaselineNote(result.baseline_note) ? (
+        <View style={styles.baselineCard} testID="personal-memory-evidence">
+          <Text style={styles.baselineKicker}>
+            Memoria personale di {dogName}
+          </Text>
+          {evidenceSections.personalMemory.map((item, index) => (
+            <Text key={`${item.label}-${index}`} style={styles.baselineNote}>
+              {ownerCopy(item.label)}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
       {isPersonalBaselineNote(result.baseline_note) ? (
         <View style={styles.baselineCard} testID="per-rocky">
-          <Text style={styles.baselineKicker}>Rispetto al suo solito</Text>
+          <Text style={styles.baselineKicker}>
+            Memoria personale di {dogName}
+          </Text>
           <Text style={styles.baselineNote}>
             {ownerCopy(result.baseline_note)}
           </Text>
@@ -405,41 +470,38 @@ export function BehaviorResultView({
       {careNote ? (
         <View style={styles.careCard}>
           <Ionicons name="heart-outline" size={18} color={colors.accent} />
-          <Text style={styles.careNote}>{careNote}</Text>
+          <View style={styles.careCopy}>
+            <Text style={styles.careKicker}>Contesto che mi hai dato</Text>
+            <Text style={styles.careNote}>{ownerCopy(careNote)}</Text>
+          </View>
         </View>
       ) : null}
 
       {contextPrompt}
 
-      {safety ? (
-        <View style={styles.safetyCard} testID="behavior-safety">
-          <View style={styles.safetyHeading}>
-            <Ionicons name="alert-circle" size={20} color={colors.danger} />
-            <Text style={styles.safetyTitle}>{safety.title}</Text>
-          </View>
-          <Text style={styles.safetyMessage}>{safety.message}</Text>
-          <Text style={styles.safetyAction}>{safety.action}</Text>
-        </View>
-      ) : null}
+      {showPrimaryAdvice({
+        hasSafety: Boolean(safety),
+        hasAdvice: hasPrimaryAdvice,
+      })
+        ? primaryAdvice
+        : null}
 
-      {primaryAdvice}
-
-      {result.recommended_next_step && !primaryAdvice && !safety ? (
+      {result.recommended_next_step && !hasPrimaryAdvice && !safety ? (
         <View style={styles.nextStepCard} testID="recommended-next-step">
-          <Text style={styles.nextStepTitle}>Cosa puoi fare</Text>
+          <Text style={styles.nextStepTitle}>Una cosa utile ora</Text>
           <Text style={styles.nextStepText}>
             {ownerCopy(result.recommended_next_step)}
           </Text>
         </View>
       ) : null}
 
-      {result.what_to_watch && !primaryAdvice ? (
+      {result.what_to_watch && !hasPrimaryAdvice && !safety ? (
         <Text style={styles.watchLine} testID="what-to-watch">
-          Da osservare: {ownerCopy(result.what_to_watch)}
+          Cosa osservare: {ownerCopy(result.what_to_watch)}
         </Text>
       ) : null}
 
-      {result.evidence.length > 0 || result.alternatives.length > 0 ? (
+      {result.alternatives.length > 0 ? (
         <View style={styles.detailsBlock}>
           <Pressable
             accessibilityRole="button"
@@ -457,22 +519,6 @@ export function BehaviorResultView({
 
           {detailsOpen ? (
             <>
-              <ConfidencePill band={result.confidence_band} />
-              {result.evidence.length > 0 ? (
-                <View style={styles.evidenceSection}>
-                  <Text style={styles.evidenceTitle}>Perché lo penso</Text>
-                  {result.evidence.map((item, index) => (
-                    <EvidenceRow
-                      key={`${item.label}-${index}`}
-                      item={{
-                        ...item,
-                        label: ownerCopy(item.label),
-                      }}
-                    />
-                  ))}
-                </View>
-              ) : null}
-
               {result.alternatives.length > 0 ? (
                 <Card style={styles.alternativeCard}>
                   <SectionHeader
@@ -491,9 +537,6 @@ export function BehaviorResultView({
                   />
                   {result.alternatives.map((alt) => (
                     <View key={alt.intent} style={styles.alternativeRow}>
-                      <Text style={styles.alternativeLabel}>
-                        {BEHAVIOR_INTENT_LABELS[alt.intent]}
-                      </Text>
                       <Text style={styles.alternativeRationale}>
                         {ownerCopy(alt.rationale)}
                       </Text>
@@ -836,8 +879,35 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
-  careNote: {
+  careCopy: {
     flex: 1,
+  },
+  careKicker: {
+    marginBottom: spacing.xs,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    color: colors.accent,
+    textTransform: 'uppercase',
+  },
+  careNote: {
+    fontSize: typography.size.sm,
+    color: colors.text,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
+  prudenceCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
+  prudenceTitle: {
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  prudenceText: {
+    marginTop: spacing.xs,
     fontSize: typography.size.sm,
     color: colors.text,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
@@ -890,6 +960,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
+  },
+  contextEvidenceCard: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentSoft,
   },
   baselineKicker: {
     fontSize: typography.size.xs,

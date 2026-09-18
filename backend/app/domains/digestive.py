@@ -85,17 +85,32 @@ def contextual_safety_flags(
 ) -> list[dict]:
     """Add owner-confirmed escalation without allowing generated text to decide."""
     flags = deterministic_safety_flags(observation)
+    consistency = str(observation.get("consistency") or "unknown").lower()
     if (
-        observation.get("consistency") == "watery"
+        consistency == "watery"
         and context.recent_watery_count_24h >= 1
     ):
         flags.append({"code": "REPEATED_WATERY", "severity": "medium"})
-    if (
-        observation.get("consistency") == "watery"
+    severe_symptoms = (
+        consistency == "watery"
         and context.recent_watery_count_24h >= 1
         and context.vomiting_today is True
-    ):
+    )
+    contextual_symptoms = (
+        consistency in {"soft", "unformed", "watery"}
+        and (
+            context.vomiting_today is True
+            or context.reduced_activity_today is True
+            or context.appetite_reduced is True
+        )
+    ) or (
+        consistency in {"hard", "formed", "soft", "unformed", "watery"}
+        and context.straining_or_urgency is True
+    )
+    if severe_symptoms:
         flags.append({"code": "DIGESTIVE_SYMPTOMS", "severity": "high"})
+    elif contextual_symptoms:
+        flags.append({"code": "DIGESTIVE_SYMPTOMS", "severity": "medium"})
     return flags
 
 
@@ -103,7 +118,7 @@ def build_inmemory_digestive_context(
     store: InMemoryStore, *, event: FecalEventRec
 ) -> DigestiveContext:
     dog = store.dogs[event.dog_id]
-    prior_events = sorted(
+    candidate_prior_events = sorted(
         (
             item
             for item in store.fecal_events.values()
@@ -111,9 +126,22 @@ def build_inmemory_digestive_context(
             and item.id != event.id
             and item.status == "COMPLETED"
             and item.created_at < event.created_at
+            and (
+                not event.image_sha256
+                or item.image_sha256 != event.image_sha256
+            )
         ),
         key=lambda item: item.created_at,
     )[-36:]
+    prior_events: list[FecalEventRec] = []
+    seen_hashes: set[str] = set()
+    for item in candidate_prior_events:
+        fingerprint = str(item.image_sha256 or "")
+        if fingerprint:
+            if fingerprint in seen_hashes:
+                continue
+            seen_hashes.add(fingerprint)
+        prior_events.append(item)
     active_periods = [
         item
         for item in store.feeding_periods.values()

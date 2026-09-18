@@ -20,7 +20,12 @@ _FORBIDDEN_MOCK = frozenset({"mock", "fake", "fixture", "local"})
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     app_env: str = "local"
 
@@ -47,17 +52,23 @@ class Settings(BaseSettings):
     reasoning_model: str = "mock-reasoner-v0"
     digestive_vision_provider: str = "mock"
     digestive_vision_model: str = "mock-digestive-vision-v0"
+    # Optional focused-verifier override. None deliberately follows the vision
+    # model so production can keep gpt-5-mini until the candidate eval passes.
+    digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
 
-    # Public list prices in USD per 1M tokens (verified 2026-09-07).
-    # Environment-overridable because provider pricing changes independently
-    # from application releases. The margin keeps budget gates conservative.
+    # Public list prices in USD per 1M tokens. Keep these environment-overridden
+    # whenever selecting a different model: model candidates and their pricing
+    # change independently from application releases. The optional verifier
+    # rates fall back to the vision rates only when it uses the same pricing.
     observer_input_usd_per_million: float = 0.75
     observer_output_usd_per_million: float = 3.75
     reasoner_input_usd_per_million: float = 0.25
     reasoner_output_usd_per_million: float = 2.0
     digestive_input_usd_per_million: float = 0.25
     digestive_output_usd_per_million: float = 2.0
+    digestive_verifier_input_usd_per_million: float | None = None
+    digestive_verifier_output_usd_per_million: float | None = None
     owner_transcription_usd_per_minute: float = 0.003
     ai_cost_safety_margin: float = 1.15
 

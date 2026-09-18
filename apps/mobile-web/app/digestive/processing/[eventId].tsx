@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button,
   DogIllustration,
@@ -17,7 +17,12 @@ import {
   isFailedDigestiveStatus,
   isRetryableDigestiveStatus,
   isTerminalDigestiveStatus,
+  updateDigestiveContext,
 } from '@/features/digestive/api';
+import {
+  DigestiveProcessingContextCard,
+} from '@/features/digestive/DigestiveProcessingContextCard';
+import { digestiveProcessingQuestions } from '@/features/digestive/processingContext';
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
 import { markDigestiveUploadCompletedForEvent } from '@/features/digestive/upload';
@@ -34,10 +39,12 @@ export default function DigestiveProcessingScreen() {
     ? params.eventId[0] ?? ''
     : params.eventId ?? '';
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
   const [stepIndex, setStepIndex] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
+  const [skippedContextKeys, setSkippedContextKeys] = useState<string[]>([]);
   const pollStartedAt = useRef(Date.now());
   const statusRef = useRef<string | undefined>(undefined);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
@@ -55,6 +62,18 @@ export default function DigestiveProcessingScreen() {
       return analysisPollIntervalMs(q.state.dataUpdateCount);
     },
   });
+  const contextMutation = useMutation({
+    mutationFn: ({
+      key,
+      value,
+    }: {
+      key: 'vomiting_today' | 'appetite_reduced' | 'unusual_food_48h';
+      value: boolean;
+    }) => updateDigestiveContext(eventId, { [key]: value }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['digestive-event', eventId], updated);
+    },
+  });
 
   const steps = useMemo(
     () => [
@@ -63,6 +82,18 @@ export default function DigestiveProcessingScreen() {
       `Confronto con il solito di ${dog.name}`,
     ],
     [dog.name],
+  );
+  const contextQuestions = useMemo(
+    () => digestiveProcessingQuestions(dog.name),
+    [dog.name],
+  );
+  const answeredContextKeys = new Set(
+    query.data?.context_answered_keys ?? [],
+  );
+  const contextQuestion = contextQuestions.find(
+    (item) =>
+      !answeredContextKeys.has(item.key) &&
+      !skippedContextKeys.includes(item.key),
   );
 
   useEffect(() => {
@@ -236,7 +267,11 @@ export default function DigestiveProcessingScreen() {
   const progress = Math.min(1, (stepIndex + 1) / steps.length);
 
   return (
-    <ScreenContainer style={styles.screen} contentStyle={styles.content}>
+    <ScreenContainer
+      style={styles.screen}
+      scroll
+      contentStyle={styles.content}
+    >
       <View style={styles.visual}>
         <View style={styles.softCircle}>
           <Ionicons name="leaf-outline" size={42} color={colors.teal} />
@@ -294,6 +329,23 @@ export default function DigestiveProcessingScreen() {
         ))}
       </View>
 
+      {useApi && contextQuestion ? (
+        <DigestiveProcessingContextCard
+          question={contextQuestion}
+          pending={contextMutation.isPending}
+          error={contextMutation.isError}
+          onAnswer={(value) =>
+            contextMutation.mutate({ key: contextQuestion.key, value })
+          }
+          onSkip={() =>
+            setSkippedContextKeys((current) => [
+              ...current,
+              contextQuestion.key,
+            ])
+          }
+        />
+      ) : null}
+
       <View style={styles.waitCard}>
         <Ionicons name="notifications-outline" size={18} color={colors.teal} />
         <Text style={styles.wait}>
@@ -309,10 +361,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
   },
   visual: {
     width: 180,

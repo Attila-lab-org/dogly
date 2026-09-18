@@ -96,7 +96,18 @@ async def test_openai_digestive_observer_sends_signed_image_and_validates(
     )
 
     image_part = captured[0]["messages"][1]["content"][1]
+    response_format = captured[0]["response_format"]
+    schema = response_format["json_schema"]["schema"]
     assert image_part["image_url"]["url"].endswith("?token=signed")
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"])
+    assert "meta" not in schema["properties"]
+    assert "schema_version" not in schema["properties"]
+    assert schema["properties"]["fecal_score_estimate"]["anyOf"][-1] == {
+        "type": "null"
+    }
     assert contract.consistency is FecalConsistency.SOFT
     assert contract.meta.provider == "openai"
     assert usage.provider == "openai"
@@ -124,6 +135,9 @@ async def test_openai_digestive_verifier_is_focused_and_cheap(monkeypatch):
             app_env="local",
             digestive_vision_provider="openai",
             digestive_vision_model="gpt-5-mini",
+            digestive_verifier_model="gpt-5.6-sol",
+            digestive_verifier_input_usd_per_million=1.25,
+            digestive_verifier_output_usd_per_million=10.0,
             openai_api_key="test-key",
         )
     )
@@ -138,8 +152,67 @@ async def test_openai_digestive_verifier_is_focused_and_cheap(monkeypatch):
     assert "do not describe consistency" in message.lower()
     assert captured[0]["max_tokens"] == 80
     assert captured[0]["messages"][1]["content"][1]["image_url"]["detail"] == "low"
+    verifier_format = captured[0]["response_format"]
+    verifier_schema = verifier_format["json_schema"]["schema"]
+    assert captured[0]["model"] == "gpt-5.6-sol"
+    assert verifier_format["type"] == "json_schema"
+    assert verifier_format["json_schema"]["strict"] is True
+    assert verifier_schema["required"] == ["fresh_blood_candidate"]
+    assert verifier_schema["additionalProperties"] is False
     assert verdicts == {"fresh_blood_candidate": "not_confirmed"}
-    assert usage.provider == "openai"
+    assert usage.model == "gpt-5.6-sol"
+    assert usage.cost_usd == round((0.000125 + 0.0005) * 1.15, 6)
+
+
+@pytest.mark.asyncio
+async def test_openai_digestive_repair_reuses_strict_contract_schema(monkeypatch):
+    captured: list[dict] = []
+    invalid = {**_observation(), "fecal_score_estimate": 99}
+    fake = _FakeClient(
+        [
+            _FakeResponse(200, _payload(invalid)),
+            _FakeResponse(200, _payload(_observation())),
+        ],
+        captured,
+    )
+    monkeypatch.setattr(
+        openai_digestive_vision.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: fake,
+    )
+    observer = openai_digestive_vision.OpenAIDigestiveVision(
+        Settings(
+            app_env="local",
+            digestive_vision_provider="openai",
+            digestive_vision_model="gpt-5-mini",
+            openai_api_key="test-key",
+        )
+    )
+
+    contract, _usage = await observer.observe_stool(
+        image_ref="https://storage.example.test/stool.jpg"
+    )
+
+    assert contract.fecal_score_estimate == 4
+    assert len(captured) == 2
+    assert captured[1]["response_format"] == captured[0]["response_format"]
+
+
+def test_digestive_verifier_model_defaults_to_vision_model(monkeypatch):
+    fake = _FakeClient([], [])
+    monkeypatch.setattr(
+        openai_digestive_vision.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: fake,
+    )
+    observer = openai_digestive_vision.OpenAIDigestiveVision(
+        Settings(
+            digestive_vision_model="gpt-5-mini",
+            digestive_verifier_model=None,
+        )
+    )
+
+    assert observer._verifier_model == "gpt-5-mini"
 
 
 @pytest.mark.asyncio

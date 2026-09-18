@@ -2,6 +2,7 @@ import type { ConfidenceBand } from '../../contracts/types';
 import {
   SAFETY_FLAG_CODES,
   type CandidateLevel,
+  type DigestiveFollowupKey,
   type DigestiveUsefulAction,
   type DigestiveUsefulActionKey,
   type FecalEventResult,
@@ -46,12 +47,9 @@ export type ApiDigestiveEvent = {
   relevant_context?: string[];
   possible_associations?: string[];
   recommended_next_step?: string | null;
-  followup_key?:
-    | 'vomiting_today'
-    | 'reduced_activity_today'
-    | 'unusual_food_48h'
-    | null;
+  followup_key?: DigestiveFollowupKey | null;
   followup_question?: string | null;
+  context_answered_keys?: DigestiveFollowupKey[];
   useful_action?: {
     key?: DigestiveUsefulActionKey | null;
     label?: string | null;
@@ -283,7 +281,7 @@ export function mapApiDigestiveEventToResult(
       ? consumerCopy(event.followup_question)
       : event.followup_question,
     usefulAction: mapUsefulAction(event.useful_action),
-    whatToWatch: event.what_to_watch ?? [],
+    whatToWatch: (event.what_to_watch ?? []).map(consumerCopy),
     observationReliability: event.observation_reliability
       ? consumerCopy(event.observation_reliability)
       : event.observation_reliability,
