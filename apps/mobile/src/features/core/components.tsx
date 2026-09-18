@@ -321,6 +321,18 @@ export function BehaviorResultView({
   const safety = result.safety;
   const evidenceSections = consumerEvidenceSections(result.evidence);
   const hasPrimaryAdvice = Boolean(primaryAdvice);
+  const hasDetails = Boolean(
+    result.dog_voice ||
+      result.sound_note ||
+      result.what_to_watch ||
+      result.confidence_band ||
+      result.alternatives.length ||
+      evidenceSections.observed.length ||
+      evidenceSections.ownerContext.length ||
+      evidenceSections.personalMemory.length ||
+      isPersonalBaselineNote(result.baseline_note) ||
+      careNote,
+  );
 
   return (
     <View>
@@ -366,100 +378,14 @@ export function BehaviorResultView({
             />
           </View>
         )}
-        <Text style={styles.thoughtKicker}>Cosa può significare</Text>
+        <Text style={styles.thoughtKicker}>Il risultato per {dogName}</Text>
         <Text style={styles.headline}>{headline}</Text>
-        {result.dog_voice ? (
-          <View style={styles.translationBlock}>
-            <Text style={styles.translationKicker}>
-              Cosa potrebbe voler comunicare
-            </Text>
-            <Text style={styles.translationText}>
-              {ownerCopy(result.dog_voice)}
-            </Text>
-          </View>
-        ) : null}
         {result.consumer_summary ? (
           <Text style={styles.summary}>
             {ownerCopy(result.consumer_summary)}
           </Text>
         ) : null}
-        {result.sound_note ? (
-          <View style={styles.soundNote}>
-            <Ionicons name="volume-medium-outline" size={18} color={colors.accent} />
-            <View style={styles.soundNoteCopy}>
-              <Text style={styles.soundNoteTitle}>Cosa ho sentito</Text>
-              <Text style={styles.soundNoteText}>
-                {ownerCopy(result.sound_note)}
-              </Text>
-            </View>
-          </View>
-        ) : null}
       </View>
-
-      <View style={styles.prudenceCard} testID="behavior-prudence">
-        <Text style={styles.prudenceTitle}>Quanto è prudente questa lettura</Text>
-        <Text style={styles.prudenceText}>
-          {behaviorPrudenceCopy(result.confidence_band)}
-        </Text>
-      </View>
-
-      {evidenceSections.observed.length > 0 ? (
-        <View style={styles.evidenceSection} testID="observed-evidence">
-          <Text style={styles.evidenceTitle}>Cosa ho osservato nel video</Text>
-          {evidenceSections.observed.map((item, index) => (
-            <EvidenceRow
-              key={`${item.label}-${index}`}
-              item={{ ...item, label: ownerCopy(item.label) }}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      {evidenceSections.ownerContext.length > 0 ? (
-        <View style={styles.contextEvidenceCard} testID="owner-context-evidence">
-          <Text style={styles.baselineKicker}>Contesto che mi hai dato</Text>
-          {evidenceSections.ownerContext.map((item, index) => (
-            <Text key={`${item.label}-${index}`} style={styles.baselineNote}>
-              {ownerCopy(item.label)}
-            </Text>
-          ))}
-        </View>
-      ) : null}
-
-      {evidenceSections.personalMemory.length > 0 &&
-      !isPersonalBaselineNote(result.baseline_note) ? (
-        <View style={styles.baselineCard} testID="personal-memory-evidence">
-          <Text style={styles.baselineKicker}>
-            Memoria personale di {dogName}
-          </Text>
-          {evidenceSections.personalMemory.map((item, index) => (
-            <Text key={`${item.label}-${index}`} style={styles.baselineNote}>
-              {ownerCopy(item.label)}
-            </Text>
-          ))}
-        </View>
-      ) : null}
-
-      {isPersonalBaselineNote(result.baseline_note) ? (
-        <View style={styles.baselineCard} testID="per-rocky">
-          <Text style={styles.baselineKicker}>
-            Memoria personale di {dogName}
-          </Text>
-          <Text style={styles.baselineNote}>
-            {ownerCopy(result.baseline_note)}
-          </Text>
-        </View>
-      ) : null}
-
-      {careNote ? (
-        <View style={styles.careCard}>
-          <Ionicons name="heart-outline" size={18} color={colors.accent} />
-          <View style={styles.careCopy}>
-            <Text style={styles.careKicker}>Contesto che mi hai dato</Text>
-            <Text style={styles.careNote}>{ownerCopy(careNote)}</Text>
-          </View>
-        </View>
-      ) : null}
 
       {contextPrompt}
 
@@ -479,13 +405,7 @@ export function BehaviorResultView({
         </View>
       ) : null}
 
-      {result.what_to_watch && !hasPrimaryAdvice && !safety ? (
-        <Text style={styles.watchLine} testID="what-to-watch">
-          Cosa osservare: {ownerCopy(result.what_to_watch)}
-        </Text>
-      ) : null}
-
-      {result.alternatives.length > 0 ? (
+      {hasDetails ? (
         <View style={styles.detailsBlock}>
           <Pressable
             accessibilityRole="button"
@@ -493,7 +413,7 @@ export function BehaviorResultView({
             onPress={() => setDetailsOpen((open) => !open)}
             style={styles.detailsToggle}
           >
-            <Text style={styles.detailsToggleText}>Approfondisci</Text>
+            <Text style={styles.detailsToggleText}>Scopri perché</Text>
             <Ionicons
               name={detailsOpen ? 'chevron-up' : 'chevron-down'}
               size={20}
@@ -503,6 +423,127 @@ export function BehaviorResultView({
 
           {detailsOpen ? (
             <>
+              {result.dog_voice ? (
+                <View style={styles.translationBlock}>
+                  <Text style={styles.translationKicker}>
+                    In parole semplici
+                  </Text>
+                  <Text style={styles.translationText}>
+                    {ownerCopy(result.dog_voice)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {evidenceSections.observed.length > 0 ? (
+                <View style={styles.evidenceSection} testID="observed-evidence">
+                  <Text style={styles.evidenceTitle}>
+                    Cosa ha considerato DOGly
+                  </Text>
+                  {evidenceSections.observed.map((item, index) => (
+                    <EvidenceRow
+                      key={`${item.label}-${index}`}
+                      item={{ ...item, label: ownerCopy(item.label) }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {result.sound_note ? (
+                <View style={styles.soundNote}>
+                  <Ionicons
+                    name="volume-medium-outline"
+                    size={18}
+                    color={colors.accent}
+                  />
+                  <View style={styles.soundNoteCopy}>
+                    <Text style={styles.soundNoteTitle}>Audio considerato</Text>
+                    <Text style={styles.soundNoteText}>
+                      {ownerCopy(result.sound_note)}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {evidenceSections.ownerContext.length > 0 ? (
+                <View
+                  style={styles.contextEvidenceCard}
+                  testID="owner-context-evidence"
+                >
+                  <Text style={styles.baselineKicker}>
+                    Informazioni che hai dato
+                  </Text>
+                  {evidenceSections.ownerContext.map((item, index) => (
+                    <Text
+                      key={`${item.label}-${index}`}
+                      style={styles.baselineNote}
+                    >
+                      {ownerCopy(item.label)}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+
+              {evidenceSections.personalMemory.length > 0 &&
+              !isPersonalBaselineNote(result.baseline_note) ? (
+                <View
+                  style={styles.baselineCard}
+                  testID="personal-memory-evidence"
+                >
+                  <Text style={styles.baselineKicker}>
+                    Rispetto al solito di {dogName}
+                  </Text>
+                  {evidenceSections.personalMemory.map((item, index) => (
+                    <Text
+                      key={`${item.label}-${index}`}
+                      style={styles.baselineNote}
+                    >
+                      {ownerCopy(item.label)}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+
+              {isPersonalBaselineNote(result.baseline_note) ? (
+                <View style={styles.baselineCard} testID="per-rocky">
+                  <Text style={styles.baselineKicker}>
+                    Rispetto al solito di {dogName}
+                  </Text>
+                  <Text style={styles.baselineNote}>
+                    {ownerCopy(result.baseline_note)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {careNote ? (
+                <View style={styles.careCard}>
+                  <Ionicons
+                    name="heart-outline"
+                    size={18}
+                    color={colors.accent}
+                  />
+                  <View style={styles.careCopy}>
+                    <Text style={styles.careKicker}>
+                      Informazioni che hai dato
+                    </Text>
+                    <Text style={styles.careNote}>
+                      {ownerCopy(careNote)}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.prudenceCard} testID="behavior-prudence">
+                <Text style={styles.prudenceText}>
+                  {behaviorPrudenceCopy(result.confidence_band)}
+                </Text>
+              </View>
+
+              {result.what_to_watch ? (
+                <Text style={styles.watchLine} testID="what-to-watch">
+                  Se vuoi approfondire: {ownerCopy(result.what_to_watch)}
+                </Text>
+              ) : null}
+
               {result.alternatives.length > 0 ? (
                 <Card style={styles.alternativeCard}>
                   <SectionHeader

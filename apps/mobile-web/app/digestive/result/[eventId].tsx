@@ -211,8 +211,7 @@ export default function DigestiveResultScreen() {
   const showAdvice =
     Boolean(advice) &&
     actionKind === null &&
-    action?.key !== 'ask_followup' &&
-    event.overallState !== 'ROUTINE';
+    action?.key !== 'ask_followup';
   const nutritionKind =
     event.overallState !== 'ROUTINE' &&
     actionKind === 'nutrition';
@@ -269,11 +268,6 @@ export default function DigestiveResultScreen() {
         ) : null}
       </View>
 
-      <View style={styles.whiteCard}>
-        <Text style={styles.cardTitle}>Dalla foto</Text>
-        <Text style={styles.comparisonText}>{photoSummary}</Text>
-      </View>
-
       {event.overallState === 'VET_CONTACT' ? (
         <View style={styles.vetContactCard}>
           <View style={styles.safetyHeading}>
@@ -299,20 +293,6 @@ export default function DigestiveResultScreen() {
           </View>
         );
       })}
-
-      {whatToWatch.length > 0 ? (
-        <View style={styles.whiteCard}>
-          <Text style={styles.cardTitle}>Cosa osservare</Text>
-          {whatToWatch.map((item) => (
-            <View key={item} style={styles.watchRow}>
-              <Text style={styles.watchBullet}>•</Text>
-              <Text style={styles.comparisonText}>
-                {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
 
       {actionKind === 'vet' ? (
         <Card style={styles.actionCard}>
@@ -404,7 +384,7 @@ export default function DigestiveResultScreen() {
         onPress={() => setDetailsOpen((open) => !open)}
         style={styles.detailsToggle}
       >
-        <Text style={styles.detailsToggleText}>Perché te lo dico</Text>
+        <Text style={styles.detailsToggleText}>Scopri perché</Text>
         <Ionicons
           name={detailsOpen ? 'chevron-up' : 'chevron-down'}
           size={20}
@@ -414,6 +394,10 @@ export default function DigestiveResultScreen() {
 
       {detailsOpen ? (
         <>
+          <View style={styles.whiteCard}>
+            <Text style={styles.cardTitle}>Cosa ha considerato DOGly</Text>
+            <Text style={styles.comparisonText}>{photoSummary}</Text>
+          </View>
           {detailLayers.length > 0
             ? detailLayers.map((layer) => (
                 <View key={layer.key} style={styles.whiteCard}>
@@ -426,6 +410,19 @@ export default function DigestiveResultScreen() {
                 </View>
               ))
             : null}
+          {whatToWatch.length > 0 ? (
+            <View style={styles.whiteCard}>
+              <Text style={styles.cardTitle}>Se vuoi, osserva anche</Text>
+              {whatToWatch.map((item) => (
+                <View key={item} style={styles.watchRow}>
+                  <Text style={styles.watchBullet}>•</Text>
+                  <Text style={styles.comparisonText}>
+                    {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {(event.possibleAssociations?.length ?? 0) > 0
             ? event.possibleAssociations?.map((item) => (
                 <Text key={item} style={styles.contextText}>

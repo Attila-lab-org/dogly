@@ -1,3 +1,6 @@
+// @ts-nocheck
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { correctionOptions } from '../features/core/correctionOptions';
 import { deriveContextBucketHint } from '../features/behavior/contextBucket';
 import {
@@ -5,6 +8,11 @@ import {
   consumerEvidenceSections,
   showPrimaryAdvice,
 } from '../features/behavior/consumerPresentation';
+
+const resultViewSource = readFileSync(
+  resolve(__dirname, '../features/core/components.tsx'),
+  'utf8',
+);
 
 describe('deriveContextBucketHint', () => {
   it('di notte suggerisce REST, di giorno lascia UNKNOWN al backend', () => {
@@ -67,5 +75,23 @@ describe('risultato comportamento consumer', () => {
   it('la safety esclude un secondo consiglio', () => {
     expect(showPrimaryAdvice({ hasSafety: true, hasAdvice: true })).toBe(false);
     expect(showPrimaryAdvice({ hasSafety: false, hasAdvice: true })).toBe(true);
+  });
+
+  it('mostra il risultato e rimanda analisi e affidabilità ai dettagli', () => {
+    expect(resultViewSource).toContain('Il risultato per {dogName}');
+    expect(resultViewSource).toContain('Scopri perché');
+    expect(resultViewSource).not.toContain(
+      'Quanto è prudente questa lettura',
+    );
+    for (const detail of [
+      'In parole semplici',
+      'Cosa ha considerato DOGly',
+      'behavior-prudence',
+      'what-to-watch',
+    ]) {
+      expect(resultViewSource.indexOf('Scopri perché')).toBeLessThan(
+        resultViewSource.indexOf(detail),
+      );
+    }
   });
 });

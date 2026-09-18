@@ -20,12 +20,13 @@ describe('digestive result UX', () => {
     expect(resultScreen).not.toContain('hasKnownBaseline');
   });
 
-  it('always shows the general photo reading outside the accordion', () => {
-    expect(resultScreen).toContain('Dalla foto');
+  it('keeps the photo analysis behind progressive disclosure', () => {
+    expect(resultScreen).not.toContain('Dalla foto');
+    expect(resultScreen).toContain('Cosa ha considerato DOGly');
     expect(resultScreen).toContain("layer.key === 'general'");
     expect(resultScreen).toContain('generalLayer?.summary ?? summary');
-    expect(resultScreen.indexOf('Dalla foto')).toBeLessThan(
-      resultScreen.indexOf('Perché te lo dico'),
+    expect(resultScreen.indexOf('Scopri perché')).toBeLessThan(
+      resultScreen.indexOf('Cosa ha considerato DOGly'),
     );
   });
 
@@ -34,7 +35,7 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain("label: 'Veterinario', kind: 'vet'");
     expect(resultScreen).toContain("label: 'Attenzione', kind: 'attention'");
     expect(resultScreen.indexOf('event.safetyFlags.map')).toBeLessThan(
-      resultScreen.indexOf('Perché te lo dico'),
+      resultScreen.indexOf('Scopri perché'),
     );
   });
 
@@ -45,10 +46,13 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain('actionKind === null');
   });
 
-  it('shows a short watch list only outside routine results', () => {
-    expect(resultScreen).toContain('Cosa osservare');
+  it('keeps the short watch list inside optional details', () => {
+    expect(resultScreen).toContain('Se vuoi, osserva anche');
     expect(resultScreen).toContain("event.overallState !== 'ROUTINE'");
     expect(resultScreen).toContain('.slice(0, 3)');
+    expect(resultScreen.indexOf('Scopri perché')).toBeLessThan(
+      resultScreen.indexOf('Se vuoi, osserva anche'),
+    );
   });
 
   it('keeps nutrition as a quiet completion after the analysis', () => {
