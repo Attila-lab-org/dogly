@@ -56,6 +56,7 @@ from app.domains import (
 from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
 from app.domains.behavior_intelligence import build_behavior_consumer
+from app.domains.behavior_reasoning import ensure_bounded_behavior_reading
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
 from app.domains.context_bucket import resolve_context_bucket
@@ -849,6 +850,10 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         if any(intelligence.flags.values()):
             interpret_kwargs["intelligence_context"] = intelligence.reasoner_payload()
         interpretation, rea_usage = await state.reasoner.interpret(**interpret_kwargs)
+        interpretation = ensure_bounded_behavior_reading(
+            interpretation,
+            observation,
+        )
         interpretation = _ground_personal_memory(
             interpretation,
             eligible_memory,
@@ -1088,6 +1093,10 @@ async def refine_behavior_event_context(
 
     try:
         interpretation, usage = await state.reasoner.interpret(**refine_kwargs)
+        interpretation = ensure_bounded_behavior_reading(
+            interpretation,
+            observation,
+        )
     except TimeoutError as exc:
         raise ApiError(
             ErrorCode.PROVIDER_TIMEOUT,
