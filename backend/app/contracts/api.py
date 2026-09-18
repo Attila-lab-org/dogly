@@ -883,6 +883,14 @@ class FeedingPeriodCreate(BaseModel):
     client_request_id: str | None = None
 
 
+class FeedingPeriodUpdate(BaseModel):
+    """Update the active period in place. A quantity change is not a food change."""
+
+    quantity_per_day: str | None = None
+    treats_notes: str | None = None
+    transition_notes: str | None = None
+
+
 class FeedingPeriodOut(BaseModel):
     id: str
     dog_id: str

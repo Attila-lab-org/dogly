@@ -432,6 +432,62 @@ def test_engine_version_change_invalidates_cache():
     assert identity["anomaly_verifier_version"] == DIGESTIVE_ANOMALY_VERIFIER_VERSION
 
 
+def test_cache_refresh_persists_new_verifier_verdict():
+    store = InMemoryStore()
+    digest = image_sha256(b"identical-oreo-stool")
+    identity = engine_identity(provider="openai", model="gpt-5-mini")
+    stale = apply_anomaly_verification(
+        _obs(fresh_blood_candidate="possible"),
+        {"fresh_blood_candidate": "not_confirmed"},
+    )
+    stale["anomaly_verification"]["fresh_blood_candidate"]["prompt_version"] = (
+        "digestive-anomaly-verifier/v0"
+    )
+    store_cached_observation(
+        store,
+        user_id="user-a",
+        dog_id="dog-oreo",
+        image_sha256_hex=digest,
+        identity=identity,
+        observation=stale,
+        source_event_id="event-1",
+    )
+    cached = lookup_cached_observation(
+        store,
+        user_id="user-a",
+        dog_id="dog-oreo",
+        image_sha256_hex=digest,
+        identity=identity,
+    )
+    assert needed_anomaly_verifications(cached or {}) == ["fresh_blood_candidate"]
+    refreshed = apply_anomaly_verification(
+        dict(cached or {}),
+        {"fresh_blood_candidate": "not_confirmed"},
+    )
+    store_cached_observation(
+        store,
+        user_id="user-a",
+        dog_id="dog-oreo",
+        image_sha256_hex=digest,
+        identity=identity,
+        observation=refreshed,
+        source_event_id="event-2",
+    )
+    latest = lookup_cached_observation(
+        store,
+        user_id="user-a",
+        dog_id="dog-oreo",
+        image_sha256_hex=digest,
+        identity=identity,
+    )
+    assert latest is not None
+    assert (
+        latest["anomaly_verification"]["fresh_blood_candidate"]["prompt_version"]
+        == DIGESTIVE_ANOMALY_VERIFIER_VERSION
+    )
+    assert needed_anomaly_verifications(latest) == []
+
+
 def test_anomaly_verifier_version_change_invalidates_cache():
     store = InMemoryStore()
     digest = image_sha256(b"identical-oreo-stool")

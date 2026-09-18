@@ -25,8 +25,13 @@ import {
   activateFeedingPeriod,
   getFood,
   listFeedingPeriods,
+  updateFeedingPeriod,
   verifyFood,
 } from '@/features/nutrition/api';
+import {
+  feedingQuantitySuccessCopy,
+  isOpenPeriodForFood,
+} from '@/features/nutrition/period';
 
 function EditableField({
   label,
@@ -93,7 +98,9 @@ export default function FoodVerifyScreen() {
   const [calories, setCalories] = useState('');
   const [feedingDirections, setFeedingDirections] = useState('');
   const [quantityPerDay, setQuantityPerDay] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
+  const [savedMode, setSavedMode] = useState<'quantity' | 'activated' | null>(
+    null,
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -160,17 +167,34 @@ export default function FoodVerifyScreen() {
     return typeof score === 'number' && score < 0.72;
   };
 
+  const openPeriod = periodsQuery.data?.find((period) =>
+    isOpenPeriodForFood(period, foodId ?? ''),
+  );
+  const quantityOnly = quantityFocus && Boolean(food.verified_at);
+  const foodLabel = [brand.trim(), name.trim()].filter(Boolean).join(' ');
+
   const confirm = async () => {
-    if (!brand.trim() || !name.trim()) {
-      setSaveError('Servono almeno marca e nome del prodotto.');
-      return;
+    if (quantityOnly) {
+      if (!quantityPerDay.trim()) {
+        setSaveError('Indica la quantità giornaliera.');
+        return;
+      }
+    } else {
+      if (!name.trim()) {
+        setSaveError('Serve almeno il nome del prodotto.');
+        return;
+      }
+      if (!food.verified_at && !brand.trim()) {
+        setSaveError('Servono almeno marca e nome del prodotto.');
+        return;
+      }
     }
     const invalidPercentage = [protein, fat, fiber, moisture].some((value) => {
       if (!value.trim()) return false;
       const parsed = Number(value.replace(',', '.'));
       return !Number.isFinite(parsed) || parsed < 0 || parsed > 100;
     });
-    if (invalidPercentage) {
+    if (!quantityOnly && invalidPercentage) {
       setSaveError('Controlla le percentuali: devono essere comprese tra 0 e 100.');
       return;
     }
@@ -178,24 +202,34 @@ export default function FoodVerifyScreen() {
     setSaving(true);
     setSaveError(null);
     try {
-      await verifyFood({
-        foodId,
-        brand: brand.trim(),
-        name: name.trim(),
-        ingredientsRaw: ingredients.trim(),
-        protein,
-        fat,
-        fiber,
-        moisture,
-        calories,
-        feedingDirections,
-      });
+      if (quantityOnly && openPeriod) {
+        await updateFeedingPeriod({
+          periodId: openPeriod.id,
+          quantityPerDay: quantityPerDay.trim(),
+        });
+        setSavedMode('quantity');
+        return;
+      }
+      if (!quantityOnly) {
+        await verifyFood({
+          foodId,
+          brand: brand.trim(),
+          name: name.trim(),
+          ingredientsRaw: ingredients.trim(),
+          protein,
+          fat,
+          fiber,
+          moisture,
+          calories,
+          feedingDirections,
+        });
+      }
       await activateFeedingPeriod({
         dogId: dog.id,
         foodId,
         quantityPerDay: quantityPerDay.trim() || undefined,
       });
-      setConfirmed(true);
+      setSavedMode('activated');
     } catch {
       setSaveError(
         'Non sono riuscito a salvare il cibo. Controlla i campi e riprova.',
@@ -205,20 +239,23 @@ export default function FoodVerifyScreen() {
     }
   };
 
-  if (confirmed) {
+  if (savedMode) {
+    const success =
+      savedMode === 'quantity'
+        ? feedingQuantitySuccessCopy(dog.name, foodLabel || name || 'questo alimento')
+        : {
+            title: 'Cibo attivato',
+            body: `"${foodLabel}" è ora il cibo attivo di ${dog.name}. Il periodo del cibo precedente è stato chiuso: le prossime osservazioni digestive saranno collegate a questo alimento.`,
+          };
     return (
       <ScreenContainer>
         <StackScreenHeader title="Verifica etichetta" />
         <Card>
           <View style={styles.doneHeader}>
             <Ionicons name="checkmark-circle" size={40} color={colors.accent} />
-            <Text style={styles.doneTitle}>Cibo attivato</Text>
+            <Text style={styles.doneTitle}>{success.title}</Text>
           </View>
-          <Text style={styles.note}>
-            "{brand} {name}" è ora il cibo attivo di {dog.name}. Il periodo del cibo
-            precedente è stato chiuso: le prossime osservazioni digestive
-            saranno collegate a questo alimento.
-          </Text>
+          <Text style={styles.note}>{success.body}</Text>
           <Button
             title={`Vai ai cibi di ${dog.name}`}
             style={styles.doneButton}
@@ -322,7 +359,7 @@ export default function FoodVerifyScreen() {
       {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
 
       <Button
-        title="Conferma e attiva"
+        title={quantityOnly ? 'Salva quantità' : 'Conferma e attiva'}
         icon={<Ionicons name="checkmark" size={18} color={colors.textOnPrimary} />}
         onPress={() => void confirm()}
         loading={saving}

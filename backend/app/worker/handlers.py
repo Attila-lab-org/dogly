@@ -1342,7 +1342,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             observer_provider=identity["observer_provider"],
             observer_model=identity["observer_model"],
         )
-        if digest and cached is None:
+        if digest:
             if state.engine is not None:
                 await store_cached_observation_db(
                     state.engine,

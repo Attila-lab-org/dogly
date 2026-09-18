@@ -19,6 +19,7 @@ from app.domains.digestive_observation import (
 )
 from app.domains.digestive_verification import (
     safety_candidate,
+    unavailable_caution_detail,
     verification_unavailable,
 )
 from app.knowledge.digestive import (
@@ -26,7 +27,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v5"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v6"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -329,7 +330,7 @@ def _choose_useful_action(
                 label="Contatta il veterinario",
                 body=(
                     "Non riesco a confermare bene questo dettaglio dalla foto. "
-                    "Se noti una traccia rossa evidente, è meglio sentire il veterinario."
+                    f"{unavailable_caution_detail(observation)}"
                 ),
             ),
             None,
@@ -471,7 +472,7 @@ def build_digestive_intelligence(
         headline = "Non riesco a confermare un dettaglio"
         summary = (
             "Non riesco a confermare bene questo dettaglio dalla foto. "
-            "Se noti una traccia rossa evidente, è meglio sentire il veterinario."
+            f"{unavailable_caution_detail(observation)}"
         )
     elif safety is DigestiveState.ATTENTION:
         state = safety

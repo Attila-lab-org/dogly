@@ -83,12 +83,36 @@ def needed_anomaly_verifications(observation: dict[str, Any]) -> list[str]:
 def verification_unavailable(observation: dict[str, Any]) -> bool:
     """True when a possible blood/melena look could not be completed."""
 
+    return bool(unavailable_anomaly_fields(observation))
+
+
+def unavailable_anomaly_fields(observation: dict[str, Any]) -> list[str]:
+    fields: list[str] = []
     for field in FOCUSED_VERIFIER_FIELDS:
         if _level(observation, field) != "possible":
             continue
         if _stored_verdict(observation, field) == "verification_unavailable":
-            return True
-    return False
+            fields.append(field)
+    return fields
+
+
+def unavailable_caution_detail(observation: dict[str, Any]) -> str:
+    fields = set(unavailable_anomaly_fields(observation))
+    blood = "fresh_blood_candidate" in fields
+    melena = "melena_candidate" in fields
+    if blood and melena:
+        return (
+            "Se noti una traccia rossa evidente o feci molto scure e catramose, "
+            "è meglio sentire il veterinario."
+        )
+    if melena:
+        return (
+            "Se noti feci molto scure o dall’aspetto catramoso, "
+            "è meglio sentire il veterinario."
+        )
+    return (
+        "Se noti una traccia rossa evidente, è meglio sentire il veterinario."
+    )
 
 
 def apply_anomaly_verification(

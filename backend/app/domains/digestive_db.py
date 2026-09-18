@@ -13,6 +13,7 @@ from app.config import Settings
 from app.contracts.api import (
     FecalInitRequest,
     FeedingPeriodCreate,
+    FeedingPeriodUpdate,
     FoodLabelExtraction,
     FoodManualCreateRequest,
     FoodScanInitRequest,
@@ -949,6 +950,48 @@ async def create_feeding_period(
                 ErrorCode.VALIDATION_FAILED,
                 "Food product must be verified before starting a feeding period.",
             )
+        open_row = (
+            await conn.execute(
+                text(
+                    """
+                    select id, dog_id, food_product_id, start_at, end_at,
+                           quantity_per_day, treats_notes, transition_notes
+                    from public.feeding_periods
+                    where dog_id = :dog_id and end_at is null
+                    order by start_at desc, id desc
+                    limit 1
+                    """
+                ),
+                {"dog_id": payload.dog_id},
+            )
+        ).mappings().first()
+        if (
+            open_row is not None
+            and str(open_row["food_product_id"]) == str(payload.food_product_id)
+        ):
+            updated = (
+                await conn.execute(
+                    text(
+                        """
+                        update public.feeding_periods
+                        set quantity_per_day = coalesce(:quantity_per_day, quantity_per_day),
+                            treats_notes = coalesce(:treats_notes, treats_notes),
+                            transition_notes = coalesce(:transition_notes, transition_notes),
+                            updated_at = now()
+                        where id = :id
+                        returning id, dog_id, food_product_id, start_at, end_at,
+                                  quantity_per_day, treats_notes, transition_notes
+                        """
+                    ),
+                    {
+                        "id": open_row["id"],
+                        "quantity_per_day": payload.quantity_per_day,
+                        "treats_notes": payload.treats_notes,
+                        "transition_notes": payload.transition_notes,
+                    },
+                )
+            ).mappings().one()
+            return _feeding_from_row(updated)
         await conn.execute(
             text(
                 """
@@ -982,6 +1025,62 @@ async def create_feeding_period(
                     "treats_notes": payload.treats_notes,
                     "transition_notes": payload.transition_notes,
                 },
+            )
+        ).mappings().one()
+    return _feeding_from_row(row)
+
+
+async def update_feeding_period(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    period_id: str,
+    payload: FeedingPeriodUpdate,
+) -> FeedingPeriodRec:
+    require_uuid(period_id, not_found="Feeding period not found")
+    updates = payload.model_dump(exclude_unset=True)
+    async with engine.begin() as conn:
+        existing = (
+            await conn.execute(
+                text(
+                    """
+                    select fp.id, fp.dog_id, fp.food_product_id, fp.start_at, fp.end_at,
+                           fp.quantity_per_day, fp.treats_notes, fp.transition_notes
+                    from public.feeding_periods fp
+                    join public.dogs d on d.id = fp.dog_id
+                    where fp.id = :id and d.owner_id = :user_id
+                    """
+                ),
+                {"id": period_id, "user_id": user_id},
+            )
+        ).mappings().first()
+        if existing is None:
+            raise ApiError(ErrorCode.NOT_FOUND, "Feeding period not found")
+        if existing["end_at"] is not None:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Only the active feeding period can be updated.",
+            )
+        if not updates:
+            return _feeding_from_row(existing)
+        assignments = ["updated_at = now()"]
+        params: dict[str, Any] = {"id": period_id}
+        for field in ("quantity_per_day", "treats_notes", "transition_notes"):
+            if field in updates:
+                assignments.append(f"{field} = :{field}")
+                params[field] = updates[field]
+        row = (
+            await conn.execute(
+                text(
+                    f"""
+                    update public.feeding_periods
+                    set {", ".join(assignments)}
+                    where id = :id
+                    returning id, dog_id, food_product_id, start_at, end_at,
+                              quantity_per_day, treats_notes, transition_notes
+                    """
+                ),
+                params,
             )
         ).mappings().one()
     return _feeding_from_row(row)

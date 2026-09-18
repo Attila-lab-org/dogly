@@ -4104,6 +4104,90 @@
         }
       }
     },
+    "/v1/nutrition/feeding-periods/{period_id}": {
+      "patch": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Update Feeding Period",
+        "operationId": "update_feeding_period_v1_nutrition_feeding_periods__period_id__patch",
+        "parameters": [
+          {
+            "name": "period_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Period Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedingPeriodUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedingPeriodOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/nutrition/foods/external/lookup": {
       "post": {
         "tags": [
@@ -7764,6 +7848,46 @@
           "start_at"
         ],
         "title": "FeedingPeriodOut"
+      },
+      "FeedingPeriodUpdate": {
+        "properties": {
+          "quantity_per_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity Per Day"
+          },
+          "treats_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treats Notes"
+          },
+          "transition_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition Notes"
+          }
+        },
+        "type": "object",
+        "title": "FeedingPeriodUpdate",
+        "description": "Update the active period in place. A quantity change is not a food change."
       },
       "FoodManualCreateRequest": {
         "properties": {

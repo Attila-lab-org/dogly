@@ -163,3 +163,141 @@ async def test_owner_can_add_food_without_scanning_a_label(
     )
     assert repeated.status_code == 201
     assert repeated.json()["id"] == body["id"]
+
+
+async def test_quantity_change_updates_active_period_without_food_change(
+    client: httpx.AsyncClient, auth_headers
+):
+    dog_id = await create_dog(client, auth_headers)
+    created = await client.post(
+        "/v1/nutrition/foods/manual",
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "manual-food-qty-0001",
+            "brand": None,
+            "name": "Pasto casalingo al pollo",
+            "guaranteed_analysis": {},
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "manual-food-qty-0001"},
+    )
+    food_id = created.json()["id"]
+    started = await client.post(
+        "/v1/nutrition/feeding-periods",
+        json={
+            "dog_id": dog_id,
+            "food_product_id": food_id,
+            "start_at": "2026-09-01T10:00:00Z",
+            "quantity_per_day": "200 g",
+            "treats_notes": "un biscotto",
+            "transition_notes": "passaggio lento",
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "feed-qty-start"},
+    )
+    assert started.status_code == 201, started.text
+    period_id = started.json()["id"]
+
+    patched = await client.patch(
+        f"/v1/nutrition/feeding-periods/{period_id}",
+        json={"quantity_per_day": "250 g"},
+        headers={**auth_headers, "X-Idempotency-Key": f"feed-qty-{period_id}-250"},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["id"] == period_id
+    assert patched.json()["start_at"].startswith("2026-09-01")
+    assert patched.json()["quantity_per_day"] == "250 g"
+    assert patched.json()["end_at"] is None
+
+    repeated = await client.post(
+        "/v1/nutrition/feeding-periods",
+        json={
+            "dog_id": dog_id,
+            "food_product_id": food_id,
+            "start_at": "2026-09-18T08:00:00Z",
+            "quantity_per_day": "260 g",
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "feed-qty-repost"},
+    )
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["id"] == period_id
+    assert repeated.json()["start_at"].startswith("2026-09-01")
+    assert repeated.json()["quantity_per_day"] == "260 g"
+
+    listed = await client.get(
+        f"/v1/nutrition/feeding-periods?dog_id={dog_id}", headers=auth_headers
+    )
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["quantity_per_day"] == "260 g"
+
+
+def test_quantity_update_keeps_food_start_and_notes():
+    from datetime import UTC, datetime, timedelta
+
+    from app.contracts.api import FeedingPeriodCreate, FeedingPeriodUpdate
+    from app.domains.digestive import (
+        build_inmemory_digestive_context,
+        create_feeding_period,
+        update_feeding_period,
+    )
+    from app.domains.models import DogRec, FecalEventRec, FoodProductRec
+    from app.domains.repository import InMemoryStore
+
+    store = InMemoryStore()
+    now = datetime(2026, 9, 18, tzinfo=UTC)
+    dog_id = "00000000-0000-0000-0000-000000000001"
+    user_id = "00000000-0000-0000-0000-0000000000aa"
+    food_id = "00000000-0000-0000-0000-0000000000f1"
+    store.dogs[dog_id] = DogRec(
+        id=dog_id,
+        owner_id=user_id,
+        name="Oreo",
+        created_at=now - timedelta(days=40),
+    )
+    store.food_products[food_id] = FoodProductRec(
+        id=food_id,
+        owner_id=user_id,
+        dog_id=dog_id,
+        client_request_id="food-qty",
+        name="Pasto casalingo",
+        verified_at=now - timedelta(days=20),
+        created_at=now - timedelta(days=20),
+    )
+    period = create_feeding_period(
+        store,
+        user_id=user_id,
+        payload=FeedingPeriodCreate(
+            dog_id=dog_id,
+            food_product_id=food_id,
+            start_at=now - timedelta(days=10),
+            quantity_per_day="200 g",
+            treats_notes="un biscotto",
+            transition_notes="passaggio lento",
+        ),
+    )
+    updated = update_feeding_period(
+        store,
+        user_id=user_id,
+        period_id=period.id,
+        payload=FeedingPeriodUpdate(quantity_per_day="250 g"),
+    )
+    assert updated.id == period.id
+    assert updated.start_at == period.start_at
+    assert updated.quantity_per_day == "250 g"
+    assert updated.treats_notes == "un biscotto"
+    assert updated.transition_notes == "passaggio lento"
+
+    event = FecalEventRec(
+        id="now",
+        dog_id=dog_id,
+        user_id=user_id,
+        client_request_id="now",
+        image_path="path",
+        created_at=now,
+        status="COMPLETED",
+        fecal_score_estimate=4,
+        learning_eligible=True,
+    )
+    store.fecal_events["now"] = event
+    context = build_inmemory_digestive_context(store, event=event)
+    assert context.food_started_days_ago == 10
+    assert context.quantity_per_day == "250 g"

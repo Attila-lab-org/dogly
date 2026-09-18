@@ -13,6 +13,7 @@ from app.contracts.api import (
     ExternalFoodLookupRequest,
     FeedingPeriodCreate,
     FeedingPeriodOut,
+    FeedingPeriodUpdate,
     FoodManualCreateRequest,
     FoodProductOut,
     FoodScanInitRequest,
@@ -340,6 +341,32 @@ async def create_feeding_period(
         rec = await digestive_db.create_feeding_period(state.engine, user_id=user_id, payload=payload)
     else:
         rec = digestive_domain.create_feeding_period(state.store, user_id=user_id, payload=payload)
+    resp = _period_out(rec)
+    await _record_guard(state, guard, resp.model_dump(mode="json"))
+    return resp
+
+
+@router.patch(
+    "/nutrition/feeding-periods/{period_id}",
+    response_model=FeedingPeriodOut,
+)
+async def update_feeding_period(
+    period_id: str,
+    payload: FeedingPeriodUpdate,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
+) -> FeedingPeriodOut:
+    if cached := guard.lookup():
+        return FeedingPeriodOut.model_validate(cached)
+    if state.engine is not None:
+        rec = await digestive_db.update_feeding_period(
+            state.engine, user_id=user_id, period_id=period_id, payload=payload
+        )
+    else:
+        rec = digestive_domain.update_feeding_period(
+            state.store, user_id=user_id, period_id=period_id, payload=payload
+        )
     resp = _period_out(rec)
     await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp

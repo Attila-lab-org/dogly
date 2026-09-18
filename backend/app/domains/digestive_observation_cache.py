@@ -200,7 +200,9 @@ async def store_cached_observation_db(
                 on conflict (
                   user_id, dog_id, image_sha256, observer_provider, observer_model,
                   observer_prompt_version, schema_version, normalizer_version
-                ) do nothing
+                ) do update set
+                  observation_json = excluded.observation_json,
+                  source_event_id = excluded.source_event_id
                 """
             ),
             {

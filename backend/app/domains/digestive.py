@@ -7,10 +7,13 @@ safety/rule layer (sez. 19.3).
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.config import Settings
 from app.contracts.api import (
     FecalInitRequest,
     FeedingPeriodCreate,
+    FeedingPeriodUpdate,
     FoodLabelExtraction,
     FoodManualCreateRequest,
     FoodScanInitRequest,
@@ -23,6 +26,7 @@ from app.domains.digestive_intelligence import DigestiveContext, count_recent_wi
 from app.domains.digestive_observation import prepare_digestive_observation
 from app.domains.digestive_verification import safety_candidate
 from app.domains.dogs import get_owned_dog
+from app.domains.ids import require_uuid
 from app.domains.models import (
     AnalysisJobRec,
     FecalEventRec,
@@ -468,11 +472,28 @@ def create_manual_food_product(
     return product
 
 
+def _apply_open_period_fields(
+    period: FeedingPeriodRec,
+    updates: dict[str, Any],
+    *,
+    ignore_none: bool,
+) -> FeedingPeriodRec:
+    for field in ("quantity_per_day", "treats_notes", "transition_notes"):
+        if field not in updates:
+            continue
+        value = updates[field]
+        if ignore_none and value is None:
+            continue
+        setattr(period, field, value)
+    return period
+
+
 def create_feeding_period(
     store: InMemoryStore, *, user_id: str, payload: FeedingPeriodCreate
 ) -> FeedingPeriodRec:
     """Starting a new food closes the active period and opens a new one; it
-    never rewrites history (sez. 20.1)."""
+    never rewrites history (sez. 20.1). Updating quantity on the same open
+    food keeps that period."""
     get_owned_dog(store, user_id=user_id, dog_id=payload.dog_id)
     product = store.food_products.get(payload.food_product_id)
     if product is None or product.owner_id != user_id:
@@ -481,6 +502,20 @@ def create_feeding_period(
         raise ApiError(
             ErrorCode.VALIDATION_FAILED,
             "Food product must be verified before starting a feeding period.",
+        )
+    open_period = next(
+        (
+            period
+            for period in store.feeding_periods.values()
+            if period.dog_id == payload.dog_id and period.end_at is None
+        ),
+        None,
+    )
+    if open_period is not None and open_period.food_product_id == payload.food_product_id:
+        return _apply_open_period_fields(
+            open_period,
+            payload.model_dump(),
+            ignore_none=True,
         )
     for period in store.feeding_periods.values():
         if period.dog_id == payload.dog_id and period.end_at is None:
@@ -496,6 +531,26 @@ def create_feeding_period(
     )
     store.feeding_periods[rec.id] = rec
     return rec
+
+
+def update_feeding_period(
+    store: InMemoryStore, *, user_id: str, period_id: str, payload: FeedingPeriodUpdate
+) -> FeedingPeriodRec:
+    require_uuid(period_id, not_found="Feeding period not found")
+    period = store.feeding_periods.get(period_id)
+    if period is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Feeding period not found")
+    get_owned_dog(store, user_id=user_id, dog_id=period.dog_id)
+    if period.end_at is not None:
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Only the active feeding period can be updated.",
+        )
+    return _apply_open_period_fields(
+        period,
+        payload.model_dump(exclude_unset=True),
+        ignore_none=False,
+    )
 
 
 def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dict:

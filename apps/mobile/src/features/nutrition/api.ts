@@ -224,6 +224,22 @@ export async function confirmExternalFood(options: {
   );
 }
 
+export async function updateFeedingPeriod(options: {
+  periodId: string;
+  quantityPerDay?: string;
+}): Promise<ApiFeedingPeriod> {
+  const quantity = options.quantityPerDay?.trim() || '';
+  return api.patch<ApiFeedingPeriod>(
+    `/v1/nutrition/feeding-periods/${options.periodId}`,
+    { quantity_per_day: quantity || null },
+    {
+      headers: {
+        'X-Idempotency-Key': `feed-qty-${options.periodId}-${quantity || 'clear'}`,
+      },
+    },
+  );
+}
+
 export async function activateFeedingPeriod(options: {
   dogId: string;
   foodId: string;

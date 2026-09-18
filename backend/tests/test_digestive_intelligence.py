@@ -412,7 +412,24 @@ def test_verification_unavailable_keeps_controlled_caution():
     assert result.overall_state is not DigestiveState.ROUTINE
     assert "confermare" in result.consumer_summary.lower()
     assert "sangue" not in result.consumer_summary.lower()
+    assert "traccia rossa" in result.consumer_summary.lower()
     assert result.useful_action.key == "contact_vet"
+
+
+def test_verification_unavailable_melena_does_not_mention_red_trace():
+    from app.domains.digestive_verification import apply_anomaly_verification
+
+    result = build_digestive_intelligence(
+        apply_anomaly_verification(
+            observation(melena_candidate="possible"),
+            {"melena_candidate": "verification_unavailable"},
+        ),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.safety_state is DigestiveState.MONITOR
+    assert "catramos" in result.consumer_summary.lower()
+    assert "traccia rossa" not in result.consumer_summary.lower()
+    assert "catramos" in (result.useful_action.body or "").lower()
 
 
 def test_stable_routine_has_no_useful_cta():
