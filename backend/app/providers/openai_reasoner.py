@@ -51,6 +51,8 @@ def chat_completion_body(
         "response_format": {"type": "json_object"},
         "messages": messages,
     }
+    if model.lower().startswith("gpt-5.2"):
+        body["reasoning_effort"] = "high"
     if temperature is not None and not _omits_sampling_params(model):
         body["temperature"] = temperature
     return body

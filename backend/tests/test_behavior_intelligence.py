@@ -57,8 +57,8 @@ def test_new_dog_says_still_learning():
     )
     assert result.baseline_comparison is BaselineComparison.LEARNING
     assert "imparando" in result.baseline_note
-    assert "Rocky sta cercando la tua attenzione" == result.consumer_headline
-    assert "coinvolgerti" in result.consumer_summary
+    assert "Rocky cerca il tuo sguardo" == result.consumer_headline
+    assert "torna verso di te" in result.consumer_summary
     assert result.safety is None
 
 
@@ -209,7 +209,7 @@ def test_insufficient_result_gives_a_concrete_retry_action():
     assert "altro breve video" in (result.recommended_next_step or "")
 
 
-def test_partial_reading_keeps_useful_signals_instead_of_generic_abstention():
+def test_composer_does_not_promote_an_ungoverned_partial_reading():
     result = build_behavior_consumer(
         _interpretation(
             primary_intent=IntentCode.INSUFFICIENT,
@@ -243,14 +243,12 @@ def test_partial_reading_keeps_useful_signals_instead_of_generic_abstention():
         dog_context=build_dog_context(_dog()),
     )
 
-    assert result.consumer_headline == "Rocky è in allerta e sta segnalando qualcosa"
-    assert "qualcosa" in result.dog_voice
-    assert "allerta" in result.consumer_summary
-    assert "corpo è rigido" not in result.consumer_summary
-    assert result.recommended_next_step is None
+    assert result.consumer_headline == "Non ho abbastanza elementi per capirlo bene"
+    assert "altro breve video" in (result.recommended_next_step or "")
+    assert result.consumer_alternatives[0].intent is IntentCode.ALERT_VIGILANCE
 
 
-def test_alert_result_explains_meaning_instead_of_repeating_video_description():
+def test_composer_preserves_the_governed_clip_specific_copy():
     result = build_behavior_consumer(
         _interpretation(
             primary_intent=IntentCode.ALERT_VIGILANCE,
@@ -266,11 +264,11 @@ def test_alert_result_explains_meaning_instead_of_repeating_video_description():
         dog_context=build_dog_context(_dog()),
     )
 
-    assert result.consumer_headline == "Rocky è in allerta e sta segnalando qualcosa"
-    assert "ti sta avvisando" in result.consumer_summary
-    assert "più compatibile con allerta" in result.consumer_summary
-    assert "tre abbai" not in result.consumer_summary
-    assert "sinistra" not in result.consumer_summary
+    assert (
+        result.consumer_headline
+        == "Rocky è rigido e abbaia verso qualcosa a sinistra fuori campo"
+    )
+    assert "tre abbai" in result.consumer_summary
 
 
 def test_recent_partial_result_is_repaired_when_read_from_the_api():

@@ -43,7 +43,7 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain("actionKind === 'vet'");
     expect(resultScreen).toContain("actionKind === 'nutrition'");
     expect(resultScreen).toContain("action?.key === 'ask_followup'");
-    expect(resultScreen).toContain('actionKind === null');
+    expect(resultScreen).toContain("actionKind !== 'vet'");
   });
 
   it('keeps the short watch list inside optional details', () => {

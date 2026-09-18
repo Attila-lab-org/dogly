@@ -5,6 +5,7 @@
 apps/admin/
 apps/landing/
 apps/mobile/
+apps/mobile-web/
 backend/tests/
 docs/
 infra/

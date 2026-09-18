@@ -73,7 +73,7 @@ def _interpretation(**updates) -> InterpretationContract:
     return InterpretationContract.model_validate(payload)
 
 
-def test_dominant_reading_hides_weak_alternatives_from_consumer():
+def test_dominant_reading_keeps_bounded_alternatives_for_owner_correction():
     result = build_behavior_consumer(
         _interpretation(),
         dog_name="Rocky",
@@ -81,7 +81,8 @@ def test_dominant_reading_hides_weak_alternatives_from_consumer():
     )
     assert result.consumer_evidence
     assert all(item.source.value == "observation" for item in result.consumer_evidence)
-    assert result.consumer_alternatives == []
+    assert len(result.consumer_alternatives) == 1
+    assert result.consumer_alternatives[0].intent is IntentCode.PLAY_INTERACTION
 
 
 def test_ambiguous_reading_keeps_material_alternatives():
@@ -151,7 +152,8 @@ def test_event_out_exposes_consumer_projection_not_raw_audit():
         },
     )
     body = event_out(event)
-    assert body.alternatives == []
+    assert len(body.alternatives) == 1
+    assert body.alternatives[0].intent is IntentCode.PLAY_INTERACTION
     assert body.evidence
     assert all(item.source.value == "observation" for item in body.evidence)
 
@@ -229,7 +231,7 @@ def test_formed_repetition_near_baseline_is_stable_routine_not_change():
     assert result.baseline_comparison == "NEAR_USUAL"
 
 
-def test_soft_repetition_still_reads_as_repeating_change():
+def test_soft_repetition_reads_as_not_yet_stabilized():
     result = build_digestive_intelligence(
         _observation(consistency="soft", fecal_score_estimate=4),
         DigestiveContext(
@@ -239,7 +241,7 @@ def test_soft_repetition_still_reads_as_repeating_change():
         ),
     )
     blob = f"{result.consumer_headline} {result.consumer_summary}".lower()
-    assert "si ripete" in blob
+    assert "non si è ancora stabilizzata" in blob
 
 
 def test_food_change_stays_temporal_association_not_cause():

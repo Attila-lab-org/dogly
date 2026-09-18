@@ -65,7 +65,29 @@ async def test_two_completed_events_create_candidate_pattern(
     body = score.json()
     assert body["score"] is not None
     assert body["score"] > 0
-    assert "completed_events" in body["components"]
+    assert "usable_volume" in body["components"]
+    assert "context_diversity" in body["components"]
+    assert "temporal_diversity" in body["components"]
+    assert "modality_quality" in body["components"]
+    assert "pattern_consistency" in body["components"]
+    assert "owner_validation" in body["components"]
+    assert "digestive" not in body["components"]
+
+    feedback = await client.post(
+        f"/v1/behavior/events/{event_id}/feedback",
+        json={"value": "YES"},
+        headers={
+            **auth_headers,
+            "X-Idempotency-Key": "pattern-feedback-confirmation",
+        },
+    )
+    assert feedback.status_code == 200, feedback.text
+    assert patterns[0].confirm_count == 1
+    refreshed = await client.get(
+        f"/v1/dogs/{dog_id}/knowledge-score",
+        headers=auth_headers,
+    )
+    assert refreshed.json()["components"]["owner_validation"] > 0
 
 
 async def test_single_completion_does_not_create_pattern(

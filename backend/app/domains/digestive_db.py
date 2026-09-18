@@ -32,7 +32,7 @@ from app.domains.digestive_intelligence import (
 from app.domains.ids import require_uuid
 from app.domains.models import FecalEventRec, FeedingPeriodRec, FoodProductRec
 from app.domains.repository import new_id
-from app.providers.base import JobQueue, StorageProvider
+from app.providers.base import JobQueue, ProviderUsage, StorageProvider
 
 DIGESTIVE_BUCKET = "digestive-raw"
 FOOD_BUCKET = "food-labels"
@@ -495,6 +495,100 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 "image_quality": event.image_quality,
                 "expires_at": event.expires_at,
                 "completed_at": event.completed_at,
+            },
+        )
+
+
+async def save_digestive_observation_audit(
+    engine: AsyncEngine,
+    *,
+    fecal_event_id: str,
+    observation_json: dict[str, Any],
+    usage: ProviderUsage,
+) -> None:
+    """Persist the normalized visual observation outside the serving row."""
+    meta = observation_json.get("meta") or {}
+    token_usage = {
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "media_bytes": usage.media_bytes,
+        "cost_usd": usage.cost_usd,
+        "request_id": usage.request_id,
+    }
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                insert into internal.digestive_observations (
+                  fecal_event_id, provider, model, version, schema_version,
+                  observation_json, token_usage, latency_ms
+                ) values (
+                  cast(:event_id as uuid), :provider, :model, :version, :schema_version,
+                  cast(:observation_json as jsonb), cast(:token_usage as jsonb), :latency_ms
+                )
+                on conflict (fecal_event_id) do update set
+                  provider = excluded.provider,
+                  model = excluded.model,
+                  version = excluded.version,
+                  schema_version = excluded.schema_version,
+                  observation_json = excluded.observation_json,
+                  token_usage = excluded.token_usage,
+                  latency_ms = excluded.latency_ms
+                """
+            ),
+            {
+                "event_id": fecal_event_id,
+                "provider": str(meta.get("provider") or usage.provider),
+                "model": str(meta.get("model") or usage.model),
+                "version": observation_json.get("normalizer_version"),
+                "schema_version": str(
+                    observation_json.get("schema_version") or "stool_observation.v0"
+                ),
+                "observation_json": json.dumps(observation_json),
+                "token_usage": json.dumps(token_usage),
+                "latency_ms": usage.latency_ms,
+            },
+        )
+
+
+async def save_digestive_insight(
+    engine: AsyncEngine,
+    *,
+    event: FecalEventRec,
+) -> None:
+    """Keep one final consumer decision per completed digestive event."""
+    if not event.intelligence_json or not event.summary:
+        return
+    baseline = event.intelligence_json.get("baseline_comparison")
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                delete from public.digestive_insights
+                where fecal_event_id = cast(:event_id as uuid)
+                """
+            ),
+            {"event_id": event.id},
+        )
+        await conn.execute(
+            text(
+                """
+                insert into public.digestive_insights (
+                  dog_id, fecal_event_id, summary, trend_code,
+                  safety_flags, policy_version
+                ) values (
+                  cast(:dog_id as uuid), cast(:event_id as uuid), :summary, :trend_code,
+                  cast(:safety_flags as jsonb), :policy_version
+                )
+                """
+            ),
+            {
+                "dog_id": event.dog_id,
+                "event_id": event.id,
+                "summary": event.summary,
+                "trend_code": str(baseline) if baseline else None,
+                "safety_flags": json.dumps(event.safety_flags or []),
+                "policy_version": event.intelligence_json.get("reasoning_version"),
             },
         )
 

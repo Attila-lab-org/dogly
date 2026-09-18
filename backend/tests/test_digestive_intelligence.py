@@ -37,7 +37,7 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "più morbide" in result.consumer_headline.lower()
+    assert result.consumer_headline == "La digestione di Rocky è da osservare oggi"
     assert "andamento abituale" not in result.consumer_summary.lower()
     assert "solito" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
@@ -660,11 +660,7 @@ def test_repeated_event_changes_meaning_versus_isolated_episode():
         isolated.consumer_headline
         == "Le feci di Rocky sono più morbide rispetto al suo solito"
     )
-    assert (
-        repeated.consumer_headline
-        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
-    )
-    assert "si ripete" in repeated.consumer_headline.lower()
+    assert repeated.consumer_headline == "La digestione di Rocky non si è ancora stabilizzata"
 
 
 def test_total_recent_analyses_are_not_a_soft_trend():
@@ -693,10 +689,7 @@ def test_total_recent_analyses_are_not_a_soft_trend():
             episode_count_7d=3,
         ),
     )
-    assert (
-        repeated.consumer_headline
-        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
-    )
+    assert repeated.consumer_headline == "La digestione di Rocky non si è ancora stabilizzata"
     watery = build_digestive_intelligence(
         observation(consistency="watery"),
         context(
@@ -711,10 +704,7 @@ def test_total_recent_analyses_are_not_a_soft_trend():
         ),
     )
     assert "ultime ore" in watery.consumer_summary.lower()
-    assert (
-        watery.consumer_headline
-        == "Le feci di Rocky sono più liquide e il cambiamento si ripete"
-    )
+    assert watery.consumer_headline == "La digestione di Rocky non si è ancora stabilizzata"
 
 
 def test_recent_event_counts_do_not_invent_a_second_time():
@@ -737,10 +727,10 @@ def test_recent_event_counts_do_not_invent_a_second_time():
         assert "poche ore" not in blob
     one, two, many = texts
     assert one[1] == "Le feci di Rocky sono più morbide rispetto al suo solito"
-    assert two[1] == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
-    assert many[1] == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    assert two[1] == "La digestione di Rocky non si è ancora stabilizzata"
+    assert many[1] == "La digestione di Rocky non si è ancora stabilizzata"
     assert "già comparso" in one[2].lower()
-    assert "si ripete" in two[1].lower()
+    assert "non si è ancora stabilizzata" in two[1].lower()
     assert one[2] != two[2]
 
 
@@ -754,17 +744,13 @@ def test_insufficient_baseline_does_not_mix_trend_with_pretend_usual():
         f"{result.recommended_next_step}"
     ).lower()
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert (
-        result.consumer_headline
-        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
-    )
-    assert "si ripete" in result.consumer_headline.lower()
+    assert result.consumer_headline == "La digestione di Rocky non si è ancora stabilizzata"
     assert "solito" not in blob
     assert "imparando" not in blob
     assert "osserva i prossimi episodi" not in blob
     assert "per ora va così" not in blob
     assert "da tenere d" not in blob
-    assert "si sta ripetendo" in result.recommended_next_step.lower()
+    assert "non cambiare quantità" in result.recommended_next_step.lower()
 
 
 def test_routine_without_food_still_offers_brief_nutrition_cta():
@@ -847,20 +833,15 @@ def test_oreo_like_soft_repeat_answers_meaning_why_and_next_step():
         context(dog_name="Oreo", prior_consistencies=["soft", "soft"]),
     )
     blob = _blob(result)
-    assert (
-        result.consumer_headline
-        == "Le feci di Oreo sono più morbide e il cambiamento si ripete"
-    )
+    assert result.consumer_headline == "La digestione di Oreo non si è ancora stabilizzata"
     assert "oreo" in result.consumer_headline.lower()
-    assert "più morbide" in result.consumer_headline.lower()
-    assert "si ripete" in result.consumer_headline.lower()
+    assert "non si è ancora stabilizzata" in result.consumer_headline.lower()
     assert result.consumer_summary.count(".") <= 2
     assert "muco" not in blob
     assert "possibile muco" not in blob
     assert any("non è abbastanza" in item.lower() for item in result.relevant_context)
-    assert "vomito" in result.recommended_next_step.lower()
-    assert "attività" in result.recommended_next_step.lower()
-    assert "alimentazione" not in result.recommended_next_step.lower()
+    assert "non cambiare quantità" in result.recommended_next_step.lower()
+    assert "sola foto" in result.recommended_next_step.lower()
 
 
 def test_same_photo_changes_with_food_history_and_symptoms():
@@ -910,13 +891,9 @@ def test_same_photo_changes_with_food_history_and_symptoms():
             food_started_days_ago=90,
         ),
     )
-    assert "più morbide" in first.consumer_headline.lower()
+    assert first.consumer_headline == "La digestione di Rocky è da osservare oggi"
     assert "andamento abituale" not in first.consumer_summary.lower()
-    assert (
-        repeating.consumer_headline
-        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
-    )
-    assert "si ripete" in repeating.consumer_headline.lower()
+    assert repeating.consumer_headline == "La digestione di Rocky non si è ancora stabilizzata"
     assert "3 giorni" in new_food.consumer_summary
     assert "causa" not in new_food.consumer_summary.lower()
     assert new_food.consumer_summary != stable_food.consumer_summary
@@ -947,7 +924,7 @@ def test_first_photo_is_useful_without_personal_baseline():
     assert "general" in layers
     assert "longitudinal" not in layers
     assert layers["general"].summary
-    assert "più morbide" in result.consumer_headline.lower()
+    assert result.consumer_headline == "La digestione di Rocky è da osservare oggi"
     assert result.baseline_comparison == "INSUFFICIENT"
     assert result.recommended_next_step
     assert result.useful_action.key

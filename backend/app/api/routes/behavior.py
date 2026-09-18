@@ -390,6 +390,9 @@ async def post_feedback(
         rec = behavior_domain.record_feedback(
             state.store, user_id=user_id, event_id=event_id, payload=payload
         )
+    from app.domains.personal_engine import on_behavior_feedback
+
+    await on_behavior_feedback(state, event_id=event_id)
     resp = BehaviorFeedbackResponse(event_id=event_id, value=rec.value)
     await _record_guard(state, guard, resp.model_dump(mode="json"))
     return resp

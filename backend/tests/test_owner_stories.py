@@ -49,7 +49,9 @@ async def test_owner_story_requires_review_before_confirmation(
     assert draft["status"] == "CONFIRMED"
     assert draft["facts"] == edited
     assert draft["transcript"] is None
-    assert state.store.knowledge_scores[-1]["components"]["owner_stories"] == 0.05
+    score = state.store.knowledge_scores[-1]
+    assert score["version"] == "behavior-knowledge/v2"
+    assert "owner_stories" not in score["components"]
 
     listed = await client.get(
         f"/v1/dogs/{dog_id}/owner-stories",
@@ -72,7 +74,7 @@ async def test_owner_story_requires_review_before_confirmation(
         headers=auth_headers,
     )
     assert deleted.status_code == 204
-    assert state.store.knowledge_scores[-1]["components"]["owner_stories"] == 0.0
+    assert "owner_stories" not in state.store.knowledge_scores[-1]["components"]
     listed_after_delete = await client.get(
         f"/v1/dogs/{dog_id}/owner-stories",
         headers=auth_headers,

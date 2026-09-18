@@ -4,11 +4,12 @@
  * comportamentale (riusata da /behavior/result e /diary/event) e feedback
  * con 👍/👎. Stile vincolante: docs/ux/UX_REFERENCE.md + mockup ufficiali.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Chip, ProgressBar, SectionHeader } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import type {
   BehaviorEventResult,
   BehaviorIntent,
@@ -181,6 +182,9 @@ export function FeedbackButtons({
   value,
   onFeedback,
   error,
+  dogName,
+  primaryIntent,
+  alternatives = [],
 }: {
   value: FeedbackValue | null;
   onFeedback: (
@@ -192,8 +196,9 @@ export function FeedbackButtons({
   primaryIntent?: BehaviorIntent | null;
   alternatives?: Array<{ intent: BehaviorIntent }>;
 }) {
+  const [correction, setCorrection] = useState<BehaviorIntent | null>(null);
   const options: Array<{
-    value: Extract<FeedbackValue, 'YES' | 'NO'>;
+    value: FeedbackValue;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
     selectedBg: string;
@@ -201,23 +206,36 @@ export function FeedbackButtons({
   }> = [
     {
       value: 'YES',
-      label: 'Utile',
-      icon: 'thumbs-up',
+      label: 'Sì, è così',
+      icon: 'checkmark-circle-outline',
       selectedBg: colors.successSoft,
       selectedBorder: colors.success,
     },
     {
       value: 'NO',
-      label: 'Non utile',
-      icon: 'thumbs-down',
+      label: 'Non proprio',
+      icon: 'close-circle-outline',
       selectedBg: colors.dangerSoft,
       selectedBorder: colors.danger,
     },
+    {
+      value: 'UNKNOWN',
+      label: 'Non so',
+      icon: 'help-circle-outline',
+      selectedBg: colors.surfaceMuted,
+      selectedBorder: colors.textSecondary,
+    },
   ];
+  const correctionOptions = alternatives
+    .map((item) => item.intent)
+    .filter((intent) => intent !== primaryIntent)
+    .slice(0, 3);
 
   return (
     <View style={styles.feedbackCard}>
-      <Text style={styles.feedbackTitle}>Ti è stata utile questa lettura?</Text>
+      <Text style={styles.feedbackTitle}>
+        Ti sembra proprio {dogName ?? 'il tuo cane'}?
+      </Text>
       {error ? <Text style={styles.errorLabel}>{error}</Text> : null}
       <View style={styles.feedbackOptions}>
         {options.map((option) => {
@@ -255,6 +273,33 @@ export function FeedbackButtons({
           );
         })}
       </View>
+      {value === 'NO' && correctionOptions.length > 0 ? (
+        <View style={styles.feedbackCorrection}>
+          <Text style={styles.feedbackCorrectionTitle}>
+            Quale lettura ti sembra più vicina?
+          </Text>
+          {correctionOptions.map((intent) => (
+            <Pressable
+              key={intent}
+              accessibilityRole="button"
+              accessibilityState={{ selected: correction === intent }}
+              onPress={() => {
+                setCorrection(intent);
+                onFeedback('NO', { correction_label: intent });
+              }}
+              style={({ pressed }) => [
+                styles.feedbackCorrectionOption,
+                correction === intent && styles.feedbackCorrectionOptionSelected,
+                pressed && styles.feedbackOptionPressed,
+              ]}
+            >
+              <Text style={styles.feedbackCorrectionLabel}>
+                {BEHAVIOR_INTENT_LABELS[intent]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -672,6 +717,32 @@ const styles = StyleSheet.create({
   feedbackOptions: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  feedbackCorrection: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  feedbackCorrectionTitle: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: colors.text,
+  },
+  feedbackCorrectionOption: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  feedbackCorrectionOptionSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  feedbackCorrectionLabel: {
+    fontSize: typography.size.sm,
+    color: colors.text,
   },
   feedbackOption: {
     flex: 1,

@@ -179,6 +179,11 @@ class PersonalPatternRec(BaseModel):
     version: int = 1
     first_seen: datetime | None = None
     last_seen: datetime | None = None
+    pattern_key: str | None = None
+    intent_code: str | None = None
+    context_bucket: str | None = None
+    signal_signature: dict | None = None
+    owner_context_signature: list[dict] | None = None
 
 
 class FecalEventRec(BaseModel):

@@ -22,7 +22,7 @@ from app.domains.models import (
     BehaviorFeedbackRec,
 )
 from app.domains.repository import new_id
-from app.providers.base import JobQueue, StorageProvider
+from app.providers.base import JobQueue, ProviderUsage, StorageProvider
 
 BEHAVIOR_BUCKET = "behavior-raw"
 
@@ -541,6 +541,160 @@ async def save_event_state(engine: AsyncEngine, event: BehaviorEventRec) -> None
                 "completed_at": event.completed_at,
             },
         )
+
+
+def _usage_json(usage: ProviderUsage | None) -> str | None:
+    if usage is None:
+        return None
+    return json.dumps(
+        {
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "media_bytes": usage.media_bytes,
+            "cost_usd": usage.cost_usd,
+            "request_id": usage.request_id,
+        }
+    )
+
+
+async def save_observation_audit(
+    engine: AsyncEngine,
+    *,
+    event_id: str,
+    observation_json: dict[str, Any],
+    usage: ProviderUsage | None,
+) -> None:
+    """Persist the normalized observer checkpoint in its dedicated audit table."""
+    meta = observation_json.get("observer_meta") or {}
+    quality = observation_json.get("capture_quality") or {}
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                insert into internal.behavior_observations (
+                  event_id, schema_version, observation_json,
+                  observer_provider, observer_model, observer_version,
+                  media_quality, token_usage, latency_ms
+                ) values (
+                  cast(:event_id as uuid), :schema_version, cast(:observation_json as jsonb),
+                  :provider, :model, :observer_version,
+                  cast(:media_quality as jsonb), cast(:token_usage as jsonb), :latency_ms
+                )
+                on conflict (event_id) do update set
+                  schema_version = excluded.schema_version,
+                  observation_json = excluded.observation_json,
+                  observer_provider = excluded.observer_provider,
+                  observer_model = excluded.observer_model,
+                  observer_version = excluded.observer_version,
+                  media_quality = excluded.media_quality,
+                  token_usage = coalesce(excluded.token_usage, internal.behavior_observations.token_usage),
+                  latency_ms = coalesce(excluded.latency_ms, internal.behavior_observations.latency_ms)
+                """
+            ),
+            {
+                "event_id": event_id,
+                "schema_version": str(
+                    observation_json.get("schema_version") or "observation.v0"
+                ),
+                "observation_json": json.dumps(observation_json),
+                "provider": str(meta.get("provider") or "unknown"),
+                "model": str(meta.get("model") or "unknown"),
+                "observer_version": meta.get("version"),
+                "media_quality": json.dumps(quality),
+                "token_usage": _usage_json(usage),
+                "latency_ms": usage.latency_ms if usage is not None else None,
+            },
+        )
+
+
+async def save_interpretation_audit(
+    engine: AsyncEngine,
+    *,
+    event_id: str,
+    interpretation_json: dict[str, Any],
+    usage: ProviderUsage,
+) -> None:
+    """Persist the raw reasoner contract before deterministic governance."""
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                insert into internal.behavior_interpretations (
+                  event_id, schema_version, interpretation_json,
+                  reasoner_provider, reasoner_model, reasoner_version,
+                  alternatives, evidence, contradictions, token_usage, latency_ms
+                ) values (
+                  cast(:event_id as uuid), :schema_version, cast(:interpretation_json as jsonb),
+                  :provider, :model, :reasoner_version,
+                  cast(:alternatives as jsonb), cast(:evidence as jsonb),
+                  cast(:contradictions as jsonb), cast(:token_usage as jsonb), :latency_ms
+                )
+                on conflict (event_id) do update set
+                  schema_version = excluded.schema_version,
+                  interpretation_json = excluded.interpretation_json,
+                  reasoner_provider = excluded.reasoner_provider,
+                  reasoner_model = excluded.reasoner_model,
+                  reasoner_version = excluded.reasoner_version,
+                  alternatives = excluded.alternatives,
+                  evidence = excluded.evidence,
+                  contradictions = excluded.contradictions,
+                  token_usage = excluded.token_usage,
+                  latency_ms = excluded.latency_ms
+                """
+            ),
+            {
+                "event_id": event_id,
+                "schema_version": str(
+                    interpretation_json.get("schema_version") or "interpretation.v0"
+                ),
+                "interpretation_json": json.dumps(interpretation_json),
+                "provider": usage.provider,
+                "model": usage.model,
+                "reasoner_version": interpretation_json.get("policy_version"),
+                "alternatives": json.dumps(
+                    interpretation_json.get("alternatives") or []
+                ),
+                "evidence": json.dumps(interpretation_json.get("evidence") or []),
+                "contradictions": json.dumps(
+                    interpretation_json.get("contradictions") or []
+                ),
+                "token_usage": _usage_json(usage),
+                "latency_ms": usage.latency_ms,
+            },
+        )
+
+
+async def save_behavior_decision_audit(
+    engine: AsyncEngine,
+    *,
+    event_id: str,
+    governed_interpretation_json: dict[str, Any],
+    decision_trace: dict[str, Any],
+    consumer_json: dict[str, Any],
+) -> None:
+    """Attach the governed decision without overwriting the raw hypothesis."""
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            text(
+                """
+                update internal.behavior_interpretations
+                set governed_interpretation_json = cast(:governed as jsonb),
+                    decision_trace = cast(:decision_trace as jsonb),
+                    decision_policy_version = :decision_policy_version,
+                    consumer_json = cast(:consumer as jsonb)
+                where event_id = cast(:event_id as uuid)
+                """
+            ),
+            {
+                "event_id": event_id,
+                "governed": json.dumps(governed_interpretation_json),
+                "decision_trace": json.dumps(decision_trace),
+                "decision_policy_version": decision_trace.get("policy_version"),
+                "consumer": json.dumps(consumer_json),
+            },
+        )
+    if result.rowcount != 1:
+        raise RuntimeError("Missing raw interpretation audit checkpoint")
 
 
 async def load_event(engine: AsyncEngine, *, event_id: str) -> BehaviorEventRec | None:

@@ -43,8 +43,8 @@ I model ID stanno in config (`OBSERVER_MODEL`, `REASONING_MODEL`, …), mai hard
 | Ruolo | Provider | Modello (prod, `vercel.json`) | Default locale |
 |-------|----------|-------------------------------|----------------|
 | Osservatore video | Gemini | `gemini-3.8-flash` | `mock-observer-v0` |
-| Reasoner comportamento | OpenAI | `gpt-5-mini` | `mock-reasoner-v0` |
-| Visione digestiva | OpenAI Vision | `gpt-5-mini` | mock |
+| Reasoner comportamento | OpenAI | `gpt-5.2` (reasoning high) | `mock-reasoner-v0` |
+| Visione digestiva | OpenAI Vision | `gpt-5.2` | mock |
 | Trascrizione storie vocali | OpenAI | `gpt-4o-mini-transcribe` | stesso |
 
 In locale e in CI i provider pagati sono **mock** (fixture JSON). Staging/produzione **falliscono all’avvio** se restano i mock.

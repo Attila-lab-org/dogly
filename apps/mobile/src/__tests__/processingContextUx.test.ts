@@ -62,19 +62,20 @@ describe('processing context companion UX', () => {
   });
 });
 
-describe('result feedback stays minimal', () => {
+describe('result feedback teaches DOGly without becoming technical', () => {
   const feedback = readFileSync(
     resolve(__dirname, '../features/core/components.tsx'),
     'utf8',
   );
 
-  it('uses thumbs only and never opens a correction questionnaire', () => {
-    expect(feedback).toContain('Ti è stata utile questa lettura?');
-    expect(feedback).toContain('thumbs-up');
-    expect(feedback).toContain('thumbs-down');
-    expect(feedback).not.toContain('Sì, è così');
-    expect(feedback).not.toContain('Non lo so');
+  it('separates interpretation correctness from advice usefulness', () => {
+    expect(feedback).toContain('Ti sembra proprio');
+    expect(feedback).toContain('Sì, è così');
+    expect(feedback).toContain('Non proprio');
+    expect(feedback).toContain('Non so');
+    expect(feedback).toContain('Quale lettura ti sembra più vicina?');
+    expect(feedback).toContain('correction_label');
+    expect(feedback).not.toContain('Ti è stata utile questa lettura?');
     expect(feedback).not.toContain('Salvato');
-    expect(feedback).not.toContain('Cosa stava davvero facendo?');
   });
 });

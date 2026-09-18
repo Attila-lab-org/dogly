@@ -210,7 +210,7 @@ export default function DigestiveResultScreen() {
     event.followupKey;
   const showAdvice =
     Boolean(advice) &&
-    actionKind === null &&
+    actionKind !== 'vet' &&
     action?.key !== 'ask_followup';
   const nutritionKind =
     event.overallState !== 'ROUTINE' &&

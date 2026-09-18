@@ -28,7 +28,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v14"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v15"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -526,10 +526,6 @@ def _personal_factor(
             f"Hai segnalato qualcosa di insolito mangiato da {context.dog_name} "
             "nelle ultime 48 ore."
         )
-    if context.vomiting_today is False and context.reduced_activity_today is False:
-        return "Non hai segnalato vomito o calo di attività."
-    if context.vomiting_today is False:
-        return "Non hai segnalato vomito."
     weight = _weight_phrase(context)
     if weight:
         return f"{weight}."
@@ -650,7 +646,9 @@ def _consumer_headline(
     ):
         return "Un cambiamento da valutare con più attenzione"
     if level in {"hours", "trend"} and texture:
-        return f"Le feci di {name} sono {texture} e il cambiamento si ripete"
+        if _is_loose(consistency):
+            return f"La digestione di {name} non si è ancora stabilizzata"
+        return f"La regolarità digestiva di {name} è da seguire"
     if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"} and texture:
         return f"Le feci di {name} sono {texture} rispetto al suo solito"
     if baseline_code == "NEAR_USUAL":
@@ -658,7 +656,9 @@ def _consumer_headline(
             return f"Le feci di {name} sono {texture}, in linea con il suo solito"
         return f"Il risultato di {name} è in linea con il suo solito"
     if texture:
-        return f"Le feci di {name} sono {texture}"
+        if _is_loose(consistency):
+            return f"La digestione di {name} è da osservare oggi"
+        return f"La regolarità digestiva di {name} è da osservare oggi"
     return f"Ecco il risultato di {name}"
 
 
@@ -796,6 +796,18 @@ def _choose_followup(
             "straining_or_urgency",
             f"{context.dog_name} ha mostrato sforzo o urgenza durante l’evacuazione?",
         )
+    if (
+        consistency in {"soft", "unformed", "watery"}
+        and state in {DigestiveState.MONITOR, DigestiveState.ATTENTION}
+        and context.vomiting_today is False
+        and context.appetite_reduced is False
+        and context.reduced_activity_today is False
+        and context.unusual_food_48h is None
+    ):
+        return (
+            "unusual_food_48h",
+            f"{context.dog_name} ha mangiato qualcosa di diverso nelle ultime 48 ore?",
+        )
     return None, None
 
 
@@ -916,9 +928,19 @@ def _final_advice(
         )
     level = _repetition_level(context, consistency)
     if level in {"hours", "trend"} and _is_loose(consistency):
+        if context.unusual_food_48h is True:
+            return (
+                "Evita altri extra e mantieni il cibo abituale. Se le prossime "
+                "evacuazioni non migliorano o compaiono altri sintomi, senti il veterinario."
+            )
+        if not _food_known(context):
+            return (
+                "Per oggi non cambiare quantità o alimento sulla base della sola foto. "
+                "Mantieni stabile la routine ed evita nuovi extra."
+            )
         return (
-            "Dato che questo tipo di cambiamento si sta ripetendo, segui anche "
-            "vomito, appetito e attività nelle prossime ore."
+            "Per oggi mantieni invariati alimento e quantità. Se le prossime "
+            "evacuazioni non migliorano, rivaluta insieme al veterinario."
         )
     if _recent_food_change(context) and _is_loose(consistency):
         return (
@@ -1342,7 +1364,12 @@ def _synthesize_from_layers(
             )
     elif followup_question:
         repetition = _repetition_level(context, consistency)
-        if repetition == "hours":
+        if "mangiato qualcosa di diverso" in followup_question:
+            summary = (
+                "Non emergono segnali visivi di urgenza. Sapere se ha mangiato "
+                "qualcosa di diverso può chiarire quale scelta è più utile oggi."
+            )
+        elif repetition == "hours":
             summary = (
                 "Il cambiamento si è ripetuto nelle ultime ore. "
                 "Per capire se basta monitorare, mi serve sapere come sta oggi."
@@ -1358,12 +1385,25 @@ def _synthesize_from_layers(
                 "Per capire se basta monitorare, mi serve sapere come sta oggi."
             )
     else:
+        repetition = _repetition_level(context, consistency)
         factor = _personal_factor(
             context,
             baseline_code=baseline_code,
             consistency=consistency,
         )
-        if _repetition_level(context, consistency) == "once":
+        if repetition in {"hours", "trend"} and _is_loose(consistency):
+            if context.unusual_food_48h is True:
+                summary = (
+                    "Non emergono segnali visivi di urgenza. Quello che ha mangiato "
+                    "di diverso può coincidere con il cambiamento, senza provarne la causa."
+                )
+            else:
+                summary = (
+                    "Non emergono segnali visivi di urgenza, ma la consistenza "
+                    "non è ancora tornata stabile. Dai dati disponibili non emerge "
+                    "una causa precisa."
+                )
+        elif repetition == "once":
             summary = (
                 "Un cambiamento simile era già comparso. "
                 "Controlla il prossimo episodio per vedere se rientra."

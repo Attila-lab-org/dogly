@@ -12,6 +12,17 @@ def test_gpt5_mini_omits_temperature():
     assert body["response_format"] == {"type": "json_object"}
 
 
+def test_gpt52_uses_high_reasoning_and_omits_temperature():
+    body = chat_completion_body(
+        "gpt-5.2",
+        [{"role": "user", "content": "{}"}],
+        temperature=0.2,
+    )
+    assert body["model"] == "gpt-5.2"
+    assert body["reasoning_effort"] == "high"
+    assert "temperature" not in body
+
+
 def test_gpt4_family_keeps_temperature():
     body = chat_completion_body(
         "gpt-4.1-mini",

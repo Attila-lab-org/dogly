@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     reasoning_model: str = "mock-reasoner-v0"
     digestive_vision_provider: str = "mock"
     digestive_vision_model: str = "mock-digestive-vision-v0"
-    # Optional focused-verifier override. None deliberately follows the vision
-    # model so production can keep gpt-5-mini until the candidate eval passes.
+    # Optional focused-verifier override. None follows the production vision
+    # model so the safety-sensitive second look uses the same capability tier.
     digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
 
@@ -63,10 +63,10 @@ class Settings(BaseSettings):
     # rates fall back to the vision rates only when it uses the same pricing.
     observer_input_usd_per_million: float = 0.75
     observer_output_usd_per_million: float = 3.75
-    reasoner_input_usd_per_million: float = 0.25
-    reasoner_output_usd_per_million: float = 2.0
-    digestive_input_usd_per_million: float = 0.25
-    digestive_output_usd_per_million: float = 2.0
+    reasoner_input_usd_per_million: float = 1.75
+    reasoner_output_usd_per_million: float = 14.0
+    digestive_input_usd_per_million: float = 1.75
+    digestive_output_usd_per_million: float = 14.0
     digestive_verifier_input_usd_per_million: float | None = None
     digestive_verifier_output_usd_per_million: float | None = None
     owner_transcription_usd_per_minute: float = 0.003

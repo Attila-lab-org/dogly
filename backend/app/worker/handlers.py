@@ -55,8 +55,8 @@ from app.domains import (
 )
 from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
+from app.domains.behavior_decision import apply_behavior_decision_policy
 from app.domains.behavior_intelligence import build_behavior_consumer
-from app.domains.behavior_reasoning import ensure_bounded_behavior_reading
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
 from app.domains.context_bucket import resolve_context_bucket
@@ -668,6 +668,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     quota = QuotaService(state.store, engine=state.engine)
 
     observation: ObservationContract | None = None
+    obs_usage: ProviderUsage | None = None
     if (
         event.status
         in {
@@ -766,6 +767,13 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         has_audio=capture.has_audio,
     )
     event.observation_json = observation.model_dump(mode="json")
+    if state.engine is not None:
+        await behavior_db.save_observation_audit(
+            state.engine,
+            event_id=event.id,
+            observation_json=event.observation_json,
+            usage=obs_usage,
+        )
     # Server/provider quality gate (sez. 13): dog not observable -> reject
     # before meaningful AI work and refund the reservation (sez. 7.3).
     quality = observation.capture_quality
@@ -850,10 +858,13 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         if any(intelligence.flags.values()):
             interpret_kwargs["intelligence_context"] = intelligence.reasoner_payload()
         interpretation, rea_usage = await state.reasoner.interpret(**interpret_kwargs)
-        interpretation = ensure_bounded_behavior_reading(
-            interpretation,
-            observation,
-        )
+        if state.engine is not None:
+            await behavior_db.save_interpretation_audit(
+                state.engine,
+                event_id=event.id,
+                interpretation_json=interpretation.model_dump(mode="json"),
+                usage=rea_usage,
+            )
         interpretation = _ground_personal_memory(
             interpretation,
             eligible_memory,
@@ -865,6 +876,13 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                 ),
                 "context_effect": None,
             }
+        )
+        interpretation, decision_trace = apply_behavior_decision_policy(
+            interpretation,
+            observation,
+            dog_name=dog.name,
+            context_bucket=context_bucket,
+            knowledge=knowledge_context,
         )
         confidence = _calibrated_confidence(
             interpretation,
@@ -913,6 +931,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         "card_ids": [card.card_id for card in knowledge_context.cards],
     }
     interpretation_json["intelligence_audit"] = intelligence.audit()
+    interpretation_json["decision_audit"] = decision_trace.model_dump(mode="json")
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
@@ -929,6 +948,14 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         else capture.context_bucket
     )
     interpretation_json["processing_owner_context"] = processing_owner_context
+    if state.engine is not None:
+        await behavior_db.save_behavior_decision_audit(
+            state.engine,
+            event_id=event.id,
+            governed_interpretation_json=interpretation.model_dump(mode="json"),
+            decision_trace=decision_trace.model_dump(mode="json"),
+            consumer_json=consumer.model_dump(mode="json"),
+        )
     event.interpretation_json = interpretation_json
     event.primary_intent = interpretation.primary_intent
     event.confidence_band = interpretation.confidence_band
@@ -1073,11 +1100,12 @@ async def refine_behavior_event_context(
         refine_rows = _proc_store.list_answers(
             state.store, event_id=event.id, user_id=event.user_id
         )
+    eligible_memory = await _eligible_memory(state, event.dog_id)
     refine_kwargs: dict = {
         "observation": observation,
         "context_bucket": context_bucket,
         "policy_version": INTERPRETATION_POLICY_VERSION,
-        "eligible_memory": await _eligible_memory(state, event.dog_id),
+        "eligible_memory": eligible_memory,
         "knowledge_context": knowledge_context,
         "dog_context": dog_context,
         "dog_name": dog.name,
@@ -1093,10 +1121,13 @@ async def refine_behavior_event_context(
 
     try:
         interpretation, usage = await state.reasoner.interpret(**refine_kwargs)
-        interpretation = ensure_bounded_behavior_reading(
-            interpretation,
-            observation,
-        )
+        if state.engine is not None:
+            await behavior_db.save_interpretation_audit(
+                state.engine,
+                event_id=event.id,
+                interpretation_json=interpretation.model_dump(mode="json"),
+                usage=usage,
+            )
     except TimeoutError as exc:
         raise ApiError(
             ErrorCode.PROVIDER_TIMEOUT,
@@ -1125,14 +1156,15 @@ async def refine_behavior_event_context(
                 or f"Ho aggiornato la lettura con la tua risposta: {owner_answer.label}.",
             }
         )
+    interpretation = _ground_personal_memory(interpretation, eligible_memory)
     interpretation = interpretation.model_copy(update=refinement_update)
-    if (
-        knowledge_context.coverage == "LOW"
-        and interpretation.confidence_band != ConfidenceBand.LOW
-    ):
-        interpretation = interpretation.model_copy(
-            update={"confidence_band": ConfidenceBand.LOW}
-        )
+    interpretation, decision_trace = apply_behavior_decision_policy(
+        interpretation,
+        observation,
+        dog_name=dog.name,
+        context_bucket=context_bucket,
+        knowledge=knowledge_context,
+    )
 
     await state.cost_meter.record(
         usage=usage,
@@ -1160,6 +1192,7 @@ async def refine_behavior_event_context(
         "card_ids": [card.card_id for card in knowledge_context.cards],
     }
     interpretation_json["intelligence_audit"] = intelligence.audit()
+    interpretation_json["decision_audit"] = decision_trace.model_dump(mode="json")
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
@@ -1167,6 +1200,14 @@ async def refine_behavior_event_context(
     if owner_answer is not None:
         interpretation_json["context_response"] = owner_answer.model_dump(
             mode="json"
+        )
+    if state.engine is not None:
+        await behavior_db.save_behavior_decision_audit(
+            state.engine,
+            event_id=event.id,
+            governed_interpretation_json=interpretation.model_dump(mode="json"),
+            decision_trace=decision_trace.model_dump(mode="json"),
+            consumer_json=consumer.model_dump(mode="json"),
         )
 
     capture.context_bucket = context_bucket
@@ -1496,6 +1537,13 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
 
     obs_json = observation_json
     event.observation_json = obs_json
+    if state.engine is not None:
+        await digestive_db.save_digestive_observation_audit(
+            state.engine,
+            fecal_event_id=event.id,
+            observation_json=obs_json,
+            usage=usage,
+        )
     event.image_quality = persistable_image_quality(obs_json.get("image_quality"))
     event.learning_eligible = bool(obs_json.get("learning_eligible"))
     if obs_json.get("image_quality") == "insufficient":
@@ -1557,6 +1605,10 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     schedule_digestive_raw_expiry(event, state.settings)
     if state.engine is not None:
         await digestive_db.save_fecal_state(state.engine, event)
+        await digestive_db.save_digestive_insight(
+            state.engine,
+            event=event,
+        )
         await digestive_db.refresh_digestive_baseline(
             state.engine, dog_id=event.dog_id
         )

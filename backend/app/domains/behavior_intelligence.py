@@ -1,9 +1,9 @@
-"""Deterministic Behavior Intelligence V2 consumer composer.
+"""Governed Behavior Intelligence V3 consumer composer.
 
-The reasoner produces an InterpretationContract. This layer turns that
-internal result into the owner-facing blocks: headline, "Per {name}",
-safety actions, and what to watch. Generated text may never replace or
-downgrade a deterministic safety flag (sez. 16.3 / 19.3).
+The decision policy has already validated the reasoner's clip-specific
+interpretation. This layer orchestrates that grounded copy, personal context,
+safety actions and what to watch. It does not replace a specific reading with
+generic prose for the selected intent.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from app.knowledge.safety import (
     SAFE_PAIN_001,
 )
 
-BEHAVIOR_CONSUMER_VERSION = "behavior-consumer/v2"
+BEHAVIOR_CONSUMER_VERSION = "behavior-consumer/v3"
 
 _SEVERITY_RANK = {
     "info": 0,
@@ -231,16 +231,6 @@ def _headline(dog_name: str, intent: IntentCode | None, safety: BehaviorSafetyCo
     return template.format(name=dog_name)
 
 
-def _effective_intent(
-    interpretation: InterpretationContract,
-    *,
-    partial_but_useful: bool,
-) -> IntentCode | None:
-    if partial_but_useful and interpretation.alternatives:
-        return interpretation.alternatives[0].intent
-    return interpretation.primary_intent
-
-
 def _meaning_summary(dog_name: str, intent: IntentCode | None) -> str:
     resolved = intent or IntentCode.INSUFFICIENT
     return _SUMMARIES.get(resolved, _SUMMARIES[IntentCode.INSUFFICIENT]).format(
@@ -341,18 +331,13 @@ def _select_consumer_alternatives(
     *,
     safety: BehaviorSafetyCopy | None,
 ) -> list[AlternativeIntent]:
-    """Expose alternatives only when they materially change the owner reading."""
+    """Keep bounded alternatives available for owner correction and audit."""
     if safety is not None:
         return []
     alternatives = list(interpretation.alternatives)
     if not alternatives:
         return []
-    intent = interpretation.primary_intent
-    if intent is IntentCode.AMBIGUOUS:
-        return alternatives[:2]
-    if intent in {None, IntentCode.INSUFFICIENT} and interpretation.needs_context:
-        return alternatives[:2]
-    return []
+    return alternatives[:2]
 
 
 def build_behavior_consumer(
@@ -367,19 +352,12 @@ def build_behavior_consumer(
         None,
         IntentCode.INSUFFICIENT,
     }
-    observed_evidence_count = sum(
-        item.source.value == "observation" for item in interpretation.evidence
+    effective_intent = interpretation.primary_intent
+    headline = (
+        _headline(dog_name, effective_intent, safety)
+        if safety is not None or insufficient
+        else interpretation.consumer_headline
     )
-    partial_but_useful = (
-        insufficient
-        and observed_evidence_count >= 2
-        and bool(interpretation.alternatives)
-    )
-    effective_intent = _effective_intent(
-        interpretation,
-        partial_but_useful=partial_but_useful,
-    )
-    headline = _headline(dog_name, effective_intent, safety)
     if safety is not None:
         dog_voice = {
             SAFE_ESCALATION_001: "«Ho bisogno di più spazio, senza essere forzato.»",
@@ -387,10 +365,10 @@ def build_behavior_consumer(
             SAFE_PAIN_001: "«Potrei non stare bene: osservami con attenzione.»",
         }.get(safety.code, "«Dammi spazio e osserva come sto.»")
     else:
-        dog_voice = _meaning_voice(dog_name, effective_intent)
+        dog_voice = interpretation.dog_voice
     comparison, baseline_note = _baseline(dog_name, interpretation, dog_context)
     next_step = safety.action if safety is not None else (advice.action if advice else None)
-    if insufficient and not partial_but_useful and next_step is None:
+    if insufficient and next_step is None:
         next_step = (
             "Prova un altro breve video, con il corpo intero visibile e un po’ più di contesto."
         )
@@ -404,7 +382,9 @@ def build_behavior_consumer(
     return BehaviorConsumerResult(
         consumer_headline=headline,
         dog_voice=dog_voice,
-        consumer_summary=_meaning_summary(dog_name, effective_intent),
+        consumer_summary=(
+            safety.message if safety is not None else interpretation.consumer_summary
+        ),
         baseline_comparison=comparison,
         baseline_note=baseline_note,
         recommended_next_step=next_step,
