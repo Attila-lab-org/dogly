@@ -185,17 +185,36 @@ export default function DigestiveResultScreen() {
 
   const hasSafetyFlags = event.safetyFlags.length > 0;
   const status = statusOrientation(event.overallState);
-  const headline = sanitizeOwnerCopy(
+  const backendHeadline = sanitizeOwnerCopy(
     (event.consumerHeadline ??
       digestiveHeadline(event.baselineComparison, dog.name, hasSafetyFlags)
     ).replace(/Rocky/g, dog.name),
   );
-  const summary = sanitizeOwnerCopy(
+  const backendSummary = sanitizeOwnerCopy(
     (event.consumerSummary ?? event.baselineComparison).replace(
       /Rocky/g,
       dog.name,
     ),
   );
+  const hasProfileLayer = (event.interpretationLayers ?? []).some(
+    (layer) => layer.key === 'profile',
+  );
+  const isSimpleRoutine =
+    event.overallState === 'ROUTINE' &&
+    event.consistency === 'formata' &&
+    !hasSafetyFlags &&
+    !hasProfileLayer;
+  const hasKnownBaseline =
+    event.baselineComparison.startsWith('È in linea') ||
+    event.baselineComparison.toLowerCase().includes('simile');
+  const headline = isSimpleRoutine
+    ? `Tutto regolare per ${dog.name}`
+    : backendHeadline;
+  const summary = isSimpleRoutine
+    ? hasKnownBaseline
+      ? `Le feci sono ben formate e in linea con le osservazioni recenti di ${dog.name}.`
+      : 'Le feci sono ben formate. Non vedo segnali che richiedano attenzione.'
+    : backendSummary;
   const advice = event.recommendedNextStep
     ? sanitizeOwnerCopy(event.recommendedNextStep.replace(/Rocky/g, dog.name))
     : '';
@@ -205,13 +224,28 @@ export default function DigestiveResultScreen() {
     action?.key === 'ask_followup' &&
     event.followupQuestion &&
     event.followupKey;
-  const showAdvice = Boolean(advice) && action?.key !== 'ask_followup';
-  const nutritionKind = digestiveActionCardKind(action?.key) === 'nutrition';
+  const showAdvice =
+    Boolean(advice) &&
+    action?.key !== 'ask_followup' &&
+    event.overallState !== 'ROUTINE';
+  const nutritionKind =
+    event.overallState !== 'ROUTINE' &&
+    digestiveActionCardKind(action?.key) === 'nutrition';
   const whyLines = whyITellYou(event.relevantContext);
   const interpretationLayers = event.interpretationLayers ?? [];
+  const detailLayers = interpretationLayers.filter(
+    (layer) => layer.key !== 'general',
+  );
+  const legacyWhyLines = interpretationLayers.length === 0 ? whyLines : [];
   const uncertainNotes = uncertainVisualNotes(event, dog.name).filter(
     (note) => !whyLines.some((line) => line.toLowerCase().includes('muco')),
   );
+  const hasDetails =
+    event.safetyFlags.length > 0 ||
+    detailLayers.length > 0 ||
+    legacyWhyLines.length > 0 ||
+    uncertainNotes.length > 0 ||
+    (event.possibleAssociations?.length ?? 0) > 0;
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title={`Digestione di ${dog.name}`} />
@@ -341,21 +375,23 @@ export default function DigestiveResultScreen() {
         </Pressable>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: detailsOpen }}
-        onPress={() => setDetailsOpen((open) => !open)}
-        style={styles.detailsToggle}
-      >
-        <Text style={styles.detailsToggleText}>Perché te lo dico</Text>
-        <Ionicons
-          name={detailsOpen ? 'chevron-up' : 'chevron-down'}
-          size={20}
-          color={colors.textSecondary}
-        />
-      </Pressable>
+      {hasDetails ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: detailsOpen }}
+          onPress={() => setDetailsOpen((open) => !open)}
+          style={styles.detailsToggle}
+        >
+          <Text style={styles.detailsToggleText}>Perché te lo dico</Text>
+          <Ionicons
+            name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      ) : null}
 
-      {detailsOpen ? (
+      {detailsOpen && hasDetails ? (
         <>
           {event.safetyFlags.map((flag) => {
             const copy = SAFETY_COPY[flag];
@@ -370,8 +406,8 @@ export default function DigestiveResultScreen() {
               </View>
             );
           })}
-          {interpretationLayers.length > 0
-            ? interpretationLayers.map((layer) => (
+          {detailLayers.length > 0
+            ? detailLayers.map((layer) => (
                 <Card key={layer.key} style={styles.notableCard}>
                   <Text style={styles.cardTitle}>
                     {sanitizeOwnerCopy(layer.title.replace(/Rocky/g, dog.name))}
@@ -381,10 +417,10 @@ export default function DigestiveResultScreen() {
                   </Text>
                 </Card>
               ))
-            : whyLines.length > 0
+            : legacyWhyLines.length > 0
               ? (
                 <Card style={styles.notableCard}>
-                  {whyLines.map((item) => (
+                  {legacyWhyLines.map((item) => (
                     <Text key={item} style={styles.comparisonText}>
                       {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
                     </Text>
@@ -392,15 +428,6 @@ export default function DigestiveResultScreen() {
                 </Card>
               )
               : null}
-          {event.consistency !== 'sconosciuta' ||
-          (event.color && event.color !== 'Non determinabile dalla foto') ? (
-            <Card style={styles.notableCard}>
-              <Text style={styles.cardTitle}>Dettaglio della foto</Text>
-              <Text style={styles.comparisonText}>
-                {photoDetailCopy(event.consistency, event.color)}
-              </Text>
-            </Card>
-          ) : null}
           {uncertainNotes.length > 0 ? (
             <Card style={styles.notableCard}>
               <Text style={styles.cardTitle}>Dettagli visivi incerti</Text>
@@ -554,31 +581,7 @@ function uncertainVisualNotes(
       'Nella foto c’è un possibile dettaglio insolito, ma non è abbastanza chiaro da cambiare la conclusione.',
     );
   }
-  if (
-    event.undigestedFoodCandidate === 'possible' ||
-    event.undigestedFoodCandidate === 'clear_candidate'
-  ) {
-    notes.push(
-      'Si vedono possibili residui di alimento: da soli non dicono come sta digerendo.',
-    );
-  }
   return notes;
-}
-
-function photoDetailCopy(consistency: string, color: string): string {
-  const texture = consistency && consistency !== 'sconosciuta' ? consistency : null;
-  const tone =
-    color &&
-    color !== 'Non determinabile dalla foto' &&
-    color !== 'non determinato'
-      ? color
-      : null;
-  if (texture && tone) {
-    return `Dalla foto, la consistenza appare ${texture} e il colore ${tone}.`;
-  }
-  if (texture) return `Dalla foto, la consistenza appare ${texture}.`;
-  if (tone) return `Dalla foto, il colore appare ${tone}.`;
-  return 'La foto permette un confronto con le osservazioni precedenti.';
 }
 
 function digestiveHeadline(

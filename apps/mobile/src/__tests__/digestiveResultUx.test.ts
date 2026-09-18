@@ -37,6 +37,18 @@ describe('digestive result UX', () => {
     expect(resultScreen).not.toContain('Mi è stato utile');
   });
 
+  it('keeps a regular formed result short and action-free', () => {
+    expect(resultScreen).toContain('isSimpleRoutine');
+    expect(resultScreen).toContain('Tutto regolare per');
+    expect(resultScreen).toContain(
+      'Non vedo segnali che richiedano attenzione.',
+    );
+    expect(resultScreen).toContain("event.overallState !== 'ROUTINE'");
+    expect(resultScreen).toContain("layer.key !== 'general'");
+    expect(resultScreen).not.toContain('photoDetailCopy');
+    expect(resultScreen).not.toContain('possibili residui di alimento');
+  });
+
   it('shows interpretation layers under the why section without claim ids', () => {
     expect(resultScreen).toContain('interpretationLayers');
     expect(resultScreen).toContain('layer.title');

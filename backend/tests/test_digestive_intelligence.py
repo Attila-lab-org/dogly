@@ -37,8 +37,7 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "qualità fecale canina generale" in result.consumer_summary.lower()
-    assert "andamento personale" in result.consumer_summary.lower()
+    assert "più morbide" in result.consumer_summary.lower()
     assert "andamento abituale" not in result.consumer_summary.lower()
     assert "solito" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
@@ -91,10 +90,11 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     )
 
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "simili al solito" not in result.consumer_headline
-    assert "solito" not in result.consumer_headline.lower()
-    assert "qualità fecale canina generale" in result.consumer_summary.lower()
+    assert result.consumer_headline == "Tutto regolare per Rocky"
+    assert result.consumer_summary.count(".") <= 2
+    assert "ben formate" in result.consumer_summary.lower()
     assert "andamento abituale" not in result.consumer_summary.lower()
+    assert result.recommended_next_step is None
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -185,7 +185,7 @@ def test_missing_active_food_never_becomes_a_food_change_today():
     )
 
     assert result.possible_associations == []
-    assert "cambio" not in result.recommended_next_step.lower()
+    assert result.recommended_next_step is None
 
 
 def test_repeated_food_association_requires_both_periods_and_stays_cautious():
@@ -317,7 +317,7 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert body["intelligence_schema_version"] == "digestive_intelligence.v2"
     assert body["overall_state"] in {"ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"}
     assert body["consumer_headline"]
-    assert body["recommended_next_step"]
+    assert "recommended_next_step" in body
     stored = state.store.fecal_events[event_id].intelligence_json
     assert stored["knowledge_registry_version"] == body["knowledge_registry_version"]
     assert stored["knowledge_registry_checksum"] == body["knowledge_registry_checksum"]
@@ -371,7 +371,7 @@ async def test_get_rebuilds_missing_intelligence_for_completed_events(
 
     assert response.status_code == 200
     assert body["consumer_headline"]
-    assert body["recommended_next_step"]
+    assert "recommended_next_step" in body
     assert body["image_quality"] == "sufficient"
     assert state.store.fecal_events[event_id].intelligence_json
     assert state.store.fecal_events[event_id].image_quality == "SUFFICIENT"
@@ -706,10 +706,7 @@ def test_oreo_like_soft_repeat_answers_meaning_why_and_next_step():
     assert "oreo" in result.consumer_summary.lower()
     assert "più morbide" in result.consumer_summary.lower()
     assert "ripetendo" in result.consumer_summary.lower()
-    assert (
-        "andamento personale" in result.consumer_summary.lower()
-        or "qualità fecale canina generale" in result.consumer_summary.lower()
-    )
+    assert result.consumer_summary.count(".") <= 2
     assert "muco" not in blob
     assert "possibile muco" not in blob
     assert any("non è abbastanza" in item.lower() for item in result.relevant_context)
@@ -765,19 +762,17 @@ def test_same_photo_changes_with_food_history_and_symptoms():
             food_started_days_ago=90,
         ),
     )
-    assert "qualità fecale canina generale" in first.consumer_summary.lower()
+    assert "più morbide" in first.consumer_summary.lower()
     assert "andamento abituale" not in first.consumer_summary.lower()
     assert repeating.consumer_headline == "Un cambiamento da seguire"
     assert "ripetendo" in repeating.consumer_summary.lower()
     assert "3 giorni" in new_food.consumer_summary
     assert "causa" not in new_food.consumer_summary.lower()
-    assert "mesi" in stable_food.consumer_summary.lower()
-    assert "coincida" in stable_food.consumer_summary.lower()
     assert new_food.consumer_summary != stable_food.consumer_summary
     assert "vomitato" in with_vomiting.consumer_summary.lower()
     assert "veterinario" in with_vomiting.recommended_next_step.lower()
     assert usual.consumer_headline == "In linea con il suo andamento"
-    assert "andamento abituale" in usual.recommended_next_step.lower()
+    assert usual.recommended_next_step is None
     assert first.recommended_next_step != repeating.recommended_next_step
     assert repeating.recommended_next_step != with_vomiting.recommended_next_step
     for result in (first, repeating, new_food, stable_food, usual):
@@ -798,7 +793,7 @@ def test_first_photo_is_useful_without_personal_baseline():
     assert "general" in layers
     assert "longitudinal" not in layers
     assert layers["general"].summary
-    assert "qualità fecale canina generale" in result.consumer_summary.lower()
+    assert "più morbide" in result.consumer_summary.lower()
     assert result.baseline_comparison == "INSUFFICIENT"
     assert result.recommended_next_step
     assert result.useful_action.key

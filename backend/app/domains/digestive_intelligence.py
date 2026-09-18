@@ -116,7 +116,7 @@ class DigestiveIntelligenceResult(BaseModel):
     relevant_context: list[str] = Field(default_factory=list)
     possible_associations: list[str] = Field(default_factory=list)
     safety_state: DigestiveState
-    recommended_next_step: str
+    recommended_next_step: str | None = None
     followup_key: str | None = None
     followup_question: str | None = None
     useful_action: DigestiveUsefulAction = Field(
@@ -1003,17 +1003,16 @@ def _general_layer_summary(
     texture = _texture_phrase(consistency)
     if verification_unavailable(observation):
         return (
-            f"Dalla foto di {name} non riesco a confermare bene un dettaglio "
-            "importante; la lettura resta prudente."
+            f"Non riesco a confermare bene questo dettaglio dalla foto di {name}. "
+            f"{unavailable_caution_detail(observation)}"
         )
     visual = _visual_safety_why(observation, name)
     if visual:
         return visual
+    if consistency == "formed":
+        return f"Le feci di {name} sono ben formate."
     if texture:
-        return (
-            f"Le feci di {name} sono {texture}: è una lettura sulla qualità "
-            "fecale canina generale, non una diagnosi."
-        )
+        return f"Le feci di {name} sono {texture}."
     return (
         f"Ho una nuova osservazione digestiva per {name}, descritta con la "
         "scala fecale canina generale."
@@ -1090,16 +1089,18 @@ def _longitudinal_layer(
     level = _repetition_level(context, consistency)
     if baseline_code == "NEAR_USUAL":
         bits.append(
-            f"Per {context.dog_name} questa osservazione è in linea con il "
-            "suo andamento personale recente."
+            f"È in linea con le osservazioni recenti di {context.dog_name}."
         )
         factors.append("personal_baseline")
         if "DIG_BASELINE_PERSONAL_001" in claim_ids:
             used_claims.append("DIG_BASELINE_PERSONAL_001")
     elif baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
+        direction = (
+            "più morbida" if baseline_code == "ABOVE_USUAL" else "più compatta"
+        )
         bits.append(
-            f"Rispetto all’andamento personale di {context.dog_name} c’è un "
-            "cambiamento da seguire."
+            f"È {direction} rispetto alle osservazioni recenti di "
+            f"{context.dog_name}."
         )
         factors.append("personal_baseline")
         if "DIG_BASELINE_PERSONAL_001" in claim_ids:
@@ -1196,18 +1197,17 @@ def _synthesize_from_layers(
     context: DigestiveContext,
     consistency: str,
     baseline_code: str,
+    state: DigestiveState,
     safety: DigestiveState,
     observation: dict[str, Any],
     followup_question: str | None,
 ) -> tuple[str, str, str]:
-    """Compose owner-facing copy after layers have been resolved.
+    """Compose one owner decision from the resolved interpretation layers."""
+    by_key = {layer.key: layer for layer in layers}
+    general = by_key["general"]
+    profile = by_key.get("profile")
+    longitudinal = by_key.get("longitudinal")
 
-    Priority remains safety/verifier -> reliable longitudinal change ->
-    claim-gated profile -> self-sufficient general reading. Headline and
-    next-step follow that priority; summary reuses the factual composition
-    that mirrors those same layers without a second divergent narrative.
-    """
-    _ = layers  # cards already resolved; copy mirrors the same facts
     headline = _consumer_headline(
         context=context,
         consistency=consistency,
@@ -1215,21 +1215,55 @@ def _synthesize_from_layers(
         safety=safety,
         observation=observation,
     )
-    summary = _useful_info(
-        context=context,
-        consistency=consistency,
-        baseline_code=baseline_code,
-        safety=safety,
-        observation=observation,
-    )
-    next_step = _final_advice(
-        observation=observation,
-        context=context,
-        consistency=consistency,
-        baseline_code=baseline_code,
-        safety=safety,
-        followup_question=followup_question,
-    )
+
+    if safety is DigestiveState.VET_CONTACT or verification_unavailable(observation):
+        summary = general.summary
+    elif safety is DigestiveState.ATTENTION:
+        summary = _useful_info(
+            context=context,
+            consistency=consistency,
+            baseline_code=baseline_code,
+            safety=safety,
+            observation=observation,
+        )
+    elif state is DigestiveState.ROUTINE and consistency == "formed":
+        headline = f"Tutto regolare per {context.dog_name}"
+        if profile is not None:
+            summary = f"Le feci sono ben formate. {profile.summary}"
+        elif longitudinal is not None and "personal_baseline" in longitudinal.factors_used:
+            summary = (
+                f"Le feci sono ben formate e in linea con le osservazioni "
+                f"recenti di {context.dog_name}."
+            )
+        else:
+            summary = (
+                "Le feci sono ben formate. "
+                "Non vedo segnali che richiedano attenzione."
+            )
+    else:
+        ordered = [layer for layer in (longitudinal, profile, general) if layer]
+        sentences: list[str] = []
+        for layer in ordered:
+            for part in layer.summary.replace("!", ".").split("."):
+                sentence = part.strip()
+                if sentence:
+                    sentences.append(f"{sentence}.")
+                if len(sentences) == 2:
+                    break
+            if len(sentences) == 2:
+                break
+        summary = " ".join(sentences)
+
+    next_step = None
+    if state is not DigestiveState.ROUTINE or followup_question:
+        next_step = _final_advice(
+            observation=observation,
+            context=context,
+            consistency=consistency,
+            baseline_code=baseline_code,
+            safety=safety,
+            followup_question=followup_question,
+        )
     return headline, summary, next_step
 
 
@@ -1380,6 +1414,7 @@ def build_digestive_intelligence(
         context=context,
         consistency=consistency,
         baseline_code=baseline_code,
+        state=state,
         safety=safety,
         observation=observation,
         followup_question=followup_question,

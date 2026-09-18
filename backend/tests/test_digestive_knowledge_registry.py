@@ -50,7 +50,7 @@ def _consumer_text(result) -> str:
         [
             result.consumer_headline,
             result.consumer_summary,
-            result.recommended_next_step,
+            result.recommended_next_step or "",
             result.observation_reliability or "",
             *result.relevant_context,
             *result.possible_associations,
