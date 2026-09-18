@@ -46,6 +46,11 @@ def _map_database_error(exc: BaseException) -> ApiError | None:
         return ApiError(ErrorCode.NOT_FOUND, "Resource not found")
     if "check violation" in message or "check constraint" in message:
         return ApiError(ErrorCode.VALIDATION_FAILED, "Request failed validation.")
+    if "media_keep_requires_consent" in message:
+        return ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Media can only be kept after the retention consent is granted.",
+        )
     return None
 
 

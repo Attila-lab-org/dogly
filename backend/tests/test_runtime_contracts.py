@@ -127,3 +127,9 @@ def test_map_database_error_recognizes_postgres_uuid_syntax():
     )
     assert mapped is not None
     assert mapped.code == ErrorCode.NOT_FOUND
+
+
+def test_map_database_error_recognizes_media_keep_consent_guard():
+    mapped = _map_database_error(Exception("MEDIA_KEEP_REQUIRES_CONSENT"))
+    assert mapped is not None
+    assert mapped.code == ErrorCode.VALIDATION_FAILED

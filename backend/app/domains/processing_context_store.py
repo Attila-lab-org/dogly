@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.domains.models import ProcessingContextAnswerRec
 from app.domains.processing_context import QUESTION_BANK_VERSION
 from app.domains.repository import InMemoryStore, new_id, now_utc
+
+
+def answer_from_row(row: Any) -> ProcessingContextAnswerRec:
+    data = dict(row)
+    for key in ("id", "event_id", "user_id"):
+        if data.get(key) is not None:
+            data[key] = str(data[key])
+    return ProcessingContextAnswerRec.model_validate(data)
 
 
 def list_answers(
@@ -73,7 +83,7 @@ async def list_answers_db(
                 {"event_id": event_id, "user_id": user_id},
             )
         ).mappings()
-    return [ProcessingContextAnswerRec.model_validate(dict(row)) for row in rows]
+    return [answer_from_row(row) for row in rows]
 
 
 async def upsert_answer_db(
@@ -117,4 +127,4 @@ async def upsert_answer_db(
                 rec.model_dump(),
             )
         ).mappings().one()
-    return ProcessingContextAnswerRec.model_validate(dict(row))
+    return answer_from_row(row)

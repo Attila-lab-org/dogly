@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from app.contracts.taxonomy import ContextBucket
 from app.domains.processing_context import (
@@ -11,6 +12,7 @@ from app.domains.processing_context import (
     owner_facts_for_reasoner,
     plan_next_question,
 )
+from app.domains.processing_context_store import answer_from_row
 from app.knowledge.models import DogContextSnapshot, LifeStageContext, LifestyleFact
 from app.providers.base import EligiblePatternSummary
 
@@ -187,3 +189,24 @@ def test_questions_use_dog_name_not_technical_codes():
     for option in planned.options:
         assert 2 <= len(planned.options) <= 4
         assert "_" not in option.label
+
+
+def test_answer_from_row_accepts_postgres_uuids():
+    rec = answer_from_row(
+        {
+            "id": UUID("32d54853-57a3-4531-a7ad-2d622c20d7ce"),
+            "event_id": UUID("aa0e4a8e-5248-41a2-9d42-7750fa0e7c0a"),
+            "user_id": UUID("ebc261ae-819a-4246-99c2-3a2ff6ff4f8d"),
+            "question_id": "before_moment",
+            "answer_id": "playing",
+            "skipped": False,
+            "question_version": "processing-questions/v1",
+            "source": "OWNER_REPORTED",
+            "answered_at": datetime.now(UTC),
+            "created_at": datetime.now(UTC),
+        }
+    )
+    assert rec.id == "32d54853-57a3-4531-a7ad-2d622c20d7ce"
+    assert rec.event_id == "aa0e4a8e-5248-41a2-9d42-7750fa0e7c0a"
+    assert rec.user_id == "ebc261ae-819a-4246-99c2-3a2ff6ff4f8d"
+    assert rec.answer_id == "playing"
