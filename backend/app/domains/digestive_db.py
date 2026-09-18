@@ -588,6 +588,11 @@ async def load_digestive_context(
         size=profile["size"],
         weight_kg=profile["weight_kg"],
         active_food_name=profile["active_food_name"],
+        active_food_product_id=(
+            str(profile["active_food_product_id"])
+            if profile.get("active_food_product_id") is not None
+            else None
+        ),
         has_active_food=bool(profile.get("has_active_food")),
         quantity_per_day=profile.get("quantity_per_day"),
         food_started_days_ago=profile["food_started_days_ago"],
@@ -989,30 +994,36 @@ async def digestive_summary(engine: AsyncEngine, *, user_id: str, dog_id: str) -
             await conn.execute(
                 text(
                     """
-                    select fecal_score_estimate, safety_flags
+                    select fecal_score_estimate, safety_flags, learning_eligible
                     from public.fecal_events
                     where dog_id = :dog_id
                       and user_id = :user_id
                       and status = 'COMPLETED'
-                      and fecal_score_estimate is not null
                     order by created_at asc, id asc
                     """
                 ),
                 {"dog_id": dog_id, "user_id": user_id},
             )
         ).mappings().all()
-    if not rows:
+    flags: list[dict] = []
+    for row in rows[-3:]:
+        flags.extend(row["safety_flags"] or [])
+    scores = [
+        int(row["fecal_score_estimate"])
+        for row in rows
+        if row["fecal_score_estimate"] is not None
+        and row.get("learning_eligible") is True
+    ][-12:]
+    if not scores:
         return {
             "dog_id": dog_id,
             "rolling_score": None,
             "variability": None,
             "data_sufficiency": "insufficient",
             "recent_trend": None,
-            "safety_flags": [],
+            "safety_flags": flags,
         }
 
-    rows = rows[-12:]
-    scores = [int(row["fecal_score_estimate"]) for row in rows]
     rolling = sum(scores) / len(scores)
     variability = max(scores) - min(scores) if len(scores) > 1 else 0.0
     sufficiency = "sufficient" if len(scores) >= 3 else "low"
@@ -1020,9 +1031,6 @@ async def digestive_summary(engine: AsyncEngine, *, user_id: str, dog_id: str) -
     if len(scores) >= 2:
         delta = scores[-1] - scores[0]
         trend = "firmer" if delta < 0 else ("softer" if delta > 0 else "stable")
-    flags: list[dict] = []
-    for row in rows[-3:]:
-        flags.extend(row["safety_flags"] or [])
     return {
         "dog_id": dog_id,
         "rolling_score": round(rolling, 2),

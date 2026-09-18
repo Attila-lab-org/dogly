@@ -24,6 +24,7 @@ import { StackScreenHeader } from '@/features/secondary/components';
 import {
   activateFeedingPeriod,
   getFood,
+  listFeedingPeriods,
   verifyFood,
 } from '@/features/nutrition/api';
 
@@ -61,17 +62,23 @@ function EditableField({
 }
 
 export default function FoodVerifyScreen() {
-  const { foodId, reading } = useLocalSearchParams<{
+  const { foodId, reading, focus } = useLocalSearchParams<{
     foodId: string;
     reading?: string;
+    focus?: string;
   }>();
   const router = useRouter();
   const { dog } = useDogProfile();
+  const quantityFocus = focus === 'quantity';
 
   const foodQuery = useQuery({
     queryKey: ['nutrition-food', foodId],
     queryFn: () => getFood(foodId!),
     enabled: Boolean(foodId),
+  });
+  const periodsQuery = useQuery({
+    queryKey: ['nutrition-feeding-periods', dog.id],
+    queryFn: () => listFeedingPeriods(dog.id),
   });
 
   const food = foodQuery.data;
@@ -85,6 +92,7 @@ export default function FoodVerifyScreen() {
   const [moisture, setMoisture] = useState('');
   const [calories, setCalories] = useState('');
   const [feedingDirections, setFeedingDirections] = useState('');
+  const [quantityPerDay, setQuantityPerDay] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -101,6 +109,15 @@ export default function FoodVerifyScreen() {
     setCalories(food.guaranteed_analysis?.calories ?? '');
     setFeedingDirections(food.feeding_directions ?? '');
   }, [food]);
+
+  useEffect(() => {
+    const open = periodsQuery.data?.find(
+      (period) => period.food_product_id === foodId && period.end_at == null,
+    );
+    if (open?.quantity_per_day) {
+      setQuantityPerDay(open.quantity_per_day);
+    }
+  }, [foodId, periodsQuery.data]);
 
   if (foodQuery.isLoading) {
     return (
@@ -173,7 +190,11 @@ export default function FoodVerifyScreen() {
         calories,
         feedingDirections,
       });
-      await activateFeedingPeriod({ dogId: dog.id, foodId });
+      await activateFeedingPeriod({
+        dogId: dog.id,
+        foodId,
+        quantityPerDay: quantityPerDay.trim() || undefined,
+      });
       setConfirmed(true);
     } catch {
       setSaveError(
@@ -220,9 +241,11 @@ export default function FoodVerifyScreen() {
         />
       ) : null}
       <Text style={styles.intro}>
-        {reading === 'manual'
-          ? 'La foto è salva, ma non sono riuscito a leggere bene i dati. Puoi completarli guardando l’etichetta qui sopra.'
-          : 'Ho compilato ciò che era leggibile. Controlla soprattutto i campi segnati.'}{' '}
+        {quantityFocus
+          ? `Quanto ne mangia ${dog.name} al giorno? Aggiungi la quantità sul periodo di alimentazione attivo: così le prossime osservazioni digestive avranno questo dato.`
+          : reading === 'manual'
+            ? 'La foto è salva, ma non sono riuscito a leggere bene i dati. Puoi completarli guardando l’etichetta qui sopra.'
+            : 'Ho compilato ciò che era leggibile. Controlla soprattutto i campi segnati.'}{' '}
         Solo ciò che confermi verrà usato per seguire la digestione di {dog.name}{' '}
         nel tempo.
       </Text>
@@ -282,6 +305,12 @@ export default function FoodVerifyScreen() {
           onChangeText={setFeedingDirections}
           needsReview={needsReview('feeding_directions')}
           multiline
+        />
+        <EditableField
+          label="Quantità giornaliera"
+          value={quantityPerDay}
+          onChangeText={setQuantityPerDay}
+          needsReview={quantityFocus && !quantityPerDay.trim()}
         />
       </Card>
 

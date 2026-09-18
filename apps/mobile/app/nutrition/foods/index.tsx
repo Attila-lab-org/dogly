@@ -76,9 +76,11 @@ export default function FoodsScreen() {
             key={food.id}
             accessibilityRole="button"
             onPress={() =>
-              verified
-                ? undefined
-                : router.push(`/nutrition/foods/${food.id}/verify`)
+              router.push(
+                verified
+                  ? `/nutrition/foods/${food.id}/verify?focus=quantity`
+                  : `/nutrition/foods/${food.id}/verify`,
+              )
             }
           >
             <Card style={styles.foodCard}>
@@ -112,11 +114,11 @@ export default function FoodsScreen() {
                   {new Date(activePeriod.start_at).toLocaleDateString('it-IT')}
                 </Text>
               )}
-              {!verified && (
-                <Text style={styles.verifyHint}>
-                  Tocca per controllare i dati letti dall’etichetta.
-                </Text>
-              )}
+              <Text style={styles.verifyHint}>
+                {verified
+                  ? 'Tocca per aggiornare la quantità giornaliera.'
+                  : 'Tocca per controllare i dati letti dall’etichetta.'}
+              </Text>
             </Card>
           </Pressable>
         );

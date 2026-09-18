@@ -17,13 +17,16 @@ from app.domains.digestive_observation import (
     observation_summary,
     prepare_digestive_observation,
 )
-from app.domains.digestive_verification import safety_candidate
+from app.domains.digestive_verification import (
+    safety_candidate,
+    verification_unavailable,
+)
 from app.knowledge.digestive import (
     DigestiveKnowledgeReference,
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v4"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v5"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -52,6 +55,7 @@ class DigestiveContext(BaseModel):
     size: str | None = None
     weight_kg: float | None = None
     active_food_name: str | None = None
+    active_food_product_id: str | None = None
     has_active_food: bool = False
     quantity_per_day: str | None = None
     food_started_days_ago: int | None = Field(default=None, ge=0)
@@ -167,6 +171,13 @@ def _recent_food_change(context: DigestiveContext) -> bool:
     )
 
 
+def _complete_nutrition_href(context: DigestiveContext) -> str:
+    food_id = context.active_food_product_id
+    if food_id:
+        return f"/nutrition/foods/{food_id}/verify?focus=quantity"
+    return NUTRITION_HREF
+
+
 def _food_started_sentence(context: DigestiveContext) -> str:
     days = context.food_started_days_ago
     if days == 0:
@@ -252,6 +263,8 @@ def _safety_state(
         context.vomiting_today is True or context.reduced_activity_today is True
     ):
         return DigestiveState.ATTENTION
+    if verification_unavailable(observation):
+        return DigestiveState.MONITOR
     return DigestiveState.ROUTINE
 
 
@@ -309,11 +322,22 @@ def _choose_useful_action(
             None,
         )
 
+    if verification_unavailable(observation):
+        return (
+            DigestiveUsefulAction(
+                key="contact_vet",
+                label="Contatta il veterinario",
+                body=(
+                    "Non riesco a confermare bene questo dettaglio dalla foto. "
+                    "Se noti una traccia rossa evidente, è meglio sentire il veterinario."
+                ),
+            ),
+            None,
+            None,
+        )
+
     consistency = str(observation.get("consistency") or "unknown").lower()
-    repeated_watery = (
-        consistency == "watery" and context.recent_watery_count_24h >= 1
-    )
-    if repeated_watery and context.vomiting_today is None:
+    if consistency in {"unformed", "watery"} and context.vomiting_today is None:
         return (
             DigestiveUsefulAction(key="ask_followup"),
             "vomiting_today",
@@ -349,7 +373,7 @@ def _choose_useful_action(
             DigestiveUsefulAction(
                 key="complete_nutrition",
                 label="Completa alimentazione",
-                href=NUTRITION_HREF,
+                href=_complete_nutrition_href(context),
                 title="Quanto ne mangia al giorno?",
                 body=(
                     f"So cosa mangia {context.dog_name}, ma mi manca la quantità "
@@ -441,6 +465,13 @@ def build_digestive_intelligence(
         summary = (
             f"{observed_summary} C’è un segnale che merita una valutazione "
             "professionale."
+        )
+    elif verification_unavailable(observation):
+        state = DigestiveState.MONITOR
+        headline = "Non riesco a confermare un dettaglio"
+        summary = (
+            "Non riesco a confermare bene questo dettaglio dalla foto. "
+            "Se noti una traccia rossa evidente, è meglio sentire il veterinario."
         )
     elif safety is DigestiveState.ATTENTION:
         state = safety

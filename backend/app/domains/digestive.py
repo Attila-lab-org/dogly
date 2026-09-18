@@ -166,6 +166,9 @@ def build_inmemory_digestive_context(
             if period_food is not None and period_food.name
             else None
         ),
+        active_food_product_id=(
+            period_food.id if period_food is not None else None
+        ),
         has_active_food=active_period is not None,
         quantity_per_day=(
             active_period.quantity_per_day if active_period is not None else None
@@ -502,24 +505,28 @@ def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dic
         (
             e
             for e in store.fecal_events.values()
-            if e.dog_id == dog_id and e.status == "COMPLETED" and e.fecal_score_estimate is not None
+            if e.dog_id == dog_id and e.status == "COMPLETED"
         ),
         key=lambda e: e.created_at,
     )
-    if not events:
+    flags: list[dict] = []
+    for event in events[-3:]:
+        flags.extend(event.safety_flags)
+    scores = [
+        int(event.fecal_score_estimate)
+        for event in events
+        if event.fecal_score_estimate is not None
+        and event.learning_eligible is True
+    ][-12:]
+    if not scores:
         return {
             "dog_id": dog_id,
             "rolling_score": None,
             "variability": None,
             "data_sufficiency": "insufficient",
             "recent_trend": None,
-            "safety_flags": [],
+            "safety_flags": flags,
         }
-    scores = [
-        e.fecal_score_estimate
-        for e in events[-12:]
-        if e.fecal_score_estimate is not None
-    ]
     rolling = sum(scores) / len(scores)
     variability = max(scores) - min(scores) if len(scores) > 1 else 0.0
     sufficiency = "sufficient" if len(scores) >= 3 else "low"
@@ -527,9 +534,6 @@ def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dic
     if len(scores) >= 2:
         delta = scores[-1] - scores[0]
         trend = "firmer" if delta < 0 else ("softer" if delta > 0 else "stable")
-    flags: list[dict] = []
-    for e in events[-3:]:
-        flags.extend(e.safety_flags)
     return {
         "dog_id": dog_id,
         "rolling_score": round(rolling, 2),

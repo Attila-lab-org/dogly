@@ -374,11 +374,45 @@ def test_food_without_quantity_asks_only_for_that():
             prior_scores=[2, 2, 2, 2],
             active_food_name="Royal Canin",
             has_active_food=True,
+            active_food_product_id="food-abc",
         ),
     )
     assert result.useful_action.key == "complete_nutrition"
     assert result.useful_action.label == "Completa alimentazione"
+    assert (
+        result.useful_action.href
+        == "/nutrition/foods/food-abc/verify?focus=quantity"
+    )
     assert result.followup_key is None
+
+
+def test_first_watery_without_food_asks_vomiting_before_nutrition():
+    result = build_digestive_intelligence(
+        observation(consistency="watery"),
+        context(),
+    )
+    assert result.useful_action.key == "ask_followup"
+    assert result.followup_key == "vomiting_today"
+    assert result.followup_question == "Rocky ha vomitato oggi?"
+    assert result.useful_action.key != "add_nutrition"
+
+
+def test_verification_unavailable_keeps_controlled_caution():
+    from app.domains.digestive_verification import apply_anomaly_verification
+
+    result = build_digestive_intelligence(
+        apply_anomaly_verification(
+            observation(fresh_blood_candidate="possible"),
+            {"fresh_blood_candidate": "verification_unavailable"},
+        ),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.safety_state is DigestiveState.MONITOR
+    assert result.overall_state is DigestiveState.MONITOR
+    assert result.overall_state is not DigestiveState.ROUTINE
+    assert "confermare" in result.consumer_summary.lower()
+    assert "sangue" not in result.consumer_summary.lower()
+    assert result.useful_action.key == "contact_vet"
 
 
 def test_stable_routine_has_no_useful_cta():
@@ -398,3 +432,28 @@ def test_safety_blocks_nutrition_cta():
     )
     assert result.useful_action.key == "contact_vet"
     assert result.followup_key is None
+
+
+@pytest.mark.asyncio
+async def test_verifier_technical_failure_is_unavailable_not_unknown():
+    from app.worker.handlers import _verify_sensitive_anomalies
+
+    class BoomVision:
+        async def verify_anomaly_focus(self, *, image_ref, fields):
+            del image_ref, fields
+            raise TimeoutError
+
+    class State:
+        digestive_vision = BoomVision()
+        cost_meter = None
+
+    result = await _verify_sensitive_anomalies(
+        State(),
+        observation(fresh_blood_candidate="possible"),
+        image_ref="https://example.test/stool.jpg",
+        event_id="event-1",
+        user_id="user-1",
+    )
+    stored = result["anomaly_verification"]["fresh_blood_candidate"]
+    assert stored["verdict"] == "verification_unavailable"
+    assert stored["verdict"] != "unknown"

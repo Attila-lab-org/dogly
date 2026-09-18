@@ -27,6 +27,7 @@ from app.domains.digestive_observation_cache import (
     store_cached_observation,
 )
 from app.domains.digestive_verification import (
+    DIGESTIVE_ANOMALY_VERIFIER_VERSION,
     apply_anomaly_verification,
     gate_candidate,
     needed_anomaly_verifications,
@@ -186,6 +187,41 @@ def test_confirmed_possible_blood_can_enter_safety():
     assert prepared["learning_eligible"] is False
 
 
+def test_verification_unavailable_is_retried_and_not_treated_as_not_confirmed():
+    observation = apply_anomaly_verification(
+        _obs(fresh_blood_candidate="possible"),
+        {"fresh_blood_candidate": "verification_unavailable"},
+    )
+    assert needed_anomaly_verifications(observation) == ["fresh_blood_candidate"]
+    prepared = prepare_digestive_observation(observation)
+    assert safety_candidate(prepared, "fresh_blood_candidate") == "possible_unverified"
+    result = build_digestive_intelligence(
+        prepared,
+        DigestiveContext(dog_name="Oreo", prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.safety_state is DigestiveState.MONITOR
+    assert result.overall_state is not DigestiveState.ROUTINE
+
+
+def test_stale_anomaly_verifier_version_is_rerun():
+    observation = _obs(fresh_blood_candidate="possible")
+    observation["anomaly_verification"] = {
+        "fresh_blood_candidate": {
+            "verdict": "not_confirmed",
+            "prompt_version": "digestive-anomaly-verifier/v0",
+        }
+    }
+    assert needed_anomaly_verifications(observation) == ["fresh_blood_candidate"]
+    current = apply_anomaly_verification(
+        observation, {"fresh_blood_candidate": "not_confirmed"}
+    )
+    assert needed_anomaly_verifications(current) == []
+    assert (
+        current["anomaly_verification"]["fresh_blood_candidate"]["prompt_version"]
+        == DIGESTIVE_ANOMALY_VERIFIER_VERSION
+    )
+
+
 def test_not_confirmed_possible_blood_does_not_escalate():
     observation = apply_anomaly_verification(
         _obs(fresh_blood_candidate="possible"),
@@ -263,6 +299,54 @@ def test_legacy_null_learning_eligible_is_not_baseline_valid():
         )
     context = build_inmemory_digestive_context(store, event=current)
     assert context.prior_scores == []
+
+
+def test_digestive_summary_uses_only_learning_eligible_scores():
+    from datetime import UTC, datetime, timedelta
+
+    from app.domains.digestive import digestive_summary
+    from app.domains.models import DogRec, FecalEventRec
+
+    store = InMemoryStore()
+    now = datetime.now(UTC)
+    dog_id = "00000000-0000-0000-0000-000000000001"
+    user_id = "00000000-0000-0000-0000-0000000000aa"
+    store.dogs[dog_id] = DogRec(
+        id=dog_id,
+        owner_id=user_id,
+        name="Oreo",
+        created_at=now,
+    )
+    store.fecal_events["eligible"] = FecalEventRec(
+        id="eligible",
+        dog_id=dog_id,
+        user_id=user_id,
+        client_request_id="eligible",
+        image_path="path",
+        created_at=now,
+        status="COMPLETED",
+        fecal_score_estimate=4,
+        learning_eligible=True,
+        safety_flags=[],
+    )
+    for index, score in enumerate((7, 7, 7)):
+        store.fecal_events[f"legacy-{index}"] = FecalEventRec(
+            id=f"legacy-{index}",
+            dog_id=dog_id,
+            user_id=user_id,
+            client_request_id=f"legacy-{index}",
+            image_path="path",
+            created_at=now - timedelta(days=index + 1),
+            status="COMPLETED",
+            fecal_score_estimate=score,
+            learning_eligible=None,
+            safety_flags=[{"code": "LEGACY_FLAG", "severity": "low"}],
+        )
+    summary = digestive_summary(store, user_id=user_id, dog_id=dog_id)
+    assert summary["rolling_score"] == 4.0
+    assert summary["data_sufficiency"] == "low"
+    assert summary["recent_trend"] is None
+    assert any(flag["code"] == "LEGACY_FLAG" for flag in summary["safety_flags"])
 
 
 def test_image_quality_persists_as_sufficient_or_insufficient():
@@ -345,6 +429,37 @@ def test_engine_version_change_invalidates_cache():
     assert identity["observer_prompt_version"] == DIGESTIVE_OBSERVER_PROMPT_VERSION
     assert identity["schema_version"] == STOOL_OBSERVATION_SCHEMA_VERSION
     assert identity["normalizer_version"] == DIGESTIVE_NORMALIZER_VERSION
+    assert identity["anomaly_verifier_version"] == DIGESTIVE_ANOMALY_VERIFIER_VERSION
+
+
+def test_anomaly_verifier_version_change_invalidates_cache():
+    store = InMemoryStore()
+    digest = image_sha256(b"identical-oreo-stool")
+    identity = engine_identity(provider="openai", model="gpt-5-mini")
+    store_cached_observation(
+        store,
+        user_id="user-a",
+        dog_id="dog-oreo",
+        image_sha256_hex=digest,
+        identity=identity,
+        observation=prepare_digestive_observation(_obs()),
+        source_event_id="event-1",
+    )
+    other = engine_identity(
+        provider="openai",
+        model="gpt-5-mini",
+        anomaly_verifier_version="digestive-anomaly-verifier/v2",
+    )
+    assert (
+        lookup_cached_observation(
+            store,
+            user_id="user-a",
+            dog_id="dog-oreo",
+            image_sha256_hex=digest,
+            identity=other,
+        )
+        is None
+    )
 
 
 def test_eval_harness_is_stable_across_repeats():

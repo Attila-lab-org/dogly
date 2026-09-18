@@ -19,7 +19,20 @@ from app.domains.digestive_observation import (
     DIGESTIVE_NORMALIZER_VERSION,
     DIGESTIVE_OBSERVER_PROMPT_VERSION,
 )
+from app.domains.digestive_verification import DIGESTIVE_ANOMALY_VERIFIER_VERSION
 from app.domains.repository import InMemoryStore, new_id, now_utc
+
+_DB_IDENTITY_KEYS = (
+    "observer_provider",
+    "observer_model",
+    "observer_prompt_version",
+    "schema_version",
+    "normalizer_version",
+)
+
+
+def _db_identity(identity: dict[str, str]) -> dict[str, str]:
+    return {key: identity[key] for key in _DB_IDENTITY_KEYS}
 
 
 def _uuid_id() -> str:
@@ -40,6 +53,7 @@ def engine_identity(
     prompt_version: str = DIGESTIVE_OBSERVER_PROMPT_VERSION,
     schema_version: str = STOOL_OBSERVATION_SCHEMA_VERSION,
     normalizer_version: str = DIGESTIVE_NORMALIZER_VERSION,
+    anomaly_verifier_version: str = DIGESTIVE_ANOMALY_VERIFIER_VERSION,
 ) -> dict[str, str]:
     return {
         "observer_provider": provider,
@@ -47,6 +61,7 @@ def engine_identity(
         "observer_prompt_version": prompt_version,
         "schema_version": schema_version,
         "normalizer_version": normalizer_version,
+        "anomaly_verifier_version": anomaly_verifier_version,
     }
 
 
@@ -66,6 +81,9 @@ def _key(
         identity["observer_prompt_version"],
         identity["schema_version"],
         identity["normalizer_version"],
+        identity.get(
+            "anomaly_verifier_version", DIGESTIVE_ANOMALY_VERIFIER_VERSION
+        ),
     )
 
 
@@ -143,7 +161,7 @@ async def lookup_cached_observation_db(
                     "user_id": user_id,
                     "dog_id": dog_id,
                     "image_sha256": image_sha256_hex,
-                    **identity,
+                    **_db_identity(identity),
                 },
             )
         ).mappings().first()
@@ -192,6 +210,6 @@ async def store_cached_observation_db(
                 "image_sha256": image_sha256_hex,
                 "observation_json": json.dumps(observation),
                 "source_event_id": source_event_id,
-                **identity,
+                **_db_identity(identity),
             },
         )

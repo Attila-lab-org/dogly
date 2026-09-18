@@ -7,6 +7,7 @@ import {
 import type { ApiBehaviorEvent } from '../features/behavior/api';
 import { mapApiEventToResult } from '../features/behavior/map';
 import {
+  digestiveNutritionHref,
   mapApiDigestiveEventToResult,
   type ApiDigestiveEvent,
 } from '../features/digestive/map';
@@ -196,5 +197,15 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
     };
 
     expect(mapApiDigestiveEventToResult(event).color).toBe('marrone scuro');
+  });
+
+  it('usa useful_action.href per complete_nutrition invece di hardcodare la lista', () => {
+    expect(
+      digestiveNutritionHref(
+        '/nutrition/foods/food-abc/verify?focus=quantity',
+      ),
+    ).toBe('/nutrition/foods/food-abc/verify?focus=quantity');
+    expect(digestiveNutritionHref('/account')).toBe('/nutrition/foods');
+    expect(digestiveNutritionHref(null)).toBe('/nutrition/foods');
   });
 });

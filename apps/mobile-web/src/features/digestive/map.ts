@@ -169,6 +169,13 @@ const USEFUL_ACTION_KEYS: DigestiveUsefulActionKey[] = [
   'none',
 ];
 
+export function digestiveNutritionHref(href?: string | null): string {
+  if (href && href.startsWith('/nutrition/foods')) {
+    return href;
+  }
+  return '/nutrition/foods';
+}
+
 function mapUsefulAction(
   action: ApiDigestiveEvent['useful_action'],
 ): DigestiveUsefulAction | null {

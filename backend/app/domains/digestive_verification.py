@@ -22,7 +22,9 @@ FOCUSED_VERIFIER_FIELDS = (
     "melena_candidate",
 )
 
-VERIFICATION_VERDICTS = frozenset({"confirmed", "not_confirmed", "unknown"})
+VERIFICATION_VERDICTS = frozenset(
+    {"confirmed", "not_confirmed", "unknown", "verification_unavailable"}
+)
 DIGESTIVE_ANOMALY_VERIFIER_VERSION = "digestive-anomaly-verifier/v1"
 
 _ANOMALY_HINTS = {
@@ -39,15 +41,24 @@ def _level(observation: dict[str, Any], field: str) -> str:
     return str(observation.get(field) or "unknown").lower()
 
 
-def _stored_verdict(observation: dict[str, Any], field: str) -> str | None:
+def _stored_record(observation: dict[str, Any], field: str) -> dict[str, str] | None:
     stored = observation.get("anomaly_verification") or {}
     raw = stored.get(field)
     if isinstance(raw, dict):
-        raw = raw.get("verdict")
+        verdict = str(raw.get("verdict") or "").lower()
+        version = str(raw.get("prompt_version") or "")
+        if verdict in VERIFICATION_VERDICTS:
+            return {"verdict": verdict, "prompt_version": version}
+        return None
     verdict = str(raw or "").lower()
     if verdict in VERIFICATION_VERDICTS:
-        return verdict
+        return {"verdict": verdict, "prompt_version": ""}
     return None
+
+
+def _stored_verdict(observation: dict[str, Any], field: str) -> str | None:
+    record = _stored_record(observation, field)
+    return record["verdict"] if record else None
 
 
 def needed_anomaly_verifications(observation: dict[str, Any]) -> list[str]:
@@ -57,9 +68,27 @@ def needed_anomaly_verifications(observation: dict[str, Any]) -> list[str]:
     for field in FOCUSED_VERIFIER_FIELDS:
         if _level(observation, field) != "possible":
             continue
-        if _stored_verdict(observation, field) is None:
+        record = _stored_record(observation, field)
+        if record is None:
+            needed.append(field)
+            continue
+        if record["prompt_version"] != DIGESTIVE_ANOMALY_VERIFIER_VERSION:
+            needed.append(field)
+            continue
+        if record["verdict"] == "verification_unavailable":
             needed.append(field)
     return needed
+
+
+def verification_unavailable(observation: dict[str, Any]) -> bool:
+    """True when a possible blood/melena look could not be completed."""
+
+    for field in FOCUSED_VERIFIER_FIELDS:
+        if _level(observation, field) != "possible":
+            continue
+        if _stored_verdict(observation, field) == "verification_unavailable":
+            return True
+    return False
 
 
 def apply_anomaly_verification(

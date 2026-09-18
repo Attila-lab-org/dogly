@@ -1222,7 +1222,7 @@ async def _verify_sensitive_anomalies(
     verdicts: dict[str, str]
     usage = None
     if not callable(verify):
-        verdicts = {field: "unknown" for field in fields}
+        verdicts = {field: "verification_unavailable" for field in fields}
     else:
         try:
             verdicts, usage = await verify(image_ref=image_ref, fields=fields)
@@ -1231,7 +1231,7 @@ async def _verify_sensitive_anomalies(
                 "Focused digestive anomaly verification failed for %s",
                 event_id,
             )
-            verdicts = {field: "unknown" for field in fields}
+            verdicts = {field: "verification_unavailable" for field in fields}
     apply_anomaly_verification(observation_json, verdicts)
     if usage is not None and not str(usage.request_id).startswith("cache-reuse-"):
         await state.cost_meter.record(

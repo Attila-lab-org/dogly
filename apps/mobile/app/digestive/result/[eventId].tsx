@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -31,6 +31,7 @@ import {
   mapApiDigestiveEventToResult,
   updateDigestiveContext,
 } from '@/features/digestive/api';
+import { digestiveNutritionHref } from '@/features/digestive/map';
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
 import type {
@@ -295,7 +296,9 @@ export default function DigestiveResultScreen() {
           ) : null}
           <Button
             title={action.label ?? 'Apri alimentazione'}
-            onPress={() => router.push('/nutrition/foods')}
+            onPress={() =>
+              router.push(digestiveNutritionHref(action.href) as Href)
+            }
           />
         </Card>
       ) : null}

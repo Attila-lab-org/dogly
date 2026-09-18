@@ -233,7 +233,10 @@ export async function activateFeedingPeriod(options: {
 }): Promise<ApiFeedingPeriod> {
   // FIX 3.4: deterministic key per food so a duplicate activation tap is a
   // server-side no-op instead of creating a second feeding period.
-  const key = `feed-${options.foodId}`;
+  const quantityKey = options.quantityPerDay?.trim();
+  const key = quantityKey
+    ? `feed-${options.foodId}-qty-${quantityKey}`
+    : `feed-${options.foodId}`;
   return api.post<ApiFeedingPeriod>(
     '/v1/nutrition/feeding-periods',
     {
