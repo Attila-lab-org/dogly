@@ -8,6 +8,8 @@ from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep, rate_lim
 from app.contracts.api import (
     DigestiveContextUpdateRequest,
     DigestiveEventOut,
+    DigestiveFeedbackRequest,
+    DigestiveFeedbackResponse,
     DigestiveInterpretationLayerOut,
     DigestiveSummaryOut,
     DigestiveUsefulActionOut,
@@ -321,6 +323,46 @@ async def update_digestive_context(
     if state.engine is not None:
         await digestive_db.save_fecal_state(state.engine, event)
     return await get_digestive_event(event_id, state, user_id)
+
+
+@router.post(
+    "/digestive/events/{event_id}/feedback",
+    response_model=DigestiveFeedbackResponse,
+)
+async def post_digestive_feedback(
+    event_id: str,
+    payload: DigestiveFeedbackRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
+    _limiter: None = Depends(rate_limit("digestive.feedback", limit=60)),
+) -> DigestiveFeedbackResponse:
+    if cached := guard.lookup():
+        return DigestiveFeedbackResponse.model_validate(cached)
+    if state.engine is not None:
+        value = await digestive_db.record_digestive_feedback(
+            state.engine,
+            user_id=user_id,
+            event_id=event_id,
+            payload=payload,
+        )
+    else:
+        event = digestive_domain.get_fecal_event(
+            state.store, user_id=user_id, event_id=event_id
+        )
+        if event.status != "COMPLETED":
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Feedback is accepted only for a completed digestive result.",
+            )
+        value = payload.value
+        state.store.digestive_feedback[event_id] = {
+            "user_id": user_id,
+            "value": value.value,
+        }
+    response = DigestiveFeedbackResponse(event_id=event_id, value=value)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.get("/dogs/{dog_id}/digestive-summary", response_model=DigestiveSummaryOut)

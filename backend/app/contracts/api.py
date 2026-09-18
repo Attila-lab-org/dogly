@@ -826,6 +826,16 @@ class DigestiveEventOut(BaseModel):
     created_at: datetime
 
 
+class DigestiveFeedbackRequest(BaseModel):
+    value: FeedbackValue
+
+
+class DigestiveFeedbackResponse(BaseModel):
+    event_id: str
+    value: FeedbackValue
+    recorded: bool = True
+
+
 class FoodScanInitRequest(BaseModel):
     dog_id: str
     client_request_id: str = Field(min_length=8, max_length=128)

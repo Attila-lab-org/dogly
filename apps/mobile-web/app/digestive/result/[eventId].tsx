@@ -27,8 +27,10 @@ import { sanitizeOwnerCopy } from '@/features/core/copy';
 import {
   getDigestiveEvent,
   mapApiDigestiveEventToResult,
+  postDigestiveFeedback,
   updateDigestiveContext,
 } from '@/features/digestive/api';
+import type { DigestiveFeedbackValue } from '@/features/digestive/api';
 import {
   digestiveActionCardKind,
   digestiveNutritionHref,
@@ -41,7 +43,7 @@ import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
 import type { FecalEventResult } from '@/features/secondary/types';
 
-type LocalFeedback = 'useful' | 'not_useful' | null;
+type LocalFeedback = DigestiveFeedbackValue | null;
 
 export default function DigestiveResultScreen() {
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
@@ -73,6 +75,11 @@ export default function DigestiveResultScreen() {
     onSuccess: (updated) => {
       queryClient.setQueryData(['digestive-event', eventId], updated);
     },
+  });
+  const feedbackMutation = useMutation({
+    mutationFn: (value: DigestiveFeedbackValue) =>
+      postDigestiveFeedback(eventId, value),
+    onSuccess: (saved) => setFeedback(saved.value),
   });
 
   const event = useApi
@@ -212,9 +219,7 @@ export default function DigestiveResultScreen() {
     Boolean(advice) &&
     actionKind !== 'vet' &&
     action?.key !== 'ask_followup';
-  const nutritionKind =
-    event.overallState !== 'ROUTINE' &&
-    actionKind === 'nutrition';
+  const nutritionKind = actionKind === 'nutrition';
   const interpretationLayers = event.interpretationLayers ?? [];
   const generalLayer = interpretationLayers.find(
     (layer) => layer.key === 'general',
@@ -375,6 +380,11 @@ export default function DigestiveResultScreen() {
               {action?.label ?? 'Aggiungi'}
             </Text>
           </Text>
+          {action?.body ? (
+            <Text style={styles.nutritionQuietBody}>
+              {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
+            </Text>
+          ) : null}
         </Pressable>
       ) : null}
 
@@ -448,33 +458,48 @@ export default function DigestiveResultScreen() {
         </>
       ) : null}
 
-      <View style={styles.footerRow}>
-        <View style={styles.thumbsRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Utile"
-            accessibilityState={{ selected: feedback === 'useful' }}
-            onPress={() => setFeedback('useful')}
-            style={[
-              styles.thumbButton,
-              feedback === 'useful' && styles.thumbButtonSelected,
-            ]}
-          >
-            <Text style={styles.thumbGlyph}>👍</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Non utile"
-            accessibilityState={{ selected: feedback === 'not_useful' }}
-            onPress={() => setFeedback('not_useful')}
-            style={[
-              styles.thumbButton,
-              feedback === 'not_useful' && styles.thumbButtonSelected,
-            ]}
-          >
-            <Text style={styles.thumbGlyph}>👎</Text>
-          </Pressable>
+      <View style={styles.feedbackCard}>
+        <Text style={styles.feedbackQuestion}>Ti ritrovi in questo risultato?</Text>
+        <View style={styles.feedbackChoices}>
+          {[
+            { label: 'Sì, è così', value: 'YES' as const },
+            { label: 'Non proprio', value: 'NO' as const },
+            { label: 'Non so', value: 'UNKNOWN' as const },
+          ].map((choice) => (
+            <Pressable
+              key={choice.value}
+              accessibilityRole="button"
+              accessibilityLabel={choice.label}
+              accessibilityState={{ selected: feedback === choice.value }}
+              disabled={feedbackMutation.isPending}
+              onPress={() => {
+                if (useApi) feedbackMutation.mutate(choice.value);
+                else setFeedback(choice.value);
+              }}
+              style={[
+                styles.feedbackChoice,
+                feedback === choice.value && styles.feedbackChoiceSelected,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.feedbackChoiceText,
+                  feedback === choice.value &&
+                    styles.feedbackChoiceTextSelected,
+                ]}
+              >
+                {choice.label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
+        {feedbackMutation.isError ? (
+          <Text style={styles.questionError}>
+            Non sono riuscito a salvare la risposta. Riprova.
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.footerRow}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Fatto"
@@ -642,28 +667,60 @@ const styles = StyleSheet.create({
     color: colors.teal,
     fontWeight: typography.weight.bold,
   },
+  nutritionQuietBody: {
+    color: '#64748B',
+    fontSize: typography.size.xs,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  feedbackCard: {
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+  },
+  feedbackQuestion: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  feedbackChoices: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  feedbackChoice: {
+    flex: 1,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceMuted,
+  },
+  feedbackChoiceSelected: {
+    backgroundColor: colors.tealSoft,
+    borderWidth: 1,
+    borderColor: colors.teal,
+  },
+  feedbackChoiceText: {
+    color: '#64748B',
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    textAlign: 'center',
+  },
+  feedbackChoiceTextSelected: {
+    color: colors.teal,
+  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     marginTop: spacing.sm,
-  },
-  thumbsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  thumbButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-  },
-  thumbButtonSelected: {
-    backgroundColor: colors.surfaceMuted,
-  },
-  thumbGlyph: {
-    fontSize: 18,
   },
   doneText: {
     color: '#64748B',

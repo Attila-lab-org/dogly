@@ -28,6 +28,27 @@ export type FecalCompleteResponse = {
   status: string;
 };
 
+export type DigestiveFeedbackValue = 'YES' | 'NO' | 'UNKNOWN';
+
+export async function postDigestiveFeedback(
+  eventId: string,
+  value: DigestiveFeedbackValue,
+): Promise<{ event_id: string; value: DigestiveFeedbackValue; recorded: boolean }> {
+  return api.post<{
+    event_id: string;
+    value: DigestiveFeedbackValue;
+    recorded: boolean;
+  }>(
+    `/v1/digestive/events/${eventId}/feedback`,
+    { value },
+    {
+      headers: {
+        'X-Idempotency-Key': `digestive-feedback-${eventId}-${value}`,
+      },
+    },
+  );
+}
+
 export type DigestiveSummary = {
   dog_id: string;
   rolling_score: number | null;

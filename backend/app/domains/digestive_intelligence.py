@@ -28,7 +28,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v15"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v16"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -926,6 +926,11 @@ def _final_advice(
             "Hai segnalato sforzo o urgenza: senti il veterinario se continua "
             f"o se {name} appare in difficoltà."
         )
+    if safety is DigestiveState.ROUTINE and consistency == "formed":
+        return (
+            "Continua normalmente. Non serve modificare alimento o quantità "
+            "sulla base di questa foto."
+        )
     level = _repetition_level(context, consistency)
     if level in {"hours", "trend"} and _is_loose(consistency):
         if context.unusual_food_48h is True:
@@ -971,6 +976,40 @@ def _final_advice(
         f"Continua a registrare le prossime osservazioni di {name} per confrontarle "
         "con questa."
     )
+
+
+def _what_to_watch(
+    *,
+    observation: dict[str, Any],
+    context: DigestiveContext,
+    consistency: str,
+    state: DigestiveState,
+) -> list[str]:
+    """Return only signs that could materially change today's decision."""
+    if state is DigestiveState.ROUTINE:
+        return []
+    if state is DigestiveState.VET_CONTACT:
+        return [
+            "peggioramento rapido o forte debolezza",
+            "vomito ripetuto o difficoltà a bere",
+            "altro sangue o feci molto scure",
+        ]
+
+    items: list[str] = []
+    if _is_loose(consistency):
+        items.extend(
+            [
+                "vomito o appetito ridotto",
+                "nuove evacuazioni liquide ravvicinate",
+            ]
+        )
+    if consistency == "hard" or context.straining_or_urgency is True:
+        items.append("sforzo, dolore o difficoltà a evacuare")
+    if _visual_safety_action(observation):
+        items.append("altro sangue, materiale estraneo o feci molto scure")
+    if context.reduced_activity_today is not True:
+        items.append("energia molto più bassa del normale")
+    return list(dict.fromkeys(items))[:3]
 
 
 def _evidence_lines(
@@ -1071,7 +1110,7 @@ _VOLUME_COPY = {
 def _visible_observation_details(
     consistency: str, observation: dict[str, Any]
 ) -> str:
-    """Describe visible facts, keeping estimates distinct from measurements."""
+    """Describe only owner-useful visible facts; technical scoring stays in audit."""
 
     details: list[str] = []
     texture = _texture_phrase(consistency)
@@ -1081,32 +1120,11 @@ def _visible_observation_details(
         observation.get("color_family") or observation.get("color") or ""
     )
     if color:
-        details.append(f"colore apparente {color}")
-    score = observation.get("fecal_score_estimate")
-    if isinstance(score, int | float):
-        details.append(
-            f"score fecale visivo stimato {int(score)}/7, indicativo e non diagnostico"
-        )
-
-    confidence = str(observation.get("confidence_band") or "LOW").upper()
-    if confidence == "HIGH":
-        shape = _SHAPE_COPY.get(str(observation.get("shape") or "").lower())
-        moisture = _MOISTURE_COPY.get(
-            str(observation.get("apparent_moisture") or "").lower()
-        )
-        volume = _VOLUME_COPY.get(
-            str(observation.get("apparent_volume") or "").lower()
-        )
-        if shape:
-            details.append(f"forma {shape}")
-        if moisture:
-            details.append(f"umidità apparente {moisture}")
-        if volume:
-            details.append(f"volume apparente {volume}")
+        details.append(f"colore {color}")
 
     if not details:
         return ""
-    return "Dalla foto: " + "; ".join(details) + "."
+    return "Dalla foto risultano " + " e ".join(details) + "."
 
 
 
@@ -1129,10 +1147,10 @@ def _general_layer_summary(
     if visual:
         return f"{details} {visual}".strip()
     if consistency == "formed":
-        meaning = f"Le feci di {name} sono ben formate."
+        meaning = "Non emergono anomalie visibili."
         return f"{details} {meaning}".strip()
     if texture:
-        meaning = f"Le feci di {name} sono {texture}."
+        meaning = f"Questo aspetto merita di essere seguito nelle prossime evacuazioni."
         return f"{details} {meaning}".strip()
     fallback = (
         f"Ho una nuova osservazione digestiva per {name}, descritta con la "
@@ -1327,8 +1345,6 @@ def _synthesize_from_layers(
     """Compose one owner decision from the resolved interpretation layers."""
     by_key = {layer.key: layer for layer in layers}
     general = by_key["general"]
-    profile = by_key.get("profile")
-    longitudinal = by_key.get("longitudinal")
 
     headline = _consumer_headline(
         context=context,
@@ -1350,18 +1366,10 @@ def _synthesize_from_layers(
         )
     elif state is DigestiveState.ROUTINE and consistency == "formed":
         headline = f"Tutto regolare per {context.dog_name}"
-        if profile is not None:
-            summary = f"Le feci sono ben formate. {profile.summary}"
-        elif longitudinal is not None and "personal_baseline" in longitudinal.factors_used:
-            summary = (
-                f"Le feci sono ben formate e in linea con le osservazioni "
-                f"recenti di {context.dog_name}."
-            )
-        else:
-            summary = (
-                "La foto mostra feci ben formate e un aspetto regolare. "
-                "Non c’è ancora abbastanza storico per definirlo il suo solito."
-            )
+        summary = (
+            "Le feci sono ben formate e non mostrano anomalie visibili. "
+            "Da questa foto non emerge alcun motivo per cambiare alimento o quantità."
+        )
     elif followup_question:
         repetition = _repetition_level(context, consistency)
         if "mangiato qualcosa di diverso" in followup_question:
@@ -1418,16 +1426,14 @@ def _synthesize_from_layers(
         else:
             summary = general.summary
 
-    next_step = None
-    if state is not DigestiveState.ROUTINE or followup_question:
-        next_step = _final_advice(
-            observation=observation,
-            context=context,
-            consistency=consistency,
-            baseline_code=baseline_code,
-            safety=safety,
-            followup_question=followup_question,
-        )
+    next_step = _final_advice(
+        observation=observation,
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        followup_question=followup_question,
+    )
     return headline, summary, next_step
 
 
@@ -1486,11 +1492,6 @@ def build_digestive_intelligence(
         associations.append(
             f"Hai segnalato qualcosa di insolito mangiato da {context.dog_name} "
             "nelle ultime 48 ore."
-        )
-    if longitudinal and context.episode_count_7d >= 3:
-        associations.append(
-            f"Negli ultimi 7 giorni hai registrato {context.episode_count_7d} "
-            "osservazioni."
         )
     if longitudinal and context.watery_count_7d >= 2:
         associations.append(
@@ -1597,7 +1598,12 @@ def build_digestive_intelligence(
         followup_key=followup_key,
         followup_question=followup_question,
         useful_action=useful_action,
-        what_to_watch=["vomito", "riduzione dell’attività", "nuovi episodi ravvicinati"],
+        what_to_watch=_what_to_watch(
+            observation=observation,
+            context=context,
+            consistency=consistency,
+            state=state,
+        ),
         observation_reliability=reliability,
         knowledge_references=knowledge.references,
         knowledge_claim_ids=knowledge.claim_ids,

@@ -64,13 +64,15 @@ describe('digestive result UX', () => {
     );
   });
 
-  it('uses a discrete status and local feedback', () => {
+  it('uses a discrete status and persisted correctness feedback', () => {
     expect(resultScreen).toContain('statusOrientation');
     expect(resultScreen).toContain('Da seguire');
     expect(resultScreen).toContain('Cosa fare ora');
-    expect(resultScreen).toContain('👍');
-    expect(resultScreen).toContain('👎');
-    expect(resultScreen).not.toContain('Mi è stato utile');
+    expect(resultScreen).toContain('Ti ritrovi in questo risultato?');
+    expect(resultScreen).toContain('Sì, è così');
+    expect(resultScreen).toContain('Non proprio');
+    expect(resultScreen).toContain('Non so');
+    expect(resultScreen).toContain('postDigestiveFeedback');
   });
 
   it('keeps only explanatory evidence in the why accordion', () => {

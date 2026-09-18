@@ -95,11 +95,11 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert "ben formate" in result.consumer_summary.lower()
     assert "andamento abituale" not in result.consumer_summary.lower()
     assert "primo riferimento" not in result.consumer_headline.lower()
-    assert "abbastanza storico" in result.consumer_summary.lower()
-    assert result.recommended_next_step is None
+    assert "cambiare alimento o quantità" in result.consumer_summary.lower()
+    assert "continua normalmente" in result.recommended_next_step.lower()
 
 
-def test_general_layer_reports_reliable_visible_details_with_score_caveat():
+def test_general_layer_keeps_technical_scoring_out_of_owner_copy():
     result = build_digestive_intelligence(
         observation(
             consistency="formed",
@@ -114,15 +114,13 @@ def test_general_layer_reports_reliable_visible_details_with_score_caveat():
     )
     general = result.interpretation_layers[0].summary.lower()
     assert "consistenza ben formate" in general
-    assert "colore apparente marrone scuro" in general
-    assert "score fecale visivo stimato 3/7" in general
-    assert "non diagnostico" in general
-    assert "forma cilindrica" in general
-    assert "umidità apparente" in general
-    assert "volume apparente" in general
+    assert "colore marrone scuro" in general
+    assert "anomalie visibili" in general
+    assert "score" not in general
+    assert "/7" not in general
 
 
-def test_general_layer_omits_secondary_details_when_confidence_is_not_high():
+def test_general_layer_stays_plain_language_when_confidence_is_not_high():
     result = build_digestive_intelligence(
         observation(
             consistency="formed",
@@ -136,10 +134,9 @@ def test_general_layer_omits_secondary_details_when_confidence_is_not_high():
         context(),
     )
     general = result.interpretation_layers[0].summary.lower()
-    assert "score fecale visivo stimato 3/7" in general
-    assert "forma cilindrica" not in general
-    assert "umidità apparente" not in general
-    assert "volume apparente" not in general
+    assert "consistenza ben formate" in general
+    assert "colore marrone" in general
+    assert "score" not in general
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -236,7 +233,7 @@ def test_missing_active_food_never_becomes_a_food_change_today():
     )
 
     assert result.possible_associations == []
-    assert result.recommended_next_step is None
+    assert "continua normalmente" in result.recommended_next_step.lower()
 
 
 def test_repeated_food_association_requires_both_periods_and_stays_cautious():
@@ -446,6 +443,15 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert body["knowledge_registry_version"] == "digestive-knowledge/v2"
     assert len(body["knowledge_registry_checksum"]) == 64
     assert body["knowledge_claim_ids"]
+
+    feedback = await client.post(
+        f"/v1/digestive/events/{event_id}/feedback",
+        headers={**auth_headers, "X-Idempotency-Key": "digestive-v2-feedback"},
+        json={"value": "YES"},
+    )
+    assert feedback.status_code == 200
+    assert feedback.json()["value"] == "YES"
+    assert state.store.digestive_feedback[event_id]["value"] == "YES"
 
     contextualized = await client.patch(
         f"/v1/digestive/events/{event_id}/context",
@@ -903,7 +909,7 @@ def test_same_photo_changes_with_food_history_and_symptoms():
         usual.consumer_headline
         == "Le feci di Rocky sono più morbide, in linea con il suo solito"
     )
-    assert usual.recommended_next_step is None
+    assert "nulla di urgente" in usual.recommended_next_step.lower()
     assert first.recommended_next_step != repeating.recommended_next_step
     assert repeating.recommended_next_step != with_vomiting.recommended_next_step
     for result in (first, repeating, new_food, stable_food, usual):

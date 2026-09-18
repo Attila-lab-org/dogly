@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.config import Settings
 from app.contracts.api import (
+    DigestiveFeedbackRequest,
     FecalInitRequest,
     FeedingPeriodCreate,
     FeedingPeriodUpdate,
@@ -20,7 +21,7 @@ from app.contracts.api import (
     FoodVerifyRequest,
 )
 from app.contracts.errors import ApiError, ErrorCode
-from app.contracts.taxonomy import AnalysisDomain
+from app.contracts.taxonomy import AnalysisDomain, FeedbackValue
 from app.domains import dogs_db, weight_db
 from app.domains.billing import QuotaExceeded
 from app.domains.db import reserve_usage_on_conn
@@ -334,6 +335,41 @@ async def get_fecal_event(engine: AsyncEngine, *, user_id: str, event_id: str) -
     if not row:
         raise ApiError(ErrorCode.NOT_FOUND, "Digestive event not found")
     return _fecal_from_row(row)
+
+
+async def record_digestive_feedback(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    event_id: str,
+    payload: DigestiveFeedbackRequest,
+) -> FeedbackValue:
+    event = await get_fecal_event(engine, user_id=user_id, event_id=event_id)
+    if event.status != "COMPLETED":
+        raise ApiError(
+            ErrorCode.VALIDATION_FAILED,
+            "Feedback is accepted only for a completed digestive result.",
+        )
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                insert into public.digestive_feedback (
+                  event_id, user_id, value
+                ) values (
+                  cast(:event_id as uuid), cast(:user_id as uuid), :value
+                )
+                on conflict (event_id, user_id) do update
+                set value = excluded.value, updated_at = now()
+                """
+            ),
+            {
+                "event_id": event_id,
+                "user_id": user_id,
+                "value": payload.value.value,
+            },
+        )
+    return payload.value
 
 
 async def update_owner_context(

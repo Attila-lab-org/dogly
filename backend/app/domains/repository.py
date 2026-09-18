@@ -73,6 +73,7 @@ class InMemoryStore:
         self.captures: dict[str, BehaviorCaptureRec] = {}
         self.behavior_events: dict[str, BehaviorEventRec] = {}
         self.behavior_feedback: dict[str, BehaviorFeedbackRec] = {}
+        self.digestive_feedback: dict[str, dict[str, str]] = {}
         self.processing_context_answers: dict[str, ProcessingContextAnswerRec] = {}
         self.care_events: dict[str, CareEventRec] = {}
         self.signal_experiments: dict[str, SignalExperimentRec] = {}
