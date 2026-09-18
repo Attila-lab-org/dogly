@@ -1,14 +1,13 @@
 // @ts-nocheck
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  CONSUMER_LEAK_PATTERN,
-  PROCESSING_ACKS,
-  processingQuestionKicker,
-} from '../features/core/conversationCopy';
 
 const card = readFileSync(
   resolve(__dirname, '../features/behavior/ProcessingContextCard.tsx'),
+  'utf8',
+);
+const companion = readFileSync(
+  resolve(__dirname, '../features/behavior/ProcessingCompanion.tsx'),
   'utf8',
 );
 const processingScreen = readFileSync(
@@ -17,32 +16,46 @@ const processingScreen = readFileSync(
 );
 
 describe('processing context companion UX', () => {
-  it('keeps the analysis companion primary and the questions as accompaniment', () => {
+  it('keeps one quiet question above continuous analysis', () => {
     expect(processingScreen).toContain('ProcessingCompanion');
     expect(processingScreen).toContain('ProcessingContextCard');
-    expect(processingScreen.indexOf('ProcessingCompanion')).toBeLessThan(
-      processingScreen.indexOf('ProcessingContextCard'),
+    expect(processingScreen.lastIndexOf('<ProcessingContextCard')).toBeLessThan(
+      processingScreen.lastIndexOf('<ProcessingCompanion'),
     );
+    expect(processingScreen).toContain('styles.experience');
     expect(processingScreen).not.toMatch(/Rispondi alle domande per avviare/);
-    expect(card).toContain('processingQuestionKicker');
+    expect(processingScreen).not.toContain('heroText');
+    expect(processingScreen).not.toContain('stepper');
+    expect(processingScreen).not.toContain('progressTrack');
+    expect(processingScreen).not.toContain('Sto guardando');
+    expect(processingScreen).not.toContain('Analisi in corso');
+    expect(card).toContain('Intanto, alcune domande');
     expect(card).toContain('Salta');
     expect(card).toContain('finishing');
     expect(card).toContain('isProcessingCollecting');
     expect(card).toContain('accepting_answers');
+    expect(card).toContain('styles.pill');
+    expect(card).not.toContain('processingQuestionKicker');
+    expect(card).not.toContain('PROCESSING_ACKS');
     expect(card).not.toMatch(/chat|bubble/i);
+    expect(companion).toContain('Analizzando ${dogName}');
+    expect(companion).not.toContain('Sto capendo');
+    expect(companion).not.toContain('Sto mettendo insieme');
   });
 
-  it('asks one locked question with 2-4 buttons and never fakes a save', () => {
+  it('asks one locked question with compact options and never fakes a save', () => {
     expect(card).toContain('locked');
     expect(card).toContain('skipped: true');
     expect(card).toContain('Non sono riuscito a salvare la risposta');
     expect(card).not.toContain('Salvato');
-    expect(card).toMatch(/560/);
-    expect(PROCESSING_ACKS.length).toBe(3);
-    expect(processingQuestionKicker('Attilio')).not.toMatch(CONSUMER_LEAK_PATTERN);
+    expect(card).not.toMatch(/560/);
+    expect(card).not.toContain('Perfetto');
+    expect(card).not.toContain('Questo dettaglio');
+    expect(card).not.toContain('Attilio');
+    expect(card).not.toContain('ownerDisplayName');
   });
 
-  it('hides the companion when interpretation has started', () => {
+  it('hides the questions when interpretation has started', () => {
     expect(card).toContain('!collecting');
     expect(card).toContain('applied_to_interpretation === false');
     expect(processingScreen).toContain('analysisStatus={displayStatus}');

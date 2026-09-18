@@ -1,13 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Button, Card } from '../../components';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { queryKeys } from '../../lib/queryClient';
-import {
-  PROCESSING_ACKS,
-  processingQuestionKicker,
-} from '../core/conversationCopy';
 import {
   getProcessingContext,
   isProcessingCollecting,
@@ -20,7 +15,6 @@ export function ProcessingContextCard({
   eventId,
   dogId,
   userId,
-  ownerDisplayName,
   enabled,
   finishing,
   analysisStatus,
@@ -28,27 +22,15 @@ export function ProcessingContextCard({
   eventId: string;
   dogId: string;
   userId: string;
-  ownerDisplayName?: string | null;
   enabled: boolean;
   finishing: boolean;
   analysisStatus?: BehaviorEventStatus | string | null;
 }) {
   const [locked, setLocked] = useState<ProcessingContextQuestion | null>(null);
-  const [ack, setAck] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ackIndex = useRef(0);
-  const ackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(
-    () => () => {
-      if (ackTimer.current) clearTimeout(ackTimer.current);
-    },
-    [],
-  );
-
-  const collecting =
-    !finishing &&
-    isProcessingCollecting(analysisStatus);
+  const collecting = !finishing && isProcessingCollecting(analysisStatus);
 
   const query = useQuery({
     queryKey: queryKeys.processingContext(userId, dogId, eventId),
@@ -59,10 +41,10 @@ export function ProcessingContextCard({
   });
 
   useEffect(() => {
-    if (!locked && !ack && query.data?.question) {
+    if (!locked && query.data?.question) {
       setLocked(query.data.question);
     }
-  }, [ack, locked, query.data?.question]);
+  }, [locked, query.data?.question]);
 
   const mutation = useMutation({
     mutationFn: (body: {
@@ -72,21 +54,15 @@ export function ProcessingContextCard({
     }) => postProcessingContext(eventId, body),
     onMutate: () => setError(null),
     onSuccess: (next) => {
+      setSelectedId(null);
       if (!next.accepting_answers || next.applied_to_interpretation === false) {
-        setAck(null);
         setLocked(null);
         return;
       }
-      const message = PROCESSING_ACKS[ackIndex.current % PROCESSING_ACKS.length];
-      ackIndex.current += 1;
-      setAck(message);
-      if (ackTimer.current) clearTimeout(ackTimer.current);
-      ackTimer.current = setTimeout(() => {
-        setAck(null);
-        setLocked(next.question ?? null);
-      }, 560);
+      setLocked(next.question ?? null);
     },
     onError: () => {
+      setSelectedId(null);
       setError('Non sono riuscito a salvare la risposta. Riprova.');
     },
   });
@@ -94,127 +70,156 @@ export function ProcessingContextCard({
   if (
     !collecting ||
     query.data?.accepting_answers === false ||
-    (!locked && !ack)
+    !locked
   ) {
     return null;
   }
 
-  const busy = mutation.isPending || Boolean(ack);
+  const busy = mutation.isPending;
   const question = locked;
 
   return (
-    <Card style={styles.card} testID="processing-context-card">
-      <Text style={styles.kicker}>
-        {processingQuestionKicker(ownerDisplayName)}
-      </Text>
-      {ack ? (
-        <Text
-          style={styles.ack}
-          accessibilityLiveRegion="polite"
-        >
-          {ack}
-        </Text>
-      ) : question ? (
-        <>
-          <Text style={styles.question}>{question.text}</Text>
-          <View style={styles.options}>
-            {question.options.map((option) => (
-              <Button
-                key={option.id}
-                title={option.label}
-                variant="secondary"
-                disabled={busy}
-                onPress={() =>
-                  mutation.mutate({
-                    question_id: question.id,
-                    answer_id: option.id,
-                  })
-                }
-                style={styles.option}
-                testID={`processing-answer-${option.id}`}
-              />
-            ))}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Salta"
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            onPress={() =>
-              mutation.mutate({
-                question_id: question.id,
-                skipped: true,
-              })
-            }
-            style={({ pressed }) => [
-              styles.skip,
-              pressed && styles.skipPressed,
-              busy && styles.skipDisabled,
-            ]}
-            testID="processing-skip"
-          >
-            <Text style={styles.skipText}>Salta</Text>
-          </Pressable>
-        </>
-      ) : null}
+    <View style={styles.wrap} testID="processing-context-card">
+      <Text style={styles.heading}>Intanto, alcune domande</Text>
+      <Text style={styles.question}>{question.text}</Text>
+      <View style={styles.options}>
+        {question.options.map((option) => {
+          const selected = selectedId === option.id;
+          return (
+            <Pressable
+              key={option.id}
+              accessibilityRole="button"
+              accessibilityLabel={option.label}
+              accessibilityState={{ disabled: busy, selected }}
+              disabled={busy}
+              onPress={() => {
+                setSelectedId(option.id);
+                mutation.mutate({
+                  question_id: question.id,
+                  answer_id: option.id,
+                });
+              }}
+              style={({ pressed }) => [
+                styles.pill,
+                selected && styles.pillSelected,
+                pressed && styles.pillPressed,
+                busy && !selected && styles.pillBusy,
+              ]}
+              testID={`processing-answer-${option.id}`}
+            >
+              <Text
+                style={[
+                  styles.pillText,
+                  selected && styles.pillTextSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Salta"
+        accessibilityState={{ disabled: busy }}
+        disabled={busy}
+        onPress={() =>
+          mutation.mutate({
+            question_id: question.id,
+            skipped: true,
+          })
+        }
+        style={({ pressed }) => [
+          styles.skip,
+          pressed && styles.skipPressed,
+          busy && styles.skipDisabled,
+        ]}
+        testID="processing-skip"
+      >
+        <Text style={styles.skipText}>Salta</Text>
+      </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginBottom: spacing.lg,
+  wrap: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
-  kicker: {
-    color: colors.accent,
+  heading: {
+    color: colors.textMuted,
     fontSize: typography.size.xs,
-    fontWeight: typography.weight.bold,
+    fontWeight: typography.weight.semibold,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
   question: {
     marginTop: spacing.sm,
     color: colors.text,
-    fontSize: typography.size.md,
+    fontSize: typography.size.lg,
     fontWeight: typography.weight.semibold,
-    lineHeight: typography.size.md * typography.lineHeight.relaxed,
-  },
-  ack: {
-    marginTop: spacing.md,
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
+    lineHeight: typography.size.lg * typography.lineHeight.relaxed,
     textAlign: 'center',
   },
   options: {
     marginTop: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: spacing.sm,
   },
-  option: {
-    alignSelf: 'stretch',
+  pill: {
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+  },
+  pillSelected: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accent,
+  },
+  pillPressed: {
+    opacity: 0.85,
+  },
+  pillBusy: {
+    opacity: 0.55,
+  },
+  pillText: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  pillTextSelected: {
+    color: colors.accentPressed,
   },
   skip: {
-    alignSelf: 'center',
     marginTop: spacing.md,
-    minHeight: 44,
+    minHeight: 36,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   skipPressed: {
     opacity: 0.7,
   },
   skipDisabled: {
-    opacity: 0.45,
+    opacity: 0.4,
   },
   skipText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.medium,
   },
   error: {
     marginTop: spacing.sm,
     color: colors.danger,
     fontSize: typography.size.xs,
+    textAlign: 'center',
   },
 });

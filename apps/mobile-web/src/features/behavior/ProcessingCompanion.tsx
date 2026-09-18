@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { CuteIcon } from '../../components';
 import type { BehaviorEventStatus } from '../../contracts/types';
-import { spacing, typography } from '../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 
 export function ProcessingCompanion({
   dogName,
@@ -22,6 +22,7 @@ export function ProcessingCompanion({
 }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
+  const nativeDriver = Platform.OS !== 'web';
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -43,72 +44,115 @@ export function ProcessingCompanion({
         Animated.timing(pulse, {
           toValue: 1,
           duration: 1100,
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: nativeDriver,
         }),
         Animated.timing(pulse, {
           toValue: 0,
           duration: 1100,
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: nativeDriver,
         }),
       ]),
     );
     animation.start();
     return () => animation.stop();
-  }, [finishing, pulse, reduceMotion]);
+  }, [finishing, nativeDriver, pulse, reduceMotion]);
 
-  const copy = finishing
-    ? {
-        title: 'Fatto! Ho osservato qualcosa in più.',
-        detail: `Ti mostro subito cosa ho osservato di ${dogName}.`,
-      }
-    : status === 'INTERPRETING'
-      ? {
-          title: `Sto mettendo insieme i segnali di ${dogName}…`,
-          detail: 'Confronto ciò che vedo con il suo contesto, con prudenza.',
-        }
-      : status === 'FAILED_RETRYABLE'
-        ? {
-            title: 'Ci riprovo con calma…',
-            detail: 'Non devi fare nulla e non userò un’altra analisi.',
-          }
-        : {
-            title: `Sto capendo cosa fa ${dogName}...`,
-            detail: 'Osservo postura, movimento e contesto senza tirare conclusioni.',
-          };
+  const title =
+    status === 'FAILED_RETRYABLE'
+      ? 'Ci riprovo…'
+      : `Analizzando ${dogName}…`;
 
   const ringScale = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.92, 1.12],
+    outputRange: [0.9, 1.12],
   });
   const ringOpacity = pulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.55, 0.12],
+    outputRange: [0.4, 0.1],
+  });
+  const glow = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.18, 0.72],
+  });
+  const glowShift = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-22, 22],
+  });
+  const dotA = pulse.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0.28, 1, 0.28],
+  });
+  const dotB = pulse.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.28, 1, 0.28],
+  });
+  const dotC = pulse.interpolate({
+    inputRange: [0, 0.7, 1],
+    outputRange: [0.28, 1, 0.28],
   });
 
   return (
     <View
       style={styles.wrap}
       accessibilityLiveRegion="polite"
-      accessibilityLabel={`${copy.title} ${copy.detail}`}
+      accessibilityLabel={title}
     >
       <View style={styles.visual}>
         {!reduceMotion && !finishing ? (
-          <Animated.View
-            style={[
-              styles.ring,
-              {
-                opacity: ringOpacity,
-                transform: [{ scale: ringScale }],
-              },
-            ]}
-          />
+          <>
+            <Animated.View
+              style={[
+                styles.ring,
+                {
+                  opacity: ringOpacity,
+                  transform: [{ scale: ringScale }],
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.ring,
+                styles.ringInner,
+                {
+                  opacity: ringOpacity,
+                  transform: [{ scale: ringScale }],
+                },
+              ]}
+            />
+          </>
         ) : null}
         <View style={[styles.icon, finishing && styles.iconDone]}>
-          <CuteIcon name={finishing ? 'play' : 'gaze'} size={54} />
+          <CuteIcon name={finishing ? 'play' : 'gaze'} size={40} />
         </View>
       </View>
-      <Text style={styles.title}>{copy.title}</Text>
-      <Text style={styles.detail}>{copy.detail}</Text>
+      <View style={styles.statusRow}>
+        <View style={styles.liveDot} />
+        <Text style={styles.title}>{title}</Text>
+      </View>
+      <View style={styles.glowTrack} accessibilityElementsHidden>
+        <Animated.View
+          style={[
+            styles.glowFill,
+            {
+              opacity: reduceMotion || finishing ? 0.35 : glow,
+              transform: [
+                { translateX: reduceMotion || finishing ? 0 : glowShift },
+              ],
+            },
+          ]}
+        />
+      </View>
+      <View style={styles.dots} accessibilityElementsHidden>
+        {[dotA, dotB, dotC].map((opacity, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              styles.dot,
+              { opacity: reduceMotion || finishing ? 0.45 : opacity },
+            ]}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -116,46 +160,80 @@ export function ProcessingCompanion({
 const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    paddingTop: spacing.xl,
   },
   visual: {
-    width: 140,
-    height: 140,
+    width: 108,
+    height: 108,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   ring: {
     position: 'absolute',
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    backgroundColor: '#E0F2F7',
+    width: 104,
+    height: 104,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.accent,
+  },
+  ringInner: {
+    width: 82,
+    height: 82,
+    borderColor: colors.primary,
   },
   icon: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E0F2F7',
+    backgroundColor: colors.accentSoft,
   },
   iconDone: {
-    backgroundColor: '#E0F7F6',
+    backgroundColor: colors.primarySoft,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
   },
   title: {
-    color: '#1A2B48',
-    fontSize: 22,
-    fontWeight: typography.weight.bold,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
     textAlign: 'center',
-    paddingHorizontal: spacing.md,
   },
-  detail: {
-    maxWidth: 320,
-    marginTop: spacing.xs,
-    color: '#64748B',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
+  glowTrack: {
+    width: 96,
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+    marginTop: spacing.sm,
+  },
+  glowFill: {
+    width: 42,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+    alignSelf: 'center',
+  },
+  dots: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
   },
 });

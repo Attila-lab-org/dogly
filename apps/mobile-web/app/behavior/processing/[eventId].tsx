@@ -1,16 +1,15 @@
 /**
  * Behavior processing — polling GET /v1/behavior/events/{id}.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
 import type { ButtonVariant } from '@/components/Button';
-import { colors, shadows, spacing, typography } from '@/theme/tokens';
+import { colors, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
-import { PROCESSING_STEP_ORDER, processingStepsFor } from '@/features/core/copy';
 import {
   getBehaviorEvent,
   IN_PROGRESS_STATUSES,
@@ -26,7 +25,6 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
 import { ProcessingContextCard } from '@/features/behavior/ProcessingContextCard';
 import { useSession } from '@/features/auth/SessionProvider';
-import { useMeProfile } from '@/features/me/api';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
 import {
@@ -89,13 +87,11 @@ export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
-  const meQuery = useMeProfile();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
     isApiConfigured() &&
     Boolean(userId) &&
     isPersistedId(eventId);
-  const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
   const [finishing, setFinishing] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const completionStarted = useRef(false);
@@ -302,11 +298,7 @@ export default function BehaviorProcessingScreen() {
           : 'QUEUED'
       : status ?? 'QUEUED';
 
-  const currentOrder = PROCESSING_STEP_ORDER[displayStatus] ?? 0;
   const isRetrying = displayStatus === 'FAILED_RETRYABLE';
-  const progressRatio = finishing
-    ? 1
-    : Math.min(1, (currentOrder + (isRetrying ? 0 : 0.45)) / Math.max(1, steps.length - 1));
 
   return (
     <ScreenContainer style={styles.screen} contentStyle={styles.content}>
@@ -320,41 +312,25 @@ export default function BehaviorProcessingScreen() {
         >
           <Ionicons name="chevron-back" size={24} color={TITLE_COLOR} />
         </Pressable>
-        <Text style={styles.topTitle} numberOfLines={1}>
-          Analisi in corso
-        </Text>
         <View style={styles.topSpacer} />
       </View>
 
-      <ProcessingCompanion
-        dogName={dog.name}
-        status={displayStatus}
-        finishing={finishing}
-      />
+      <View style={styles.experience}>
+        {eventId && userId ? (
+          <ProcessingContextCard
+            eventId={eventId}
+            dogId={dog.id}
+            userId={userId}
+            enabled={useApi}
+            finishing={finishing}
+            analysisStatus={displayStatus}
+          />
+        ) : null}
 
-      {eventId && userId ? (
-        <ProcessingContextCard
-          eventId={eventId}
-          dogId={dog.id}
-          userId={userId}
-          ownerDisplayName={meQuery.data?.display_name}
-          enabled={useApi}
+        <ProcessingCompanion
+          dogName={dog.name}
+          status={displayStatus}
           finishing={finishing}
-          analysisStatus={displayStatus}
-        />
-      ) : null}
-
-      <Text style={styles.heroText}>
-        Puoi anche chiudere. Se hai attivato le notifiche, ti avviso quando il
-        risultato è pronto; altrimenti lo ritrovi nel Diario.
-      </Text>
-
-      <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${Math.round(progressRatio * 100)}%` },
-          ]}
         />
       </View>
 
@@ -367,52 +343,6 @@ export default function BehaviorProcessingScreen() {
           </Text>
         </View>
       )}
-
-      <View style={styles.stepper}>
-        {steps.map((step) => {
-          const stepOrder = PROCESSING_STEP_ORDER[step.status];
-          const done = finishing || (!isRetrying && stepOrder < currentOrder);
-          const active = !finishing && !isRetrying && stepOrder === currentOrder;
-          return (
-            <View
-              key={step.id}
-              style={[
-                styles.stepCard,
-                active && styles.stepCardActive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.stepDot,
-                  done && styles.stepDotDone,
-                  active && styles.stepDotActive,
-                ]}
-              >
-                {done ? (
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                ) : active ? (
-                  <View style={styles.stepInnerDotActive} />
-                ) : (
-                  <View style={styles.stepInnerDot} />
-                )}
-              </View>
-              <View style={styles.stepTextWrap}>
-                <Text
-                  style={[
-                    styles.stepTitle,
-                    (active || done) && styles.stepTitleActive,
-                  ]}
-                >
-                  {step.title}
-                </Text>
-                {(active || done) && (
-                  <Text style={styles.stepDescription}>{step.description}</Text>
-                )}
-              </View>
-            </View>
-          );
-        })}
-      </View>
     </ScreenContainer>
   );
 }
@@ -428,7 +358,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   backButton: {
     width: 40,
@@ -437,37 +367,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-    color: TITLE_COLOR,
-    marginHorizontal: spacing.sm,
-  },
   topSpacer: {
     width: 40,
   },
-  heroText: {
-    fontSize: 13,
-    color: MUTED_COLOR,
-    lineHeight: 19,
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  progressTrack: {
-    alignSelf: 'stretch',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginBottom: spacing.xl,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: '#2DAAAB',
+  experience: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: spacing.xl,
   },
   retryBanner: {
     flexDirection: 'row',
@@ -484,71 +390,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: TITLE_COLOR,
-    lineHeight: 18,
-  },
-  stepper: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  stepCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    ...shadows.card,
-  },
-  stepCardActive: {
-    borderColor: '#C7EDEC',
-  },
-  stepDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  stepDotDone: {
-    backgroundColor: '#2DAAAB',
-  },
-  stepDotActive: {
-    backgroundColor: colors.tealSoft,
-    borderWidth: 2,
-    borderColor: '#2DAAAB',
-  },
-  stepInnerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  stepInnerDotActive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2DAAAB',
-  },
-  stepTextWrap: {
-    flex: 1,
-  },
-  stepTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: MUTED_COLOR,
-  },
-  stepTitleActive: {
-    color: TITLE_COLOR,
-  },
-  stepDescription: {
-    marginTop: spacing.xxs,
-    color: MUTED_COLOR,
-    fontSize: 13,
     lineHeight: 18,
   },
   statePage: {

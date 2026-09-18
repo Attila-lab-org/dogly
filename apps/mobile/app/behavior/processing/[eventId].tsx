@@ -1,7 +1,7 @@
 /**
  * Behavior processing — polling GET /v1/behavior/events/{id}.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +9,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
-import { PROCESSING_STEP_ORDER, processingStepsFor } from '@/features/core/copy';
 import {
   getBehaviorEvent,
   IN_PROGRESS_STATUSES,
@@ -25,7 +24,6 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { ProcessingCompanion } from '@/features/behavior/ProcessingCompanion';
 import { ProcessingContextCard } from '@/features/behavior/ProcessingContextCard';
 import { useSession } from '@/features/auth/SessionProvider';
-import { useMeProfile } from '@/features/me/api';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
 import {
@@ -37,13 +35,11 @@ export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
-  const meQuery = useMeProfile();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
     isApiConfigured() &&
     Boolean(userId) &&
     isPersistedId(eventId);
-  const steps = useMemo(() => processingStepsFor(dog.name), [dog.name]);
   const [finishing, setFinishing] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const completionStarted = useRef(false);
@@ -288,7 +284,6 @@ export default function BehaviorProcessingScreen() {
           : 'QUEUED'
       : status ?? 'QUEUED';
 
-  const currentOrder = PROCESSING_STEP_ORDER[displayStatus] ?? 0;
   const isRetrying = displayStatus === 'FAILED_RETRYABLE';
 
   return (
@@ -302,32 +297,27 @@ export default function BehaviorProcessingScreen() {
         >
           <Ionicons name="close" size={26} color={colors.text} />
         </Pressable>
-        <Text style={styles.topTitle}>Sto guardando {dog.name}</Text>
         <View style={styles.topSpacer} />
       </View>
 
-      <ProcessingCompanion
-        dogName={dog.name}
-        status={displayStatus}
-        finishing={finishing}
-      />
+      <View style={styles.experience}>
+        {eventId && userId ? (
+          <ProcessingContextCard
+            eventId={eventId}
+            dogId={dog.id}
+            userId={userId}
+            enabled={useApi}
+            finishing={finishing}
+            analysisStatus={displayStatus}
+          />
+        ) : null}
 
-      {eventId && userId ? (
-        <ProcessingContextCard
-          eventId={eventId}
-          dogId={dog.id}
-          userId={userId}
-          ownerDisplayName={meQuery.data?.display_name}
-          enabled={useApi}
+        <ProcessingCompanion
+          dogName={dog.name}
+          status={displayStatus}
           finishing={finishing}
-          analysisStatus={displayStatus}
         />
-      ) : null}
-
-      <Text style={styles.heroText}>
-        Puoi anche chiudere. Se hai attivato le notifiche, ti avviso quando il
-        risultato è pronto; altrimenti lo ritrovi nel Diario.
-      </Text>
+      </View>
 
       {isRetrying && (
         <View style={styles.retryBanner}>
@@ -338,44 +328,6 @@ export default function BehaviorProcessingScreen() {
           </Text>
         </View>
       )}
-
-      <View style={styles.stepper}>
-        {steps.map((step, index) => {
-          const stepOrder = PROCESSING_STEP_ORDER[step.status];
-          const done = !isRetrying && stepOrder < currentOrder;
-          const active = !isRetrying && stepOrder === currentOrder;
-          return (
-            <View key={step.id} style={styles.stepRow}>
-              <View
-                style={[
-                  styles.stepDot,
-                  done && styles.stepDotDone,
-                  active && styles.stepDotActive,
-                ]}
-              >
-                {done ? (
-                  <Ionicons name="checkmark" size={14} color={colors.textOnPrimary} />
-                ) : (
-                  <View style={[styles.stepInnerDot, active && styles.stepInnerDotActive]} />
-                )}
-              </View>
-              {index < steps.length - 1 && (
-                <View style={[styles.stepLine, done && styles.stepLineDone]} />
-              )}
-              <View style={styles.stepTextWrap}>
-                <Text
-                  style={[styles.stepTitle, active && styles.stepTitleActive]}
-                >
-                  {step.title}
-                </Text>
-                {(active || done) && (
-                  <Text style={styles.stepDescription}>{step.description}</Text>
-                )}
-              </View>
-            </View>
-          );
-        })}
-      </View>
     </ScreenContainer>
   );
 }
@@ -385,22 +337,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xl,
-  },
-  topTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    marginBottom: spacing.md,
   },
   topSpacer: {
     width: 26,
   },
-  heroText: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-    marginBottom: spacing.xl,
-    textAlign: 'center',
+  experience: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: spacing.xl,
   },
   retryBanner: {
     flexDirection: 'row',
@@ -415,68 +360,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.size.sm,
     color: colors.text,
-  },
-  stepper: {
-    marginBottom: spacing.lg,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  stepDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepDotDone: {
-    backgroundColor: colors.accent,
-  },
-  stepDotActive: {
-    backgroundColor: colors.primarySoft,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  stepInnerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  stepInnerDotActive: {
-    backgroundColor: colors.primary,
-  },
-  stepLine: {
-    position: 'absolute',
-    left: 13,
-    top: 30,
-    width: 2,
-    height: spacing.lg,
-    backgroundColor: colors.border,
-  },
-  stepLineDone: {
-    backgroundColor: colors.accent,
-  },
-  stepTextWrap: {
-    flex: 1,
-  },
-  stepTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.textMuted,
-  },
-  stepTitleActive: {
-    color: colors.text,
-  },
-  stepDescription: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   statePage: {
     flex: 1,
