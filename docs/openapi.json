@@ -9092,6 +9092,11 @@
               }
             ],
             "title": "Applied To Interpretation"
+          },
+          "accepting_answers": {
+            "type": "boolean",
+            "title": "Accepting Answers",
+            "default": true
           }
         },
         "type": "object",

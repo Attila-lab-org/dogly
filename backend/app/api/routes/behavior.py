@@ -20,22 +20,27 @@ from app.contracts.api import (
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import (
-    BehaviorEventStatus,
     INTERPRETATION_SCHEMA_VERSION,
     FeedbackValue,
 )
 from app.domains import behavior as behavior_domain
-from app.domains import behavior_db, idempotency_db, lifestyle, lifestyle_db
+from app.domains import (
+    behavior_db,
+    idempotency_db,
+    lifestyle,
+    lifestyle_db,
+    processing_context_store,
+)
 from app.domains.context_bucket import resolve_context_bucket
 from app.domains.models import BehaviorEventRec
 from app.domains.processing_context import (
     MAX_PROCESSING_QUESTIONS,
     PLANNER_VERSION,
+    is_collecting_status,
     owner_facts_for_reasoner,
     plan_next_question,
     resolve_question,
 )
-from app.domains import processing_context_store
 from app.knowledge.models import AdviceOutcomeValue
 
 router = APIRouter()
@@ -327,12 +332,7 @@ async def _processing_rows(state: StateDep, *, event_id: str, user_id: str):
     )
 
 
-async def _processing_out(
-    state: StateDep,
-    *,
-    event: BehaviorEventRec,
-    applied_to_interpretation: bool | None = None,
-) -> ProcessingContextOut:
+async def _processing_plan_state(state: StateDep, event: BehaviorEventRec):
     from app.worker.handlers import _dog_context, _eligible_memory
 
     rows = await _processing_rows(
@@ -350,48 +350,60 @@ async def _processing_out(
     bucket = getattr(capture, "context_bucket", None) if capture is not None else None
     dog_name = "il cane"
     dog_context = None
+    lifestyle = None
     memory = []
     try:
-        dog, dog_context, _lifestyle = await _dog_context(state, event)
+        dog, dog_context, lifestyle = await _dog_context(state, event)
         dog_name = dog.name
         memory = await _eligible_memory(state, event.dog_id)
-    except Exception:
-        if event.dog_id in state.store.dogs:
-            dog_name = state.store.dogs[event.dog_id].name
-    question = None
-    if event.status not in {
-        BehaviorEventStatus.REJECTED_QUALITY,
-        BehaviorEventStatus.FAILED_TERMINAL,
-        BehaviorEventStatus.CANCELLED,
-        BehaviorEventStatus.COMPLETED,
-    }:
-        planned = plan_next_question(
-            dog_name=dog_name,
-            context_bucket=bucket,
-            has_audio=has_audio,
-            occupied_question_ids=occupied,
-            dog_context=dog_context,
-            eligible_memory=memory,
-            observation=event.observation_json,
-        )
-        if planned is not None:
-            question = ProcessingContextQuestion(
-                id=planned.id,
-                text=planned.text,
-                options=[
-                    ProcessingContextOption(id=item.id, label=item.label)
-                    for item in planned.options
-                ],
-            )
+    except (ApiError, KeyError, AttributeError, TypeError, ValueError):
+        stored = state.store.dogs.get(event.dog_id)
+        if stored is not None:
+            dog_name = stored.name
+    planned = plan_next_question(
+        dog_name=dog_name,
+        context_bucket=bucket,
+        has_audio=has_audio,
+        occupied_question_ids=occupied,
+        dog_context=dog_context,
+        eligible_memory=memory,
+        observation=event.observation_json,
+        lifestyle=lifestyle,
+    )
+    return rows, occupied, planned
+
+
+def _question_out(planned) -> ProcessingContextQuestion | None:
+    if planned is None:
+        return None
+    return ProcessingContextQuestion(
+        id=planned.id,
+        text=planned.text,
+        options=[
+            ProcessingContextOption(id=item.id, label=item.label)
+            for item in planned.options
+        ],
+    )
+
+
+async def _processing_out(
+    state: StateDep,
+    *,
+    event: BehaviorEventRec,
+    applied_to_interpretation: bool | None = None,
+) -> ProcessingContextOut:
+    rows, _occupied, planned = await _processing_plan_state(state, event)
+    accepting = is_collecting_status(event.status)
     answered = sum(1 for row in rows if not row.skipped and row.answer_id)
     return ProcessingContextOut(
         event_id=event.id,
         analysis_status=str(getattr(event.status, "value", event.status)),
-        question=question,
+        question=_question_out(planned) if accepting else None,
         answered_count=answered,
         max_questions=MAX_PROCESSING_QUESTIONS,
         planner_version=PLANNER_VERSION,
         applied_to_interpretation=applied_to_interpretation,
+        accepting_answers=accepting,
     )
 
 
@@ -434,36 +446,51 @@ async def post_processing_context(
         event = await behavior_db.get_event(
             state.engine, user_id=user_id, event_id=event_id
         )
-        await processing_context_store.upsert_answer_db(
-            state.engine,
-            event_id=event.id,
-            user_id=user_id,
-            question_id=payload.question_id,
-            answer_id=payload.answer_id,
-            skipped=payload.skipped,
-        )
     else:
         event = behavior_domain.get_event(
             state.store, user_id=user_id, event_id=event_id
         )
-        processing_context_store.upsert_answer(
-            state.store,
-            event_id=event.id,
-            user_id=user_id,
-            question_id=payload.question_id,
-            answer_id=payload.answer_id,
-            skipped=payload.skipped,
-        )
-    applied = event.status in {
-        BehaviorEventStatus.QUEUED,
-        BehaviorEventStatus.OBSERVING,
-        BehaviorEventStatus.UPLOADING,
-    }
-    # Late answers stay audited. They never re-run the Observer.
+    rows, occupied, planned = await _processing_plan_state(state, event)
+    existing = next(
+        (row for row in rows if row.question_id == payload.question_id),
+        None,
+    )
+    collecting = is_collecting_status(event.status)
+    if existing is None:
+        if len(occupied) >= MAX_PROCESSING_QUESTIONS:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "Processing companion already collected three answers.",
+            )
+        if planned is None or planned.id != payload.question_id:
+            raise ApiError(
+                ErrorCode.VALIDATION_FAILED,
+                "This question is not the current processing question.",
+            )
+        if state.engine is not None:
+            await processing_context_store.upsert_answer_db(
+                state.engine,
+                event_id=event.id,
+                user_id=user_id,
+                question_id=payload.question_id,
+                answer_id=payload.answer_id,
+                skipped=payload.skipped,
+            )
+        else:
+            processing_context_store.upsert_answer(
+                state.store,
+                event_id=event.id,
+                user_id=user_id,
+                question_id=payload.question_id,
+                answer_id=payload.answer_id,
+                skipped=payload.skipped,
+            )
+    # Late in-flight taps stay audited. They never re-run the Observer
+    # and are not presented as applied to the first interpretation.
     return await _processing_out(
         state,
         event=event,
-        applied_to_interpretation=applied,
+        applied_to_interpretation=collecting,
     )
 
 

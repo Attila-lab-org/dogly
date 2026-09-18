@@ -9,11 +9,11 @@ from app.config import Settings
 from app.contracts.api import DogAvatarInitRequest, DogCreate, DogUpdate, SignedUpload
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains.age_stage import normalize_age_stage
-from app.domains.sex import normalize_sex
 from app.domains.billing import max_active_dogs
 from app.domains.ids import require_uuid
 from app.domains.models import DogRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
+from app.domains.sex import normalize_sex
 from app.providers.base import StorageProvider
 
 logger = logging.getLogger(__name__)

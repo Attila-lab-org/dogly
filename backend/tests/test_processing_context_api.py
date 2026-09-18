@@ -5,8 +5,8 @@ from __future__ import annotations
 import httpx
 
 from app.contracts.taxonomy import BehaviorEventStatus
-from app.domains.processing_context import owner_facts_for_reasoner
 from app.domains import processing_context_store
+from app.domains.processing_context import owner_facts_for_reasoner
 from app.worker.handlers import process_behavior_event
 from tests.conftest import create_dog, make_token
 
@@ -195,8 +195,7 @@ async def test_rejected_quality_stays_rejected_even_with_answers(
         json={"question_id": "usual_situation", "answer_id": "usual"},
         headers=auth_headers,
     )
-    assert late.status_code == 200
-    assert late.json()["applied_to_interpretation"] is False
+    assert late.status_code == 422
     assert state.store.behavior_events[event_id].status is BehaviorEventStatus.REJECTED_QUALITY
 
 
@@ -255,3 +254,82 @@ async def test_no_answers_keeps_reasoner_context_empty(
     result = await process_behavior_event(state, event_id=event_id)
     assert result["status"] == "COMPLETED"
     assert captured["processing_owner_context"] == []
+
+
+async def test_server_rejects_unoffered_and_fourth_question(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    event_id = await _queue_event(client, auth_headers, "proc-offered-0001", state=state)
+    first = (
+        await client.get(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            headers=auth_headers,
+        )
+    ).json()["question"]
+    other = "usual_situation" if first["id"] != "usual_situation" else "before_moment"
+    hijack = await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={"question_id": other, "answer_id": "usual"},
+        headers=auth_headers,
+    )
+    assert hijack.status_code == 422
+
+    for index in range(3):
+        shown = (
+            await client.get(
+                f"/v1/behavior/events/{event_id}/processing-context",
+                headers=auth_headers,
+            )
+        ).json()["question"]
+        assert shown is not None
+        answered = await client.post(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            json={
+                "question_id": shown["id"],
+                "answer_id": shown["options"][0]["id"],
+            },
+            headers=auth_headers,
+        )
+        assert answered.status_code == 200, answered.text
+        assert answered.json()["accepting_answers"] is True
+        if index == 2:
+            assert answered.json()["question"] is None
+
+    overflow = await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={"question_id": "recent_change", "answer_id": "no"},
+        headers=auth_headers,
+    )
+    assert overflow.status_code == 422
+
+
+async def test_interpreting_cutoff_does_not_present_late_answer_as_applied(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    event_id = await _queue_event(client, auth_headers, "proc-cut-0001", state=state)
+    shown = (
+        await client.get(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            headers=auth_headers,
+        )
+    ).json()["question"]
+    state.store.behavior_events[event_id].status = BehaviorEventStatus.INTERPRETING
+    hidden = await client.get(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        headers=auth_headers,
+    )
+    assert hidden.json()["question"] is None
+    assert hidden.json()["accepting_answers"] is False
+
+    late = await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={
+            "question_id": shown["id"],
+            "answer_id": shown["options"][0]["id"],
+        },
+        headers=auth_headers,
+    )
+    assert late.status_code == 200
+    assert late.json()["applied_to_interpretation"] is False
+    assert late.json()["accepting_answers"] is False
+    assert late.json()["question"] is None

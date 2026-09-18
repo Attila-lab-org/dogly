@@ -6,11 +6,14 @@ No LLM. Never asks the owner to annotate posture, emotion, or confidence.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.contracts.taxonomy import ContextBucket
+from app.contracts.observation import ObservationContract
+from app.contracts.taxonomy import BehaviorEventStatus, ContextBucket
+from app.domains.context_bucket import resolve_context_bucket
 from app.knowledge.models import DogContextSnapshot
 from app.providers.base import EligiblePatternSummary
 
@@ -18,6 +21,24 @@ QUESTION_BANK_VERSION = "processing-questions/v1"
 PLANNER_VERSION = "processing-planner/v1"
 MAX_PROCESSING_QUESTIONS = 3
 OWNER_REPORTED = "OWNER_REPORTED"
+COLLECTING_STATUSES = frozenset(
+    {
+        BehaviorEventStatus.DRAFT,
+        BehaviorEventStatus.UPLOADING,
+        BehaviorEventStatus.QUEUED,
+        BehaviorEventStatus.OBSERVING,
+        BehaviorEventStatus.FAILED_RETRYABLE,
+    }
+)
+UNKNOWN_GENERIC_QUESTION_IDS = frozenset(
+    {
+        "before_moment",
+        "usual_situation",
+        "behavior_seen_before",
+        "recent_change",
+        "owner_heard_vocalization",
+    }
+)
 
 
 class QuestionOption(BaseModel):
@@ -79,7 +100,7 @@ QUESTION_BANK: dict[str, QuestionDef] = {
             QuestionOption(id="no", label="No"),
             QuestionOption(id="not_sure", label="Non lo so"),
         ],
-        buckets=frozenset({"WALK", "OUTDOORS", "OTHER_DOG", "UNKNOWN"}),
+        buckets=frozenset({"WALK", "OUTDOORS", "OTHER_DOG"}),
         distinguish=3,
     ),
     "target_known": QuestionDef(
@@ -104,7 +125,7 @@ QUESTION_BANK: dict[str, QuestionDef] = {
             QuestionOption(id="not_sure", label="Non lo so"),
         ],
         buckets=frozenset(
-            {"OUTDOORS", "WALK", "DOOR_EXIT", "STRANGER", "OTHER_DOG", "UNKNOWN"}
+            {"OUTDOORS", "WALK", "DOOR_EXIT", "STRANGER", "OTHER_DOG"}
         ),
         distinguish=3,
     ),
@@ -260,8 +281,42 @@ BUCKET_SEEDS: dict[str, tuple[str, ...]] = {
     "OTHER_DOG": ("target_known", "freedom_to_move", "resource_nearby"),
     "VEHICLE": ("familiar_place", "usual_situation", "recent_change"),
     "HANDLING": ("owner_interaction", "discomfort_today", "usual_situation"),
-    "UNKNOWN": ("before_moment", "usual_situation", "other_dog_present"),
+    "UNKNOWN": ("before_moment", "usual_situation"),
 }
+
+
+def is_collecting_status(status: BehaviorEventStatus | str | None) -> bool:
+    if status is None:
+        return False
+    value = status.value if isinstance(status, BehaviorEventStatus) else str(status)
+    try:
+        return BehaviorEventStatus(value) in COLLECTING_STATUSES
+    except ValueError:
+        return False
+
+
+def _as_bucket(context_bucket: ContextBucket | str | None) -> ContextBucket:
+    if context_bucket is None:
+        return ContextBucket.UNKNOWN
+    if isinstance(context_bucket, ContextBucket):
+        return context_bucket
+    try:
+        return ContextBucket(str(context_bucket))
+    except ValueError:
+        return ContextBucket.UNKNOWN
+
+
+def _observation_contract(observation: dict[str, Any] | ObservationContract | None):
+    if observation is None:
+        return None
+    if isinstance(observation, ObservationContract):
+        return observation
+    from pydantic import ValidationError
+
+    try:
+        return ObservationContract.model_validate(observation)
+    except ValidationError:
+        return None
 
 
 def resolve_question(question_id: str, answer_id: str | None = None) -> QuestionDef:
@@ -307,12 +362,6 @@ def owner_facts_for_reasoner(
             )
         )
     return facts
-
-
-def _bucket_value(context_bucket: ContextBucket | str | None) -> str:
-    if context_bucket is None:
-        return ContextBucket.UNKNOWN.value
-    return context_bucket.value if hasattr(context_bucket, "value") else str(context_bucket)
 
 
 def _owner_off(dog_context: DogContextSnapshot | None) -> bool:
@@ -388,6 +437,8 @@ def _score(
         return None
     if question.id == "weather" or question.id == "temperature":
         return None
+    if bucket == "UNKNOWN" and question.id not in UNKNOWN_GENERIC_QUESTION_IDS:
+        return None
 
     score = 0
     score += question.distinguish
@@ -397,7 +448,11 @@ def _score(
         score += 1
     elif question.id not in {"owner_heard_vocalization", "usual_situation"}:
         score -= 3
-    if question.id in {"freedom_to_move", "target_known", "discomfort_today"}:
+    if bucket != "UNKNOWN" and question.id in {
+        "freedom_to_move",
+        "target_known",
+        "discomfort_today",
+    }:
         score += 2
     if question.video_blind:
         score += 1
@@ -424,7 +479,8 @@ def plan_next_question(
     occupied_question_ids: Iterable[str],
     dog_context: DogContextSnapshot | None = None,
     eligible_memory: list[EligiblePatternSummary] | None = None,
-    observation: dict[str, Any] | None = None,
+    observation: dict[str, Any] | ObservationContract | None = None,
+    lifestyle: dict[str, Any] | None = None,
 ) -> PlannedQuestion | None:
     occupied = set(occupied_question_ids)
     if len(occupied) >= MAX_PROCESSING_QUESTIONS:
@@ -432,7 +488,12 @@ def plan_next_question(
     if _quality_insufficient(observation):
         return None
 
-    bucket = _bucket_value(context_bucket)
+    bucket = resolve_context_bucket(
+        _as_bucket(context_bucket),
+        observation=_observation_contract(observation),
+        lifestyle=lifestyle,
+        dog_context=dog_context,
+    ).value
     seeds = BUCKET_SEEDS.get(bucket, BUCKET_SEEDS["UNKNOWN"])
     owner_off = _owner_off(dog_context)
     recent_known = _has_recent_change(dog_context)

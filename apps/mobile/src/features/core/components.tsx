@@ -2,7 +2,7 @@
  * Componenti condivisi dei domini core (F1): header di sezione, avatar cane,
  * Knowledge Score, pill di confidenza, righe evidence, vista risultato
  * comportamentale (riusata da /behavior/result e /diary/event) e feedback
- * a tre vie. Stile vincolante: docs/ux/UX_REFERENCE.md + mockup ufficiali.
+ * con 👍/👎. Stile vincolante: docs/ux/UX_REFERENCE.md + mockup ufficiali.
  */
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
@@ -25,9 +25,7 @@ import {
   sanitizeOwnerCopy,
 } from './copy';
 import { isPersonalBaselineNote } from './conversationCopy';
-import { correctionOptions } from './correctionOptions';
 import { knowledgeLevelLabel, type KnowledgeScore } from './types';
-import { getConsents } from '../privacy/consents';
 
 export { SectionHeader };
 
@@ -174,65 +172,51 @@ export function EvidenceRow({ item }: { item: EvidenceItem }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* FeedbackButtons — "Sì, è così / Non credo / Non lo so" one-tap (6.1) */
+/* FeedbackButtons — "Ti è stata utile?" 👍 / 👎 one-tap */
 /* ------------------------------------------------------------------ */
 
 export function FeedbackButtons({
   value,
   onFeedback,
   error,
-  dogName = 'lui',
-  primaryIntent = null,
-  alternatives = [],
 }: {
   value: FeedbackValue | null;
   onFeedback: (
     value: FeedbackValue,
     extras?: { correction_label?: BehaviorIntent | null },
   ) => void;
-  /** Messaggio onesto quando il salvataggio è fallito: il badge "Salvato" resta spento. */
   error?: string | null;
   dogName?: string;
   primaryIntent?: BehaviorIntent | null;
   alternatives?: Array<{ intent: BehaviorIntent }>;
 }) {
-  const [awaitingCorrection, setAwaitingCorrection] = React.useState(false);
-  const researchOptIn = getConsents().researchTraining;
   const options: Array<{
-    value: FeedbackValue;
+    value: Extract<FeedbackValue, 'YES' | 'NO'>;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
+    selectedBg: string;
+    selectedBorder: string;
   }> = [
-    { value: 'YES', label: 'Sì, è così', icon: 'checkmark' },
-    { value: 'NO', label: 'Non proprio', icon: 'close' },
-    { value: 'UNKNOWN', label: 'Non lo so', icon: 'help' },
+    {
+      value: 'YES',
+      label: 'Utile',
+      icon: 'thumbs-up',
+      selectedBg: colors.successSoft,
+      selectedBorder: colors.success,
+    },
+    {
+      value: 'NO',
+      label: 'Non utile',
+      icon: 'thumbs-down',
+      selectedBg: colors.dangerSoft,
+      selectedBorder: colors.danger,
+    },
   ];
-  const chips = correctionOptions(primaryIntent, alternatives);
-
-  const submit = (
-    next: FeedbackValue,
-    extras?: { correction_label?: BehaviorIntent | null },
-  ) => {
-    setAwaitingCorrection(false);
-    onFeedback(next, extras);
-  };
 
   return (
     <View style={styles.feedbackCard}>
-      <View style={styles.feedbackHeading}>
-        <Text style={styles.feedbackTitle}>Ti torna per {dogName}?</Text>
-        {error ? (
-          <View style={styles.savedBadge}>
-            <Ionicons name="alert-circle" size={13} color={colors.danger} />
-            <Text style={styles.errorLabel}>{error}</Text>
-          </View>
-        ) : value ? (
-          <View style={styles.savedBadge}>
-            <Ionicons name="checkmark" size={13} color={colors.accent} />
-            <Text style={styles.savedLabel}>Salvato</Text>
-          </View>
-        ) : null}
-      </View>
+      <Text style={styles.feedbackTitle}>Ti è stata utile questa lettura?</Text>
+      {error ? <Text style={styles.errorLabel}>{error}</Text> : null}
       <View style={styles.feedbackOptions}>
         {options.map((option) => {
           const selected = value === option.value;
@@ -240,78 +224,35 @@ export function FeedbackButtons({
             <Pressable
               key={option.value}
               accessibilityRole="button"
+              accessibilityLabel={option.label}
               accessibilityState={{ selected }}
               onPress={() => {
-                if (option.value === 'NO' && !value) {
-                  setAwaitingCorrection(true);
-                  return;
-                }
-                submit(option.value);
+                if (value === option.value) return;
+                onFeedback(option.value);
               }}
               style={({ pressed }) => [
                 styles.feedbackOption,
-                selected && styles.feedbackOptionSelected,
+                selected && {
+                  backgroundColor: option.selectedBg,
+                  borderColor: option.selectedBorder,
+                },
                 pressed && styles.feedbackOptionPressed,
               ]}
               testID={`feedback-${option.value.toLowerCase()}`}
             >
-              <View
-                style={[
-                  styles.feedbackIcon,
-                  selected && styles.feedbackIconSelected,
-                ]}
-              >
-                <Ionicons
-                  name={option.icon}
-                  size={16}
-                  color={selected ? colors.textOnPrimary : colors.textSecondary}
-                />
-              </View>
-              <Text
-                style={[
-                  styles.feedbackOptionLabel,
-                  selected && styles.feedbackOptionLabelSelected,
-                ]}
-              >
-                {option.label}
-              </Text>
+              <Ionicons
+                name={option.icon}
+                size={22}
+                color={
+                  selected
+                    ? option.selectedBorder
+                    : colors.textSecondary
+                }
+              />
             </Pressable>
           );
         })}
       </View>
-      {awaitingCorrection ? (
-        <View style={styles.correctionBlock} testID="feedback-correction">
-          <Text style={styles.correctionTitle}>Cosa stava davvero facendo?</Text>
-          <View style={styles.correctionChips}>
-            {chips.map((intent) => (
-              <Pressable
-                key={intent}
-                onPress={() =>
-                  submit('NO', { correction_label: intent })
-                }
-                style={styles.correctionChip}
-                testID={`correction-${intent}`}
-              >
-                <Text style={styles.correctionChipLabel}>
-                  {BEHAVIOR_INTENT_LABELS[intent]}
-                </Text>
-              </Pressable>
-            ))}
-            <Pressable
-              onPress={() => submit('NO', { correction_label: null })}
-              style={styles.correctionChip}
-              testID="correction-other"
-            >
-              <Text style={styles.correctionChipLabel}>Altro</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.researchNote}>
-            {researchOptIn
-              ? `Questa correzione aiuta Dogly a capire ${dogName} e, con il tuo consenso, anche la ricerca.`
-              : `Questa correzione resta sul profilo di ${dogName}. Per usarla anche in ricerca, attiva il consenso in Privacy.`}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -355,7 +296,7 @@ export function BehaviorResultView({
     extras?: { correction_label?: BehaviorIntent | null },
   ) => void;
   careNote?: string | null;
-  /** Stato errore del salvataggio feedback (mai finto "Salvato"). */
+  /** Stato errore del salvataggio feedback: non mostrare un successo finto. */
   feedbackError?: string | null;
   photoUri?: string | null;
   contextPrompt?: React.ReactNode;
@@ -634,31 +575,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
   },
-  feedbackHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
   feedbackTitle: {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
-  },
-  savedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  savedLabel: {
-    color: colors.accent,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
+    marginBottom: spacing.md,
   },
   errorLabel: {
     color: colors.danger,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
+    marginBottom: spacing.sm,
   },
   feedbackOptions: {
     flexDirection: 'row',
@@ -666,41 +593,16 @@ const styles = StyleSheet.create({
   },
   feedbackOption: {
     flex: 1,
-    minHeight: 70,
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceMuted,
   },
-  feedbackOptionSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
   feedbackOptionPressed: {
-    backgroundColor: colors.border,
-  },
-  feedbackIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  feedbackIconSelected: {
-    backgroundColor: colors.primary,
-  },
-  feedbackOptionLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-    textAlign: 'center',
-  },
-  feedbackOptionLabelSelected: {
-    color: colors.primary,
+    opacity: 0.85,
   },
   resultHero: {
     alignItems: 'center',

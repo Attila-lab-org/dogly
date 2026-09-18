@@ -566,6 +566,7 @@ class ProcessingContextOut(BaseModel):
     max_questions: int = 3
     planner_version: str
     applied_to_interpretation: bool | None = None
+    accepting_answers: bool = True
 
 
 class ProcessingContextAnswerRequest(BaseModel):

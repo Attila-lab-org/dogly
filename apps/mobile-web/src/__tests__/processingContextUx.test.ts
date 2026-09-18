@@ -27,6 +27,8 @@ describe('processing context companion UX', () => {
     expect(card).toContain('processingQuestionKicker');
     expect(card).toContain('Salta');
     expect(card).toContain('finishing');
+    expect(card).toContain('isProcessingCollecting');
+    expect(card).toContain('accepting_answers');
     expect(card).not.toMatch(/chat|bubble/i);
   });
 
@@ -40,8 +42,26 @@ describe('processing context companion UX', () => {
     expect(processingQuestionKicker('Attilio')).not.toMatch(CONSUMER_LEAK_PATTERN);
   });
 
-  it('hides the companion when the result is ready', () => {
-    expect(card).toContain('if (finishing || (!locked && !ack)) return null');
-    expect(processingScreen).toContain('finishing={finishing}');
+  it('hides the companion when interpretation has started', () => {
+    expect(card).toContain('!collecting');
+    expect(card).toContain('applied_to_interpretation === false');
+    expect(processingScreen).toContain('analysisStatus={displayStatus}');
+  });
+});
+
+describe('result feedback stays minimal', () => {
+  const feedback = readFileSync(
+    resolve(__dirname, '../features/core/components.tsx'),
+    'utf8',
+  );
+
+  it('uses thumbs only and never opens a correction questionnaire', () => {
+    expect(feedback).toContain('Ti è stata utile questa lettura?');
+    expect(feedback).toContain('thumbs-up');
+    expect(feedback).toContain('thumbs-down');
+    expect(feedback).not.toContain('Sì, è così');
+    expect(feedback).not.toContain('Non lo so');
+    expect(feedback).not.toContain('Salvato');
+    expect(feedback).not.toContain('Cosa stava davvero facendo?');
   });
 });

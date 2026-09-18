@@ -153,6 +153,7 @@ export type ProcessingContextOut = {
   max_questions: number;
   planner_version: string;
   applied_to_interpretation?: boolean | null;
+  accepting_answers?: boolean;
 };
 
 export async function getProcessingContext(
@@ -216,6 +217,18 @@ export const IN_PROGRESS_STATUSES: BehaviorEventStatus[] = [
   'INTERPRETING',
   'FAILED_RETRYABLE',
 ];
+
+export function isProcessingCollecting(
+  status?: BehaviorEventStatus | string | null,
+): boolean {
+  return (
+    status === 'DRAFT' ||
+    status === 'UPLOADING' ||
+    status === 'QUEUED' ||
+    status === 'OBSERVING' ||
+    status === 'FAILED_RETRYABLE'
+  );
+}
 
 export function isTerminalBehaviorStatus(status: BehaviorEventStatus): boolean {
   return (

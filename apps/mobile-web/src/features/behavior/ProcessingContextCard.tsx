@@ -10,9 +10,11 @@ import {
 } from '../core/conversationCopy';
 import {
   getProcessingContext,
+  isProcessingCollecting,
   postProcessingContext,
   type ProcessingContextQuestion,
 } from './api';
+import type { BehaviorEventStatus } from '../../contracts/types';
 
 export function ProcessingContextCard({
   eventId,
@@ -21,6 +23,7 @@ export function ProcessingContextCard({
   ownerDisplayName,
   enabled,
   finishing,
+  analysisStatus,
 }: {
   eventId: string;
   dogId: string;
@@ -28,6 +31,7 @@ export function ProcessingContextCard({
   ownerDisplayName?: string | null;
   enabled: boolean;
   finishing: boolean;
+  analysisStatus?: BehaviorEventStatus | string | null;
 }) {
   const [locked, setLocked] = useState<ProcessingContextQuestion | null>(null);
   const [ack, setAck] = useState<string | null>(null);
@@ -42,11 +46,16 @@ export function ProcessingContextCard({
     [],
   );
 
+  const collecting =
+    !finishing &&
+    isProcessingCollecting(analysisStatus);
+
   const query = useQuery({
     queryKey: queryKeys.processingContext(userId, dogId, eventId),
     queryFn: () => getProcessingContext(eventId),
-    enabled: enabled && !finishing,
-    staleTime: 8_000,
+    enabled: enabled && collecting,
+    staleTime: 4_000,
+    refetchInterval: collecting ? 2_500 : false,
   });
 
   useEffect(() => {
@@ -63,6 +72,11 @@ export function ProcessingContextCard({
     }) => postProcessingContext(eventId, body),
     onMutate: () => setError(null),
     onSuccess: (next) => {
+      if (!next.accepting_answers || next.applied_to_interpretation === false) {
+        setAck(null);
+        setLocked(null);
+        return;
+      }
       const message = PROCESSING_ACKS[ackIndex.current % PROCESSING_ACKS.length];
       ackIndex.current += 1;
       setAck(message);
@@ -77,7 +91,13 @@ export function ProcessingContextCard({
     },
   });
 
-  if (finishing || (!locked && !ack)) return null;
+  if (
+    !collecting ||
+    query.data?.accepting_answers === false ||
+    (!locked && !ack)
+  ) {
+    return null;
+  }
 
   const busy = mutation.isPending || Boolean(ack);
   const question = locked;

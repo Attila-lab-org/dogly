@@ -5,7 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import StateDep, UserIdDep
-from app.contracts.api import MeResponse, ProfilePatch, UserConsentsPatch, UserConsentsResponse
+from app.contracts.api import (
+    MeResponse,
+    ProfilePatch,
+    UserConsentsPatch,
+    UserConsentsResponse,
+)
 from app.domains import billing_db, consents_db, profiles_db
 from app.domains import consents as consents_domain
 from app.domains import profiles as profiles_domain

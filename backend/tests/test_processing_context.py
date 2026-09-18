@@ -11,7 +11,7 @@ from app.domains.processing_context import (
     owner_facts_for_reasoner,
     plan_next_question,
 )
-from app.knowledge.models import DogContextSnapshot, LifestyleFact, LifeStageContext
+from app.knowledge.models import DogContextSnapshot, LifeStageContext, LifestyleFact
 from app.providers.base import EligiblePatternSummary
 
 
@@ -166,6 +166,16 @@ def test_skip_does_not_create_owner_fact():
     assert [item.question_id for item in facts] == ["usual_situation"]
     assert facts[0].provenance == "OWNER_REPORTED"
     assert facts[0].answer_id == "unusual"
+
+
+def test_unknown_prefers_general_high_value_questions():
+    ids = _collect(3, context_bucket=ContextBucket.UNKNOWN)
+    assert ids[0] in {"before_moment", "usual_situation"}
+    assert "usual_situation" in ids
+    assert "before_moment" in ids
+    assert "freedom_to_move" not in ids
+    assert "target_known" not in ids
+    assert "other_dog_present" not in ids
 
 
 def test_questions_use_dog_name_not_technical_codes():

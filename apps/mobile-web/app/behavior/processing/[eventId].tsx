@@ -340,6 +340,7 @@ export default function BehaviorProcessingScreen() {
           ownerDisplayName={meQuery.data?.display_name}
           enabled={useApi}
           finishing={finishing}
+          analysisStatus={displayStatus}
         />
       ) : null}
 
