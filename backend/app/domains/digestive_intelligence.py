@@ -995,7 +995,7 @@ def _general_layer_summary(
     context: DigestiveContext,
     consistency: str,
     observation: dict[str, Any],
-) -> str:  # noqa: F811 — written into target module
+) -> str:
     name = context.dog_name
     texture = _texture_phrase(consistency)
     if verification_unavailable(observation):
