@@ -99,7 +99,7 @@ export default function HomeScreen() {
 
   const startConversation = () => {
     if (!dog.id) return;
-    router.push(`/dogs/${dog.id}/tell` as never);
+    router.push('/realtime' as never);
   };
 
   return (
@@ -269,7 +269,7 @@ export default function HomeScreen() {
                 >
                   <Ionicons name="mic" size={27} color={colors.accent} />
                 </Pressable>
-                <Text style={styles.ctaActionLabel}>Parla</Text>
+                <Text style={styles.ctaActionLabel}>Chiedi a DOGly</Text>
               </View>
               <View style={styles.ctaAction}>
                 <Pressable

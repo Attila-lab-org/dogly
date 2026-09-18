@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import pytest
+
+from app.config import Settings
+from app.contracts.realtime import RealtimeDecision
+from app.domains.realtime_context import (
+    RealtimeContextItem,
+    RealtimeDogContext,
+    route_realtime_domains,
+)
+from app.domains.realtime_orchestrator import (
+    deterministic_safety_interrupt,
+    orchestrate_realtime_turn,
+)
+from tests.conftest import create_dog
+
+
+def test_cross_domain_router_is_bounded() -> None:
+    assert route_realtime_domains(
+        "Oreo ha diarrea e da quando ho cambiato cibo è anche agitato"
+    ) == ["DIGESTIVE", "NUTRITION", "BEHAVIOR"]
+
+
+def test_question_requires_real_information_gain() -> None:
+    with pytest.raises(ValueError, match="change the decision"):
+        RealtimeDecision(
+            assistant_text="Posso aiutarti.",
+            question="Mi racconti altro?",
+        )
+
+
+def test_deterministic_safety_interrupt_precedes_ai() -> None:
+    decision = deterministic_safety_interrupt("Oreo fa fatica a respirare")
+    assert decision is not None
+    assert decision.terminal_state == "SAFETY_INTERRUPT"
+    assert decision.safety_flags == ["EMERGENCY_BREATHING"]
+    assert decision.question is None
+
+
+@pytest.mark.asyncio
+async def test_disabled_realtime_uses_grounded_latest_analysis() -> None:
+    settings = Settings(realtime_enabled=False)
+    context = RealtimeDogContext(
+        dog_id="dog-1",
+        dog_name="Oreo",
+        identity={},
+        items=[
+            RealtimeContextItem(
+                source_id="fecal-1",
+                source_type="DIGESTIVE_EVENT",
+                summary="La digestione è stabile e oggi non serve cambiare alimentazione.",
+            )
+        ],
+    )
+    decision, audit = await orchestrate_realtime_turn(
+        settings=settings,
+        user_text="Come va la sua digestione?",
+        domains=["DIGESTIVE"],
+        context=context,
+        history=[],
+    )
+    assert "non serve cambiare alimentazione" in decision.assistant_text
+    assert decision.used_source_ids == ["fecal-1"]
+    assert audit["provider"] == "deterministic"
+
+
+@pytest.mark.asyncio
+async def test_behavior_without_evidence_hands_off_to_video() -> None:
+    settings = Settings(realtime_enabled=False)
+    context = RealtimeDogContext(
+        dog_id="dog-1",
+        dog_name="Oreo",
+        identity={},
+    )
+    decision, _ = await orchestrate_realtime_turn(
+        settings=settings,
+        user_text="Perché Oreo abbaia così?",
+        domains=["BEHAVIOR"],
+        context=context,
+        history=[],
+    )
+    assert decision.behavior_handoff is True
+    assert decision.terminal_state == "BEHAVIOR_VIDEO_HANDOFF"
+    assert "video" in decision.assistant_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_realtime_api_session_turn_and_close(
+    client, auth_headers: dict[str, str]
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    session_response = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "TEXT"},
+    )
+    assert session_response.status_code == 201
+    session_id = session_response.json()["id"]
+
+    turn_response = await client.post(
+        f"/v1/realtime/sessions/{session_id}/turns",
+        headers=auth_headers,
+        json={"text": "Perché Oreo abbaia così?"},
+    )
+    assert turn_response.status_code == 201
+    body = turn_response.json()
+    assert body["terminal_state"] == "BEHAVIOR_VIDEO_HANDOFF"
+    assert body["behavior_handoff_href"].startswith("/behavior/capture")
+
+    close_response = await client.delete(
+        f"/v1/realtime/sessions/{session_id}", headers=auth_headers
+    )
+    assert close_response.status_code == 204

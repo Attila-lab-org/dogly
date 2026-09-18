@@ -1150,7 +1150,7 @@ def _general_layer_summary(
         meaning = "Non emergono anomalie visibili."
         return f"{details} {meaning}".strip()
     if texture:
-        meaning = f"Questo aspetto merita di essere seguito nelle prossime evacuazioni."
+        meaning = "Questo aspetto merita di essere seguito nelle prossime evacuazioni."
         return f"{details} {meaning}".strip()
     fallback = (
         f"Ho una nuova osservazione digestiva per {name}, descritta con la "

@@ -99,7 +99,7 @@ export default function HomeScreen() {
 
   const startAudioTell = () => {
     if (!dog.id) return;
-    router.push(`/dogs/${dog.id}/tell` as never);
+    router.push('/realtime');
   };
 
   const openLastInsight = () => {
@@ -277,7 +277,7 @@ export default function HomeScreen() {
                   >
                     <Ionicons name="mic" size={30} color="#10B981" />
                   </Pressable>
-                  <Text style={styles.ctaActionLabel}>Parla</Text>
+                  <Text style={styles.ctaActionLabel}>Chiedi a DOGly</Text>
                 </View>
 
                 <View style={styles.ctaAction}>

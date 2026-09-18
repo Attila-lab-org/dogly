@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # model so the safety-sensitive second look uses the same capability tier.
     digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
+    realtime_reasoning_model: str = "gpt-5.2"
+    realtime_voice_model: str = "gpt-realtime-2.1"
+    realtime_voice: str = "marin"
 
     # Public list prices in USD per 1M tokens. Keep these environment-overridden
     # whenever selecting a different model: model candidates and their pricing
@@ -81,6 +84,7 @@ class Settings(BaseSettings):
     reasoner_kill_switch: bool = False
     digestive_vision_kill_switch: bool = False
     owner_transcription_kill_switch: bool = False
+    realtime_kill_switch: bool = False
     observer_budget_usd_per_day: float = 50.0
     reasoner_budget_usd_per_day: float = 50.0
     digestive_vision_budget_usd_per_day: float = 25.0
@@ -117,6 +121,7 @@ class Settings(BaseSettings):
     nutrition_intelligence_v1: bool = False
     digestive_longitudinal_v3: bool = False
     open_pet_food_facts_v1: bool = False
+    realtime_enabled: bool = False
     open_pet_food_facts_user_agent: str = "DOGly/1.0 (+https://dogly.app)"
 
     # --- CORS (sez. 9.1) ---

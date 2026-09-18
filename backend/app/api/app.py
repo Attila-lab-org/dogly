@@ -26,6 +26,7 @@ from app.api.routes import (
     owner_stories,
     patterns,
     privacy,
+    realtime,
     signals,
     subscription,
     webhooks,
@@ -151,6 +152,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         owner_stories.router, prefix="/v1", tags=["owner-stories"]
     )
     app.include_router(nutrition.router, prefix="/v1", tags=["nutrition"])
+    app.include_router(realtime.router, prefix="/v1", tags=["realtime"])
     app.include_router(subscription.router, prefix="/v1", tags=["subscription", "usage"])
     app.include_router(devices.router, prefix="/v1", tags=["devices"])
     app.include_router(privacy.router, prefix="/v1", tags=["privacy"])
