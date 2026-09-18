@@ -439,9 +439,7 @@ export function BehaviorResultView({
         </Text>
       ) : null}
 
-      {result.evidence.length > 0 ||
-      result.alternatives.length > 0 ||
-      result.confidence_band === 'LOW' ? (
+      {result.evidence.length > 0 || result.alternatives.length > 0 ? (
         <View style={styles.detailsBlock}>
           <Pressable
             accessibilityRole="button"

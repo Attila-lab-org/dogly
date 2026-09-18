@@ -19,4 +19,13 @@ describe('correctionOptions after Non proprio', () => {
     expect(options.length).toBeGreaterThanOrEqual(3);
     expect(options.length).toBeLessThanOrEqual(5);
   });
+  it('preferisce alternative consumer-facing e non espone INSUFFICIENT/AMBIGUOUS', () => {
+    const withAlts = correctionOptions('ATTENTION_REQUEST', [
+      { intent: 'PLAY_INTERACTION' },
+    ]);
+    const without = correctionOptions('ATTENTION_REQUEST', []);
+    expect(withAlts[0]).toBe('PLAY_INTERACTION');
+    expect(without).not.toContain('INSUFFICIENT');
+    expect(without).not.toContain('AMBIGUOUS');
+  });
 });

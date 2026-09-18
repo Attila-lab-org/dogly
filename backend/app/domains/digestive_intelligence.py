@@ -295,6 +295,9 @@ def _similar_hours_count(context: DigestiveContext, consistency: str) -> int:
 
 
 def _repetition_level(context: DigestiveContext, consistency: str) -> str | None:
+    # Formed/hard repetition is stable routine, not a repeating change.
+    if consistency in _FIRM:
+        return None
     hours = _similar_hours_count(context, consistency)
     similar = _similar_prior_count(context, consistency)
     if hours >= 1:
@@ -1186,6 +1189,50 @@ def _build_interpretation_layers(
     return layers
 
 
+
+def _synthesize_from_layers(
+    *,
+    layers: list[DigestiveInterpretationLayer],
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    safety: DigestiveState,
+    observation: dict[str, Any],
+    followup_question: str | None,
+) -> tuple[str, str, str]:
+    """Compose owner-facing copy after layers have been resolved.
+
+    Priority remains safety/verifier -> reliable longitudinal change ->
+    claim-gated profile -> self-sufficient general reading. Headline and
+    next-step follow that priority; summary reuses the factual composition
+    that mirrors those same layers without a second divergent narrative.
+    """
+    _ = layers  # cards already resolved; copy mirrors the same facts
+    headline = _consumer_headline(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        observation=observation,
+    )
+    summary = _useful_info(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        observation=observation,
+    )
+    next_step = _final_advice(
+        observation=observation,
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        followup_question=followup_question,
+    )
+    return headline, summary, next_step
+
+
 def build_digestive_intelligence(
     observation: dict[str, Any],
     context: DigestiveContext,
@@ -1221,20 +1268,6 @@ def build_digestive_intelligence(
     else:
         state = DigestiveState.ROUTINE
 
-    headline = _consumer_headline(
-        context=context,
-        consistency=consistency,
-        baseline_code=baseline_code,
-        safety=safety,
-        observation=observation,
-    )
-    summary = _useful_info(
-        context=context,
-        consistency=consistency,
-        baseline_code=baseline_code,
-        safety=safety,
-        observation=observation,
-    )
 
     relevant_context = _evidence_lines(
         context=context,
@@ -1307,15 +1340,6 @@ def build_digestive_intelligence(
         followup_key=followup_key,
         followup_question=followup_question,
     )
-    next_step = _final_advice(
-        observation=observation,
-        context=context,
-        consistency=consistency,
-        baseline_code=baseline_code,
-        safety=safety,
-        followup_question=followup_question,
-    )
-
     knowledge = retrieve_digestive_knowledge(
         observation,
         state=state.value,
@@ -1343,13 +1367,22 @@ def build_digestive_intelligence(
         soft_or_loose=_is_loose(consistency),
         owner_context_used=_owner_context_used(context),
     )
-
     interpretation_layers = _build_interpretation_layers(
         context=context,
         consistency=consistency,
         baseline_code=baseline_code,
         observation=observation,
         claim_ids=knowledge.claim_ids,
+    )
+
+    headline, summary, next_step = _synthesize_from_layers(
+        layers=interpretation_layers,
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        observation=observation,
+        followup_question=followup_question,
     )
 
     return DigestiveIntelligenceResult(

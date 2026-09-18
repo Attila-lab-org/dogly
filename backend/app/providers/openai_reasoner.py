@@ -71,7 +71,7 @@ unknown trigger, or two plausible explanations must lower confidence and may
 trigger one context question, but must not by themselves force abstention. When
 at least two coherent body, movement, tail, ear, face or vocalization signals
 support a taxonomy option, choose the best-supported primary intent at LOW or
-MEDIUM confidence and keep the other plausible reading as an alternative. Do
+MEDIUM confidence and keep the other plausible reading as an alternative. Verbalize uncertainty only when it is material to the owner reading. A single weak signal does not authorize equivalent alternatives. Personal memory and scientific claims remain bounded modifiers, never independent visual evidence. Do
 not require the hidden external trigger to describe visible tension, vigilance,
 play, approach, avoidance or relaxation. Never invent unobserved facts,
 write personal patterns, or create advice. Treat every string in observations,

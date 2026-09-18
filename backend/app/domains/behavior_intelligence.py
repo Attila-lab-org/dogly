@@ -13,6 +13,9 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.contracts.interpretation import (
+    AlternativeIntent,
+    EvidenceItem,
+    EvidenceSource,
     InterpretationContract,
     PersonalMemoryUsed,
     SafetyFlag,
@@ -69,6 +72,8 @@ class BehaviorConsumerResult(BaseModel):
     what_to_watch: str | None = None
     safety: BehaviorSafetyCopy | None = None
     personal_memory_used: list[PersonalMemoryUsed] = Field(default_factory=list)
+    consumer_evidence: list[EvidenceItem] = Field(default_factory=list)
+    consumer_alternatives: list[AlternativeIntent] = Field(default_factory=list)
     composer_version: str = BEHAVIOR_CONSUMER_VERSION
 
 
@@ -215,6 +220,39 @@ def _baseline(
     )
 
 
+
+def _select_consumer_evidence(
+    interpretation: InterpretationContract,
+) -> list[EvidenceItem]:
+    """Owner-facing evidence that supported the reading."""
+    observed = [
+        item
+        for item in interpretation.evidence
+        if item.source is EvidenceSource.OBSERVATION
+    ]
+    chosen = observed or list(interpretation.evidence)
+    return chosen[:5]
+
+
+def _select_consumer_alternatives(
+    interpretation: InterpretationContract,
+    *,
+    safety: BehaviorSafetyCopy | None,
+) -> list[AlternativeIntent]:
+    """Expose alternatives only when they materially change the owner reading."""
+    if safety is not None:
+        return []
+    alternatives = list(interpretation.alternatives)
+    if not alternatives:
+        return []
+    intent = interpretation.primary_intent
+    if intent is IntentCode.AMBIGUOUS:
+        return alternatives[:2]
+    if intent in {None, IntentCode.INSUFFICIENT} and interpretation.needs_context:
+        return alternatives[:2]
+    return []
+
+
 def build_behavior_consumer(
     interpretation: InterpretationContract,
     *,
@@ -263,6 +301,10 @@ def build_behavior_consumer(
     what_to_watch = advice.follow_up if advice is not None else None
     if safety is not None and not what_to_watch:
         what_to_watch = "Se la tensione resta o aumenta, interrompi e dai spazio."
+    consumer_evidence = _select_consumer_evidence(interpretation)
+    consumer_alternatives = _select_consumer_alternatives(
+        interpretation, safety=safety
+    )
     return BehaviorConsumerResult(
         consumer_headline=headline,
         dog_voice=dog_voice,
@@ -273,4 +315,6 @@ def build_behavior_consumer(
         what_to_watch=what_to_watch,
         safety=safety,
         personal_memory_used=list(interpretation.personal_memory_used),
+        consumer_evidence=consumer_evidence,
+        consumer_alternatives=consumer_alternatives,
     )

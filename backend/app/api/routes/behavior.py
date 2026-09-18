@@ -111,8 +111,16 @@ def event_out(
         primary_intent=event.primary_intent,
         confidence_band=event.confidence_band,
         summary=event.summary,
-        alternatives=interp.get("alternatives", []),
-        evidence=interp.get("evidence", []),
+        alternatives=(
+            consumer["consumer_alternatives"]
+            if "consumer_alternatives" in consumer
+            else interp.get("alternatives", [])
+        ),
+        evidence=(
+            consumer["consumer_evidence"]
+            if "consumer_evidence" in consumer
+            else interp.get("evidence", [])
+        ),
         safety_flags=interp.get("safety_flags", []),
         needs_context=interp.get("needs_context", False),
         context_question=interp.get("context_question"),

@@ -141,13 +141,20 @@ def build_advice(
         # Urgent copy remains owned by the existing deterministic safety layer.
         return None
 
+    # While a context question is the useful action, skip ordinary advice.
+    if interpretation.needs_context:
+        return None
+
     intent = interpretation.primary_intent
     if intent is None:
         return None
     tags = _context_tags(dog_context, flags)
     candidates = []
     for entry in get_registry().advice_catalog:
-        if knowledge_context.coverage == "LOW" and entry.category != "MONITOR":
+        if (
+            knowledge_context.coverage == "LOW"
+            or interpretation.contradictions
+        ) and entry.category != "MONITOR":
             continue
         if intent.value not in entry.applies_to_intents:
             continue
@@ -228,6 +235,25 @@ def build_advice(
             "Osserva se passa volentieri al suo gioco e se il corpo resta "
             "sciolto durante lo scambio."
         )
+
+    # A stable recognized routine must not auto-ask to record another moment.
+    if selected.code == "ADVICE_MONITOR_BASELINE_CHANGE":
+        established = any(
+            item.state.upper() in {"ESTABLISHED", "STRONG"}
+            for item in interpretation.personal_memory_used
+        )
+        disrupted = any(
+            str(fact.value).lower() in {"off", "unusual", "not_usual"}
+            for fact in dog_context.today_vs_usual
+        )
+        if (
+            established
+            and not disrupted
+            and intent
+            not in {IntentCode.AMBIGUOUS, IntentCode.INSUFFICIENT}
+        ):
+            return None
+
     return AdviceItem(
         code=selected.code,
         category=selected.category,
