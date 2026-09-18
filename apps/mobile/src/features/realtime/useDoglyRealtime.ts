@@ -47,6 +47,7 @@ export function useDoglyRealtime(dogId: string) {
   );
   const streamRef = useRef<MediaStream | null>(null);
   const sessionRef = useRef<string | null>(null);
+  const sessionDataRef = useRef<RealtimeSession | null>(null);
   const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
   const handledCalls = useRef(new Set<string>());
 
@@ -61,19 +62,20 @@ export function useDoglyRealtime(dogId: string) {
   }, []);
 
   const ensureSession = useCallback(async () => {
-    if (sessionRef.current && session) return session;
+    if (sessionRef.current && sessionDataRef.current) return sessionDataRef.current;
     if (sessionPromiseRef.current) return sessionPromiseRef.current;
     const promise = createRealtimeSession(dogId, 'VOICE');
     sessionPromiseRef.current = promise;
     try {
       const created = await promise;
       sessionRef.current = created.id;
+      sessionDataRef.current = created;
       setSession(created);
       return created;
     } finally {
       sessionPromiseRef.current = null;
     }
-  }, [dogId, session]);
+  }, [dogId]);
 
   const handleToolCall = useCallback(async (event: ServerEvent) => {
     const channel = channelRef.current;
@@ -211,6 +213,7 @@ export function useDoglyRealtime(dogId: string) {
         void endRealtimeSession(sessionRef.current).catch(() => undefined);
       }
       sessionRef.current = null;
+      sessionDataRef.current = null;
       setError(
         'Non riesco ad aprire il microfono. Puoi continuare scrivendo a DOGly.',
       );
@@ -222,6 +225,7 @@ export function useDoglyRealtime(dogId: string) {
     closeMedia();
     const sessionId = sessionRef.current;
     sessionRef.current = null;
+    sessionDataRef.current = null;
     setSession(null);
     setVoiceState('idle');
     if (sessionId) await endRealtimeSession(sessionId).catch(() => undefined);
