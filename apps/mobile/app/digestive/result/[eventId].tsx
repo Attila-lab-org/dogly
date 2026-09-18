@@ -208,6 +208,7 @@ export default function DigestiveResultScreen() {
   const showAdvice = Boolean(advice) && action?.key !== 'ask_followup';
   const nutritionKind = digestiveActionCardKind(action?.key) === 'nutrition';
   const whyLines = whyITellYou(event.relevantContext);
+  const interpretationLayers = event.interpretationLayers ?? [];
   const uncertainNotes = uncertainVisualNotes(event, dog.name).filter(
     (note) => !whyLines.some((line) => line.toLowerCase().includes('muco')),
   );
@@ -369,15 +370,28 @@ export default function DigestiveResultScreen() {
               </View>
             );
           })}
-          {whyLines.length > 0 ? (
-            <Card style={styles.notableCard}>
-              {whyLines.map((item) => (
-                <Text key={item} style={styles.comparisonText}>
-                  {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
-                </Text>
-              ))}
-            </Card>
-          ) : null}
+          {interpretationLayers.length > 0
+            ? interpretationLayers.map((layer) => (
+                <Card key={layer.key} style={styles.notableCard}>
+                  <Text style={styles.cardTitle}>
+                    {sanitizeOwnerCopy(layer.title.replace(/Rocky/g, dog.name))}
+                  </Text>
+                  <Text style={styles.comparisonText}>
+                    {sanitizeOwnerCopy(layer.summary.replace(/Rocky/g, dog.name))}
+                  </Text>
+                </Card>
+              ))
+            : whyLines.length > 0
+              ? (
+                <Card style={styles.notableCard}>
+                  {whyLines.map((item) => (
+                    <Text key={item} style={styles.comparisonText}>
+                      {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
+                    </Text>
+                  ))}
+                </Card>
+              )
+              : null}
           {event.consistency !== 'sconosciuta' ||
           (event.color && event.color !== 'Non determinabile dalla foto') ? (
             <Card style={styles.notableCard}>

@@ -210,6 +210,7 @@ export default function DigestiveResultScreen() {
   const showAdvice = Boolean(advice) && action?.key !== 'ask_followup';
   const nutritionKind = digestiveActionCardKind(action?.key) === 'nutrition';
   const whyLines = whyITellYou(event.relevantContext);
+  const interpretationLayers = event.interpretationLayers ?? [];
   const uncertainNotes = uncertainVisualNotes(event, dog.name).filter(
     (note) => !whyLines.some((line) => line.toLowerCase().includes('muco')),
   );
@@ -365,15 +366,28 @@ export default function DigestiveResultScreen() {
               </View>
             );
           })}
-          {whyLines.length > 0 ? (
-            <View style={styles.whiteCard}>
-              {whyLines.map((item) => (
-                <Text key={item} style={styles.comparisonText}>
-                  {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
-                </Text>
-              ))}
-            </View>
-          ) : null}
+          {interpretationLayers.length > 0
+            ? interpretationLayers.map((layer) => (
+                <View key={layer.key} style={styles.whiteCard}>
+                  <Text style={styles.cardTitle}>
+                    {sanitizeOwnerCopy(layer.title.replace(/Rocky/g, dog.name))}
+                  </Text>
+                  <Text style={styles.comparisonText}>
+                    {sanitizeOwnerCopy(layer.summary.replace(/Rocky/g, dog.name))}
+                  </Text>
+                </View>
+              ))
+            : whyLines.length > 0
+              ? (
+                <View style={styles.whiteCard}>
+                  {whyLines.map((item) => (
+                    <Text key={item} style={styles.comparisonText}>
+                      {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
+                    </Text>
+                  ))}
+                </View>
+              )
+              : null}
           {event.consistency !== 'sconosciuta' ||
           (event.color && event.color !== 'Non determinabile dalla foto') ? (
             <View style={styles.whiteCard}>

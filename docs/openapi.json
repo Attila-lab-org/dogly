@@ -6180,6 +6180,13 @@
             ],
             "title": "Consumer Summary"
           },
+          "interpretation_layers": {
+            "items": {
+              "$ref": "#/components/schemas/DigestiveInterpretationLayerOut"
+            },
+            "type": "array",
+            "title": "Interpretation Layers"
+          },
           "relevant_context": {
             "items": {
               "type": "string"
@@ -6352,6 +6359,48 @@
           "created_at"
         ],
         "title": "DigestiveEventOut"
+      },
+      "DigestiveInterpretationLayerOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "general",
+              "profile",
+              "longitudinal"
+            ],
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "claim_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Claim Ids"
+          },
+          "factors_used": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Factors Used"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "summary"
+        ],
+        "title": "DigestiveInterpretationLayerOut"
       },
       "DigestiveSummaryOut": {
         "properties": {

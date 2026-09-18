@@ -8,6 +8,7 @@ from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep, rate_lim
 from app.contracts.api import (
     DigestiveContextUpdateRequest,
     DigestiveEventOut,
+    DigestiveInterpretationLayerOut,
     DigestiveSummaryOut,
     DigestiveUsefulActionOut,
     FecalCompleteResponse,
@@ -52,7 +53,11 @@ async def _ensure_digestive_intelligence(
         context = digestive_domain.build_inmemory_digestive_context(
             state.store, event=event
         )
-    intelligence = build_digestive_intelligence(event.observation_json, context)
+    intelligence = build_digestive_intelligence(
+        event.observation_json,
+        context,
+        longitudinal=state.settings.digestive_longitudinal_v3,
+    )
     event.intelligence_json = intelligence.model_dump(mode="json")
     event.summary = intelligence.consumer_summary
     event.image_quality = persistable_image_quality(
@@ -214,6 +219,10 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         overall_state=intelligence.get("overall_state"),
         consumer_headline=intelligence.get("consumer_headline"),
         consumer_summary=intelligence.get("consumer_summary"),
+        interpretation_layers=[
+            DigestiveInterpretationLayerOut.model_validate(layer)
+            for layer in intelligence.get("interpretation_layers", [])
+        ],
         relevant_context=intelligence.get("relevant_context", []),
         possible_associations=intelligence.get("possible_associations", []),
         safety_state=intelligence.get("safety_state"),
@@ -276,7 +285,9 @@ async def update_digestive_context(
         )
 
     intelligence = build_digestive_intelligence(
-        event.observation_json or {}, context
+        event.observation_json or {},
+        context,
+        longitudinal=state.settings.digestive_longitudinal_v3,
     )
     event.safety_flags = digestive_domain.contextual_safety_flags(
         event.observation_json or {}, context

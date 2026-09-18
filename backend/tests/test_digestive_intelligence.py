@@ -37,7 +37,9 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "andamento abituale" in result.consumer_summary.lower()
+    assert "qualità fecale canina generale" in result.consumer_summary.lower()
+    assert "andamento personale" in result.consumer_summary.lower()
+    assert "andamento abituale" not in result.consumer_summary.lower()
     assert "solito" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
     assert result.useful_action.label == "Aggiungi"
@@ -91,7 +93,8 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert result.baseline_comparison == "INSUFFICIENT"
     assert "simili al solito" not in result.consumer_headline
     assert "solito" not in result.consumer_headline.lower()
-    assert "andamento abituale" in result.consumer_summary.lower()
+    assert "qualità fecale canina generale" in result.consumer_summary.lower()
+    assert "andamento abituale" not in result.consumer_summary.lower()
 
 
 def test_possible_foreign_material_does_not_dominate_the_result():
@@ -200,7 +203,7 @@ def test_repeated_food_association_requires_both_periods_and_stays_cautious():
     assert not any("causa" in item.lower() for item in result.possible_associations)
 
 
-def test_season_is_not_mentioned_until_there_are_repeated_comparisons():
+def test_season_alone_never_produces_associations():
     sparse = build_digestive_intelligence(
         observation(fecal_score_estimate=5),
         context(
@@ -219,8 +222,9 @@ def test_season_is_not_mentioned_until_there_are_repeated_comparisons():
     )
 
     assert not any("estate" in item for item in sparse.possible_associations)
-    assert any("estate" in item for item in repeated.possible_associations)
-    assert not any("causa" in item.lower() for item in repeated.possible_associations)
+    assert not any("estate" in item for item in repeated.possible_associations)
+    assert not any("stagion" in item.lower() for item in repeated.possible_associations)
+
 
 
 def test_quality_warnings_do_not_leak_internal_codes():
@@ -310,7 +314,7 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert completed["status"] == "COMPLETED"
     assert response.status_code == 200
     assert body["fecal_score_estimate"] is not None
-    assert body["intelligence_schema_version"] == "digestive_intelligence.v1"
+    assert body["intelligence_schema_version"] == "digestive_intelligence.v2"
     assert body["overall_state"] in {"ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"}
     assert body["consumer_headline"]
     assert body["recommended_next_step"]
@@ -318,7 +322,7 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert stored["knowledge_registry_version"] == body["knowledge_registry_version"]
     assert stored["knowledge_registry_checksum"] == body["knowledge_registry_checksum"]
     assert stored["knowledge_claim_ids"] == body["knowledge_claim_ids"]
-    assert body["knowledge_registry_version"] == "digestive-knowledge/v1"
+    assert body["knowledge_registry_version"] == "digestive-knowledge/v2"
     assert len(body["knowledge_registry_checksum"]) == 64
     assert body["knowledge_claim_ids"]
 
@@ -702,7 +706,10 @@ def test_oreo_like_soft_repeat_answers_meaning_why_and_next_step():
     assert "oreo" in result.consumer_summary.lower()
     assert "più morbide" in result.consumer_summary.lower()
     assert "ripetendo" in result.consumer_summary.lower()
-    assert "andamento abituale" in result.consumer_summary.lower()
+    assert (
+        "andamento personale" in result.consumer_summary.lower()
+        or "qualità fecale canina generale" in result.consumer_summary.lower()
+    )
     assert "muco" not in blob
     assert "possibile muco" not in blob
     assert any("non è abbastanza" in item.lower() for item in result.relevant_context)
@@ -758,7 +765,8 @@ def test_same_photo_changes_with_food_history_and_symptoms():
             food_started_days_ago=90,
         ),
     )
-    assert "andamento abituale" in first.consumer_summary.lower()
+    assert "qualità fecale canina generale" in first.consumer_summary.lower()
+    assert "andamento abituale" not in first.consumer_summary.lower()
     assert repeating.consumer_headline == "Un cambiamento da seguire"
     assert "ripetendo" in repeating.consumer_summary.lower()
     assert "3 giorni" in new_food.consumer_summary
@@ -778,4 +786,126 @@ def test_same_photo_changes_with_food_history_and_symptoms():
         assert "osserva i prossimi episodi" not in blob
         assert "da tenere d" not in blob
         assert "appaiono" not in result.consumer_summary.lower()
+
+def _layers(result):
+    return {layer.key: layer for layer in result.interpretation_layers}
+
+
+def test_first_photo_is_useful_without_personal_baseline():
+    result = build_digestive_intelligence(observation(), context())
+    layers = _layers(result)
+
+    assert "general" in layers
+    assert "longitudinal" not in layers
+    assert layers["general"].summary
+    assert "qualità fecale canina generale" in result.consumer_summary.lower()
+    assert result.baseline_comparison == "INSUFFICIENT"
+    assert result.recommended_next_step
+    assert result.useful_action.key
+
+
+def test_large_vs_small_changes_only_profile_layer():
+    obs = observation()
+    large = build_digestive_intelligence(obs, context(size="large"))
+    small = build_digestive_intelligence(obs, context(size="small"))
+
+    assert large.overall_state == small.overall_state
+    assert large.safety_state == small.safety_state
+    assert large.baseline_comparison == small.baseline_comparison
+    assert "profile" in _layers(large)
+    assert "profile" not in _layers(small)
+    assert "size" in _layers(large)["profile"].factors_used
+    assert "DIG_SIZE_CONTEXT_001" in large.knowledge_claim_ids
+    assert "DIG_SIZE_CONTEXT_001" not in small.knowledge_claim_ids
+
+
+def test_puppy_vs_adult_changes_only_when_age_claim_applies():
+    obs = observation()
+    puppy = build_digestive_intelligence(obs, context(age_stage="PUPPY"))
+    adult = build_digestive_intelligence(obs, context(age_stage="ADULT"))
+
+    assert puppy.overall_state == adult.overall_state
+    assert puppy.safety_state == adult.safety_state
+    assert "profile" in _layers(puppy)
+    assert "profile" not in _layers(adult)
+    assert "age_stage" in _layers(puppy)["profile"].factors_used
+    assert "DIG_AGE_STAGE_CONTEXT_001" in puppy.knowledge_claim_ids
+    assert "DIG_AGE_STAGE_CONTEXT_001" not in adult.knowledge_claim_ids
+
+
+def test_labrador_vs_mix_does_not_introduce_breed_prior():
+    obs = observation()
+    lab = build_digestive_intelligence(
+        obs, context(breed_label="Labrador Retriever", size="large")
+    )
+    mix = build_digestive_intelligence(
+        obs, context(breed_label="Mix", size="large")
+    )
+
+    assert lab.consumer_headline == mix.consumer_headline
+    assert lab.consumer_summary == mix.consumer_summary
+    assert lab.knowledge_claim_ids == mix.knowledge_claim_ids
+    assert [layer.key for layer in lab.interpretation_layers] == [
+        layer.key for layer in mix.interpretation_layers
+    ]
+    assert not any("breed" in layer.factors_used for layer in lab.interpretation_layers)
+    assert not any(claim.startswith("DIG_BREED") for claim in lab.knowledge_claim_ids)
+
+
+def test_absolute_weight_does_not_change_meaning_but_delta_does():
+    obs = observation()
+    absolute = build_digestive_intelligence(obs, context(weight_kg=32.0))
+    delta = build_digestive_intelligence(
+        obs,
+        context(weight_kg=32.0, latest_weight_kg=30.5, weight_delta_kg=-1.5),
+    )
+    bare = build_digestive_intelligence(obs, context())
+
+    assert absolute.consumer_summary == bare.consumer_summary
+    assert [layer.key for layer in absolute.interpretation_layers] == [
+        layer.key for layer in bare.interpretation_layers
+    ]
+    assert "DIG_WEIGHT_CONTEXT_001" not in absolute.knowledge_claim_ids
+    assert "profile" in _layers(delta)
+    assert "weight_delta" in _layers(delta)["profile"].factors_used
+    assert "DIG_WEIGHT_CONTEXT_001" in delta.knowledge_claim_ids
+
+
+def test_baseline_and_repetition_add_longitudinal_precision():
+    obs = observation(consistency="soft", fecal_score_estimate=5)
+    with_baseline = build_digestive_intelligence(
+        obs,
+        context(
+            prior_scores=[2, 2, 2, 2],
+            prior_consistencies=["formed", "formed", "formed", "formed"],
+        ),
+    )
+    with_repetition = build_digestive_intelligence(
+        obs,
+        context(
+            prior_scores=[5, 5],
+            prior_consistencies=["soft", "soft"],
+        ),
+    )
+    first = build_digestive_intelligence(obs, context())
+
+    assert "longitudinal" not in _layers(first)
+    assert "longitudinal" in _layers(with_baseline)
+    assert "personal_baseline" in _layers(with_baseline)["longitudinal"].factors_used
+    assert "longitudinal" in _layers(with_repetition)
+    assert "semantic_repetition" in _layers(with_repetition)["longitudinal"].factors_used
+
+
+def test_api_model_exposes_interpretation_layers():
+    result = build_digestive_intelligence(
+        observation(),
+        context(age_stage="PUPPY", size="large"),
+    )
+    assert result.interpretation_layers
+    assert result.interpretation_layers[0].key == "general"
+    assert any(layer.key == "profile" for layer in result.interpretation_layers)
+    dumped = result.model_dump(mode="json")
+    assert "interpretation_layers" in dumped
+    assert dumped["schema_version"] == "digestive_intelligence.v2"
+    assert dumped["knowledge_registry_version"] == "digestive-knowledge/v2"
 

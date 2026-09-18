@@ -164,6 +164,7 @@ def build_inmemory_digestive_context(
         dog_name=dog.name,
         age_stage=dog.age_stage,
         size=dog.size,
+        breed_label=dog.breed_label,
         weight_kg=dog.weight_kg,
         active_food_name=(
             period_food.name

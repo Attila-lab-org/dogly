@@ -48,6 +48,9 @@ def retrieve_digestive_knowledge(
     unusual_food_48h: bool | None = None,
     supplements_or_medication: bool | None = None,
     weight_present: bool = False,
+    age_stage_puppy: bool = False,
+    size_large: bool = False,
+    soft_or_loose: bool = False,
     owner_context_used: bool = False,
 ) -> DigestiveKnowledgeRetrieval:
     facts = facts_from_observation(
@@ -70,6 +73,9 @@ def retrieve_digestive_knowledge(
         unusual_food_48h=unusual_food_48h,
         supplements_or_medication=supplements_or_medication,
         weight_present=weight_present,
+        age_stage_puppy=age_stage_puppy,
+        size_large=size_large,
+        soft_or_loose=soft_or_loose,
         owner_context_used=owner_context_used,
     )
     return retrieve_registry(facts)

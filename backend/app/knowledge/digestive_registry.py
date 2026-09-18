@@ -1,4 +1,4 @@
-"""Dedicated Digestive Knowledge Registry V1.
+"""Dedicated Digestive Knowledge Registry V2.
 
 Repo JSON is the source of truth. Retrieval is deterministic and returns
 audit cards/source IDs; it never writes diagnosis text onto the consumer UI.
@@ -14,8 +14,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DATA_PATH = Path(__file__).parent / "data" / "digestive_knowledge_v1.json"
-EXPECTED_VERSION = "digestive-knowledge/v1"
+DATA_PATH = Path(__file__).parent / "data" / "digestive_knowledge_v2.json"
+EXPECTED_VERSION = "digestive-knowledge/v2"
 ACTIVE_STATUS = "active_v1"
 GUIDANCE_ONLY_STATUS = "guidance_only"
 
@@ -32,6 +32,8 @@ SOURCE_PUBLISHERS = {
     "AAHA_NUTRITION_2021": "American Animal Hospital Association",
     "AAHA_FEEDING_PLAN_2021": "American Animal Hospital Association",
     "WERNER_2020_CADS": "Journal of Veterinary Internal Medicine",
+    "GRELLET_2012_PUPPY_FECAL": "Preventive Veterinary Medicine",
+    "HERNOT_2005_BODY_SIZE": "Journal of Animal Physiology and Animal Nutrition",
 }
 
 SOURCE_TITLES = {
@@ -54,6 +56,12 @@ SOURCE_TITLES = {
     ),
     "WERNER_2020_CADS": (
         "Effect of amoxicillin-clavulanic acid on clinical scores in acute diarrhea"
+    ),
+    "GRELLET_2012_PUPPY_FECAL": (
+        "Validation of a fecal scoring scale in puppies during the weaning period"
+    ),
+    "HERNOT_2005_BODY_SIZE": (
+        "Relationship between total transit time and faecal quality in adult dogs differing in body size"
     ),
 }
 
@@ -84,6 +92,16 @@ class DigestiveKnowledgeClaim(BaseModel):
     notes: str | None = None
 
 
+class DigestiveEvidenceGap(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    factor: str
+    status: Literal["not_active"] = "not_active"
+    reason: str
+    allowed_use: str
+
+
 class DigestiveKnowledgeDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -92,6 +110,7 @@ class DigestiveKnowledgeDocument(BaseModel):
     purpose: str
     evidence_grades: dict[str, str]
     global_forbidden: list[str]
+    evidence_gaps: list[DigestiveEvidenceGap] = Field(default_factory=list)
     sources: list[DigestiveKnowledgeSource]
     claims: list[DigestiveKnowledgeClaim]
 
@@ -139,6 +158,9 @@ class DigestiveKnowledgeFacts(BaseModel):
     unusual_food_48h: bool | None = None
     supplements_or_medication: bool | None = None
     weight_present: bool = False
+    age_stage_puppy: bool = False
+    size_large: bool = False
+    soft_or_loose: bool = False
     owner_context_used: bool = False
     photo_based: bool = True
 
@@ -295,6 +317,10 @@ def _matcher_table(facts: DigestiveKnowledgeFacts) -> dict[str, bool]:
         or (_digestive_changed(facts) and facts.unusual_food_48h is None),
         "DIG_MED_SUPPLEMENT_001": facts.supplements_or_medication is True,
         "DIG_WEIGHT_CONTEXT_001": facts.weight_present,
+        "DIG_AGE_STAGE_CONTEXT_001": (
+            facts.age_stage_puppy and facts.soft_or_loose
+        ),
+        "DIG_SIZE_CONTEXT_001": facts.size_large and facts.soft_or_loose,
         "DIG_BASELINE_PERSONAL_001": facts.prior_score_count >= 3,
         "DIG_LEARNING_QUALITY_001": _level(facts.image_quality) == "insufficient",
         "DIG_LEARNING_SAFETY_001": facts.learning_eligible is False
@@ -394,6 +420,9 @@ def facts_from_observation(
     unusual_food_48h: bool | None = None,
     supplements_or_medication: bool | None = None,
     weight_present: bool = False,
+    age_stage_puppy: bool = False,
+    size_large: bool = False,
+    soft_or_loose: bool = False,
     owner_context_used: bool = False,
 ) -> DigestiveKnowledgeFacts:
     score_raw = observation.get("fecal_score_estimate")
@@ -432,6 +461,9 @@ def facts_from_observation(
         unusual_food_48h=unusual_food_48h,
         supplements_or_medication=supplements_or_medication,
         weight_present=weight_present,
+        age_stage_puppy=age_stage_puppy,
+        size_large=size_large,
+        soft_or_loose=soft_or_loose,
         owner_context_used=owner_context_used,
         photo_based=True,
     )

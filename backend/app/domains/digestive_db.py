@@ -502,7 +502,7 @@ async def load_digestive_context(
             await conn.execute(
                 text(
                     """
-                    select d.name, d.age_stage, d.size, d.weight_kg,
+                    select d.name, d.age_stage, d.size, d.breed_label, d.weight_kg,
                            food.id as active_food_product_id,
                            food.name as active_food_name,
                            period.food_product_id is not null as has_active_food,
@@ -587,6 +587,7 @@ async def load_digestive_context(
         dog_name=profile["name"],
         age_stage=profile["age_stage"],
         size=profile["size"],
+        breed_label=profile.get("breed_label"),
         weight_kg=profile["weight_kg"],
         active_food_name=profile["active_food_name"],
         active_food_product_id=(

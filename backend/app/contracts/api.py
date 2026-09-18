@@ -742,6 +742,14 @@ class OwnerStoryUpdateRequest(BaseModel):
     facts: list[OwnerReportedFact] = Field(min_length=1, max_length=8)
 
 
+class DigestiveInterpretationLayerOut(BaseModel):
+    key: Literal["general", "profile", "longitudinal"]
+    title: str
+    summary: str
+    claim_ids: list[str] = Field(default_factory=list)
+    factors_used: list[str] = Field(default_factory=list)
+
+
 class DigestiveUsefulActionOut(BaseModel):
     key: Literal[
         "contact_vet",
@@ -782,6 +790,7 @@ class DigestiveEventOut(BaseModel):
     overall_state: Literal["ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"] | None = None
     consumer_headline: str | None = None
     consumer_summary: str | None = None
+    interpretation_layers: list[DigestiveInterpretationLayerOut] = Field(default_factory=list)
     relevant_context: list[str] = Field(default_factory=list)
     possible_associations: list[str] = Field(default_factory=list)
     safety_state: Literal["ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"] | None = None

@@ -36,6 +36,13 @@ export type ApiDigestiveEvent = {
   overall_state?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT' | null;
   consumer_headline?: string | null;
   consumer_summary?: string | null;
+  interpretation_layers?: Array<{
+    key: 'general' | 'profile' | 'longitudinal';
+    title: string;
+    summary: string;
+    claim_ids?: string[];
+    factors_used?: string[];
+  }>;
   relevant_context?: string[];
   possible_associations?: string[];
   recommended_next_step?: string | null;
@@ -259,6 +266,13 @@ export function mapApiDigestiveEventToResult(
     consumerSummary: event.consumer_summary
       ? consumerCopy(event.consumer_summary)
       : event.consumer_summary,
+    interpretationLayers: (event.interpretation_layers ?? [])
+      .filter((layer) => Boolean(layer?.summary?.trim()))
+      .map((layer) => ({
+        key: layer.key,
+        title: consumerCopy(layer.title),
+        summary: consumerCopy(layer.summary),
+      })),
     relevantContext: (event.relevant_context ?? []).map(consumerCopy),
     possibleAssociations: (event.possible_associations ?? []).map(consumerCopy),
     recommendedNextStep: event.recommended_next_step

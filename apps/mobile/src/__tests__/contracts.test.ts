@@ -147,6 +147,62 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
 });
 
 describe('digestive mapping — valori reali del backend, non mock', () => {
+  it('mappa i tre livelli senza esporre metadata audit alla UI', () => {
+    const event = {
+      id: 'evt-layers',
+      dog_id: 'dog-real',
+      status: 'COMPLETED',
+      fecal_score_estimate: 4,
+      consistency: 'SOFT',
+      color: 'brown',
+      image_quality: 'sufficient',
+      quality_warnings: [],
+      mucus_candidate: 'none_observed',
+      fresh_blood_candidate: 'none_observed',
+      melena_candidate: 'none_observed',
+      foreign_material_candidate: 'none_observed',
+      confidence_band: 'MEDIUM',
+      safety_flags: [],
+      summary: null,
+      active_food_name: null,
+      baseline_comparison: 'INSUFFICIENT',
+      interpretation_layers: [
+        {
+          key: 'general',
+          title: 'Valutazione generale',
+          summary: 'Feci più morbide.',
+          claim_ids: ['DIG_SCORE_4_001'],
+          factors_used: ['observation'],
+        },
+        {
+          key: 'profile',
+          title: 'Profilo di Oreo',
+          summary: 'Contesto supportato dalla taglia.',
+          claim_ids: ['DIG_SIZE_CONTEXT_001'],
+          factors_used: ['size'],
+        },
+      ],
+      created_at: '2026-09-18T09:00:00Z',
+    } satisfies ApiDigestiveEvent;
+
+    const result = mapApiDigestiveEventToResult(event);
+
+    expect(result.interpretationLayers).toEqual([
+      {
+        key: 'general',
+        title: 'Valutazione generale',
+        summary: 'Feci più morbide.',
+      },
+      {
+        key: 'profile',
+        title: 'Profilo di Oreo',
+        summary: 'Contesto supportato dalla taglia.',
+      },
+    ]);
+    expect(result.interpretationLayers?.[0]).not.toHaveProperty('claim_ids');
+    expect(result.interpretationLayers?.[0]).not.toHaveProperty('factors_used');
+  });
+
   it('traduce SOFT/FORMED inglese in consistenza consumer', () => {
     const event: ApiDigestiveEvent = {
       id: 'evt-real',

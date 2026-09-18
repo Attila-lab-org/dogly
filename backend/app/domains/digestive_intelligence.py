@@ -27,7 +27,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v11"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v12"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -54,6 +54,7 @@ class DigestiveContext(BaseModel):
     dog_name: str
     age_stage: str | None = None
     size: str | None = None
+    breed_label: str | None = None
     weight_kg: float | None = None
     active_food_name: str | None = None
     active_food_product_id: str | None = None
@@ -93,14 +94,25 @@ class DigestiveUsefulAction(BaseModel):
     body: str | None = None
 
 
+class DigestiveInterpretationLayer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: Literal["general", "profile", "longitudinal"]
+    title: str
+    summary: str
+    claim_ids: list[str] = Field(default_factory=list)
+    factors_used: list[str] = Field(default_factory=list)
+
+
 class DigestiveIntelligenceResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: str = "digestive_intelligence.v1"
+    schema_version: str = "digestive_intelligence.v2"
     overall_state: DigestiveState
     consumer_headline: str
     consumer_summary: str
     baseline_comparison: str
+    interpretation_layers: list[DigestiveInterpretationLayer] = Field(default_factory=list)
     relevant_context: list[str] = Field(default_factory=list)
     possible_associations: list[str] = Field(default_factory=list)
     safety_state: DigestiveState
@@ -336,6 +348,24 @@ def _is_loose(consistency: str) -> bool:
     return consistency in _LOOSE
 
 
+
+
+def _is_puppy_stage(age_stage: str | None) -> bool:
+    if not age_stage:
+        return False
+    raw = str(age_stage).strip().lower()
+    if raw in {"puppy", "cucciolo", "pup"}:
+        return True
+    return raw.startswith("meno di 1")
+
+
+def _is_large_size(size: str | None) -> bool:
+    if not size:
+        return False
+    raw = str(size).strip().lower()
+    return raw in {"large", "grande", "giant", "gigante", "xl"}
+
+
 def _texture_phrase(consistency: str) -> str | None:
     if consistency == "watery":
         return "più liquide"
@@ -532,8 +562,8 @@ def _why_sentences(
 
     if baseline_code == "INSUFFICIENT" and level or baseline_code == "INSUFFICIENT":
         sentences.append(
-            "Non abbiamo ancora abbastanza storico per confrontarlo con il suo "
-            "andamento abituale."
+            "Questa lettura usa la qualità fecale canina generale; con più "
+            "osservazioni potremo confrontarla con il suo andamento personale."
         )
     else:
         factor = _personal_factor(
@@ -959,6 +989,203 @@ def count_recent_windows(
     return counts
 
 
+
+def _general_layer_summary(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    observation: dict[str, Any],
+) -> str:  # noqa: F811 — written into target module
+    name = context.dog_name
+    texture = _texture_phrase(consistency)
+    if verification_unavailable(observation):
+        return (
+            f"Dalla foto di {name} non riesco a confermare bene un dettaglio "
+            "importante; la lettura resta prudente."
+        )
+    visual = _visual_safety_why(observation, name)
+    if visual:
+        return visual
+    if texture:
+        return (
+            f"Le feci di {name} sono {texture}: è una lettura sulla qualità "
+            "fecale canina generale, non una diagnosi."
+        )
+    return (
+        f"Ho una nuova osservazione digestiva per {name}, descritta con la "
+        "scala fecale canina generale."
+    )
+
+
+def _profile_layer(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    claim_ids: set[str],
+) -> DigestiveInterpretationLayer | None:
+    bits: list[str] = []
+    factors: list[str] = []
+    used_claims: list[str] = []
+    if (
+        "DIG_AGE_STAGE_CONTEXT_001" in claim_ids
+        and _is_puppy_stage(context.age_stage)
+        and _is_loose(consistency)
+    ):
+        bits.append(
+            f"Nella fase di crescita di {context.dog_name} i cambiamenti "
+            "digestivi meritano un seguito più attento, senza considerarli "
+            "automaticamente normali."
+        )
+        factors.append("age_stage")
+        used_claims.append("DIG_AGE_STAGE_CONTEXT_001")
+    if (
+        "DIG_SIZE_CONTEXT_001" in claim_ids
+        and _is_large_size(context.size)
+        and _is_loose(consistency)
+    ):
+        bits.append(
+            "Nei cani di taglia grande le feci possono risultare più morbide "
+            "più spesso come tendenza di popolazione, non come regola "
+            "individuale."
+        )
+        factors.append("size")
+        used_claims.append("DIG_SIZE_CONTEXT_001")
+    if (
+        "DIG_WEIGHT_CONTEXT_001" in claim_ids
+        and context.weight_delta_kg is not None
+        and abs(context.weight_delta_kg) >= 1.0
+    ):
+        direction = "perso" if context.weight_delta_kg < 0 else "preso"
+        bits.append(
+            f"Nel diario del peso {context.dog_name} ha {direction} circa "
+            f"{abs(context.weight_delta_kg):.1f} kg: è un contesto "
+            "nutrizionale da seguire, non una causa dimostrata."
+        )
+        factors.append("weight_delta")
+        used_claims.append("DIG_WEIGHT_CONTEXT_001")
+    if not bits:
+        return None
+    return DigestiveInterpretationLayer(
+        key="profile",
+        title=f"Profilo di {context.dog_name}",
+        summary=" ".join(bits[:2]),
+        claim_ids=used_claims,
+        factors_used=factors,
+    )
+
+
+def _longitudinal_layer(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    claim_ids: set[str],
+) -> DigestiveInterpretationLayer | None:
+    bits: list[str] = []
+    factors: list[str] = []
+    used_claims: list[str] = []
+    level = _repetition_level(context, consistency)
+    if baseline_code == "NEAR_USUAL":
+        bits.append(
+            f"Per {context.dog_name} questa osservazione è in linea con il "
+            "suo andamento personale recente."
+        )
+        factors.append("personal_baseline")
+        if "DIG_BASELINE_PERSONAL_001" in claim_ids:
+            used_claims.append("DIG_BASELINE_PERSONAL_001")
+    elif baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
+        bits.append(
+            f"Rispetto all’andamento personale di {context.dog_name} c’è un "
+            "cambiamento da seguire."
+        )
+        factors.append("personal_baseline")
+        if "DIG_BASELINE_PERSONAL_001" in claim_ids:
+            used_claims.append("DIG_BASELINE_PERSONAL_001")
+    if level in {"hours", "trend"}:
+        bits.append(
+            "Lo stesso tipo di cambiamento si sta ripetendo nelle "
+            "osservazioni simili."
+        )
+        factors.append("semantic_repetition")
+    elif level == "once":
+        bits.append("Un cambiamento di questo tipo si è già presentato.")
+        factors.append("semantic_repetition")
+    if _recent_food_change(context):
+        bits.append(_food_started_sentence(context))
+        factors.append("recent_food")
+        if "DIG_FOOD_CHANGE_001" in claim_ids:
+            used_claims.append("DIG_FOOD_CHANGE_001")
+    symptom = _owner_symptom_sentence(context)
+    if symptom:
+        bits.append(symptom)
+        factors.append("owner_symptoms")
+    if not bits:
+        return None
+    return DigestiveInterpretationLayer(
+        key="longitudinal",
+        title="Storico personale",
+        summary=" ".join(bits[:2]),
+        claim_ids=list(dict.fromkeys(used_claims)),
+        factors_used=factors,
+    )
+
+
+def _build_interpretation_layers(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    observation: dict[str, Any],
+    claim_ids: list[str],
+) -> list[DigestiveInterpretationLayer]:
+    claims = set(claim_ids)
+    general_claims = [
+        claim_id
+        for claim_id in claim_ids
+        if claim_id.startswith("DIG_SCORE_")
+        or claim_id
+        in {
+            "DIG_PHOTO_VALIDATION_001",
+            "DIG_MUCUS_001",
+            "DIG_FRESH_BLOOD_001",
+            "DIG_FRESH_BLOOD_POSSIBLE_001",
+            "DIG_BLACK_TARRY_001",
+            "DIG_BLACK_TARRY_POSSIBLE_001",
+            "DIG_FOREIGN_MATERIAL_001",
+            "DIG_FOREIGN_POSSIBLE_001",
+            "DIG_COLOR_NONRED_NONBLACK_001",
+            "DIG_UNDIGESTED_FOOD_001",
+        }
+    ][:6]
+    layers = [
+        DigestiveInterpretationLayer(
+            key="general",
+            title="Valutazione generale",
+            summary=_general_layer_summary(
+                context=context,
+                consistency=consistency,
+                observation=observation,
+            ),
+            claim_ids=general_claims,
+            factors_used=["observation"],
+        )
+    ]
+    profile = _profile_layer(
+        context=context, consistency=consistency, claim_ids=claims
+    )
+    if profile is not None:
+        layers.append(profile)
+    longitudinal = _longitudinal_layer(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        claim_ids=claims,
+    )
+    if longitudinal is not None:
+        layers.append(longitudinal)
+    return layers
+
+
 def build_digestive_intelligence(
     observation: dict[str, Any],
     context: DigestiveContext,
@@ -1068,21 +1295,7 @@ def build_digestive_intelligence(
         )
         if food_association:
             associations.append(food_association)
-    if score is not None and context.season_label:
-        season_association = _directional_association(
-            [*context.same_season_prior_scores, score],
-            context.other_season_scores,
-            softer=(
-                f"Nel periodo {context.season_label}, le osservazioni raccolte sono "
-                "state spesso più morbide rispetto agli altri periodi dell’anno."
-            ),
-            firmer=(
-                f"Nel periodo {context.season_label}, le osservazioni raccolte sono "
-                "state spesso più compatte rispetto agli altri periodi dell’anno."
-            ),
-        )
-        if season_association:
-            associations.append(season_association)
+    # Season associations stay off until a registry claim exists.
 
     reliability = _observation_reliability(observation)
     followup_key, followup_question = _choose_followup(consistency, state, context)
@@ -1125,7 +1338,18 @@ def build_digestive_intelligence(
         weight_present=(
             context.latest_weight_kg is not None or context.weight_delta_kg is not None
         ),
+        age_stage_puppy=_is_puppy_stage(context.age_stage),
+        size_large=_is_large_size(context.size),
+        soft_or_loose=_is_loose(consistency),
         owner_context_used=_owner_context_used(context),
+    )
+
+    interpretation_layers = _build_interpretation_layers(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        observation=observation,
+        claim_ids=knowledge.claim_ids,
     )
 
     return DigestiveIntelligenceResult(
@@ -1133,6 +1357,7 @@ def build_digestive_intelligence(
         consumer_headline=headline,
         consumer_summary=summary,
         baseline_comparison=baseline_code,
+        interpretation_layers=interpretation_layers,
         relevant_context=relevant_context,
         possible_associations=associations,
         safety_state=safety,

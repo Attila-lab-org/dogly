@@ -6,6 +6,10 @@ const resultScreen = readFileSync(
   resolve(__dirname, '../../app/digestive/result/[eventId].tsx'),
   'utf8',
 );
+const mapSource = readFileSync(
+  resolve(__dirname, '../features/digestive/map.ts'),
+  'utf8',
+);
 
 describe('digestive result UX', () => {
   it('keeps nutrition as a quiet completion after the analysis', () => {
@@ -31,5 +35,15 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain('👍');
     expect(resultScreen).toContain('👎');
     expect(resultScreen).not.toContain('Mi è stato utile');
+  });
+
+  it('shows interpretation layers under the why section without claim ids', () => {
+    expect(resultScreen).toContain('interpretationLayers');
+    expect(resultScreen).toContain('layer.title');
+    expect(resultScreen).toContain('layer.summary');
+    expect(resultScreen).not.toContain('claim_ids');
+    expect(resultScreen).not.toContain('DIG_');
+    expect(mapSource).toContain('interpretation_layers');
+    expect(mapSource).toContain('interpretationLayers');
   });
 });

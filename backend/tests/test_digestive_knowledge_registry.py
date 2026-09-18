@@ -384,3 +384,44 @@ def test_repeated_watery_and_missing_quantity_match_activation_cards():
     )
     assert "DIG_FEEDING_AMOUNT_001" in amount.claim_ids
     assert "DIG_DIET_HISTORY_001" in amount.claim_ids
+
+def test_registry_v2_documents_evidence_gaps_and_supported_profile_claims():
+    document = get_digestive_knowledge()
+    assert document.version == "digestive-knowledge/v2"
+    assert document.version == EXPECTED_VERSION
+    gap_factors = {gap.factor for gap in document.evidence_gaps}
+    assert {"breed", "weight_absolute", "season"} <= gap_factors
+    claim_ids = {claim.id for claim in document.claims}
+    assert "DIG_AGE_STAGE_CONTEXT_001" in claim_ids
+    assert "DIG_SIZE_CONTEXT_001" in claim_ids
+    assert not any(claim_id.startswith("DIG_BREED") for claim_id in claim_ids)
+    assert not any(claim_id.startswith("DIG_SEASON") for claim_id in claim_ids)
+    source_ids = {source.id for source in document.sources}
+    assert "GRELLET_2012_PUPPY_FECAL" in source_ids
+    assert "HERNOT_2005_BODY_SIZE" in source_ids
+
+
+def test_age_and_size_matchers_require_soft_or_loose():
+    soft = retrieve_from_observation(
+        prepare_digestive_observation(_obs()),
+        state="MONITOR",
+        safety_state="ROUTINE",
+        age_stage_puppy=True,
+        size_large=True,
+        soft_or_loose=True,
+    )
+    formed = retrieve_from_observation(
+        prepare_digestive_observation(
+            _obs(consistency="formed", fecal_score_estimate=3)
+        ),
+        state="ROUTINE",
+        safety_state="ROUTINE",
+        age_stage_puppy=True,
+        size_large=True,
+        soft_or_loose=False,
+    )
+    assert "DIG_AGE_STAGE_CONTEXT_001" in soft.claim_ids
+    assert "DIG_SIZE_CONTEXT_001" in soft.claim_ids
+    assert "DIG_AGE_STAGE_CONTEXT_001" not in formed.claim_ids
+    assert "DIG_SIZE_CONTEXT_001" not in formed.claim_ids
+

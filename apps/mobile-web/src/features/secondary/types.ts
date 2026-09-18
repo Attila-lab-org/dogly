@@ -93,6 +93,11 @@ export interface FecalEventResult {
   overallState?: 'ROUTINE' | 'MONITOR' | 'ATTENTION' | 'VET_CONTACT';
   consumerHeadline?: string | null;
   consumerSummary?: string | null;
+  interpretationLayers?: Array<{
+    key: 'general' | 'profile' | 'longitudinal';
+    title: string;
+    summary: string;
+  }>;
   relevantContext?: string[];
   possibleAssociations?: string[];
   recommendedNextStep?: string | null;
