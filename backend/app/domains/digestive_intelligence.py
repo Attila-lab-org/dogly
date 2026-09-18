@@ -28,7 +28,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v13"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v14"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -635,6 +635,8 @@ def _consumer_headline(
     observation: dict[str, Any],
 ) -> str:
     level = _repetition_level(context, consistency)
+    name = context.dog_name
+    texture = _texture_phrase(consistency)
     if safety is DigestiveState.VET_CONTACT:
         return "È prudente sentire il veterinario"
     if verification_unavailable(observation):
@@ -647,17 +649,17 @@ def _consumer_headline(
         or context.straining_or_urgency is True
     ):
         return "Un cambiamento da valutare con più attenzione"
-    if level in {"hours", "trend"} and baseline_code != "INSUFFICIENT":
-        return "Questo andamento si sta ripetendo"
-    if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
-        return "Un cambiamento da seguire"
+    if level in {"hours", "trend"} and texture:
+        return f"Le feci di {name} sono {texture} e il cambiamento si ripete"
+    if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"} and texture:
+        return f"Le feci di {name} sono {texture} rispetto al suo solito"
     if baseline_code == "NEAR_USUAL":
-        return "In linea con il suo andamento"
-    if _is_loose(consistency):
-        return "Un cambiamento da seguire"
-    if consistency == "hard":
-        return "Feci più compatte da osservare"
-    return "La foto offre indicazioni utili"
+        if texture:
+            return f"Le feci di {name} sono {texture}, in linea con il suo solito"
+        return f"Il risultato di {name} è in linea con il suo solito"
+    if texture:
+        return f"Le feci di {name} sono {texture}"
+    return f"Ecco il risultato di {name}"
 
 
 def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
@@ -1338,30 +1340,43 @@ def _synthesize_from_layers(
                 "La foto mostra feci ben formate e un aspetto regolare. "
                 "Non c’è ancora abbastanza storico per definirlo il suo solito."
             )
+    elif followup_question:
+        repetition = _repetition_level(context, consistency)
+        if repetition == "hours":
+            summary = (
+                "Il cambiamento si è ripetuto nelle ultime ore. "
+                "Per capire se basta monitorare, mi serve sapere come sta oggi."
+            )
+        elif repetition == "once":
+            summary = (
+                "Un cambiamento simile era già comparso. "
+                "Per capire se basta monitorare, mi serve sapere come sta oggi."
+            )
+        else:
+            summary = (
+                "Dalla foto non emergono segnali che richiedono urgenza. "
+                "Per capire se basta monitorare, mi serve sapere come sta oggi."
+            )
     else:
-        ordered = [layer for layer in (longitudinal, profile, general) if layer]
-        sentences: list[str] = []
-        for layer in ordered:
-            layer_summary = layer.summary
-            if layer.key == "general":
-                # The general layer retains observation detail for inspection;
-                # consumer copy answers what the observation means for this dog.
-                layer_summary = _useful_info(
-                    context=context,
-                    consistency=consistency,
-                    baseline_code=baseline_code,
-                    safety=safety,
-                    observation=observation,
-                )
-            for part in layer_summary.replace("!", ".").split("."):
-                sentence = part.strip()
-                if sentence:
-                    sentences.append(f"{sentence}.")
-                if len(sentences) == 2:
-                    break
-            if len(sentences) == 2:
-                break
-        summary = " ".join(sentences)
+        factor = _personal_factor(
+            context,
+            baseline_code=baseline_code,
+            consistency=consistency,
+        )
+        if _repetition_level(context, consistency) == "once":
+            summary = (
+                "Un cambiamento simile era già comparso. "
+                "Controlla il prossimo episodio per vedere se rientra."
+            )
+        elif factor:
+            summary = factor
+        elif state is DigestiveState.MONITOR:
+            summary = (
+                "Dalla foto non emergono segnali che richiedono urgenza. "
+                "Controlla il prossimo episodio per vedere se rientra."
+            )
+        else:
+            summary = general.summary
 
     next_step = None
     if state is not DigestiveState.ROUTINE or followup_question:

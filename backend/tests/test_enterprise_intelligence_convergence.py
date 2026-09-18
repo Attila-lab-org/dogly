@@ -239,7 +239,7 @@ def test_soft_repetition_still_reads_as_repeating_change():
         ),
     )
     blob = f"{result.consumer_headline} {result.consumer_summary}".lower()
-    assert "ripetendo" in blob
+    assert "si ripete" in blob
 
 
 def test_food_change_stays_temporal_association_not_cause():

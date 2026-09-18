@@ -37,7 +37,7 @@ def test_new_dog_monitors_without_inventing_a_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert "più morbide" in result.consumer_summary.lower()
+    assert "più morbide" in result.consumer_headline.lower()
     assert "andamento abituale" not in result.consumer_summary.lower()
     assert "solito" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
@@ -175,7 +175,10 @@ def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "ABOVE_USUAL"
-    assert result.consumer_headline == "Un cambiamento da seguire"
+    assert (
+        result.consumer_headline
+        == "Le feci di Rocky sono più morbide rispetto al suo solito"
+    )
 
 
 def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
@@ -188,7 +191,10 @@ def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
         context(prior_scores=[4, 4, 4, 4]),
     )
 
-    assert result.consumer_headline == "Un cambiamento da seguire"
+    assert (
+        result.consumer_headline
+        == "Le feci di Rocky sono ben formate rispetto al suo solito"
+    )
     assert "ben formate" in " ".join(result.relevant_context)
     assert "marrone scuro" in " ".join(result.relevant_context)
     assert "appaiono" not in result.consumer_summary.lower()
@@ -623,8 +629,14 @@ def test_same_photo_means_different_things_with_different_personal_context():
     photo = observation(consistency="soft")
     softer = build_digestive_intelligence(photo, context(prior_scores=[2, 2, 2, 2]))
     usual = build_digestive_intelligence(photo, context(prior_scores=[4, 4, 4, 4]))
-    assert softer.consumer_headline == "Un cambiamento da seguire"
-    assert usual.consumer_headline == "In linea con il suo andamento"
+    assert (
+        softer.consumer_headline
+        == "Le feci di Rocky sono più morbide rispetto al suo solito"
+    )
+    assert (
+        usual.consumer_headline
+        == "Le feci di Rocky sono più morbide, in linea con il suo solito"
+    )
     assert "appaiono" not in softer.consumer_summary.lower()
     assert "appaiono" not in usual.consumer_summary.lower()
 
@@ -644,9 +656,15 @@ def test_repeated_event_changes_meaning_versus_isolated_episode():
     )
     assert "seconda volta" not in isolated.consumer_summary.lower()
     assert "seconda volta" not in repeated.consumer_summary.lower()
-    assert isolated.consumer_headline == "Un cambiamento da seguire"
-    assert repeated.consumer_headline == "Questo andamento si sta ripetendo"
-    assert "ripetendo" in repeated.consumer_summary.lower()
+    assert (
+        isolated.consumer_headline
+        == "Le feci di Rocky sono più morbide rispetto al suo solito"
+    )
+    assert (
+        repeated.consumer_headline
+        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    )
+    assert "si ripete" in repeated.consumer_headline.lower()
 
 
 def test_total_recent_analyses_are_not_a_soft_trend():
@@ -666,7 +684,7 @@ def test_total_recent_analyses_are_not_a_soft_trend():
     ).lower()
     assert "poche ore" not in blob
     assert mixed.consumer_headline != "Questo andamento si sta ripetendo"
-    assert "già presentato" in mixed.consumer_summary.lower()
+    assert "già comparso" in mixed.consumer_summary.lower()
     repeated = build_digestive_intelligence(
         photo,
         context(
@@ -675,7 +693,10 @@ def test_total_recent_analyses_are_not_a_soft_trend():
             episode_count_7d=3,
         ),
     )
-    assert repeated.consumer_headline == "Questo andamento si sta ripetendo"
+    assert (
+        repeated.consumer_headline
+        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    )
     watery = build_digestive_intelligence(
         observation(consistency="watery"),
         context(
@@ -690,7 +711,10 @@ def test_total_recent_analyses_are_not_a_soft_trend():
         ),
     )
     assert "ultime ore" in watery.consumer_summary.lower()
-    assert watery.consumer_headline == "Questo andamento si sta ripetendo"
+    assert (
+        watery.consumer_headline
+        == "Le feci di Rocky sono più liquide e il cambiamento si ripete"
+    )
 
 
 def test_recent_event_counts_do_not_invent_a_second_time():
@@ -712,11 +736,11 @@ def test_recent_event_counts_do_not_invent_a_second_time():
         assert "imparando" not in blob
         assert "poche ore" not in blob
     one, two, many = texts
-    assert one[1] == "Un cambiamento da seguire"
-    assert two[1] == "Questo andamento si sta ripetendo"
-    assert many[1] == "Questo andamento si sta ripetendo"
-    assert "già presentato" in one[2].lower()
-    assert "ripetendo" in two[2].lower()
+    assert one[1] == "Le feci di Rocky sono più morbide rispetto al suo solito"
+    assert two[1] == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    assert many[1] == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    assert "già comparso" in one[2].lower()
+    assert "si ripete" in two[1].lower()
     assert one[2] != two[2]
 
 
@@ -730,8 +754,11 @@ def test_insufficient_baseline_does_not_mix_trend_with_pretend_usual():
         f"{result.recommended_next_step}"
     ).lower()
     assert result.baseline_comparison == "INSUFFICIENT"
-    assert result.consumer_headline == "Un cambiamento da seguire"
-    assert "si sta ripetendo" in result.consumer_summary.lower()
+    assert (
+        result.consumer_headline
+        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    )
+    assert "si ripete" in result.consumer_headline.lower()
     assert "solito" not in blob
     assert "imparando" not in blob
     assert "osserva i prossimi episodi" not in blob
@@ -808,7 +835,10 @@ def test_possible_mucus_is_contextualized_not_an_alarm():
     assert any("muco" in item.lower() for item in result.relevant_context)
     assert "colite" not in blob
     assert "da tenere d" not in blob
-    assert result.consumer_headline == "In linea con il suo andamento"
+    assert (
+        result.consumer_headline
+        == "Le feci di Rocky sono più morbide, in linea con il suo solito"
+    )
 
 
 def test_oreo_like_soft_repeat_answers_meaning_why_and_next_step():
@@ -817,10 +847,13 @@ def test_oreo_like_soft_repeat_answers_meaning_why_and_next_step():
         context(dog_name="Oreo", prior_consistencies=["soft", "soft"]),
     )
     blob = _blob(result)
-    assert result.consumer_headline == "Un cambiamento da seguire"
-    assert "oreo" in result.consumer_summary.lower()
-    assert "più morbide" in result.consumer_summary.lower()
-    assert "ripetendo" in result.consumer_summary.lower()
+    assert (
+        result.consumer_headline
+        == "Le feci di Oreo sono più morbide e il cambiamento si ripete"
+    )
+    assert "oreo" in result.consumer_headline.lower()
+    assert "più morbide" in result.consumer_headline.lower()
+    assert "si ripete" in result.consumer_headline.lower()
     assert result.consumer_summary.count(".") <= 2
     assert "muco" not in blob
     assert "possibile muco" not in blob
@@ -877,16 +910,22 @@ def test_same_photo_changes_with_food_history_and_symptoms():
             food_started_days_ago=90,
         ),
     )
-    assert "più morbide" in first.consumer_summary.lower()
+    assert "più morbide" in first.consumer_headline.lower()
     assert "andamento abituale" not in first.consumer_summary.lower()
-    assert repeating.consumer_headline == "Un cambiamento da seguire"
-    assert "ripetendo" in repeating.consumer_summary.lower()
+    assert (
+        repeating.consumer_headline
+        == "Le feci di Rocky sono più morbide e il cambiamento si ripete"
+    )
+    assert "si ripete" in repeating.consumer_headline.lower()
     assert "3 giorni" in new_food.consumer_summary
     assert "causa" not in new_food.consumer_summary.lower()
     assert new_food.consumer_summary != stable_food.consumer_summary
     assert "vomitato" in with_vomiting.consumer_summary.lower()
     assert "veterinario" in with_vomiting.recommended_next_step.lower()
-    assert usual.consumer_headline == "In linea con il suo andamento"
+    assert (
+        usual.consumer_headline
+        == "Le feci di Rocky sono più morbide, in linea con il suo solito"
+    )
     assert usual.recommended_next_step is None
     assert first.recommended_next_step != repeating.recommended_next_step
     assert repeating.recommended_next_step != with_vomiting.recommended_next_step
@@ -908,7 +947,7 @@ def test_first_photo_is_useful_without_personal_baseline():
     assert "general" in layers
     assert "longitudinal" not in layers
     assert layers["general"].summary
-    assert "più morbide" in result.consumer_summary.lower()
+    assert "più morbide" in result.consumer_headline.lower()
     assert result.baseline_comparison == "INSUFFICIENT"
     assert result.recommended_next_step
     assert result.useful_action.key
