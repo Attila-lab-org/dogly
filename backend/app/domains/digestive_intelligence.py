@@ -27,7 +27,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v6"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v7"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -115,6 +115,8 @@ class DigestiveIntelligenceResult(BaseModel):
     knowledge_references: list[DigestiveKnowledgeReference] = Field(
         default_factory=list
     )
+    knowledge_claim_ids: list[str] = Field(default_factory=list)
+    knowledge_registry_version: str | None = None
     reasoning_version: str = DIGESTIVE_REASONING_VERSION
     baseline_version: str = DIGESTIVE_BASELINE_VERSION
 
@@ -162,6 +164,25 @@ def _has_quantity(context: DigestiveContext) -> bool:
 
 def _food_known(context: DigestiveContext) -> bool:
     return context.has_active_food or bool(context.active_food_name)
+
+
+def _owner_context_used(context: DigestiveContext) -> bool:
+    return any(
+        value is not None and value != ""
+        for value in (
+            context.vomiting_today,
+            context.reduced_activity_today,
+            context.appetite_reduced,
+            context.straining_or_urgency,
+            context.unusual_food_48h,
+            context.supplements_or_medication,
+            context.food_started_days_ago,
+            context.quantity_per_day,
+            context.latest_weight_kg,
+            context.weight_delta_kg,
+            context.active_food_name,
+        )
+    )
 
 
 def _recent_food_change(context: DigestiveContext) -> bool:
@@ -602,6 +623,31 @@ def build_digestive_intelligence(
     else:
         next_step = "Per ora va bene così."
 
+    knowledge = retrieve_digestive_knowledge(
+        observation,
+        state=state.value,
+        safety_state=safety.value,
+        has_food_context=_food_known(context),
+        quantity_present=bool(context.quantity_per_day),
+        food_started_days_ago=context.food_started_days_ago,
+        prior_score_count=len(context.prior_scores),
+        recent_episode_count_24h=context.recent_episode_count_24h,
+        recent_watery_count_24h=context.recent_watery_count_24h,
+        episode_count_7d=context.episode_count_7d,
+        episode_count_30d=context.episode_count_30d,
+        watery_count_7d=context.watery_count_7d,
+        vomiting_today=context.vomiting_today,
+        reduced_activity_today=context.reduced_activity_today,
+        appetite_reduced=context.appetite_reduced,
+        straining_or_urgency=context.straining_or_urgency,
+        unusual_food_48h=context.unusual_food_48h,
+        supplements_or_medication=context.supplements_or_medication,
+        weight_present=(
+            context.latest_weight_kg is not None or context.weight_delta_kg is not None
+        ),
+        owner_context_used=_owner_context_used(context),
+    )
+
     return DigestiveIntelligenceResult(
         overall_state=state,
         consumer_headline=headline,
@@ -616,11 +662,7 @@ def build_digestive_intelligence(
         useful_action=useful_action,
         what_to_watch=["vomito", "riduzione dell’attività", "nuovi episodi ravvicinati"],
         observation_reliability=reliability,
-        knowledge_references=retrieve_digestive_knowledge(
-            has_food_context=_food_known(context),
-            needs_clinical_context=(
-                state in {DigestiveState.ATTENTION, DigestiveState.VET_CONTACT}
-                or consistency in {"unformed", "watery"}
-            ),
-        ),
+        knowledge_references=knowledge.references,
+        knowledge_claim_ids=knowledge.claim_ids,
+        knowledge_registry_version=knowledge.registry_version,
     )

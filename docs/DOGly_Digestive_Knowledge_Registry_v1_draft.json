@@ -1,0 +1,863 @@
+{
+  "version": "digestive-knowledge/v1-draft",
+  "created_at": "2026-09-18",
+  "purpose": "Bounded scientific knowledge registry for DOGly Digestive Intelligence; evidence-backed constraints and retrieval cards, not free-form diagnosis text.",
+  "evidence_grades": {
+    "A": "Directly supported by professional guideline/reference or validated descriptive scale.",
+    "B": "Supported by peer-reviewed or academic veterinary evidence, but context/population is narrower.",
+    "C": "Conservative DOGly implementation/governance rule derived from A/B evidence; not a clinical conclusion itself."
+  },
+  "global_forbidden": [
+    "No disease diagnosis from stool photo.",
+    "No literal certainty about blood, melena, foreign material or food residue when visual evidence is ambiguous.",
+    "No causal food verdict from temporal association.",
+    "No treatment or medication instructions generated from photo interpretation.",
+    "No implication that absence on a photo proves true absence.",
+    "No use of insufficient-quality or safety-anomalous events to teach the personal normal baseline.",
+    "No claim that DOGly reproduces a validated clinical severity index unless the exact instrument is implemented and independently validated."
+  ],
+  "sources": [
+    {
+      "id": "PURINA_FECAL_CHART_7",
+      "citation": "Purina Institute. Purina Fecal Scoring Chart (7-point scale).",
+      "url": "https://www.purinainstitute.com/sites/default/files/2024-02/fecal-chart.pdf",
+      "use": "Visible form/moisture/segmentation descriptors for scores 1-7.",
+      "limitation": "Pickup residue and effort to pass are not visible in a still photo."
+    },
+    {
+      "id": "CAVETT_2021_JSAP",
+      "citation": "Cavett CL et al. Consistency of faecal scoring using two canine faecal scoring systems. J Small Anim Pract. 2021;62(3):167-173.",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33491796/",
+      "use": "Observer disagreement exists; experience affects agreement.",
+      "limitation": "Does not validate DOGly or an AI model."
+    },
+    {
+      "id": "CHAUVEL_2025_PHOTO",
+      "citation": "Chauvel C et al. Validation of photographic fecal scoring in puppies. Prev Vet Med. 2026;246:106729. Epub 2025.",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/41175811/",
+      "use": "Photographic scoring can agree well with in-situ scoring in the studied puppies.",
+      "limitation": "Specific puppy population and 13-point scale; not universal validation."
+    },
+    {
+      "id": "VCA_DIARRHEA_CONTEXT",
+      "citation": "VCA Animal Hospitals. Diarrhea Questionnaire and Checklist for Dogs.",
+      "url": "https://vcahospitals.com/ho-ho-kus/know-your-pet/diarrhea-questionnaire-and-checklist-for-dogs",
+      "use": "Frequency, consistency, blood, color, mucus, foreign material, appetite, diet, meds, activity and vomiting are relevant history.",
+      "limitation": "Context source, not a diagnostic decision rule."
+    },
+    {
+      "id": "MERCK_DIGESTIVE_DOGS",
+      "citation": "Merck Veterinary Manual. Introduction to Digestive Disorders of Dogs.",
+      "url": "https://www.merckvetmanual.com/dog-owners/digestive-disorders-of-dogs/introduction-to-digestive-disorders-of-dogs",
+      "use": "Color/consistency/frequency changes are relevant; black tarry stool can be compatible with digested blood; straining and systemic signs matter.",
+      "limitation": "Do not infer underlying disease or source from a photo alone."
+    },
+    {
+      "id": "MERCK_WHEN_VET",
+      "citation": "Merck Veterinary Manual. When to See a Veterinarian.",
+      "url": "https://www.merckvetmanual.com/multimedia/table/when-to-see-a-veterinarian",
+      "use": "Bloody/uncontrollable diarrhea, thick black stool, severe straining and prolonged vomiting/diarrhea are escalation signals.",
+      "limitation": "General owner triage guidance, not a DOGly diagnosis."
+    },
+    {
+      "id": "CORNELL_DIARRHEA",
+      "citation": "Cornell University College of Veterinary Medicine. Diarrhea.",
+      "url": "https://www.vet.cornell.edu/departments-centers-and-institutes/riney-canine-health-center/canine-health-topics/diarrhea",
+      "use": "Black/tarry stool, fresh blood, vomiting, reduced appetite/lethargy and persistence are reasons to seek veterinary care.",
+      "limitation": "General owner guidance; not individualized veterinary assessment."
+    },
+    {
+      "id": "ACVS_FOREIGN_BODY",
+      "citation": "American College of Veterinary Surgeons. Gastrointestinal Foreign Bodies.",
+      "url": "https://www.acvs.org/small-animal/gastrointestinal-foreign-bodies/",
+      "use": "Foreign-body obstruction can present with vomiting, appetite loss, pain, dehydration and diarrhea; visible material alone does not prove obstruction.",
+      "limitation": "DOGly cannot diagnose obstruction from stool appearance."
+    },
+    {
+      "id": "WSAVA_NUTRITION_2011",
+      "citation": "WSAVA Nutritional Assessment Guidelines. Journal of Small Animal Practice, 2011.",
+      "url": "https://wsava.org/wp-content/uploads/2020/01/WSAVA-Nutrition-Assessment-Guidelines-2011-JSAP.pdf",
+      "use": "Diet history, activity, weight, BCS/MCS, GI signs, supplements and weight change are relevant nutrition assessment data.",
+      "limitation": "Many items require veterinary exam; DOGly only compares owner-confirmed/measured data."
+    },
+    {
+      "id": "AAHA_NUTRITION_2021",
+      "citation": "2021 AAHA Nutrition and Weight Management Guidelines for Dogs and Cats.",
+      "url": "https://www.aaha.org/resources/2021-aaha-nutrition-and-weight-management-guidelines/",
+      "use": "Individualized feeding plan, amount/frequency, treats/supplements and gradual transitions are relevant.",
+      "limitation": "Do not generate therapeutic feeding prescriptions from photo analysis."
+    },
+    {
+      "id": "AAHA_FEEDING_PLAN_2021",
+      "citation": "AAHA. Feeding Plans for Healthy, Appropriate Weight Cats and Dogs.",
+      "url": "https://www.aaha.org/resources/2021-aaha-nutrition-and-weight-management-guidelines/feeding-plans-for-healthy-appropriate-weight-cats-and-dogs/",
+      "use": "Specific feeding amount/frequency and 4-7 day transitions are useful context; gradual changes may reduce negative GI responses.",
+      "limitation": "Does not prove a food caused a stool change."
+    },
+    {
+      "id": "WERNER_2020_CADS",
+      "citation": "Werner M et al. Effect of amoxicillin-clavulanic acid on clinical scores... J Vet Intern Med. 2020.",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/32324947/",
+      "use": "CADS combines activity, appetite, vomiting, fecal consistency and defecation frequency.",
+      "limitation": "Do not claim DOGly reproduces CADS unless the exact instrument is implemented and validated."
+    }
+  ],
+  "claims": [
+    {
+      "id": "DIG_SCORE_SCALE_001",
+      "group": "scoring",
+      "statement": "The 1-7 fecal score is a descriptive stool-consistency/form scale, not a diagnosis.",
+      "trigger": "fecal score is produced/displayed",
+      "output": "Use the score to describe visible stool quality and longitudinal change.",
+      "forbidden": "Do not map a score to disease, cause, treatment, or prognosis.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_1_001",
+      "group": "scoring",
+      "statement": "Very hard/dry, pellet-like or small hard masses.",
+      "trigger": "very hard/dry and pellet-like",
+      "output": "Score 1 compatible.",
+      "forbidden": "Do not infer constipation or defecation effort.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_2_001",
+      "group": "scoring",
+      "statement": "Firm but not hard, pliable-looking, segmented stool.",
+      "trigger": "firm/formed with clear segmentation and low apparent moisture",
+      "output": "Score 2 compatible.",
+      "forbidden": "Do not infer pickup residue/ease of passage.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_3_001",
+      "group": "scoring",
+      "statement": "Moist log-shaped stool with little/no segmentation that retains form.",
+      "trigger": "formed/log-shaped, moist, minimally segmented",
+      "output": "Score 3 compatible.",
+      "forbidden": "Do not infer residue on pickup.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_4_001",
+      "group": "scoring",
+      "statement": "Very moist/soggy log-shaped stool losing form.",
+      "trigger": "broadly log-shaped, very moist, partly collapsed",
+      "output": "Score 4 compatible.",
+      "forbidden": "Do not diagnose diarrhea cause.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_5_001",
+      "group": "scoring",
+      "statement": "Very moist stool with a distinct piled shape rather than a log.",
+      "trigger": "distinct piled shape, not log-like",
+      "output": "Score 5 compatible.",
+      "forbidden": "Do not infer cause.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_6_001",
+      "group": "scoring",
+      "statement": "Textured stool with no defined shape, in piles/spots.",
+      "trigger": "texture present but no defined form",
+      "output": "Score 6 compatible.",
+      "forbidden": "Do not name an enteric disease.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_7_001",
+      "group": "scoring",
+      "statement": "Watery stool with no texture, appearing as a flat puddle.",
+      "trigger": "liquid/watery with no defined texture or shape",
+      "output": "Score 7 compatible.",
+      "forbidden": "Do not infer dehydration/infection/severity from photo alone.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "shape",
+        "apparent_moisture",
+        "segmentation",
+        "consistency",
+        "fecal_score_estimate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_PHOTO_LIMIT_001",
+      "group": "scoring",
+      "statement": "A still photo cannot establish nonvisual chart criteria such as effort to pass stool or residue after pickup.",
+      "trigger": "photo-based scoring",
+      "output": "Use only visible primitives; reduce reliability if adjacent classes depend on nonvisual criteria.",
+      "forbidden": "Never invent effort, pickup residue, odor, texture-by-touch or internal composition.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7"
+      ],
+      "current_fields": [
+        "image_quality",
+        "confidence_band"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_SCORE_ADJACENT_001",
+      "group": "scoring",
+      "statement": "Fecal scoring has meaningful observer variability.",
+      "trigger": "visible features sit near adjacent score boundary",
+      "output": "Use deterministic tie-breaking and uncertainty/reliability rather than stochastic score flipping.",
+      "forbidden": "Do not imply exactness unsupported by scoring literature.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "CAVETT_2021_JSAP"
+      ],
+      "current_fields": [
+        "fecal_score_estimate",
+        "confidence_band"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_PHOTO_VALIDATION_001",
+      "group": "scoring",
+      "statement": "Photographs can support fecal-consistency scoring, but validation is population- and scale-specific.",
+      "trigger": "describing photo-based analysis",
+      "output": "State that photos can support visual consistency assessment while preserving image-quality limits.",
+      "forbidden": "Do not claim universal validation across all dogs/scales.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "CHAUVEL_2025_PHOTO",
+        "CAVETT_2021_JSAP"
+      ],
+      "current_fields": [
+        "image_quality",
+        "observation_reliability"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_BLACK_TARRY_001",
+      "group": "appearance_safety",
+      "statement": "Black, tarry stool is clinically important because it can be compatible with digested blood.",
+      "trigger": "melena clear OR BLACK_TARRY_APPEARANCE",
+      "output": "Veterinary-contact guidance; describe appearance, not diagnosis.",
+      "forbidden": "Do not say confirmed GI bleeding or localize source from photo.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "MERCK_DIGESTIVE_DOGS",
+        "MERCK_WHEN_VET",
+        "CORNELL_DIARRHEA"
+      ],
+      "current_fields": [
+        "melena_candidate",
+        "color_family"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_BLACK_TARRY_POSSIBLE_001",
+      "group": "appearance_safety",
+      "statement": "A merely possible black/tarry appearance needs corroboration before becoming a safety finding.",
+      "trigger": "melena_candidate=possible",
+      "output": "Focused verifier; confirmed->safety, unavailable->controlled caution, not_confirmed->no strong claim.",
+      "forbidden": "Do not convert first-pass uncertainty into definitive melena.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "MERCK_DIGESTIVE_DOGS",
+        "CAVETT_2021_JSAP"
+      ],
+      "current_fields": [
+        "melena_candidate",
+        "anomaly_verification"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_FRESH_BLOOD_001",
+      "group": "appearance_safety",
+      "statement": "Visible fresh/bright red blood in stool is a reason for veterinary attention.",
+      "trigger": "fresh_blood_candidate=clear_candidate",
+      "output": "Recommend contacting a veterinarian while keeping wording observational.",
+      "forbidden": "Do not diagnose colitis, parasites, hemorrhagic disease or another cause.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "CORNELL_DIARRHEA",
+        "MERCK_WHEN_VET"
+      ],
+      "current_fields": [
+        "fresh_blood_candidate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_FRESH_BLOOD_POSSIBLE_001",
+      "group": "appearance_safety",
+      "statement": "A possible red/blood-like finding should be verified before it becomes a consumer safety claim.",
+      "trigger": "fresh_blood_candidate=possible",
+      "output": "Focused verifier required; unavailable verification keeps cautious monitor/contact guidance.",
+      "forbidden": "Do not use model confidence as independent corroboration.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "CAVETT_2021_JSAP",
+        "CORNELL_DIARRHEA"
+      ],
+      "current_fields": [
+        "fresh_blood_candidate",
+        "anomaly_verification",
+        "confidence_band"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_COLOR_NONRED_NONBLACK_001",
+      "group": "appearance_safety",
+      "statement": "Pale/tan/yellow/green/dark-brown color is worth recording, but color alone is not specific enough to assign a cause.",
+      "trigger": "non-brown ordinary color and not confirmed red/black-tarry",
+      "output": "Record canonical color and compare longitudinally.",
+      "forbidden": "Do not diagnose liver/pancreas/infection/intolerance from color alone.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "MERCK_DIGESTIVE_DOGS"
+      ],
+      "current_fields": [
+        "color_family"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_MUCUS_001",
+      "group": "appearance_safety",
+      "statement": "Visible mucus is relevant but nonspecific on its own.",
+      "trigger": "mucus possible/clear",
+      "output": "Record and combine with frequency, urgency/straining, duration and other symptoms.",
+      "forbidden": "Do not diagnose colitis or infection from mucus alone.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT"
+      ],
+      "current_fields": [
+        "mucus_candidate",
+        "straining_or_urgency",
+        "episode_count_7d"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_FOREIGN_MATERIAL_001",
+      "group": "appearance_safety",
+      "statement": "Visible foreign material is worth recording, but does not prove GI obstruction.",
+      "trigger": "foreign_material=clear_candidate",
+      "output": "Raise attention and combine with vomiting/appetite/pain/ingestion context if available.",
+      "forbidden": "Do not diagnose obstruction or advise inducing vomiting from stool photo.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "ACVS_FOREIGN_BODY"
+      ],
+      "current_fields": [
+        "foreign_material_candidate",
+        "vomiting_today",
+        "appetite_reduced"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_FOREIGN_POSSIBLE_001",
+      "group": "appearance_safety",
+      "statement": "Uncertain texture/debris should not be upgraded to foreign material without object-like evidence.",
+      "trigger": "foreign_material=possible",
+      "output": "Keep internal/monitoring unless evidence becomes clear or owner context raises concern.",
+      "forbidden": "Do not create strong alert from ambiguous debris alone.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "CAVETT_2021_JSAP"
+      ],
+      "current_fields": [
+        "foreign_material_candidate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_UNDIGESTED_FOOD_001",
+      "group": "appearance_safety",
+      "statement": "Food-like particles can be described visually but are nonspecific.",
+      "trigger": "undigested_food possible/clear",
+      "output": "Record as food-like material and use longitudinally/contextually.",
+      "forbidden": "Do not infer malabsorption, pancreatic disease, poor digestibility or overfeeding from one photo.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "WSAVA_NUTRITION_2011"
+      ],
+      "current_fields": [
+        "undigested_food_candidate"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_CONTEXT_CORE_001",
+      "group": "context",
+      "statement": "Activity, appetite, vomiting, fecal consistency and defecation frequency are established context variables used together in canine acute-diarrhea severity assessment.",
+      "trigger": "non-routine digestive change",
+      "output": "Prefer one missing question that can change safety/interpretation.",
+      "forbidden": "Do not claim DOGly is calculating CADS unless exact instrument is implemented/validated.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "WERNER_2020_CADS"
+      ],
+      "current_fields": [
+        "vomiting_today",
+        "reduced_activity_today",
+        "appetite_reduced",
+        "consistency",
+        "episode_count_7d"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_VOMITING_001",
+      "group": "context",
+      "statement": "Vomiting alongside loose/watery stool increases concern versus isolated stool change.",
+      "trigger": "unformed/watery AND vomiting_today=true",
+      "output": "Escalate attention/contact according to repetition/severity.",
+      "forbidden": "Do not identify cause of vomiting/diarrhea.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "CORNELL_DIARRHEA",
+        "MERCK_DIGESTIVE_DOGS",
+        "WERNER_2020_CADS"
+      ],
+      "current_fields": [
+        "vomiting_today",
+        "consistency"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_ACTIVITY_001",
+      "group": "context",
+      "statement": "Reduced activity/lethargy is important context with diarrhea.",
+      "trigger": "digestive change AND reduced_activity_today=true",
+      "output": "Increase concern and avoid framing as isolated benign variation.",
+      "forbidden": "Do not infer systemic disease from activity alone.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "CORNELL_DIARRHEA",
+        "VCA_DIARRHEA_CONTEXT",
+        "WERNER_2020_CADS"
+      ],
+      "current_fields": [
+        "reduced_activity_today"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_APPETITE_001",
+      "group": "context",
+      "statement": "Reduced appetite is important context with diarrhea.",
+      "trigger": "digestive change AND appetite_reduced=true",
+      "output": "Increase concern, especially with other red flags.",
+      "forbidden": "Do not diagnose nausea/pain/obstruction/systemic disease from appetite alone.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "CORNELL_DIARRHEA",
+        "VCA_DIARRHEA_CONTEXT",
+        "WERNER_2020_CADS"
+      ],
+      "current_fields": [
+        "appetite_reduced"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_FREQUENCY_001",
+      "group": "context",
+      "statement": "Defecation frequency is clinically relevant and should be separate from consistency.",
+      "trigger": "multiple events in a short window",
+      "output": "Use episode counts to describe repetition and choose follow-up/safety context.",
+      "forbidden": "Do not turn frequency alone into diagnosis.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "WERNER_2020_CADS"
+      ],
+      "current_fields": [
+        "recent_episode_count_24h",
+        "episode_count_7d",
+        "episode_count_30d"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_REPEATED_WATERY_001",
+      "group": "context",
+      "statement": "Repeated watery stools are more concerning than one isolated soft stool.",
+      "trigger": "watery AND recent_watery_count_24h>=1",
+      "output": "Raise attention and ask vomiting/activity/appetite if missing.",
+      "forbidden": "Do not diagnose infection/dehydration from appearance alone.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "CORNELL_DIARRHEA",
+        "WERNER_2020_CADS"
+      ],
+      "current_fields": [
+        "consistency",
+        "recent_watery_count_24h"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_STRAINING_001",
+      "group": "context",
+      "statement": "Severe straining/urgency is relevant history and can change veterinary concern.",
+      "trigger": "straining_or_urgency=true",
+      "output": "Surface with blood/mucus/frequency and ability to pass stool.",
+      "forbidden": "Do not localize disease or diagnose colitis/rectal disease from owner report alone.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "MERCK_DIGESTIVE_DOGS",
+        "MERCK_WHEN_VET"
+      ],
+      "current_fields": [
+        "straining_or_urgency"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_DURATION_001",
+      "group": "context",
+      "statement": "Persistence of diarrhea over time is a reason to seek veterinary advice even when initial episode is mild.",
+      "trigger": "loose/watery pattern persists across days",
+      "output": "Escalate toward veterinary contact as persistence increases, especially with other signs.",
+      "forbidden": "Do not hard-code universal prognosis from duration alone.",
+      "evidence_grade": "B",
+      "source_ids": [
+        "CORNELL_DIARRHEA",
+        "MERCK_WHEN_VET"
+      ],
+      "current_fields": [
+        "episode_count_7d",
+        "episode_count_30d"
+      ],
+      "status": "active_v1",
+      "notes": "Prefer future explicit owner-reported onset time; event counts are only a proxy."
+    },
+    {
+      "id": "DIG_DIET_HISTORY_001",
+      "group": "nutrition",
+      "statement": "Diet history is relevant to GI assessment: main food, treats/table food, recent additions and supplements.",
+      "trigger": "digestive state changed and nutrition context absent/incomplete",
+      "output": "Ask for the single most useful missing nutrition item; if no food, offer Add nutrition.",
+      "forbidden": "Do not imply missing diet data caused the change.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "WSAVA_NUTRITION_2011",
+        "VCA_DIARRHEA_CONTEXT"
+      ],
+      "current_fields": [
+        "active_food_name",
+        "has_active_food",
+        "quantity_per_day",
+        "unusual_food_48h",
+        "supplements_or_medication"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_FOOD_CHANGE_001",
+      "group": "nutrition",
+      "statement": "A recent food change is a temporal association to track, not proof the food caused the stool change.",
+      "trigger": "food_started_days_ago recent",
+      "output": "Use 'coincides with' / 'happened after' and watch subsequent observations.",
+      "forbidden": "Do not blame/clear/rank a product from temporal coincidence.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "AAHA_NUTRITION_2021",
+        "AAHA_FEEDING_PLAN_2021",
+        "VCA_DIARRHEA_CONTEXT"
+      ],
+      "current_fields": [
+        "food_started_days_ago",
+        "active_food_name"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_DIET_TRANSITION_001",
+      "group": "nutrition",
+      "statement": "Gradual diet adjustment over roughly 4-7 days may reduce negative GI responses in healthy dogs/cats.",
+      "trigger": "recording a planned new food/transition",
+      "output": "Use as education for planned change, not treatment of active illness.",
+      "forbidden": "Do not present 4-7 days as universally safe or as diarrhea treatment.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "AAHA_FEEDING_PLAN_2021"
+      ],
+      "current_fields": [
+        "food_started_days_ago"
+      ],
+      "status": "guidance_only",
+      "notes": null
+    },
+    {
+      "id": "DIG_FEEDING_AMOUNT_001",
+      "group": "nutrition",
+      "statement": "Feeding amount and frequency are meaningful parts of individualized nutrition history.",
+      "trigger": "active food but quantity missing",
+      "output": "Offer Complete nutrition and ask quantity/day.",
+      "forbidden": "Do not calculate therapeutic grams from stool photo/unverified product data.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "AAHA_FEEDING_PLAN_2021",
+        "WSAVA_NUTRITION_2011"
+      ],
+      "current_fields": [
+        "quantity_per_day",
+        "active_food_product_id"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_TREATS_EXTRAS_001",
+      "group": "nutrition",
+      "statement": "Treats, table foods and other extras can materially change the nutrition history.",
+      "trigger": "persistent change and extras unknown",
+      "output": "Use owner-confirmed extras context only when it changes interpretation.",
+      "forbidden": "Do not label a treat/table food as the cause without evidence.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "WSAVA_NUTRITION_2011",
+        "VCA_DIARRHEA_CONTEXT"
+      ],
+      "current_fields": [
+        "unusual_food_48h"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_MED_SUPPLEMENT_001",
+      "group": "nutrition",
+      "statement": "Medication and supplement use is relevant digestive context.",
+      "trigger": "digestive change and medication/supplement context relevant",
+      "output": "Record owner-reported use and surface for vet sharing when relevant.",
+      "forbidden": "Do not advise stopping medication/supplements or assign causality.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "WSAVA_NUTRITION_2011",
+        "VCA_DIARRHEA_CONTEXT"
+      ],
+      "current_fields": [
+        "supplements_or_medication"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_WEIGHT_CONTEXT_001",
+      "group": "nutrition",
+      "statement": "Weight/body-condition trends are nutrition context and more useful longitudinally than isolated labels.",
+      "trigger": "weight data exists",
+      "output": "Use measured/owner-entered weight change as context; keep BCS/MCS separate when available.",
+      "forbidden": "Do not diagnose obesity/malnutrition/dehydration/disease from home weight or stool photo.",
+      "evidence_grade": "A",
+      "source_ids": [
+        "WSAVA_NUTRITION_2011",
+        "AAHA_NUTRITION_2021"
+      ],
+      "current_fields": [
+        "latest_weight_kg",
+        "weight_delta_kg"
+      ],
+      "status": "active_v1",
+      "notes": "BCS exists in dog_weight_events but is not currently wired into DigestiveContext."
+    },
+    {
+      "id": "DIG_BASELINE_PERSONAL_001",
+      "group": "longitudinal",
+      "statement": "DOGly's 'usual' should describe this dog's recent eligible observations, not a population-normal diagnosis.",
+      "trigger": "baseline available",
+      "output": "Compare current eligible score/consistency with dog's own eligible history.",
+      "forbidden": "Do not call personal baseline medically normal or healthy.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "PURINA_FECAL_CHART_7",
+        "CAVETT_2021_JSAP"
+      ],
+      "current_fields": [
+        "prior_scores",
+        "prior_consistencies"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_LEARNING_QUALITY_001",
+      "group": "learning",
+      "statement": "Insufficient-quality image must not teach personal baseline.",
+      "trigger": "image_quality=insufficient",
+      "output": "Retry/reject display as appropriate; learning_eligible=false.",
+      "forbidden": "Do not treat missing visual evidence as normal absence.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "CHAUVEL_2025_PHOTO",
+        "CAVETT_2021_JSAP"
+      ],
+      "current_fields": [
+        "image_quality",
+        "learning_eligible"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_LEARNING_SAFETY_001",
+      "group": "learning",
+      "statement": "Observation carrying a meaningful safety anomaly should not become part of the dog's 'normal' baseline.",
+      "trigger": "confirmed/clear blood, melena, foreign material or comparable safety anomaly",
+      "output": "display_eligible may stay true; learning_eligible=false.",
+      "forbidden": "Do not normalize future warnings through abnormal learning examples.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "MERCK_WHEN_VET",
+        "CORNELL_DIARRHEA",
+        "ACVS_FOREIGN_BODY"
+      ],
+      "current_fields": [
+        "learning_eligible",
+        "safety_flags"
+      ],
+      "status": "active_v1",
+      "notes": null
+    },
+    {
+      "id": "DIG_OWNER_CONTEXT_PROVENANCE_001",
+      "group": "learning",
+      "statement": "Owner-reported symptoms and feeding history are context, not visual evidence.",
+      "trigger": "owner_context_json contributes to reasoning",
+      "output": "Keep provenance explicit; never rewrite observer facts from owner context.",
+      "forbidden": "Do not claim the image showed vomiting, appetite change, medication use or diet history.",
+      "evidence_grade": "C",
+      "source_ids": [
+        "VCA_DIARRHEA_CONTEXT",
+        "WSAVA_NUTRITION_2011"
+      ],
+      "current_fields": [
+        "owner_context_json"
+      ],
+      "status": "active_v1",
+      "notes": null
+    }
+  ]
+}

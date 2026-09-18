@@ -1,89 +1,75 @@
-"""Small, versioned veterinary source registry for digestive reasoning.
+"""Digestive knowledge retrieval for consumer-intelligence audit metadata.
 
-References are selected by deterministic relevance rules. They are audit
-metadata, not diagnosis text and are not dumped onto the primary consumer UI.
+The dedicated Digestive Knowledge Registry V1 is the source of truth.
+References are selected by deterministic claim triggers. They are audit
+metadata, not diagnosis text, and are not dumped onto the primary consumer UI.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from typing import Any
 
-
-class DigestiveKnowledgeReference(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    reference_id: str
-    title: str
-    publisher: str
-    url: str
-    supports: str
-
-
-MERCK_GROSS_FECAL = DigestiveKnowledgeReference(
-    reference_id="merck-gross-fecal-evaluation/v1",
-    title="The Digestive System in Animals",
-    publisher="Merck Veterinary Manual",
-    url=(
-        "https://www.merckvetmanual.com/digestive-system/"
-        "digestive-system-introduction/the-digestive-system-in-animals"
-    ),
-    supports="Gross fecal characteristics must be interpreted with history and examination.",
+from app.knowledge.digestive_registry import (
+    DigestiveKnowledgeFacts,
+    DigestiveKnowledgeReference,
+    DigestiveKnowledgeRetrieval,
+    facts_from_observation,
+)
+from app.knowledge.digestive_registry import (
+    retrieve_digestive_knowledge as retrieve_registry,
 )
 
-VCA_DIARRHEA_CONTEXT = DigestiveKnowledgeReference(
-    reference_id="vca-diarrhea-context/v1",
-    title="Diarrhea Questionnaire and Checklist for Dogs",
-    publisher="VCA Animal Hospitals",
-    url="https://vcahospitals.com/know-your-pet/diarrhea-questionnaire-and-checklist-for-dogs",
-    supports="Frequency, blood, mucus, diet, activity and vomiting are relevant context.",
-)
-
-WSAVA_NUTRITION = DigestiveKnowledgeReference(
-    reference_id="wsava-nutrition-assessment/v1",
-    title="WSAVA Nutritional Assessment Guidelines",
-    publisher="World Small Animal Veterinary Association",
-    url=(
-        "https://wsava.org/wp-content/uploads/2020/01/"
-        "WSAVA-Nutrition-Assessment-Guidelines-2011-JSAP.pdf"
-    ),
-    supports="Diet history, activity, weight and gastrointestinal signs belong in context.",
-)
-
-AAHA_DIET_TRANSITION = DigestiveKnowledgeReference(
-    reference_id="aaha-diet-transition-2021/v1",
-    title="2021 AAHA Nutrition and Weight Management Guidelines",
-    publisher="American Animal Hospital Association",
-    url=(
-        "https://www.aaha.org/resources/2021-aaha-nutrition-and-weight-"
-        "management-guidelines/feeding-plans-for-healthy-appropriate-"
-        "weight-cats-and-dogs/"
-    ),
-    supports=(
-        "Gradual diet adjustments over four to seven days may reduce "
-        "negative gastrointestinal responses."
-    ),
-)
-
-FECAL_SCORE_AGREEMENT = DigestiveKnowledgeReference(
-    reference_id="jsap-fecal-score-agreement-2021/v1",
-    title="Consistency of faecal scoring using two canine faecal scoring systems",
-    publisher="Journal of Small Animal Practice",
-    url="https://pubmed.ncbi.nlm.nih.gov/33491796/",
-    supports=(
-        "Visual fecal scores are descriptive monitoring tools with variable "
-        "agreement, especially between lay people and veterinarians."
-    ),
-)
+__all__ = [
+    "DigestiveKnowledgeFacts",
+    "DigestiveKnowledgeReference",
+    "DigestiveKnowledgeRetrieval",
+    "retrieve_digestive_knowledge",
+]
 
 
 def retrieve_digestive_knowledge(
+    observation: dict[str, Any],
     *,
-    has_food_context: bool,
-    needs_clinical_context: bool,
-) -> list[DigestiveKnowledgeReference]:
-    references = [MERCK_GROSS_FECAL, FECAL_SCORE_AGREEMENT]
-    if needs_clinical_context:
-        references.append(VCA_DIARRHEA_CONTEXT)
-    if has_food_context:
-        references.extend([WSAVA_NUTRITION, AAHA_DIET_TRANSITION])
-    return references
+    state: str,
+    safety_state: str,
+    has_food_context: bool = False,
+    quantity_present: bool = False,
+    food_started_days_ago: int | None = None,
+    prior_score_count: int = 0,
+    recent_episode_count_24h: int = 0,
+    recent_watery_count_24h: int = 0,
+    episode_count_7d: int = 0,
+    episode_count_30d: int = 0,
+    watery_count_7d: int = 0,
+    vomiting_today: bool | None = None,
+    reduced_activity_today: bool | None = None,
+    appetite_reduced: bool | None = None,
+    straining_or_urgency: bool | None = None,
+    unusual_food_48h: bool | None = None,
+    supplements_or_medication: bool | None = None,
+    weight_present: bool = False,
+    owner_context_used: bool = False,
+) -> DigestiveKnowledgeRetrieval:
+    facts = facts_from_observation(
+        observation,
+        state=state,
+        safety_state=safety_state,
+        has_food=has_food_context,
+        quantity_present=quantity_present,
+        food_started_days_ago=food_started_days_ago,
+        prior_score_count=prior_score_count,
+        recent_episode_count_24h=recent_episode_count_24h,
+        recent_watery_count_24h=recent_watery_count_24h,
+        episode_count_7d=episode_count_7d,
+        episode_count_30d=episode_count_30d,
+        watery_count_7d=watery_count_7d,
+        vomiting_today=vomiting_today,
+        reduced_activity_today=reduced_activity_today,
+        appetite_reduced=appetite_reduced,
+        straining_or_urgency=straining_or_urgency,
+        unusual_food_48h=unusual_food_48h,
+        supplements_or_medication=supplements_or_medication,
+        weight_present=weight_present,
+        owner_context_used=owner_context_used,
+    )
+    return retrieve_registry(facts)
