@@ -39,6 +39,8 @@ def test_new_dog_monitors_without_inventing_a_baseline():
     assert result.baseline_comparison == "INSUFFICIENT"
     assert "imparando" in result.consumer_summary
     assert result.useful_action.key == "add_nutrition"
+    assert result.useful_action.label == "Aggiungi"
+    assert result.useful_action.title == "Alimentazione non impostata"
     assert result.useful_action.href == "/nutrition/foods"
 
 
@@ -52,9 +54,9 @@ def test_watery_observation_asks_only_the_high_value_missing_question():
     assert result.followup_question == "Rocky ha vomitato oggi?"
     assert result.useful_action.key == "ask_followup"
     assert {
-        "Merck Veterinary Manual",
         "VCA Animal Hospitals",
         "Journal of Small Animal Practice",
+        "Purina Institute",
     }.issubset({item.publisher for item in result.knowledge_references})
     assert "REPEATED_WATERY" not in {
         item["code"]
@@ -119,7 +121,7 @@ def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
 
     assert result.overall_state is DigestiveState.MONITOR
     assert result.baseline_comparison == "ABOVE_USUAL"
-    assert "morbida" in result.consumer_headline.lower()
+    assert "morbide" in result.consumer_headline.lower()
 
 
 def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
@@ -132,9 +134,10 @@ def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
         context(prior_scores=[4, 4, 4, 4]),
     )
 
-    assert result.consumer_headline == "Più compatta del solito"
-    assert "ben formate" in result.consumer_summary
-    assert "marrone scuro" in result.consumer_summary
+    assert result.consumer_headline == "Più compatte del suo solito"
+    assert "ben formate" in " ".join(result.relevant_context)
+    assert "marrone scuro" in " ".join(result.relevant_context)
+    assert "appaiono" not in result.consumer_summary.lower()
     assert result.useful_action.key == "add_nutrition"
 
 
@@ -152,7 +155,9 @@ def test_recent_food_change_is_context_not_a_causal_claim():
 
     assert result.possible_associations
     assert "3 giorni" in result.possible_associations[0]
+    assert "3 giorni" in result.consumer_summary
     assert "causa" not in result.possible_associations[0].lower()
+    assert "causa" not in result.consumer_summary.lower()
     assert any(
         item.publisher == "World Small Animal Veterinary Association"
         for item in result.knowledge_references
@@ -161,8 +166,7 @@ def test_recent_food_change_is_context_not_a_causal_claim():
         item.publisher == "American Animal Hospital Association"
         for item in result.knowledge_references
     )
-    assert result.useful_action.key == "contextual"
-    assert "3 giorni" in result.recommended_next_step
+    assert result.useful_action.key == "none"
 
 
 def test_missing_active_food_never_becomes_a_food_change_today():
@@ -304,6 +308,13 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert body["overall_state"] in {"ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"}
     assert body["consumer_headline"]
     assert body["recommended_next_step"]
+    stored = state.store.fecal_events[event_id].intelligence_json
+    assert stored["knowledge_registry_version"] == body["knowledge_registry_version"]
+    assert stored["knowledge_registry_checksum"] == body["knowledge_registry_checksum"]
+    assert stored["knowledge_claim_ids"] == body["knowledge_claim_ids"]
+    assert body["knowledge_registry_version"] == "digestive-knowledge/v1"
+    assert len(body["knowledge_registry_checksum"]) == 64
+    assert body["knowledge_claim_ids"]
 
     contextualized = await client.patch(
         f"/v1/digestive/events/{event_id}/context",
@@ -363,7 +374,8 @@ def test_missing_food_on_a_change_asks_to_add_nutrition():
     )
     assert result.baseline_comparison == "ABOVE_USUAL"
     assert result.useful_action.key == "add_nutrition"
-    assert result.useful_action.label == "Aggiungi alimentazione"
+    assert result.useful_action.label == "Aggiungi"
+    assert result.useful_action.title == "Alimentazione non impostata"
     assert result.followup_key is None
 
 
@@ -378,7 +390,8 @@ def test_food_without_quantity_asks_only_for_that():
         ),
     )
     assert result.useful_action.key == "complete_nutrition"
-    assert result.useful_action.label == "Completa alimentazione"
+    assert result.useful_action.label == "Completa"
+    assert result.useful_action.title == "Quantità non impostata"
     assert (
         result.useful_action.href
         == "/nutrition/foods/food-abc/verify?focus=quantity"
@@ -432,10 +445,15 @@ def test_verification_unavailable_melena_does_not_mention_red_trace():
     assert "catramos" in (result.useful_action.body or "").lower()
 
 
-def test_stable_routine_has_no_useful_cta():
+def test_stable_routine_with_complete_nutrition_has_no_useful_cta():
     result = build_digestive_intelligence(
         observation(consistency="formed", fecal_score_estimate=4),
-        context(prior_scores=[4, 4, 4, 4]),
+        context(
+            prior_scores=[4, 4, 4, 4],
+            active_food_name="Crocchette",
+            has_active_food=True,
+            quantity_per_day="200g",
+        ),
     )
     assert result.overall_state is DigestiveState.ROUTINE
     assert result.useful_action.key == "none"
@@ -474,3 +492,77 @@ async def test_verifier_technical_failure_is_unavailable_not_unknown():
     stored = result["anomaly_verification"]["fresh_blood_candidate"]
     assert stored["verdict"] == "verification_unavailable"
     assert stored["verdict"] != "unknown"
+
+
+def test_same_photo_means_different_things_with_different_personal_context():
+    photo = observation(consistency="soft")
+    softer = build_digestive_intelligence(photo, context(prior_scores=[2, 2, 2, 2]))
+    usual = build_digestive_intelligence(photo, context(prior_scores=[4, 4, 4, 4]))
+    assert softer.consumer_headline != usual.consumer_headline
+    assert "morbide" in softer.consumer_headline.lower()
+    assert "linea" in usual.consumer_headline.lower()
+    assert "appaiono" not in softer.consumer_summary.lower()
+    assert "appaiono" not in usual.consumer_summary.lower()
+
+
+def test_repeated_event_changes_meaning_versus_isolated_episode():
+    photo = observation(consistency="soft")
+    isolated = build_digestive_intelligence(
+        photo,
+        context(prior_scores=[2, 2, 2, 2]),
+    )
+    repeated = build_digestive_intelligence(
+        photo,
+        context(prior_scores=[2, 2, 2, 2], episode_count_7d=1),
+    )
+    assert "seconda volta" not in isolated.consumer_summary.lower()
+    assert "seconda volta questa settimana" in repeated.consumer_summary.lower()
+    assert isolated.consumer_headline == repeated.consumer_headline
+
+
+def test_routine_without_food_still_offers_brief_nutrition_cta():
+    result = build_digestive_intelligence(
+        observation(consistency="formed", fecal_score_estimate=4),
+        context(prior_scores=[4, 4, 4, 4]),
+    )
+    assert result.overall_state is DigestiveState.ROUTINE
+    assert result.useful_action.key == "add_nutrition"
+    assert result.useful_action.title == "Alimentazione non impostata"
+    assert result.useful_action.label == "Aggiungi"
+    assert result.useful_action.body is None
+
+
+def test_vomiting_true_selects_claim_unknown_and_false_do_not():
+    watery = observation(consistency="watery")
+    food = context(
+        active_food_name="Crocchette",
+        quantity_per_day="200g",
+        has_active_food=True,
+    )
+    unknown = build_digestive_intelligence(watery, food)
+    absent = build_digestive_intelligence(
+        watery,
+        context(
+            active_food_name="Crocchette",
+            quantity_per_day="200g",
+            has_active_food=True,
+            vomiting_today=False,
+        ),
+    )
+    present = build_digestive_intelligence(
+        watery,
+        context(
+            active_food_name="Crocchette",
+            quantity_per_day="200g",
+            has_active_food=True,
+            vomiting_today=True,
+        ),
+    )
+    assert unknown.useful_action.key == "ask_followup"
+    assert "DIG_VOMITING_001" not in unknown.knowledge_claim_ids
+    assert "DIG_VOMITING_001" not in absent.knowledge_claim_ids
+    assert "DIG_VOMITING_001" in present.knowledge_claim_ids
+    assert any(
+        item.publisher == "Merck Veterinary Manual"
+        for item in present.knowledge_references
+    )

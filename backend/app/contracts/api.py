@@ -794,6 +794,9 @@ class DigestiveEventOut(BaseModel):
     what_to_watch: list[str] = Field(default_factory=list)
     observation_reliability: str | None = None
     knowledge_references: list[dict[str, str]] = Field(default_factory=list)
+    knowledge_claim_ids: list[str] = Field(default_factory=list)
+    knowledge_registry_version: str | None = None
+    knowledge_registry_checksum: str | None = None
     reasoning_version: str | None = None
     baseline_version: str | None = None
     created_at: datetime

@@ -228,6 +228,11 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         what_to_watch=intelligence.get("what_to_watch", []),
         observation_reliability=intelligence.get("observation_reliability"),
         knowledge_references=intelligence.get("knowledge_references", []),
+        knowledge_claim_ids=intelligence.get("knowledge_claim_ids", []),
+        knowledge_registry_version=intelligence.get("knowledge_registry_version"),
+        knowledge_registry_checksum=intelligence.get(
+            "knowledge_registry_checksum"
+        ),
         reasoning_version=intelligence.get("reasoning_version"),
         baseline_version=intelligence.get("baseline_version"),
         created_at=e.created_at,

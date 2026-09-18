@@ -6287,6 +6287,35 @@
             "type": "array",
             "title": "Knowledge References"
           },
+          "knowledge_claim_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Knowledge Claim Ids"
+          },
+          "knowledge_registry_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Registry Version"
+          },
+          "knowledge_registry_checksum": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Registry Checksum"
+          },
           "reasoning_version": {
             "anyOf": [
               {

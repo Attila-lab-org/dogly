@@ -166,6 +166,45 @@ def test_score_1_to_7_comes_from_visible_primitives_only():
         assert source == "derived"
 
 
+def test_shape_changes_fecal_score_when_other_primitives_are_equal():
+    formed_high = {
+        "consistency": "formed",
+        "apparent_moisture": "high",
+        "segmentation": "reduced",
+        "fecal_score_estimate": None,
+        "image_quality": "sufficient",
+    }
+    log_score, log_source = derive_fecal_score({**formed_high, "shape": "log"})
+    piled_score, piled_source = derive_fecal_score({**formed_high, "shape": "piled"})
+    assert log_source == piled_source == "derived"
+    assert log_score == 4
+    assert piled_score == 5
+
+    hard_dry = {
+        "consistency": "hard",
+        "apparent_moisture": "low",
+        "segmentation": "present",
+        "fecal_score_estimate": None,
+        "image_quality": "sufficient",
+    }
+    pellets, _ = derive_fecal_score({**hard_dry, "shape": "pellets"})
+    log, _ = derive_fecal_score({**hard_dry, "shape": "log"})
+    assert pellets == 1
+    assert log == 2
+
+    soft_high = {
+        "consistency": "soft",
+        "apparent_moisture": "high",
+        "segmentation": "reduced",
+        "fecal_score_estimate": None,
+        "image_quality": "sufficient",
+    }
+    soft_log, _ = derive_fecal_score({**soft_high, "shape": "log"})
+    soft_piled, _ = derive_fecal_score({**soft_high, "shape": "piled"})
+    assert soft_log == 4
+    assert soft_piled == 5
+
+
 def test_nonvisual_purina_criteria_are_not_inferred():
     score, _ = derive_fecal_score(
         _obs(
@@ -318,10 +357,9 @@ def test_watery_retrieval_is_deterministic_and_bounded():
         item.reference_id for item in second.knowledge_references
     ]
     assert "DIG_SCORE_7_001" in first.knowledge_claim_ids
-    assert "DIG_VOMITING_001" in first.knowledge_claim_ids
+    assert "DIG_VOMITING_001" not in first.knowledge_claim_ids
     assert "cads" not in _consumer_text(first)
     assert {
-        "Merck Veterinary Manual",
         "VCA Animal Hospitals",
         "Journal of Small Animal Practice",
         "Purina Institute",

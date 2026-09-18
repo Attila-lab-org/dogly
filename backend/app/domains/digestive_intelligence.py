@@ -27,7 +27,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v7"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v8"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -117,6 +117,7 @@ class DigestiveIntelligenceResult(BaseModel):
     )
     knowledge_claim_ids: list[str] = Field(default_factory=list)
     knowledge_registry_version: str | None = None
+    knowledge_registry_checksum: str | None = None
     reasoning_version: str = DIGESTIVE_REASONING_VERSION
     baseline_version: str = DIGESTIVE_BASELINE_VERSION
 
@@ -203,15 +204,158 @@ def _complete_nutrition_href(context: DigestiveContext) -> str:
 def _food_started_sentence(context: DigestiveContext) -> str:
     days = context.food_started_days_ago
     if days == 0:
-        started = "Hai iniziato questo alimento oggi."
+        started = "l’alimento iniziato oggi"
     elif days == 1:
-        started = "Hai iniziato questo alimento da ieri."
+        started = "l’alimento iniziato ieri"
     else:
-        started = f"Hai iniziato questo alimento da {days} giorni."
+        started = f"l’alimento iniziato da {days} giorni"
+    return f"Il cambiamento coincide temporalmente con {started}."
+
+
+def _food_stability_phrase(context: DigestiveContext) -> str | None:
+    if not _food_known(context) or context.food_started_days_ago is None:
+        return None
+    days = context.food_started_days_ago
+    if days <= 7:
+        return None
+    if days >= 60:
+        months = max(days // 30, 2)
+        if months == 2:
+            return "Il cibo è lo stesso da due mesi"
+        return f"Il cibo è lo stesso da {months} mesi"
+    if days == 1:
+        return "Il cibo è lo stesso da ieri"
+    return f"Il cibo è lo stesso da {days} giorni"
+
+
+def _repetition_phrase(context: DigestiveContext, consistency: str) -> str | None:
+    if context.episode_count_7d >= 1 and consistency in {
+        "soft",
+        "unformed",
+        "watery",
+    }:
+        return "È la seconda volta questa settimana."
+    if context.recent_watery_count_24h >= 1 or context.recent_episode_count_24h >= 1:
+        return "È la seconda volta in poche ore."
+    return None
+
+
+def _owner_negative_phrase(context: DigestiveContext) -> str | None:
+    missing: list[str] = []
+    if context.vomiting_today is False:
+        missing.append("vomito")
+    if context.appetite_reduced is False:
+        missing.append("appetito ridotto")
+    if context.reduced_activity_today is False:
+        missing.append("attività ridotta")
+    if not missing:
+        return None
+    if len(missing) == 1:
+        return f"non risulta {missing[0]}"
+    if len(missing) == 2:
+        return f"non risultano {missing[0]} o {missing[1]}"
+    return "non risultano vomito, appetito ridotto o attività ridotta"
+
+
+def _weight_phrase(context: DigestiveContext) -> str | None:
+    if context.weight_delta_kg is None or abs(context.weight_delta_kg) < 1.0:
+        return None
+    direction = "perso" if context.weight_delta_kg < 0 else "preso"
     return (
-        f"{started} Vediamo se la consistenza torna verso il suo solito "
-        "nelle prossime osservazioni."
+        f"{context.dog_name} ha {direction} circa "
+        f"{abs(context.weight_delta_kg):.1f} kg nel diario del peso"
     )
+
+
+def _useful_info(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    safety: DigestiveState,
+    observation: dict[str, Any],
+) -> str:
+    if verification_unavailable(observation):
+        return (
+            "Non riesco a confermare bene questo dettaglio dalla foto. "
+            f"{unavailable_caution_detail(observation)}"
+        )
+    if safety is DigestiveState.VET_CONTACT:
+        return "C’è un segnale che merita una valutazione professionale."
+
+    sentences: list[str] = []
+    repetition = _repetition_phrase(context, consistency)
+    if repetition:
+        sentences.append(repetition)
+
+    second_bits: list[str] = []
+    if _recent_food_change(context):
+        second_bits.append(_food_started_sentence(context).rstrip("."))
+    else:
+        stable = _food_stability_phrase(context)
+        if stable:
+            second_bits.append(stable)
+    owner = _owner_negative_phrase(context)
+    if owner:
+        if second_bits:
+            second_bits.append(owner)
+        else:
+            second_bits.append(owner.capitalize() if owner[:1].islower() else owner)
+    weight = _weight_phrase(context)
+    if weight and not second_bits and not sentences:
+        second_bits.append(weight)
+
+    if second_bits:
+        if len(second_bits) == 1:
+            fragment = second_bits[0]
+        else:
+            fragment = f"{second_bits[0]} e {second_bits[1]}"
+        if not fragment.endswith("."):
+            fragment = f"{fragment}."
+        sentences.append(fragment)
+
+    if baseline_code == "INSUFFICIENT" and len(sentences) < 2:
+        sentences.append(
+            f"Sto ancora imparando il solito digestivo di {context.dog_name}."
+        )
+    if not sentences:
+        if baseline_code == "NEAR_USUAL":
+            return "Niente di diverso dalle ultime osservazioni."
+        if baseline_code == "ABOVE_USUAL":
+            return "È un cambiamento rispetto alle ultime osservazioni."
+        if baseline_code == "BELOW_USUAL":
+            return "È un cambiamento rispetto alle ultime osservazioni."
+        return "Per ora niente altro da aggiungere."
+    return " ".join(sentences[:2])
+
+
+def _consumer_headline(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    baseline_code: str,
+    safety: DigestiveState,
+    observation: dict[str, Any],
+) -> str:
+    if safety is DigestiveState.VET_CONTACT:
+        return "È prudente sentire il veterinario"
+    if verification_unavailable(observation):
+        return "Non riesco a confermare un dettaglio"
+    if safety is DigestiveState.ATTENTION:
+        return "C’è qualcosa da tenere d’occhio"
+    if baseline_code == "ABOVE_USUAL":
+        return "Più morbide del suo solito"
+    if baseline_code == "BELOW_USUAL":
+        return "Più compatte del suo solito"
+    if baseline_code == "NEAR_USUAL":
+        return "In linea con il suo solito"
+    if consistency == "watery":
+        return "Più liquide"
+    if consistency in {"soft", "unformed"}:
+        return "Più morbide"
+    if consistency == "formed":
+        return "Prima osservazione utile"
+    return f"Ecco cosa noto oggi per {context.dog_name}"
 
 
 def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
@@ -329,7 +473,6 @@ def _choose_useful_action(
     context: DigestiveContext,
     state: DigestiveState,
     safety: DigestiveState,
-    baseline_code: str,
     followup_key: str | None,
     followup_question: str | None,
 ) -> tuple[DigestiveUsefulAction, str | None, str | None]:
@@ -366,64 +509,40 @@ def _choose_useful_action(
             f"{context.dog_name} ha vomitato oggi?",
         )
 
-    changed = state is DigestiveState.MONITOR or baseline_code in {
-        "ABOVE_USUAL",
-        "BELOW_USUAL",
-    }
-    if not _food_known(context) and state is not DigestiveState.ROUTINE:
+    if state is DigestiveState.ATTENTION and context.reduced_activity_today is None:
+        return (
+            DigestiveUsefulAction(key="ask_followup"),
+            "reduced_activity_today",
+            f"{context.dog_name} appare meno attivo del solito?",
+        )
+
+    if not _food_known(context):
         return (
             DigestiveUsefulAction(
                 key="add_nutrition",
-                label="Aggiungi alimentazione",
+                label="Aggiungi",
                 href=NUTRITION_HREF,
-                title="Mi manca una cosa utile",
-                body=(
-                    f"Non so ancora cosa mangia {context.dog_name}. "
-                    "Se lo aggiungi posso capire meglio se i cambiamenti "
-                    "digestivi coincidono con alimento, quantità o cambi recenti."
-                ),
+                title="Alimentazione non impostata",
             ),
             None,
             None,
         )
-    if (
-        _food_known(context)
-        and not _has_quantity(context)
-        and state is not DigestiveState.ROUTINE
-    ):
+    if _food_known(context) and not _has_quantity(context):
         return (
             DigestiveUsefulAction(
                 key="complete_nutrition",
-                label="Completa alimentazione",
+                label="Completa",
                 href=_complete_nutrition_href(context),
-                title="Quanto ne mangia al giorno?",
-                body=(
-                    f"So cosa mangia {context.dog_name}, ma mi manca la quantità "
-                    "giornaliera. Con quella posso confrontare meglio le prossime volte."
-                ),
+                title="Quantità non impostata",
             ),
             None,
             None,
         )
-    if changed and followup_key and followup_question:
+    if followup_key and followup_question:
         return (
             DigestiveUsefulAction(key="ask_followup"),
             followup_key,
             followup_question,
-        )
-    if (
-        _food_known(context)
-        and _has_quantity(context)
-        and _recent_food_change(context)
-        and state is DigestiveState.MONITOR
-    ):
-        return (
-            DigestiveUsefulAction(
-                key="contextual",
-                body=_food_started_sentence(context),
-            ),
-            None,
-            None,
         )
     return DigestiveUsefulAction(key="none"), None, None
 
@@ -467,77 +586,52 @@ def build_digestive_intelligence(
     score = int(score_raw) if isinstance(score_raw, int | float) else None
     consistency = str(observation.get("consistency") or "unknown").lower()
     observed_summary = observation_summary(observation, dog_name=context.dog_name)
-    baseline_code, baseline_text = _baseline(context, score)
+    baseline_code, _ = _baseline(context, score)
     safety = _safety_state(observation, context)
-
-    extra = ""
-    if context.recent_watery_count_24h >= 1 or (
-        consistency in {"soft", "unformed", "watery"}
-        and context.episode_count_7d >= 1
-        and baseline_code == "ABOVE_USUAL"
-    ):
-        if context.episode_count_7d >= 1:
-            extra = " È la seconda volta questa settimana."
-        elif context.recent_episode_count_24h >= 1:
-            extra = " È la seconda volta in poche ore."
 
     if safety is DigestiveState.VET_CONTACT:
         state = safety
-        headline = "È prudente sentire il veterinario"
-        summary = (
-            f"{observed_summary} C’è un segnale che merita una valutazione "
-            "professionale."
-        )
     elif verification_unavailable(observation):
         state = DigestiveState.MONITOR
-        headline = "Non riesco a confermare un dettaglio"
-        summary = (
-            "Non riesco a confermare bene questo dettaglio dalla foto. "
-            f"{unavailable_caution_detail(observation)}"
-        )
     elif safety is DigestiveState.ATTENTION:
         state = safety
-        headline = "C’è qualcosa da tenere d’occhio"
-        summary = f"{observed_summary} Meglio non lasciarlo passare."
-    elif baseline_code == "ABOVE_USUAL":
+    elif baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
         state = DigestiveState.MONITOR
-        headline = "Più morbida del solito"
-        summary = (
-            f"{observed_summary} È un cambiamento rispetto alle ultime "
-            f"osservazioni.{extra}"
-        )
-    elif baseline_code == "BELOW_USUAL":
-        state = DigestiveState.MONITOR
-        headline = "Più compatta del solito"
-        summary = (
-            f"{observed_summary} È un cambiamento rispetto alle ultime "
-            f"osservazioni.{extra}"
-        )
-    elif baseline_code == "NEAR_USUAL":
+    elif baseline_code == "NEAR_USUAL" or (
+        baseline_code == "INSUFFICIENT" and consistency == "formed"
+    ):
         state = DigestiveState.ROUTINE
-        headline = "In linea con il suo solito"
-        summary = f"{observed_summary} È simile alle ultime volte."
-    elif baseline_code == "INSUFFICIENT" and consistency == "formed":
-        state = DigestiveState.ROUTINE
-        headline = f"Le feci di {context.dog_name} appaiono ben formate"
-        summary = f"{observed_summary} Sto ancora imparando il suo solito."
     elif consistency in {"soft", "unformed", "watery"} or (
         score is not None and score >= 4
     ):
         state = DigestiveState.MONITOR
-        headline = f"Le feci di {context.dog_name} appaiono più morbide"
-        summary = f"{observed_summary} {baseline_text}{extra}"
     else:
         state = DigestiveState.ROUTINE
-        headline = f"Ecco cosa noto oggi per {context.dog_name}"
-        summary = f"{observed_summary} {baseline_text}"
+
+    headline = _consumer_headline(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        observation=observation,
+    )
+    summary = _useful_info(
+        context=context,
+        consistency=consistency,
+        baseline_code=baseline_code,
+        safety=safety,
+        observation=observation,
+    )
 
     relevant_context: list[str] = []
-    associations: list[str] = []
+    if observed_summary:
+        relevant_context.append(observed_summary)
     if context.active_food_name:
         relevant_context.append(f"Alimento registrato: {context.active_food_name}.")
     if context.has_active_food and _has_quantity(context) and context.quantity_per_day:
         relevant_context.append(f"Quantità indicata: {context.quantity_per_day}.")
+
+    associations: list[str] = []
     if _recent_food_change(context):
         associations.append(_food_started_sentence(context))
     if context.unusual_food_48h is True:
@@ -607,19 +701,16 @@ def build_digestive_intelligence(
         context=context,
         state=state,
         safety=safety,
-        baseline_code=baseline_code,
         followup_key=followup_key,
         followup_question=followup_question,
     )
 
     if useful_action.key == "contact_vet":
         next_step = "Contatta il veterinario e descrivi ciò che hai osservato."
-    elif useful_action.key == "add_nutrition" or useful_action.key == "complete_nutrition":
-        next_step = useful_action.body or ""
+    elif useful_action.key in {"add_nutrition", "complete_nutrition"}:
+        next_step = useful_action.title or useful_action.label or ""
     elif useful_action.key == "ask_followup":
         next_step = followup_question or ""
-    elif useful_action.key == "contextual":
-        next_step = useful_action.body or ""
     else:
         next_step = "Per ora va bene così."
 
@@ -665,4 +756,5 @@ def build_digestive_intelligence(
         knowledge_references=knowledge.references,
         knowledge_claim_ids=knowledge.claim_ids,
         knowledge_registry_version=knowledge.registry_version,
+        knowledge_registry_checksum=knowledge.checksum,
     )

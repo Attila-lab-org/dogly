@@ -269,74 +269,43 @@ export default function DigestiveResultScreen() {
         <Text style={styles.resultSummary}>{summary}</Text>
       </View>
 
-      {event.safetyFlags.map((flag) => {
-        const copy = SAFETY_COPY[flag];
-        return (
-          <View key={flag} style={styles.safetyCard}>
-            <View style={styles.safetyHeading}>
-              <Ionicons name="medkit" size={20} color={colors.danger} />
-              <Text style={styles.safetyTitle}>{copy.title}</Text>
-            </View>
-            <Text style={styles.safetyMessage}>{copy.message}</Text>
-            <Text style={styles.safetyAction}>{copy.action}</Text>
-          </View>
-        );
-      })}
-
-      {digestiveActionCardKind(action?.key) ? (
+      {digestiveActionCardKind(action?.key) === 'nutrition' ? (
         <Card style={styles.actionCard}>
           {action?.title ? (
             <Text style={styles.actionTitle}>
               {sanitizeOwnerCopy(action.title.replace(/Rocky/g, dog.name))}
             </Text>
-          ) : action?.key === 'contact_vet' && action.label ? (
-            <Text style={styles.actionTitle}>
-              {sanitizeOwnerCopy(action.label.replace(/Rocky/g, dog.name))}
-            </Text>
           ) : null}
-          {action?.body ? (
-            <Text style={styles.actionBody}>
-              {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
-            </Text>
-          ) : null}
-          {digestiveActionCardKind(action?.key) === 'nutrition' ? (
-            <Button
-              title={action?.label ?? 'Apri alimentazione'}
-              onPress={() =>
-                router.push(digestiveNutritionHref(action?.href) as Href)
-              }
-            />
-          ) : (
-            <>
-              <Button
-                title={DIGESTIVE_VET_SHARE_CTA}
-                onPress={() => {
-                  void (async () => {
-                    const shared = await shareDigestiveWithVet({
-                      dogName: dog.name,
-                      headline,
-                      summary,
-                      actionBody: action?.body,
-                    });
-                    setVetShareError(!shared);
-                  })();
-                }}
-              />
-              {vetShareError ? (
-                <Text style={styles.questionError}>
-                  Non sono riuscito ad aprire la condivisione. Puoi copiare il
-                  testo e inviarlo al veterinario.
-                </Text>
-              ) : null}
-            </>
-          )}
+          <Button
+            title={action?.label ?? 'Apri alimentazione'}
+            onPress={() =>
+              router.push(digestiveNutritionHref(action?.href) as Href)
+            }
+          />
         </Card>
-      ) : null}
-
-      {action?.key === 'contextual' && action.body ? (
-        <Text style={styles.contextualText}>
-          {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
-        </Text>
+      ) : digestiveActionCardKind(action?.key) === 'vet' ? (
+        <Card style={styles.actionCard}>
+          <Button
+            title={DIGESTIVE_VET_SHARE_CTA}
+            onPress={() => {
+              void (async () => {
+                const shared = await shareDigestiveWithVet({
+                  dogName: dog.name,
+                  headline,
+                  summary,
+                  actionBody: action?.body,
+                });
+                setVetShareError(!shared);
+              })();
+            }}
+          />
+          {vetShareError ? (
+            <Text style={styles.questionError}>
+              Non sono riuscito ad aprire la condivisione. Puoi copiare il
+              testo e inviarlo al veterinario.
+            </Text>
+          ) : null}
+        </Card>
       ) : null}
 
       {showFollowup ? (
@@ -395,6 +364,19 @@ export default function DigestiveResultScreen() {
 
       {detailsOpen ? (
         <>
+          {event.safetyFlags.map((flag) => {
+            const copy = SAFETY_COPY[flag];
+            return (
+              <View key={flag} style={styles.safetyCard}>
+                <View style={styles.safetyHeading}>
+                  <Ionicons name="medkit" size={20} color={colors.danger} />
+                  <Text style={styles.safetyTitle}>{copy.title}</Text>
+                </View>
+                <Text style={styles.safetyMessage}>{copy.message}</Text>
+                <Text style={styles.safetyAction}>{copy.action}</Text>
+              </View>
+            );
+          })}
           {event.consistency !== 'sconosciuta' ||
           (event.color && event.color !== 'Non determinabile dalla foto') ? (
             <View style={styles.whiteCard}>
@@ -432,6 +414,13 @@ export default function DigestiveResultScreen() {
                 <Text style={styles.foodValue} numberOfLines={2}>
                   {event.activeFoodName}
                 </Text>
+                {(event.relevantContext ?? [])
+                  .filter((item) => item.startsWith('Quantità indicata'))
+                  .map((item) => (
+                    <Text key={item} style={styles.foodLabel}>
+                      {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
+                    </Text>
+                  ))}
               </View>
             </View>
           ) : null}

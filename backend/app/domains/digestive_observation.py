@@ -13,7 +13,7 @@ from typing import Any
 from app.domains.digestive_verification import verify_anomaly_candidates
 
 DIGESTIVE_OBSERVER_PROMPT_VERSION = "digestive-observer/v2"
-DIGESTIVE_NORMALIZER_VERSION = "digestive-normalizer/v1"
+DIGESTIVE_NORMALIZER_VERSION = "digestive-normalizer/v2"
 
 
 class ColorFamily(StrEnum):
@@ -139,17 +139,44 @@ def color_family_copy(family: ColorFamily | str) -> str | None:
     return COLOR_FAMILY_IT.get(family)
 
 
+def _shape_kind(value: object) -> str:
+    """Visible stool shape only. Pickup residue and effort are never inferred."""
+
+    raw = (
+        str(value or "")
+        .strip()
+        .lower()
+        .replace("_", " ")
+        .replace("-", " ")
+    )
+    if not raw or raw in {"unknown", "n a", "na"}:
+        return "unknown"
+    if "pellet" in raw or "small mass" in raw:
+        return "pellets"
+    if raw == "none" or any(
+        token in raw for token in ("puddle", "shapeless", "no shape", "spots")
+    ):
+        return "none"
+    if "pile" in raw or "mound" in raw:
+        return "piled"
+    if any(token in raw for token in ("log", "sausage", "cylindrical")):
+        return "log"
+    return "unknown"
+
+
 def derive_fecal_score(observation: dict[str, Any]) -> tuple[int | None, str]:
     """Derive a stable 1–7 visual estimate from visible form features.
 
-    Soft stool defaults to 4 unless moisture is high *and* the pile no longer
-    holds shape. That prevents 4↔5 flicker from the same visible facts.
+    Shape participates where the 7-point rubric distinguishes log vs piled vs
+    pellets. Soft stool defaults to 4 unless moisture is high *and* the pile no
+    longer holds a log shape. Nonvisual chart criteria are ignored.
     """
     if str(observation.get("image_quality") or "").lower() == "insufficient":
         return None, "none"
     consistency = str(observation.get("consistency") or "unknown").lower()
     moisture = str(observation.get("apparent_moisture") or "unknown").lower()
     segmentation = str(observation.get("segmentation") or "unknown").lower()
+    shape = _shape_kind(observation.get("shape"))
     model_raw = observation.get("fecal_score_estimate")
     model = int(model_raw) if isinstance(model_raw, int | float) else None
 
@@ -158,12 +185,20 @@ def derive_fecal_score(observation: dict[str, Any]) -> tuple[int | None, str]:
     if consistency == "unformed":
         return 6, "derived"
     if consistency == "hard":
+        if shape == "pellets":
+            return 1, "derived"
+        if shape == "log":
+            return 2, "derived"
         if moisture == "low" or segmentation == "present":
             return 1, "derived"
         return 2, "derived"
     if consistency == "formed":
+        if shape == "piled" and moisture == "high":
+            return 5, "derived"
         if moisture == "high":
             return 4, "derived"
+        if shape == "pellets" and moisture == "low":
+            return 1, "derived"
         if moisture == "low" and segmentation == "present":
             return 2, "derived"
         if moisture in {"normal", "low"} or segmentation == "present":
@@ -172,7 +207,9 @@ def derive_fecal_score(observation: dict[str, Any]) -> tuple[int | None, str]:
             return model, "model_constrained"
         return 3, "derived"
     if consistency == "soft":
-        loses_shape = segmentation in {"reduced", "absent"}
+        if shape == "log" and moisture == "high":
+            return 4, "derived"
+        loses_shape = segmentation in {"reduced", "absent"} or shape == "piled"
         if moisture == "high" and loses_shape:
             return 5, "derived"
         return 4, "derived"

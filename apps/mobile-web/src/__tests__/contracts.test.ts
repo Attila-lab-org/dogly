@@ -243,4 +243,39 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
     expect(digestiveActionCardKind(result.usefulAction?.key)).toBe('vet');
     expect(digestiveActionCardKind('ask_followup')).toBeNull();
   });
+
+  it('mantiene la CTA alimentazione compatta', () => {
+    const event: ApiDigestiveEvent = {
+      id: 'evt-food',
+      dog_id: 'dog-real',
+      status: 'COMPLETED',
+      fecal_score_estimate: 3,
+      consistency: 'FORMED',
+      color: 'brown',
+      image_quality: 'sufficient',
+      quality_warnings: [],
+      mucus_candidate: 'none_observed',
+      fresh_blood_candidate: 'none_observed',
+      melena_candidate: 'none_observed',
+      foreign_material_candidate: 'none_observed',
+      confidence_band: 'MEDIUM',
+      safety_flags: [],
+      summary: null,
+      active_food_name: null,
+      baseline_comparison: 'NEAR_USUAL',
+      overall_state: 'ROUTINE',
+      useful_action: {
+        key: 'add_nutrition',
+        label: 'Aggiungi',
+        title: 'Alimentazione non impostata',
+        href: '/nutrition/foods',
+      },
+      created_at: '2026-09-18T01:00:00Z',
+    };
+    const result = mapApiDigestiveEventToResult(event);
+    expect(digestiveActionCardKind(result.usefulAction?.key)).toBe('nutrition');
+    expect(result.usefulAction?.title).toBe('Alimentazione non impostata');
+    expect(result.usefulAction?.label).toBe('Aggiungi');
+    expect(result.usefulAction?.body ?? null).toBeNull();
+  });
 });

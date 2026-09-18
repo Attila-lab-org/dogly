@@ -271,7 +271,8 @@ def _matcher_table(facts: DigestiveKnowledgeFacts) -> dict[str, bool]:
         "DIG_UNDIGESTED_FOOD_001": _is_possible(facts.undigested)
         or _is_clear(facts.undigested),
         "DIG_CONTEXT_CORE_001": _digestive_changed(facts),
-        "DIG_VOMITING_001": consistency in {"unformed", "watery"},
+        "DIG_VOMITING_001": consistency in {"unformed", "watery"}
+        and facts.vomiting_today is True,
         "DIG_ACTIVITY_001": _digestive_changed(facts)
         and facts.reduced_activity_today is True,
         "DIG_APPETITE_001": _digestive_changed(facts)
