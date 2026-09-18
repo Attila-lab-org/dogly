@@ -176,6 +176,18 @@ export function digestiveNutritionHref(href?: string | null): string {
   return '/nutrition/foods';
 }
 
+export function digestiveActionCardKind(
+  key?: DigestiveUsefulActionKey | null,
+): 'nutrition' | 'vet' | null {
+  if (key === 'add_nutrition' || key === 'complete_nutrition') {
+    return 'nutrition';
+  }
+  if (key === 'contact_vet') {
+    return 'vet';
+  }
+  return null;
+}
+
 function mapUsefulAction(
   action: ApiDigestiveEvent['useful_action'],
 ): DigestiveUsefulAction | null {

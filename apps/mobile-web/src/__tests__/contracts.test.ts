@@ -7,6 +7,7 @@ import {
 import type { ApiBehaviorEvent } from '../features/behavior/api';
 import { mapApiEventToResult } from '../features/behavior/map';
 import {
+  digestiveActionCardKind,
   digestiveNutritionHref,
   mapApiDigestiveEventToResult,
   type ApiDigestiveEvent,
@@ -207,5 +208,39 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
     ).toBe('/nutrition/foods/food-abc/verify?focus=quantity');
     expect(digestiveNutritionHref('/account')).toBe('/nutrition/foods');
     expect(digestiveNutritionHref(null)).toBe('/nutrition/foods');
+  });
+
+  it('mostra contact_vet come unica useful action card', () => {
+    const event: ApiDigestiveEvent = {
+      id: 'evt-vet',
+      dog_id: 'dog-real',
+      status: 'COMPLETED',
+      fecal_score_estimate: 4,
+      consistency: 'SOFT',
+      color: 'brown',
+      image_quality: 'sufficient',
+      quality_warnings: [],
+      mucus_candidate: 'none_observed',
+      fresh_blood_candidate: 'possible',
+      melena_candidate: 'none_observed',
+      foreign_material_candidate: 'none_observed',
+      confidence_band: 'MEDIUM',
+      safety_flags: [],
+      summary: null,
+      active_food_name: null,
+      baseline_comparison: 'NEAR_USUAL',
+      useful_action: {
+        key: 'contact_vet',
+        label: 'Contatta il veterinario',
+        body: 'Non riesco a confermare bene questo dettaglio dalla foto.',
+      },
+      created_at: '2026-09-18T01:00:00Z',
+    };
+
+    const result = mapApiDigestiveEventToResult(event);
+    expect(result.usefulAction?.key).toBe('contact_vet');
+    expect(result.usefulAction?.label).toBe('Contatta il veterinario');
+    expect(digestiveActionCardKind(result.usefulAction?.key)).toBe('vet');
+    expect(digestiveActionCardKind('ask_followup')).toBeNull();
   });
 });

@@ -30,7 +30,10 @@ import {
   mapApiDigestiveEventToResult,
   updateDigestiveContext,
 } from '@/features/digestive/api';
-import { digestiveNutritionHref } from '@/features/digestive/map';
+import {
+  digestiveActionCardKind,
+  digestiveNutritionHref,
+} from '@/features/digestive/map';
 import { isApiConfigured } from '@/features/auth/env';
 import { useSession } from '@/features/auth/SessionProvider';
 import type {
@@ -275,24 +278,32 @@ export default function DigestiveResultScreen() {
         );
       })}
 
-      {action?.key === 'add_nutrition' || action?.key === 'complete_nutrition' ? (
+      {digestiveActionCardKind(action?.key) ? (
         <Card style={styles.actionCard}>
-          {action.title ? (
+          {action?.title ? (
             <Text style={styles.actionTitle}>
               {sanitizeOwnerCopy(action.title.replace(/Rocky/g, dog.name))}
             </Text>
+          ) : action?.key === 'contact_vet' && action.label ? (
+            <Text style={styles.actionTitle}>
+              {sanitizeOwnerCopy(action.label.replace(/Rocky/g, dog.name))}
+            </Text>
           ) : null}
-          {action.body ? (
+          {action?.body ? (
             <Text style={styles.actionBody}>
               {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
             </Text>
           ) : null}
-          <Button
-            title={action.label ?? 'Apri alimentazione'}
-            onPress={() =>
-              router.push(digestiveNutritionHref(action.href) as Href)
-            }
-          />
+          {digestiveActionCardKind(action?.key) === 'nutrition' ? (
+            <Button
+              title={action?.label ?? 'Apri alimentazione'}
+              onPress={() =>
+                router.push(digestiveNutritionHref(action?.href) as Href)
+              }
+            />
+          ) : (
+            <Button title={action?.label ?? 'Contatta il veterinario'} />
+          )}
         </Card>
       ) : null}
 
