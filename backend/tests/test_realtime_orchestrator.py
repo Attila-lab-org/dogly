@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
+from app.api.routes.realtime import _is_owned_active_voice_session
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
 from app.domains.realtime_context import (
@@ -36,6 +39,14 @@ def test_openai_schema_requires_every_nullable_field() -> None:
     assert set(schema["required"]) == set(schema["properties"])
     assert schema["additionalProperties"] is False
     assert "default" not in str(schema)
+
+
+def test_voice_session_accepts_database_uuid_owner() -> None:
+    user_id = str(uuid.uuid4())
+    assert _is_owned_active_voice_session(
+        {"user_id": uuid.UUID(user_id), "status": "ACTIVE", "modality": "VOICE"},
+        user_id,
+    )
 
 
 def test_deterministic_safety_interrupt_precedes_ai() -> None:

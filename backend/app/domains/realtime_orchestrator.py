@@ -189,6 +189,7 @@ async def orchestrate_realtime_turn(
         "routed_domains": domains,
         "conversation": history[-6:],
         "owner_turn": user_text,
+        "output_schema": openai_realtime_decision_schema(),
     }
     body: dict[str, Any] = {
         "model": settings.realtime_reasoning_model,
@@ -200,29 +201,29 @@ async def orchestrate_realtime_turn(
                 + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             },
         ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "dogly_realtime_decision",
-                "strict": True,
-                "schema": openai_realtime_decision_schema(),
-            },
-        },
+        "response_format": {"type": "json_object"},
     }
     if settings.realtime_reasoning_model.lower().startswith("gpt-5"):
         body["reasoning_effort"] = "high"
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openai_api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
-        response.raise_for_status()
-        raw = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+            response.raise_for_status()
+            raw = response.json()
+    except httpx.HTTPError:
+        return _fallback_decision(text=user_text, context=context, domains=domains), {
+            "provider": "deterministic_fallback",
+            "failed_provider": "openai",
+            "version": REALTIME_ORCHESTRATOR_VERSION,
+        }
     try:
         decision = RealtimeDecision.model_validate_json(
             raw["choices"][0]["message"]["content"]

@@ -34,6 +34,17 @@ from app.providers.openai_realtime import create_realtime_client_secret
 router = APIRouter(prefix="/realtime")
 
 
+def _is_owned_active_voice_session(
+    session: dict[str, Any] | None, user_id: str
+) -> bool:
+    return bool(
+        session
+        and str(session["user_id"]) == user_id
+        and session["status"] == "ACTIVE"
+        and session["modality"] == "VOICE"
+    )
+
+
 @router.post("/sessions", response_model=RealtimeSessionOut, status_code=201)
 async def create_realtime_session(
     body: RealtimeSessionCreate,
@@ -91,12 +102,7 @@ async def create_voice_client_secret(
         )
     else:
         session = state.store.realtime_sessions.get(session_id)
-    if (
-        not session
-        or session["user_id"] != user_id
-        or session["status"] != "ACTIVE"
-        or session["modality"] != "VOICE"
-    ):
+    if not _is_owned_active_voice_session(session, user_id):
         raise ApiError(ErrorCode.NOT_FOUND, "Conversazione vocale non trovata.")
     if (
         not state.settings.realtime_enabled
