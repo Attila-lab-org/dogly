@@ -23,16 +23,49 @@ from app.contracts.digestive import (
 )
 from app.contracts.taxonomy import ConfidenceBand
 from app.domains.db import get_engine
+from app.domains.digestive_observation import DIGESTIVE_OBSERVER_PROMPT_VERSION
 from app.providers.base import ProviderUsage
 from app.providers.budget import check_daily_budget
 
 _SYSTEM = """You are a cautious visual observer for a consumer dog-health app.
-Inspect only visible properties of the stool image. Do not diagnose disease,
-claim laboratory certainty, prescribe treatment, or infer facts not visible.
-Use unknown when the image cannot support a field. A failure to see blood,
-mucus, melena, or foreign material means none_observed, never proven absence.
-If the image is blurred, too dark, obstructed, or does not clearly show stool,
-set image_quality to insufficient and fecal_score_estimate to null.
+Describe only what is visibly present in the stool photograph. Do not diagnose,
+name a disease, infer diet, guess unseen history, or tell the owner what to do.
+
+Observe these fields separately, each from visible evidence only:
+- shape: pellets, log, piled, flat, irregular, or unknown
+- segmentation: present, reduced, absent, or unknown
+- apparent_moisture: low, normal, high, or unknown
+- consistency: hard, formed, soft, unformed, watery, or unknown
+- color: short visible descriptor only
+- color_uniformity: uniform, non_uniform, or unknown
+- mucus_candidate, fresh_blood_candidate, melena_candidate,
+  foreign_material_candidate, undigested_food_candidate
+- apparent_volume: low, normal, high, or not_assessable
+- image_quality: sufficient or insufficient
+- fecal_score_estimate: optional 1-7 visual impression only, not a clinical score
+
+Candidate vocabulary is strict:
+- none_observed: you looked at the relevant area and see no compatible feature
+- unknown: the photo cannot support a judgement for that field
+- possible: a concrete visible feature is compatible with that category, but
+  it is not clear enough to call a strong candidate
+- clear_candidate: the visible feature is distinct and compatible
+
+possible is never a fallback for uncertainty, surprise, or "I do not recognize
+this". If you are unsure whether a mark, highlight, or texture exists, use
+unknown. If you looked and there is no compatible feature, use none_observed.
+A failure to see blood, mucus, melena, or foreign material is none_observed,
+never proven clinical absence.
+
+fresh_blood_candidate needs a distinct red or bright-red mark on or at the
+surface. melena_candidate needs a tarry, black, sticky appearance. 
+foreign_material_candidate needs a distinct non-fecal object or fragment,
+not an unrecognized color or texture. mucus_candidate needs a visible slimy
+or gelatinous sheen. undigested_food_candidate needs recognizable food pieces.
+
+If the image is blurred, too dark, obstructed, filmed from a screen, or does
+not clearly show stool, set image_quality to insufficient and
+fecal_score_estimate to null.
 Return one JSON object only, matching the supplied closed vocabulary.
 """
 
@@ -87,9 +120,9 @@ class OpenAIDigestiveVision:
             "schema_version": "stool_observation.v0",
             "image_quality": ["sufficient", "insufficient"],
             "warnings": ["short machine-readable strings"],
-            "fecal_score_estimate": "integer 1-7 or null",
+            "fecal_score_estimate": "integer 1-7 visual impression or null",
             "consistency": [value.value for value in FecalConsistency],
-            "shape": "short visible descriptor or unknown",
+            "shape": ["pellets", "log", "piled", "flat", "irregular", "unknown"],
             "apparent_moisture": ["low", "normal", "high", "unknown"],
             "segmentation": ["present", "reduced", "absent", "unknown"],
             "color": "short visible descriptor or unknown",
@@ -121,7 +154,8 @@ class OpenAIDigestiveVision:
                                 {
                                     "type": "text",
                                     "text": (
-                                        "Observe this digestive capture. Return JSON only. "
+                                        "Observe only visible stool properties. "
+                                        "Do not diagnose. Return JSON only. "
                                         f"Closed schema: {json.dumps(schema_hint)}"
                                     ),
                                 },
@@ -208,6 +242,7 @@ class OpenAIDigestiveVision:
             "provider": "openai",
             "model": self._model,
             "request_id": request_id,
+            "prompt_version": DIGESTIVE_OBSERVER_PROMPT_VERSION,
         }
 
 

@@ -20,6 +20,8 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains.billing import QuotaService
 from app.domains.digestive_intelligence import DigestiveContext, count_recent_windows
+from app.domains.digestive_observation import prepare_digestive_observation
+from app.domains.digestive_verification import safety_candidate
 from app.domains.dogs import get_owned_dog
 from app.domains.models import (
     AnalysisJobRec,
@@ -59,11 +61,17 @@ def digestive_period_label(month: int) -> tuple[str, str]:
 
 
 def deterministic_safety_flags(observation: dict) -> list[dict]:
+    prepared = (
+        observation
+        if observation.get("safety_candidates")
+        else prepare_digestive_observation(observation)
+    )
     flags: list[dict] = []
     for field, code in SAFETY_FLAG_RULES.items():
-        if observation.get(field) == "clear_candidate":
+        level = safety_candidate(prepared, field)
+        if level == "clear_candidate":
             flags.append({"code": code, "severity": "high"})
-        elif observation.get(field) == "possible":
+        elif level == "possible":
             flags.append({"code": code, "severity": "medium"})
     return flags
 
@@ -138,7 +146,10 @@ def build_inmemory_digestive_context(
         return food_id if food is not None and food.verified_at is not None else None
 
     scored_prior = [
-        item for item in prior_events if item.fecal_score_estimate is not None
+        item
+        for item in prior_events
+        if item.fecal_score_estimate is not None
+        and item.learning_eligible is not False
     ]
     active_food_id = active_food.id if active_food else None
     nutrition = nutrition_history_snapshot(store, dog_id=event.dog_id)

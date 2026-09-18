@@ -169,7 +169,7 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
 
     const result = mapApiDigestiveEventToResult(event);
     expect(result.consistency).toBe('morbida');
-    expect(result.color).toBe('olive brown');
+    expect(result.color).toBe('marrone con una tonalità verdastra');
     expect(result.status).toBe('COMPLETED');
   });
 

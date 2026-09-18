@@ -64,6 +64,15 @@ from app.domains.digestive import (
     contextual_safety_flags,
 )
 from app.domains.digestive_intelligence import build_digestive_intelligence
+from app.domains.digestive_observation import prepare_digestive_observation
+from app.domains.digestive_observation_cache import (
+    engine_identity,
+    image_sha256,
+    lookup_cached_observation,
+    lookup_cached_observation_db,
+    store_cached_observation,
+    store_cached_observation_db,
+)
 from app.domains.dog_context import build_dog_context
 from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import BehaviorEventRec
@@ -84,7 +93,11 @@ from app.knowledge.safety import (
 )
 from app.knowledge.safety import merge_safety_flags
 from app.providers import supabase_auth_admin
-from app.providers.base import EligiblePatternSummary, ProviderRateLimitError
+from app.providers.base import (
+    EligiblePatternSummary,
+    ProviderRateLimitError,
+    ProviderUsage,
+)
 from app.providers.budget import BudgetExceededError
 from app.providers.expo_push import send_push
 
@@ -1170,6 +1183,21 @@ async def refine_behavior_event_context(
     return event
 
 
+async def _digestive_image_digest(image_ref: str) -> str | None:
+    if not image_ref.startswith(("http://", "https://")):
+        return None
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(image_ref)
+        if response.status_code == 200 and response.content:
+            return image_sha256(response.content)
+    except (OSError, ValueError, httpx.HTTPError):
+        return None
+    return None
+
+
 async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     """Digestive analysis handler (sez. 19). Observation is separate from the
     deterministic safety layer; completed events are a no-op on redelivery."""
@@ -1214,7 +1242,78 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
                 path=event.image_path,
                 ttl_seconds=min(state.settings.storage_signed_url_ttl_seconds, 600),
             )
-        observation, usage = await state.digestive_vision.observe_stool(image_ref=image_ref)
+        identity = engine_identity(
+            provider=state.settings.digestive_vision_provider,
+            model=state.settings.digestive_vision_model,
+        )
+        digest = await _digestive_image_digest(image_ref)
+        cached = None
+        if digest:
+            event.image_sha256 = digest
+            if state.engine is not None:
+                cached = await lookup_cached_observation_db(
+                    state.engine,
+                    user_id=event.user_id,
+                    dog_id=event.dog_id,
+                    image_sha256_hex=digest,
+                    identity=identity,
+                )
+            else:
+                cached = lookup_cached_observation(
+                    state.store,
+                    user_id=event.user_id,
+                    dog_id=event.dog_id,
+                    image_sha256_hex=digest,
+                    identity=identity,
+                )
+        if cached is not None:
+            observation_json = prepare_digestive_observation(
+                cached,
+                image_sha256=digest,
+                observer_provider=identity["observer_provider"],
+                observer_model=identity["observer_model"],
+            )
+            usage = ProviderUsage(
+                provider=identity["observer_provider"],
+                model=identity["observer_model"],
+                input_tokens=0,
+                output_tokens=0,
+                media_bytes=0,
+                latency_ms=0,
+                cost_usd=0.0,
+                request_id=f"cache-reuse-{event.id[:12]}",
+            )
+        else:
+            observation, usage = await state.digestive_vision.observe_stool(
+                image_ref=image_ref
+            )
+            observation_json = prepare_digestive_observation(
+                observation.model_dump(mode="json"),
+                image_sha256=digest,
+                observer_provider=identity["observer_provider"],
+                observer_model=identity["observer_model"],
+            )
+            if digest:
+                if state.engine is not None:
+                    await store_cached_observation_db(
+                        state.engine,
+                        user_id=event.user_id,
+                        dog_id=event.dog_id,
+                        image_sha256_hex=digest,
+                        identity=identity,
+                        observation=observation_json,
+                        source_event_id=event.id,
+                    )
+                else:
+                    store_cached_observation(
+                        state.store,
+                        user_id=event.user_id,
+                        dog_id=event.dog_id,
+                        image_sha256_hex=digest,
+                        identity=identity,
+                        observation=observation_json,
+                        source_event_id=event.id,
+                    )
     except TimeoutError:
         event.last_error_code = ErrorCode.PROVIDER_TIMEOUT.value
         if event.attempt_count < MAX_TASK_ATTEMPTS:
@@ -1327,18 +1426,21 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             "status": event.status,
             "error": ErrorCode.PROCESSING_FAILED.value,
         }
-    await state.cost_meter.record(
-        usage=usage,
-        operation="digestive_vision.observe_stool",
-        domain=AnalysisDomain.DIGESTIVE,
-        event_id=event.id,
-        user_id=event.user_id,
-    )
+    if not str(usage.request_id).startswith("cache-reuse-"):
+        await state.cost_meter.record(
+            usage=usage,
+            operation="digestive_vision.observe_stool",
+            domain=AnalysisDomain.DIGESTIVE,
+            event_id=event.id,
+            user_id=event.user_id,
+        )
     event.last_error_code = None
 
-    obs_json = observation.model_dump(mode="json")
+    obs_json = observation_json
     event.observation_json = obs_json
-    if observation.image_quality == "insufficient":
+    event.learning_eligible = bool(obs_json.get("learning_eligible"))
+    if obs_json.get("image_quality") == "insufficient":
+        event.learning_eligible = False
         event.status = "REJECTED_QUALITY"
         if not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
@@ -1361,10 +1463,15 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         )
         return {"event_id": event.id, "status": event.status}
 
-    event.fecal_score_estimate = observation.fecal_score_estimate
-    event.consistency = observation.consistency.value
-    event.color = observation.color
-    event.confidence_band = observation.confidence_band
+    event.fecal_score_estimate = obs_json.get("fecal_score_estimate")
+    event.consistency = str(obs_json.get("consistency") or "unknown")
+    event.color = str(obs_json.get("color_family") or obs_json.get("color") or "unknown")
+    raw_confidence = obs_json.get("confidence_band") or "LOW"
+    event.confidence_band = (
+        raw_confidence
+        if isinstance(raw_confidence, ConfidenceBand)
+        else ConfidenceBand(str(raw_confidence).upper())
+    )
     if state.engine is not None:
         digestive_context = await digestive_db.load_digestive_context(
             state.engine, event=event

@@ -206,6 +206,8 @@ class FecalEventRec(BaseModel):
     quota_refunded: bool = False
     attempt_count: int = 0
     last_error_code: str | None = None
+    image_sha256: str | None = None
+    learning_eligible: bool | None = None
     created_at: datetime
     completed_at: datetime | None = None
 

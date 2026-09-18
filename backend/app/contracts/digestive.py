@@ -39,6 +39,7 @@ class StoolObservationMeta(BaseModel):
     provider: str
     model: str
     request_id: str
+    prompt_version: str | None = None
 
 
 class StoolObservationContract(BaseModel):

@@ -13,13 +13,18 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domains.digestive_observation import (
+    observation_summary,
+    prepare_digestive_observation,
+)
+from app.domains.digestive_verification import safety_candidate
 from app.knowledge.digestive import (
     DigestiveKnowledgeReference,
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v2"
-DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v1"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v3"
+DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 
 
 class DigestiveState(StrEnum):
@@ -84,10 +89,6 @@ class DigestiveIntelligenceResult(BaseModel):
     baseline_version: str = DIGESTIVE_BASELINE_VERSION
 
 
-def _candidate(observation: dict[str, Any], field: str) -> str:
-    return str(observation.get(field) or "unknown").lower()
-
-
 _QUALITY_COPY = {
     "filmed_screen": (
         "alcuni dettagli si perdono perché la foto non è stata scattata direttamente"
@@ -125,34 +126,10 @@ def _observation_reliability(observation: dict[str, Any]) -> str:
     return "La foto permette di valutare forma, consistenza e colore apparente."
 
 
-def _observation_summary(observation: dict[str, Any]) -> str:
-    consistency = {
-        "hard": "dura",
-        "formed": "ben formata",
-        "soft": "morbida",
-        "unformed": "poco formata",
-        "watery": "liquida",
-    }.get(str(observation.get("consistency") or "").lower())
-    color = {
-        "brown": "marrone",
-        "dark brown": "marrone scuro",
-        "light brown": "marrone chiaro",
-        "brown-green": "marrone-verde",
-        "green": "verde",
-        "yellow": "giallo",
-        "orange": "arancione",
-        "black": "nero",
-        "red": "rossastro",
-        "gray": "grigio",
-        "grey": "grigio",
-    }.get(str(observation.get("color") or "").lower())
-    if consistency and color:
-        return f"La consistenza appare {consistency} e il colore {color}."
-    if consistency:
-        return f"La consistenza appare {consistency}."
-    if color:
-        return f"Il colore appare {color}."
-    return "La foto permette un confronto con le osservazioni precedenti."
+def _observation_summary(
+    observation: dict[str, Any], *, dog_name: str | None = None
+) -> str:
+    return observation_summary(observation, dog_name=dog_name)
 
 
 def _baseline(context: DigestiveContext, score: int | None) -> tuple[str, str]:
@@ -199,9 +176,9 @@ def _directional_association(
 def _safety_state(
     observation: dict[str, Any], context: DigestiveContext
 ) -> DigestiveState:
-    blood = _candidate(observation, "fresh_blood_candidate")
-    melena = _candidate(observation, "melena_candidate")
-    foreign = _candidate(observation, "foreign_material_candidate")
+    blood = safety_candidate(observation, "fresh_blood_candidate")
+    melena = safety_candidate(observation, "melena_candidate")
+    foreign = safety_candidate(observation, "foreign_material_candidate")
     consistency = str(observation.get("consistency") or "unknown").lower()
 
     if blood == "clear_candidate" or melena == "clear_candidate":
@@ -263,10 +240,11 @@ def build_digestive_intelligence(
 ) -> DigestiveIntelligenceResult:
     """Build a bounded consumer result from observed and persisted facts only."""
 
+    observation = prepare_digestive_observation(observation)
     score_raw = observation.get("fecal_score_estimate")
     score = int(score_raw) if isinstance(score_raw, int | float) else None
     consistency = str(observation.get("consistency") or "unknown").lower()
-    observed_summary = _observation_summary(observation)
+    observed_summary = _observation_summary(observation, dog_name=context.dog_name)
     baseline_code, baseline_text = _baseline(context, score)
     safety = _safety_state(observation, context)
 

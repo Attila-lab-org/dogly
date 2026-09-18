@@ -80,23 +80,58 @@ function mapConsistency(value: string | null): Consistency {
   return CONSISTENCY_FROM_API[(value ?? '').toLowerCase()] ?? 'sconosciuta';
 }
 
+const COLOR_FAMILY_IT: Record<string, string> = {
+  BROWN: 'marrone',
+  DARK_BROWN: 'marrone scuro',
+  LIGHT_BROWN: 'marrone chiaro',
+  GREEN_BROWN: 'marrone con una tonalità verdastra',
+  GREEN: 'verde',
+  YELLOW: 'giallo',
+  ORANGE: 'arancione',
+  RED_APPEARANCE: 'con una tonalità rossastra',
+  BLACK_TARRY_APPEARANCE: 'molto scuro, quasi nero',
+  PALE_GRAY: 'chiaro, tendente al grigio',
+};
+
+function canonicalizeColorFamily(value: string | null): string {
+  const upper = (value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (upper in COLOR_FAMILY_IT) {
+    return upper;
+  }
+  if ((value ?? '').toLowerCase().includes('olive')) {
+    return 'GREEN_BROWN';
+  }
+  const tokens = (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_/-]+/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token && token !== 'unknown')
+    .map((token) => {
+      if (token === 'grey' || token === 'greyish' || token === 'grayish') return 'gray';
+      if (token === 'olive' || token === 'olivegreen' || token === 'greenish') return 'green';
+      if (token === 'brownish') return 'brown';
+      return token;
+    });
+  const has = new Set(tokens);
+  if (tokens.length === 0) return 'UNKNOWN';
+  if (has.has('black') || has.has('tarry')) return 'BLACK_TARRY_APPEARANCE';
+  if (has.has('red') || has.has('blood')) return 'RED_APPEARANCE';
+  if ((has.has('pale') || has.has('gray')) && !has.has('brown')) return 'PALE_GRAY';
+  if (has.has('yellow') && !has.has('brown') && !has.has('green')) return 'YELLOW';
+  if (has.has('orange') && !has.has('brown')) return 'ORANGE';
+  if (has.has('green') && has.has('brown')) return 'GREEN_BROWN';
+  if (has.has('green')) return 'GREEN';
+  if (has.has('brown') && (has.has('dark') || has.has('deep'))) return 'DARK_BROWN';
+  if (has.has('brown') && (has.has('light') || has.has('pale'))) return 'LIGHT_BROWN';
+  if (has.has('brown')) return 'BROWN';
+  return 'OTHER';
+}
+
 function mapColor(value: string | null): string {
-  const normalized = (value ?? '').trim().toLowerCase();
-  return (
-    {
-      brown: 'marrone',
-      'dark brown': 'marrone scuro',
-      'light brown': 'marrone chiaro',
-      'brown-green': 'marrone-verde',
-      green: 'verde',
-      yellow: 'giallo',
-      orange: 'arancione',
-      black: 'nero',
-      red: 'rossastro',
-      gray: 'grigio',
-      grey: 'grigio',
-    }[normalized] ?? (normalized || 'non determinato')
-  );
+  const family = canonicalizeColorFamily(value);
+  if (family === 'UNKNOWN') return 'non determinato';
+  return COLOR_FAMILY_IT[family] ?? 'un colore non usuale';
 }
 
 function mapSafetyFlags(

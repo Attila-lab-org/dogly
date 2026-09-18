@@ -82,12 +82,29 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert "servono ancora" in result.consumer_summary.lower()
 
 
-def test_possible_foreign_material_requires_attention():
+def test_possible_foreign_material_does_not_dominate_the_result():
     result = build_digestive_intelligence(
-        observation(foreign_material_candidate="possible"),
+        observation(foreign_material_candidate="possible", consistency="formed"),
+        context(prior_scores=[4, 4, 4]),
+    )
+    assert result.overall_state is not DigestiveState.ATTENTION
+    assert result.safety_state is DigestiveState.ROUTINE
+    assert "FOREIGN_MATERIAL_CANDIDATE" not in {
+        item["code"]
+        for item in contextual_safety_flags(
+            observation(foreign_material_candidate="possible"),
+            context(prior_scores=[4, 4, 4]),
+        )
+    }
+
+
+def test_clear_foreign_material_still_requires_attention():
+    result = build_digestive_intelligence(
+        observation(foreign_material_candidate="clear_candidate"),
         context(prior_scores=[4, 4, 4]),
     )
     assert result.overall_state is DigestiveState.ATTENTION
+    assert result.safety_state is DigestiveState.ATTENTION
 
 
 def test_same_photo_is_monitor_when_it_differs_from_personal_baseline():
@@ -115,7 +132,7 @@ def test_firmer_result_names_the_dog_and_explains_the_photo_naturally():
         result.consumer_headline
         == "Oggi è un po’ più compatta del solito di Rocky"
     )
-    assert "ben formata" in result.consumer_summary
+    assert "ben formate" in result.consumer_summary
     assert "marrone scuro" in result.consumer_summary
     assert "per ora non serve cambiare nulla" in result.recommended_next_step
 

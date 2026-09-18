@@ -454,6 +454,8 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                   quota_refunded = :quota_refunded,
                   attempt_count = :attempt_count,
                   last_error_code = :last_error_code,
+                  image_sha256 = :image_sha256,
+                  learning_eligible = :learning_eligible,
                   expires_at = :expires_at,
                   completed_at = :completed_at
                 where id = :id and user_id = :user_id
@@ -480,6 +482,8 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 "quota_refunded": event.quota_refunded,
                 "attempt_count": event.attempt_count,
                 "last_error_code": event.last_error_code,
+                "image_sha256": event.image_sha256,
+                "learning_eligible": event.learning_eligible,
                 "expires_at": event.expires_at,
                 "completed_at": event.completed_at,
             },
@@ -533,6 +537,7 @@ async def load_digestive_context(
                     select prior.fecal_score_estimate,
                            prior.consistency,
                            prior.created_at,
+                           prior.learning_eligible,
                            (
                              select fp.food_product_id
                              from public.feeding_periods fp
@@ -565,7 +570,12 @@ async def load_digestive_context(
     answers = event.owner_context_json
     active_food_id = profile["active_food_product_id"]
     season_key, season_label = _digestive_period_label(event.created_at.month)
-    scored = [row for row in ordered if row["fecal_score_estimate"] is not None]
+    scored = [
+        row
+        for row in ordered
+        if row["fecal_score_estimate"] is not None
+        and row.get("learning_eligible") is not False
+    ]
     nutrition = await weight_db.nutrition_history_snapshot(
         engine, dog_id=event.dog_id
     )
@@ -649,6 +659,7 @@ async def refresh_digestive_baseline(
                     where dog_id = cast(:dog_id as uuid)
                       and status = 'COMPLETED'
                       and fecal_score_estimate is not null
+                      and coalesce(learning_eligible, true)
                     order by created_at desc, id desc
                     limit 12
                     """

@@ -79,6 +79,7 @@ class InMemoryStore:
         self.signal_map_entries: dict[tuple[str, str], SignalMapEntryRec] = {}
         self.patterns: dict[str, PersonalPatternRec] = {}
         self.fecal_events: dict[str, FecalEventRec] = {}
+        self.digestive_observation_cache: dict[tuple[str, ...], dict] = {}
         self.food_products: dict[str, FoodProductRec] = {}
         self.feeding_periods: dict[str, FeedingPeriodRec] = {}
         self.subscriptions: dict[str, SubscriptionRec] = {}
