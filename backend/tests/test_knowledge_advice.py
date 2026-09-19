@@ -79,6 +79,26 @@ def test_known_observation_retrieves_bounded_scientific_cards():
     assert len(result.cards) <= 6
 
 
+def test_door_context_card_requires_an_exit_in_the_video():
+    raw = load_fixture("observation.fixture.json")
+    raw["scene"].update(
+        {
+            "environment_class": "outdoor",
+            "visible_objects": ["grass", "gravel", "stone_wall", "plant"],
+            "spatial_relations": ["dog moves towards camera"],
+        }
+    )
+    raw["body"]["orientation_target"] = "camera"
+    raw["head_face"]["head_orientation"] = "towards_camera"
+    raw["head_face"]["gaze_target"] = "camera"
+    result = retrieve_evidence(
+        ObservationContract.model_validate(raw),
+        ContextBucket.DOOR_EXIT,
+        build_dog_context(_dog()),
+    )
+    assert "CTX_SEP_001" not in {card.card_id for card in result.cards}
+
+
 def test_play_bow_in_timeline_retrieves_play_evidence():
     raw = load_fixture("observation.fixture.json")
     raw["body"]["posture"] = "loose"
@@ -165,6 +185,15 @@ def test_alert_advice_helps_owner_respond_in_the_current_moment():
     assert "Controlla con calma" in advice.action
     assert "richiamalo" in advice.action
     assert "evita di sgridarlo" in advice.action
+
+
+def test_ambiguous_result_does_not_issue_a_generic_management_action():
+    advice = build_advice(
+        _interpretation(IntentCode.AMBIGUOUS),
+        build_dog_context(_dog()),
+        KnowledgeContext(registry_version="2.1", coverage="MEDIUM"),
+    )
+    assert advice is None
 
 
 def test_life_stage_derivation_and_unknown_fallback():

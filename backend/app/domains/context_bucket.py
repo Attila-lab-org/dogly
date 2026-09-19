@@ -18,7 +18,8 @@ from app.knowledge.models import DogContextSnapshot
 
 logger = logging.getLogger(__name__)
 
-_DOOR_OBJECTS = {"door", "leash", "lead", "collar", "harness"}
+_EXIT_OBJECTS = {"door", "gate", "porta", "cancello"}
+_WALK_OBJECTS = {"leash", "lead", "guinzaglio"}
 _FOOD_OBJECTS = {"bowl", "food", "kibble", "ciotola"}
 _PLAY_OBJECTS = {"toy", "ball", "rope", "toy_rope", "frisbee"}
 _VEHICLE_OBJECTS = {"car", "vehicle", "crate"}
@@ -26,6 +27,36 @@ _VEHICLE_OBJECTS = {"car", "vehicle", "crate"}
 
 def _norm(items: list[str] | tuple[str, ...] | set[str]) -> set[str]:
     return {str(item).lower().replace("-", "_") for item in items}
+
+
+def observation_supports_exit(observation: ObservationContract | None) -> bool:
+    """True only when the clip itself contains an exit cue.
+
+    A client hint, an outdoor location, a collar or a leash are not enough to
+    claim that the dog is oriented toward a door or asking to go outside.
+    """
+    if observation is None:
+        return False
+    scene = observation.scene
+    objects = _norm(scene.visible_objects)
+    relations = _norm(scene.spatial_relations)
+    target_text = " ".join(
+        str(value).casefold()
+        for value in (
+            observation.body.orientation_target,
+            observation.head_face.head_orientation,
+            observation.head_face.gaze_target,
+        )
+        if value
+    )
+    return bool(
+        objects & _EXIT_OBJECTS
+        or relations & {"near_door", "near_gate", "vicino_porta", "vicino_cancello"}
+        or any(
+            token in target_text
+            for token in ("door", "gate", "porta", "cancello", "uscita", "exit")
+        )
+    )
 
 
 def derive_from_observation(
@@ -37,11 +68,13 @@ def derive_from_observation(
     scene = observation.scene
     objects = _norm(scene.visible_objects)
     env = (scene.environment_class or "unknown").lower()
-    relations = _norm(scene.spatial_relations)
+    env_tokens = set(env.replace("-", "_").replace(" ", "_").split("_"))
 
     if (scene.dog_count or 0) > 1 or "other_dog" in objects:
         return ContextBucket.OTHER_DOG
-    if objects & _DOOR_OBJECTS or "door" in env or "near_door" in relations:
+    if observation_supports_exit(observation) or bool(
+        env_tokens & _EXIT_OBJECTS
+    ):
         return ContextBucket.DOOR_EXIT
     if objects & _FOOD_OBJECTS or "feeding" in env:
         return ContextBucket.FEEDING
@@ -55,7 +88,7 @@ def derive_from_observation(
         return ContextBucket.VEHICLE
     if any(token in env for token in ("outdoor", "park", "garden", "yard", "street")):
         locomotion = (observation.body.locomotion or "unknown").lower()
-        if locomotion == "walking":
+        if locomotion == "walking" or objects & _WALK_OBJECTS:
             return ContextBucket.WALK
         return ContextBucket.OUTDOORS
     if "home" in env or "indoor" in env or "living" in env:

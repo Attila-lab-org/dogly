@@ -737,7 +737,11 @@ const styles = StyleSheet.create({
     // overflow+radius spegne il <video> su Safari iOS (layer nera).
   },
   camera: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     width: '100%',
     height: '100%',
   },

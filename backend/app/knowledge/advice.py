@@ -30,8 +30,8 @@ _ITALIAN_COPY: dict[str, tuple[str, str]] = {
         "Osserva se riesce a tornare calmo e se il comportamento diminuisce senza aumentare la tensione.",
     ),
     "ADVICE_RESPOND_TO_PLAY": (
-        "Se il momento è sicuro e ti va, accogli l’invito con un gioco breve e morbido. Fai piccole pause e lascia che sia libero di continuare o fermarsi.",
-        "Durante una pausa, osserva se torna spontaneamente al gioco con un corpo sciolto oppure sceglie di fare altro.",
+        "Accogli l’invito con un gioco breve e leggero. Fai piccole pause e lascia che sia lui a decidere se continuare.",
+        "Nella pausa guarda se torna al gioco col corpo sciolto, oppure se sceglie di fare altro.",
     ),
     "ADVICE_SNIFF_EXPLORATION": (
         "Se salute e ambiente lo consentono, proponi un’attività calma di fiuto ed esplorazione invece di aumentare soltanto l’intensità.",
@@ -172,7 +172,7 @@ def build_advice(
         return None
 
     intent = interpretation.primary_intent
-    if intent is None:
+    if intent in {None, IntentCode.AMBIGUOUS, IntentCode.INSUFFICIENT}:
         return None
     tags = _context_tags(dog_context, flags)
     candidates = []

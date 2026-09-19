@@ -15,6 +15,8 @@ import {
   type RealtimeTurn,
 } from './api';
 
+type NativeMediaConstraints = Parameters<typeof mediaDevices.getUserMedia>[0];
+
 export type VoiceState =
   | 'idle'
   | 'connecting'
@@ -225,7 +227,9 @@ export function useDoglyRealtime(dogId: string) {
           noiseSuppression: true,
           autoGainControl: true,
           channelCount: 1,
-        },
+          // react-native-webrtc accepts standard audio constraints at runtime,
+          // but its current declaration only lists video-track fields.
+        } as unknown as NativeMediaConstraints['audio'],
         video: false,
       })) as MediaStream;
       streamRef.current = stream;

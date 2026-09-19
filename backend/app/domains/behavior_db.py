@@ -378,7 +378,7 @@ async def update_capture_context(
     event_id: str,
     context_bucket: str,
 ) -> None:
-    """Persist an owner-confirmed context on the event's capture."""
+    """Keep the observed context identical on capture and event."""
     require_uuid(event_id, not_found="Event not found")
     async with engine.begin() as conn:
         result = await conn.execute(
@@ -390,6 +390,21 @@ async def update_capture_context(
                 where e.id = cast(:event_id as uuid)
                   and e.user_id = cast(:user_id as uuid)
                   and e.capture_id = c.id
+                """
+            ),
+            {
+                "event_id": event_id,
+                "user_id": user_id,
+                "context_bucket": context_bucket,
+            },
+        )
+        await conn.execute(
+            text(
+                """
+                update public.behavior_events
+                set context_bucket = :context_bucket
+                where id = cast(:event_id as uuid)
+                  and user_id = cast(:user_id as uuid)
                 """
             ),
             {

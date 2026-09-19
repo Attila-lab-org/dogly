@@ -53,6 +53,29 @@ def test_door_in_scene_resolves_door_exit():
     )
 
 
+def test_garden_with_collar_is_outdoors_not_door_exit():
+    obs = _observation(
+        environment_class="outdoor garden",
+        visible_objects=["grass", "gravel", "stone_wall", "collar"],
+        spatial_relations=["dog moves towards camera"],
+    )
+    obs = obs.model_copy(
+        update={
+            "body": obs.body.model_copy(
+                update={"orientation_target": "camera", "locomotion": "still"}
+            ),
+            "head_face": obs.head_face.model_copy(
+                update={"head_orientation": "camera", "gaze_target": "camera"}
+            ),
+        }
+    )
+    assert derive_from_observation(obs) is ContextBucket.OUTDOORS
+    assert (
+        resolve_context_bucket(ContextBucket.DOOR_EXIT, observation=obs)
+        is ContextBucket.OUTDOORS
+    )
+
+
 def test_bowl_resolves_feeding():
     obs = _observation(visible_objects=["bowl", "food"])
     assert derive_from_observation(obs) is ContextBucket.FEEDING

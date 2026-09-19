@@ -13,13 +13,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import BehaviorEventStatus, ContextBucket
-from app.domains.context_bucket import resolve_context_bucket
+from app.domains.context_bucket import observation_supports_exit, resolve_context_bucket
 from app.knowledge.models import DogContextSnapshot
 from app.providers.base import EligiblePatternSummary
 
-QUESTION_BANK_VERSION = "processing-questions/v1"
-PLANNER_VERSION = "processing-planner/v1"
-MAX_PROCESSING_QUESTIONS = 3
+QUESTION_BANK_VERSION = "processing-questions/v2"
+PLANNER_VERSION = "processing-planner/v2"
+MAX_PROCESSING_QUESTIONS = 1
 OWNER_REPORTED = "OWNER_REPORTED"
 COLLECTING_STATUSES = frozenset(
     {
@@ -497,6 +497,7 @@ def _score(
     owner_off: bool,
     recent_known: bool,
     memory_known: bool,
+    exit_supported: bool,
 ) -> int | None:
     if question.id in {"behavior_seen_before"} and memory_known:
         return None
@@ -513,6 +514,8 @@ def _score(
     if question.id == "activity_today" and bucket not in {"REST"} and not owner_off:
         return None
     if question.id == "discomfort_today" and bucket not in {"HANDLING", "REST"} and not owner_off:
+        return None
+    if question.id == "outside_trigger" and not exit_supported:
         return None
     if question.id == "weather" or question.id == "temperature":
         return None
@@ -567,16 +570,25 @@ def plan_next_question(
     if _quality_insufficient(observation):
         return None
 
-    bucket = resolve_context_bucket(
-        _as_bucket(context_bucket),
-        observation=_observation_contract(observation),
-        lifestyle=lifestyle,
-        dog_context=dog_context,
-    ).value
+    observation_contract = _observation_contract(observation)
+    # Before the observer has described the scene, a capture hint is not
+    # evidence. Asking a door/food/dog-specific question from that hint is
+    # exactly how an outdoor clip can receive an unrelated door question.
+    bucket = (
+        resolve_context_bucket(
+            _as_bucket(context_bucket),
+            observation=observation_contract,
+            lifestyle=lifestyle,
+            dog_context=dog_context,
+        ).value
+        if observation_contract is not None
+        else ContextBucket.UNKNOWN.value
+    )
     seeds = BUCKET_SEEDS.get(bucket, BUCKET_SEEDS["UNKNOWN"])
     owner_off = _owner_off(dog_context)
     recent_known = _has_recent_change(dog_context)
     memory_known = _has_personal_memory(eligible_memory)
+    exit_supported = observation_supports_exit(observation_contract)
 
     ranked: list[tuple[int, int, QuestionDef]] = []
     order = {qid: index for index, qid in enumerate(QUESTION_BANK)}
@@ -592,6 +604,7 @@ def plan_next_question(
             owner_off=owner_off,
             recent_known=recent_known,
             memory_known=memory_known,
+            exit_supported=exit_supported,
         )
         if score is None:
             continue

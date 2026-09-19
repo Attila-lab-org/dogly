@@ -571,7 +571,7 @@ class ProcessingContextOut(BaseModel):
     analysis_status: str
     question: ProcessingContextQuestion | None = None
     answered_count: int = 0
-    max_questions: int = 3
+    max_questions: int = 1
     planner_version: str
     applied_to_interpretation: bool | None = None
     accepting_answers: bool = True

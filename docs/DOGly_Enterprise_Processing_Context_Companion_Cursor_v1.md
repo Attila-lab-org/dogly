@@ -15,13 +15,13 @@ Leggi prima lo stato reale più recente di `main` e verifica i file/contratti ci
 
 Lavora direttamente su `main`, coerentemente con il workflow attuale del progetto.
 
-Obiettivo di questo intervento: trasformare la schermata di attesa dell'analisi comportamentale in un **accompagnamento intelligente, semplice e veloce**, che mentre DOGly sta già analizzando il video raccoglie dal proprietario **massimo 3 informazioni contestuali ad alto valore**, tramite pulsanti, senza chat libera e senza rallentare o bloccare il motore.
+Obiettivo di questo intervento: trasformare la schermata di attesa dell'analisi comportamentale in un **accompagnamento intelligente, semplice e veloce**, che mentre DOGly sta già analizzando il video raccoglie dal proprietario **al massimo una informazione contestuale ad alto valore**, tramite pulsanti, senza chat libera e senza rallentare o bloccare il motore.
 
 Principi non negoziabili:
 
 - l'analisi del video deve continuare in parallelo;
 - le domande non devono bloccare la pipeline;
-- massimo 3 domande durante il processing;
+- massimo 1 domanda durante il processing;
 - una domanda alla volta;
 - risposta solo tramite opzioni strutturate, niente testo libero in V1;
 - sempre disponibile `Salta`;
@@ -61,7 +61,7 @@ upload / queue
 DOGly inizia davvero a osservare
   ↓
 PROCESSING CONTEXT COMPANION
-2-3 domande brevi a tasti mentre l'analisi continua
+0-1 domanda breve a tasti mentre l'analisi continua
   ↓
 OWNER_REPORTED CONTEXT salvato sull'evento
   ↓
@@ -970,7 +970,9 @@ Non fare un redesign del resto dell'app.
 
 ## Planner
 
-- non propone più di 3 domande;
+- non propone più di 1 domanda;
+- prima dell'osservazione usa solo domande generali ad alto valore;
+- una domanda su porta, cibo, cani o altri oggetti richiede evidenza nella scena;
 - non ripete domande già risposte/skippate;
 - non chiede dati già noti;
 - `OTHER_DOG` prioritizza familiarità / libertà di movimento;
@@ -1025,7 +1027,7 @@ La feature è accettabile solo se tutti i seguenti punti sono veri:
 
 1. Dopo il video DOGly entra subito in processing: non aspetta il questionario.
 2. L'utente vede chiaramente che l'analisi sta continuando.
-3. DOGly propone 0–3 domande, mai più di 3.
+3. DOGly propone 0–1 domanda durante il processing.
 4. Le domande sono contestuali, non sempre uguali.
 5. Nessuna domanda duplica dati già disponibili.
 6. Ogni domanda può essere saltata.
@@ -1177,7 +1179,7 @@ overall_quality = insufficient
 dog_visible_fraction very low
 ```
 
-Anche se l'owner ha risposto a tre domande, risultato:
+Anche se l'owner ha risposto alla domanda di contesto, risultato:
 
 ```text
 Non riesco a vedere abbastanza bene Rocky per darti una lettura affidabile.

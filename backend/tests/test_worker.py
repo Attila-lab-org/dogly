@@ -5,7 +5,7 @@ commit/refund semantics; internal auth on workflow routes."""
 import httpx
 import pytest
 
-from app.contracts.taxonomy import BehaviorEventStatus
+from app.contracts.taxonomy import BehaviorEventStatus, ContextBucket
 from app.providers.base import ProviderRateLimitError
 from app.worker.handlers import (
     MAX_TASK_ATTEMPTS,
@@ -311,7 +311,10 @@ async def test_worker_retryable_failure_returns_503(
 
 
 async def test_unknown_context_and_checkin_reach_the_composer(
-    client: httpx.AsyncClient, worker_client: httpx.AsyncClient, auth_headers
+    client: httpx.AsyncClient,
+    worker_client: httpx.AsyncClient,
+    auth_headers,
+    state,
 ):
     from datetime import UTC, datetime
 
@@ -368,6 +371,7 @@ async def test_unknown_context_and_checkin_reach_the_composer(
     assert "diverso dal solito" in body["baseline_note"]
     # Fixture video shows a toy: UNKNOWN must not stay UNKNOWN.
     assert body["context_bucket"] == "PLAY"
+    assert state.store.captures[capture_id].context_bucket == ContextBucket.PLAY
     assert "SAFE_" not in (body.get("consumer_headline") or "")
 
 

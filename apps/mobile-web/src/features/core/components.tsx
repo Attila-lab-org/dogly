@@ -435,7 +435,7 @@ export function BehaviorResultView({
             </>
           ) : null}
         </View>
-        <Text style={styles.thoughtKicker}>Il risultato per {dogName}</Text>
+        <Text style={styles.thoughtKicker}>In questo momento</Text>
         <View style={styles.headlineRow}>
           <Text style={styles.headline}>{headline}</Text>
           {celebrate ? <Text style={styles.headlineSparkle}> ✨</Text> : null}
@@ -443,6 +443,13 @@ export function BehaviorResultView({
         {result.consumer_summary ? (
           <Text style={styles.summary}>
             {ownerCopy(result.consumer_summary)}
+          </Text>
+        ) : null}
+        {isPersonalBaselineNote(result.baseline_note) &&
+        (result.baseline_comparison === 'VARIATION' ||
+          result.baseline_comparison === 'CONTESTED') ? (
+          <Text style={styles.baselineHeroNote} testID="baseline-hero-note">
+            {ownerCopy(result.baseline_note)}
           </Text>
         ) : null}
 
@@ -459,7 +466,7 @@ export function BehaviorResultView({
 
       {result.recommended_next_step && !hasPrimaryAdvice && !safety ? (
         <View style={styles.nextStepCard} testID="recommended-next-step">
-          <Text style={styles.nextStepTitle}>Una cosa utile ora</Text>
+          <Text style={styles.nextStepTitle}>Cosa fare ora</Text>
           <Text style={styles.nextStepText}>
             {ownerCopy(result.recommended_next_step)}
           </Text>
@@ -474,7 +481,7 @@ export function BehaviorResultView({
             onPress={() => setDetailsOpen((open) => !open)}
             style={styles.detailsToggle}
           >
-            <Text style={styles.detailsToggleText}>Scopri perché</Text>
+            <Text style={styles.detailsToggleText}>Perché</Text>
             <Ionicons
               name={detailsOpen ? 'chevron-up' : 'chevron-down'}
               size={20}
@@ -498,7 +505,7 @@ export function BehaviorResultView({
               {evidenceSections.observed.length > 0 ? (
                 <View style={styles.evidenceSection} testID="observed-evidence">
                   <Text style={styles.evidenceTitle}>
-                    Cosa ha considerato DOGly
+                    Cosa si vede nel video
                   </Text>
                   {evidenceSections.observed.map((item, index) => (
                     <EvidenceRow
@@ -517,7 +524,7 @@ export function BehaviorResultView({
                     color={colors.accent}
                   />
                   <View style={styles.soundNoteCopy}>
-                    <Text style={styles.soundNoteTitle}>Audio considerato</Text>
+                    <Text style={styles.soundNoteTitle}>Cosa si sente</Text>
                     <Text style={styles.soundNoteText}>
                       {ownerCopy(result.sound_note)}
                     </Text>
@@ -977,6 +984,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14 * typography.lineHeight.relaxed,
     paddingHorizontal: spacing.sm,
+  },
+  baselineHeroNote: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    textAlign: 'center',
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   soundNote: {
     flexDirection: 'row',

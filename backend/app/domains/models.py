@@ -150,7 +150,7 @@ class ProcessingContextAnswerRec(BaseModel):
     question_id: str
     answer_id: str | None = None
     skipped: bool = False
-    question_version: str = "processing-questions/v1"
+    question_version: str = "processing-questions/v2"
     source: str = "OWNER_REPORTED"
     answered_at: datetime
     created_at: datetime

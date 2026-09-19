@@ -78,18 +78,18 @@ describe('risultato comportamento consumer', () => {
   });
 
   it('mostra il risultato e rimanda analisi e affidabilità ai dettagli', () => {
-    expect(resultViewSource).toContain('Il risultato per {dogName}');
-    expect(resultViewSource).toContain('Scopri perché');
+    expect(resultViewSource).toContain('In questo momento');
+    expect(resultViewSource).toContain('Perché');
     expect(resultViewSource).not.toContain(
       'Quanto è prudente questa lettura',
     );
     for (const detail of [
       'In parole semplici',
-      'Cosa ha considerato DOGly',
+      'Cosa si vede nel video',
       'behavior-prudence',
       'what-to-watch',
     ]) {
-      expect(resultViewSource.indexOf('Scopri perché')).toBeLessThan(
+      expect(resultViewSource.indexOf('Perché')).toBeLessThan(
         resultViewSource.indexOf(detail),
       );
     }

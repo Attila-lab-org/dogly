@@ -846,6 +846,15 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             dog_context=dog_context,
         )
         capture.context_bucket = context_bucket
+        if hasattr(event, "context_bucket"):
+            event.context_bucket = context_bucket
+        if state.engine is not None:
+            await behavior_db.update_capture_context(
+                state.engine,
+                user_id=event.user_id,
+                event_id=event.id,
+                context_bucket=context_bucket.value,
+            )
         knowledge_context = retrieve_evidence(
             observation, context_bucket, dog_context
         )
@@ -893,6 +902,9 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                     interpretation.safety_flags, det_flags
                 ),
                 "context_effect": None,
+                # Context is an observed server fact, not a field the reasoner
+                # may preserve from an earlier client hint.
+                "context_bucket": context_bucket,
             }
         )
         interpretation, decision_trace = apply_behavior_decision_policy(

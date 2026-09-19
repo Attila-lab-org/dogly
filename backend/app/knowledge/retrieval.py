@@ -11,6 +11,7 @@ from app.contracts.observation import (
     TriState,
 )
 from app.contracts.taxonomy import ContextBucket
+from app.domains.context_bucket import observation_supports_exit
 from app.knowledge.breed_resolver import resolve_breed
 from app.knowledge.models import (
     DogContextSnapshot,
@@ -100,7 +101,10 @@ def _candidate_ids(
         ids.append("CTX_DOG_001")
     if visible_objects & {"food", "bowl", "toy", "bone"}:
         ids.append("CTX_RESOURCE_001")
-    if context_bucket == ContextBucket.DOOR_EXIT:
+    if (
+        context_bucket == ContextBucket.DOOR_EXIT
+        and observation_supports_exit(observation)
+    ):
         ids.append("CTX_SEP_001")
     if breed_prior_eligible(dog_context):
         ids.append("PRIOR_BREED_001")

@@ -13,7 +13,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.contracts.interpretation import EvidenceItem, InterpretationContract
+from app.contracts.interpretation import (
+    AlternativeIntent,
+    ContextOption,
+    EvidenceItem,
+    InterpretationContract,
+)
 from app.contracts.observation import (
     ApproachWithdrawalFreeze,
     BodyHeight,
@@ -27,9 +32,10 @@ from app.contracts.observation import (
     VocalizationType,
 )
 from app.contracts.taxonomy import ConfidenceBand, ContextBucket, IntentCode
+from app.domains.context_bucket import observation_supports_exit
 from app.knowledge.models import KnowledgeContext
 
-BEHAVIOR_DECISION_POLICY_VERSION = "behavior-decision/v1"
+BEHAVIOR_DECISION_POLICY_VERSION = "behavior-decision/v3"
 
 
 @dataclass(frozen=True)
@@ -72,6 +78,7 @@ class BehaviorDecisionTrace(BaseModel):
     resolution: Literal[
         "ACCEPTED_REASONER",
         "PROMOTED_BOUNDED_CANDIDATE",
+        "OVERRIDDEN_UNSUPPORTED",
         "ABSTAINED",
         "SAFETY_PRESERVED",
     ]
@@ -95,7 +102,14 @@ _POLICIES = (
             {"body.play_bow", "body.loose", "movement.approach", "tail.wagging"}
         ),
         contradictions=frozenset(
-            {"body.stiff", "movement.withdrawal", "tail.tucked", "vocal.growl"}
+            {
+                "body.stiff",
+                "body.lowered",
+                "movement.withdrawal",
+                "tail.tucked",
+                "face.lip_lick",
+                "vocal.growl",
+            }
         ),
         min_families=1,
     ),
@@ -108,7 +122,9 @@ _POLICIES = (
         supporting=frozenset(
             {"target.owner", "movement.approach", "vocal.whine", "vocal.bark"}
         ),
-        contradictions=frozenset({"movement.withdrawal", "target.external"}),
+        contradictions=frozenset(
+            {"movement.withdrawal", "target.external", "tail.tucked"}
+        ),
     ),
     IntentPolicy(
         intent=IntentCode.OUTSIDE_REQUEST,
@@ -148,21 +164,33 @@ _POLICIES = (
     IntentPolicy(
         intent=IntentCode.DISCOMFORT_AVOIDANCE,
         paths=(
+            # Social avoidance: seeks distance.
             frozenset({"movement.withdrawal", "ears.back"}),
             frozenset({"movement.withdrawal", "face.lip_lick"}),
             frozenset({"movement.withdrawal", "body.lowered"}),
+            # Somatic / unease: may still approach the owner for help.
+            frozenset({"face.lip_lick", "body.lowered", "movement.still"}),
+            frozenset({"face.lip_lick", "body.lowered", "vocal.whine"}),
+            frozenset({"ears.back", "face.lip_lick", "movement.still"}),
+            frozenset({"movement.approach", "face.lip_lick", "body.lowered"}),
+            frozenset({"movement.approach", "vocal.whine", "body.lowered"}),
         ),
         supporting=frozenset(
             {
                 "movement.withdrawal",
+                "movement.approach",
+                "movement.still",
                 "ears.back",
                 "face.lip_lick",
                 "face.yawn",
                 "body.lowered",
                 "tail.below",
+                "vocal.whine",
             }
         ),
-        contradictions=frozenset({"movement.approach", "body.play_bow"}),
+        # Play bow is the hard opposite; approaching the owner is allowed
+        # (dogs often seek people when they feel unwell).
+        contradictions=frozenset({"body.play_bow", "body.loose", "tail.wagging"}),
     ),
     IntentPolicy(
         intent=IntentCode.FEAR_INSECURITY,
@@ -388,7 +416,10 @@ def extract_behavior_signals(
     if _contains(_text(vocal.intensity), ("high", "forte", "intense")):
         add("vocal.high_intensity", "vocalization", "vocalization.intensity", "La vocalizzazione è intensa.")
 
-    if context_bucket is ContextBucket.DOOR_EXIT:
+    if (
+        context_bucket is ContextBucket.DOOR_EXIT
+        and observation_supports_exit(observation)
+    ):
         add("context.door_exit", "context", "context_bucket", "Il momento è vicino a un’uscita.")
     if context_bucket is ContextBucket.FEEDING:
         add("context.feeding", "context", "context_bucket", "Il momento riguarda il cibo.")
@@ -439,26 +470,306 @@ def _confidence_ceiling(
     return ConfidenceBand.HIGH
 
 
+# Everyday, low-stakes readings: prefer a useful primary over "ambiguous".
+_EVERYDAY_INTENTS = frozenset(
+    {
+        IntentCode.PLAY_INTERACTION,
+        IntentCode.ATTENTION_REQUEST,
+        IntentCode.RELAX_REST,
+    }
+)
+
+# Care / wellbeing branch: never collapse these into "play vs angry".
+_CARE_INTENTS = frozenset(
+    {
+        IntentCode.DISCOMFORT_AVOIDANCE,
+        IntentCode.FEAR_INSECURITY,
+    }
+)
+
 _PROMOTION_COPY: dict[IntentCode, tuple[str, str, str]] = {
     IntentCode.ALERT_VIGILANCE: (
-        "{name} sembra molto attento a qualcosa fuori campo",
+        "{name} è molto attento a qualcosa fuori campo",
         (
-            "{name} sembra aver concentrato l’attenzione su qualcosa che non vediamo. "
-            "Non sappiamo che cosa abbia attirato la sua attenzione, quindi la lettura resta prudente."
+            "{name} ha fissato qualcosa che non vediamo. "
+            "Per ora la lettura più utile è: sta segnalando uno stimolo, non chiedendo altro."
         ),
-        "«C’è qualcosa che ha attirato la mia attenzione.»",
+        "«C’è qualcosa: guardalo con me.»",
     ),
     IntentCode.PLAY_INTERACTION: (
-        "{name} sembra invitarti a giocare",
-        "I segnali visibili sono compatibili con un invito all’interazione in questo momento.",
+        "{name} ti sta invitando a giocare",
+        (
+            "Corpo sciolto, avvicinamento e coda morbida: "
+            "in questo momento {name} cerca uno scambio di gioco con te."
+        ),
         "«Ti va di fare qualcosa insieme?»",
     ),
+    IntentCode.ATTENTION_REQUEST: (
+        "{name} sta cercando la tua attenzione",
+        (
+            "{name} si orienta verso di te e si avvicina. "
+            "Vuole un contatto o una risposta da te."
+        ),
+        "«Ehi, ci sei anche per me?»",
+    ),
     IntentCode.OUTSIDE_REQUEST: (
-        "{name} potrebbe volerti accompagnare verso l’uscita",
-        "Orientamento e movimento rendono plausibile una richiesta legata all’uscita.",
+        "{name} ti sta chiedendo di uscire",
+        "Orientamento e movimento verso l’uscita rendono chiara una richiesta concreta.",
         "«Possiamo andare verso la porta?»",
     ),
+    IntentCode.DISCOMFORT_AVOIDANCE: (
+        "{name} non sembra a suo agio",
+        (
+            "Ci sono segnali di tensione o di possibile disagio fisico. "
+            "Non è una diagnosi: per ora la cosa più utile è osservarlo "
+            "con calma e non forzare gioco o contatto."
+        ),
+        "«Qualcosa non mi torna: lasciami spazio e guardami.»",
+    ),
 }
+
+
+def _best_override_candidate(
+    bounded_eligible: list[CandidateDecision],
+) -> CandidateDecision | None:
+    """Pick one useful reading without collapsing care into play."""
+    if not bounded_eligible:
+        return None
+    if len(bounded_eligible) == 1:
+        return bounded_eligible[0]
+
+    ranked = sorted(bounded_eligible, key=lambda item: item.score, reverse=True)
+    top, second = ranked[0], ranked[1]
+    intents = {item.intent for item in ranked}
+
+    # Play/attention vs unease: do not auto-pick play. Ask or keep ambiguous.
+    if (
+        IntentCode.DISCOMFORT_AVOIDANCE in intents
+        and (
+            IntentCode.PLAY_INTERACTION in intents
+            or IntentCode.ATTENTION_REQUEST in intents
+        )
+        and top.score < second.score + 3
+    ):
+        discomfort = next(
+            item
+            for item in ranked
+            if item.intent is IntentCode.DISCOMFORT_AVOIDANCE
+        )
+        rival = next(
+            (
+                item
+                for item in ranked
+                if item.intent
+                in {
+                    IntentCode.PLAY_INTERACTION,
+                    IntentCode.ATTENTION_REQUEST,
+                }
+            ),
+            None,
+        )
+        if rival is not None and discomfort.score >= rival.score:
+            return discomfort
+        return None
+
+    if top.intent in _CARE_INTENTS and top.score >= second.score:
+        return top
+
+    if top.intent in _EVERYDAY_INTENTS and second.intent in _EVERYDAY_INTENTS:
+        return top
+    if top.score >= second.score + 2:
+        return top
+    return None
+
+
+def _evidence_from_candidates(
+    *,
+    signals: dict[str, Signal],
+    candidates: list[CandidateDecision],
+) -> list[EvidenceItem]:
+    # The previous evidence supported a now-rejected intent. Rebuild the
+    # owner-facing explanation only from signals supporting the final options.
+    evidence: list[EvidenceItem] = []
+    known_refs: set[str | None] = set()
+    for candidate in candidates:
+        for key in candidate.supporting_signals:
+            signal = signals[key]
+            if signal.ref in known_refs:
+                continue
+            evidence.append(
+                EvidenceItem(
+                    source="observation",
+                    ref=signal.ref,
+                    description=signal.description,
+                )
+            )
+            known_refs.add(signal.ref)
+            if len(evidence) >= 3:
+                return evidence[:5]
+    return evidence[:5]
+
+
+def _interaction_question(
+    intents: set[IntentCode],
+    *,
+    exit_supported: bool,
+) -> tuple[str, list[ContextOption]] | None:
+    care_vs_social = IntentCode.DISCOMFORT_AVOIDANCE in intents and (
+        IntentCode.PLAY_INTERACTION in intents
+        or IntentCode.ATTENTION_REQUEST in intents
+    )
+    if care_vs_social:
+        return (
+            "Ti sembrava a disagio, oppure cercava contatto o gioco?",
+            [
+                ContextOption(
+                    id="seemed_unwell",
+                    label="Sembrava a disagio / non al meglio",
+                ),
+                ContextOption(
+                    id="wanted_contact",
+                    label="Cercava contatto o gioco",
+                ),
+                ContextOption(id="not_sure_care", label="Non ne sono sicuro"),
+            ],
+        )
+    if {
+        IntentCode.PLAY_INTERACTION,
+        IntentCode.ATTENTION_REQUEST,
+    } <= intents:
+        return (
+            "Subito prima, stavate già giocando o ti stava cercando?",
+            [
+                ContextOption(id="already_playing", label="Stavamo già giocando"),
+                ContextOption(id="seeking_me", label="Mi stava cercando"),
+                ContextOption(id="neither", label="Nessuna delle due"),
+            ],
+        )
+    if exit_supported and {
+        IntentCode.OUTSIDE_REQUEST,
+        IntentCode.ATTENTION_REQUEST,
+    } <= intents:
+        return (
+            "Si stava dirigendo davvero verso una porta o un cancello?",
+            [
+                ContextOption(id="toward_exit", label="Sì, verso l’uscita"),
+                ContextOption(id="toward_me", label="No, veniva verso di me"),
+                ContextOption(id="not_sure", label="Non ne sono sicuro"),
+            ],
+        )
+    return None
+
+
+def _ground_context_question(
+    interpretation: InterpretationContract,
+    *,
+    candidates: list[CandidateDecision],
+    exit_supported: bool,
+) -> InterpretationContract:
+    """Only retain a question that separates two supported readings."""
+    if not interpretation.needs_context or interpretation.context_effect:
+        return interpretation.model_copy(
+            update={
+                "needs_context": False,
+                "context_question": None,
+                "context_options": [],
+            }
+        )
+    ranked = sorted(
+        (item for item in candidates if item.eligible),
+        key=lambda item: item.score,
+        reverse=True,
+    )
+    prompt = _interaction_question(
+        {item.intent for item in ranked[:2]},
+        exit_supported=exit_supported,
+    )
+    if prompt is None:
+        return interpretation.model_copy(
+            update={
+                "needs_context": False,
+                "context_question": None,
+                "context_options": [],
+            }
+        )
+    question, options = prompt
+    return interpretation.model_copy(
+        update={
+            "needs_context": True,
+            "context_question": question,
+            "context_options": options,
+        }
+    )
+
+
+def _sync_ambiguous_result(
+    interpretation: InterpretationContract,
+    *,
+    dog_name: str,
+    signals: dict[str, Signal],
+    candidates: list[CandidateDecision],
+) -> InterpretationContract:
+    ranked = sorted(
+        (item for item in candidates if item.eligible),
+        key=lambda item: item.score,
+        reverse=True,
+    )[:2]
+    alternatives = [
+        AlternativeIntent(
+            intent=item.intent,
+            rationale=(
+                "I segnali visibili sostengono questa possibilità, "
+                "ma il breve momento non basta a distinguerla con certezza."
+            ),
+        )
+        for item in ranked
+    ]
+    ranked_intents = {item.intent for item in ranked}
+    care_pair = IntentCode.DISCOMFORT_AVOIDANCE in ranked_intents and (
+        IntentCode.PLAY_INTERACTION in ranked_intents
+        or IntentCode.ATTENTION_REQUEST in ranked_intents
+    )
+    interaction_pair = {
+        IntentCode.PLAY_INTERACTION,
+        IntentCode.ATTENTION_REQUEST,
+    } <= ranked_intents
+    if care_pair:
+        headline = f"{dog_name}: può essere disagio, non solo richiesta"
+        summary = (
+            f"I segnali di {dog_name} possono indicare disagio o un possibile "
+            "malessere, oppure una richiesta di contatto. "
+            "Osserva se è diverso dal suo solito, senza forzare gioco o contatto."
+        )
+        dog_voice = "«Qualcosa non mi torna: guardami con attenzione.»"
+    elif interaction_pair:
+        headline = f"{dog_name} sembra cercare un momento con te"
+        summary = (
+            f"{dog_name} si avvicina con il corpo sciolto e poi riparte. "
+            "Può essere un invito al gioco oppure un modo per coinvolgerti."
+        )
+        dog_voice = "«Ti va di fare qualcosa insieme?»"
+    else:
+        headline = f"Ci sono due letture possibili per {dog_name}"
+        summary = (
+            "Il video sostiene più di una spiegazione e non permette ancora "
+            "di sceglierne una con sicurezza."
+        )
+        dog_voice = "«Guardami ancora un momento.»"
+    return interpretation.model_copy(
+        update={
+            "primary_intent": IntentCode.AMBIGUOUS,
+            "confidence_band": ConfidenceBand.LOW,
+            "consumer_headline": headline,
+            "consumer_summary": summary,
+            "dog_voice": dog_voice,
+            "evidence": _evidence_from_candidates(
+                signals=signals,
+                candidates=ranked,
+            ),
+            "alternatives": alternatives,
+            "needs_context": not bool(interpretation.context_effect),
+        }
+    )
 
 
 def _is_observation_inventory(interpretation: InterpretationContract) -> bool:
@@ -504,24 +815,16 @@ def _sync_promoted_copy(
     if fallback is None:
         return interpretation
     headline, summary, voice = (part.format(name=dog_name) for part in fallback)
-    evidence = list(interpretation.evidence)
-    known_refs = {item.ref for item in evidence}
-    for key in candidate.supporting_signals:
-        signal = signals[key]
-        if signal.ref not in known_refs:
-            evidence.append(
-                EvidenceItem(
-                    source="observation",
-                    ref=signal.ref,
-                    description=signal.description,
-                )
-            )
-            known_refs.add(signal.ref)
-        if len(evidence) >= 3:
-            break
+    # Rebuild owner-facing evidence from the promoted reading's signals.
+    # Keeping the previous (rejected) evidence would leave technical placeholders.
+    evidence = _evidence_from_candidates(
+        signals=signals,
+        candidates=[candidate],
+    )
     return interpretation.model_copy(
         update={
             "primary_intent": intent,
+            "confidence_band": interpretation.confidence_band,
             "consumer_headline": headline,
             "consumer_summary": summary,
             "dog_voice": voice,
@@ -529,6 +832,11 @@ def _sync_promoted_copy(
             "alternatives": [
                 item for item in interpretation.alternatives if item.intent is not intent
             ][:2],
+            # A promoted everyday reading is already useful: do not stall on a
+            # follow-up question before showing the owner what to do.
+            "needs_context": False,
+            "context_question": None,
+            "context_options": [],
         }
     )
 
@@ -547,13 +855,13 @@ def apply_behavior_decision_policy(
     final = interpretation
     resolution = "ACCEPTED_REASONER"
     copy_source = "REASONER"
+    eligible = sorted(
+        (item for item in candidates if item.eligible),
+        key=lambda item: item.score,
+        reverse=True,
+    )
 
     if initial_intent in {None, IntentCode.INSUFFICIENT}:
-        eligible = sorted(
-            (item for item in candidates if item.eligible),
-            key=lambda item: item.score,
-            reverse=True,
-        )
         alternative_intents = {item.intent for item in interpretation.alternatives}
         unique = (
             eligible[0]
@@ -577,7 +885,96 @@ def apply_behavior_decision_policy(
             copy_source = "DECISION_FALLBACK"
         else:
             resolution = "ABSTAINED"
-    elif (
+    else:
+        selected = next(
+            (item for item in candidates if item.intent is initial_intent),
+            None,
+        )
+        if (
+            not interpretation.safety_flags
+            and selected is not None
+            and not selected.eligible
+        ):
+            alternative_intents = {
+                item.intent for item in interpretation.alternatives
+            }
+            bounded_eligible = [
+                item for item in eligible if item.intent in alternative_intents
+            ]
+            unique = _best_override_candidate(bounded_eligible)
+            if unique is not None and unique.intent in _PROMOTION_COPY:
+                final = _sync_promoted_copy(
+                    interpretation,
+                    intent=unique.intent,
+                    dog_name=dog_name,
+                    signals=signals,
+                    candidate=unique,
+                )
+                # Keep the next everyday option as a soft alternative, not as
+                # the main (ambiguous) answer the owner sees first.
+                if len(bounded_eligible) >= 2:
+                    runner_up = next(
+                        (
+                            item
+                            for item in bounded_eligible
+                            if item.intent is not unique.intent
+                        ),
+                        None,
+                    )
+                    if runner_up is not None:
+                        final = final.model_copy(
+                            update={
+                                "alternatives": [
+                                    AlternativeIntent(
+                                        intent=runner_up.intent,
+                                        rationale=(
+                                            "È un’altra lettura possibile, "
+                                            "ma meno sostenuta di quella principale."
+                                        ),
+                                    ),
+                                    *[
+                                        item
+                                        for item in final.alternatives
+                                        if item.intent is not runner_up.intent
+                                    ],
+                                ][:2]
+                            }
+                        )
+                resolution = "OVERRIDDEN_UNSUPPORTED"
+                copy_source = "DECISION_FALLBACK"
+            elif len(bounded_eligible) >= 2:
+                final = _sync_ambiguous_result(
+                    interpretation,
+                    dog_name=dog_name,
+                    signals=signals,
+                    candidates=bounded_eligible,
+                )
+                resolution = "OVERRIDDEN_UNSUPPORTED"
+                copy_source = "DECISION_FALLBACK"
+            else:
+                final = interpretation.model_copy(
+                    update={
+                        "primary_intent": IntentCode.INSUFFICIENT,
+                        "confidence_band": ConfidenceBand.LOW,
+                        "consumer_headline": (
+                            f"Non ho ancora abbastanza elementi su {dog_name}"
+                        ),
+                        "consumer_summary": (
+                            "Il momento è visibile, ma i segnali non sostengono "
+                            "una lettura abbastanza solida."
+                        ),
+                        "dog_voice": "«Serve un momento un po’ più chiaro.»",
+                        "alternatives": [],
+                        "needs_context": False,
+                        "context_question": None,
+                        "context_options": [],
+                    }
+                )
+                resolution = "OVERRIDDEN_UNSUPPORTED"
+                copy_source = "DECISION_FALLBACK"
+    if (
+        resolution == "ACCEPTED_REASONER"
+        and
         initial_intent in _PROMOTION_COPY
         and _is_observation_inventory(interpretation)
     ):
@@ -598,6 +995,12 @@ def apply_behavior_decision_policy(
                 candidate=selected,
             )
             copy_source = "DECISION_FALLBACK"
+
+    final = _ground_context_question(
+        final,
+        candidates=candidates,
+        exit_supported=observation_supports_exit(observation),
+    )
 
     ceiling = _confidence_ceiling(
         observation,

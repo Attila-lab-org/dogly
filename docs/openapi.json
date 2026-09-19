@@ -4347,6 +4347,81 @@
         }
       }
     },
+    "/v1/nutrition/foods/external/search": {
+      "post": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Search External Foods",
+        "operationId": "search_external_foods_v1_nutrition_foods_external_search_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalFoodSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalFoodSearchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/nutrition/foods/external/confirm": {
       "post": {
         "tags": [
@@ -6680,6 +6755,13 @@
               }
             ]
           },
+          "owner_advice": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Owner Advice"
+          },
           "what_to_watch": {
             "items": {
               "type": "string"
@@ -8022,6 +8104,39 @@
             ],
             "title": "Name"
           },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          },
+          "package_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Size"
+          },
+          "food_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Form"
+          },
           "ingredients_raw": {
             "anyOf": [
               {
@@ -8082,6 +8197,17 @@
           "lookup_id": {
             "type": "string",
             "title": "Lookup Id"
+          },
+          "draft_food_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Food Id"
           },
           "brand": {
             "anyOf": [
@@ -8163,6 +8289,53 @@
           "client_request_id"
         ],
         "title": "ExternalFoodLookupRequest"
+      },
+      "ExternalFoodSearchOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalFoodCandidateOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "attribution": {
+            "type": "string",
+            "title": "Attribution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attribution"
+        ],
+        "title": "ExternalFoodSearchOut"
+      },
+      "ExternalFoodSearchRequest": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2,
+            "title": "Query"
+          },
+          "client_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Client Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "query",
+          "client_request_id"
+        ],
+        "title": "ExternalFoodSearchRequest"
       },
       "FecalCompleteResponse": {
         "properties": {
@@ -8667,9 +8840,15 @@
       "FoodVerifyRequest": {
         "properties": {
           "brand": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Brand"
           },
           "name": {
@@ -8706,7 +8885,6 @@
         },
         "type": "object",
         "required": [
-          "brand",
           "name"
         ],
         "title": "FoodVerifyRequest",
@@ -9827,7 +10005,7 @@
           "max_questions": {
             "type": "integer",
             "title": "Max Questions",
-            "default": 3
+            "default": 1
           },
           "planner_version": {
             "type": "string",
@@ -10137,6 +10315,25 @@
             "type": "string",
             "title": "Dog Id"
           },
+          "dog_name": {
+            "type": "string",
+            "title": "Dog Name"
+          },
+          "owner_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Display Name"
+          },
+          "welcome_text": {
+            "type": "string",
+            "title": "Welcome Text"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -10173,6 +10370,8 @@
         "required": [
           "id",
           "dog_id",
+          "dog_name",
+          "welcome_text",
           "status",
           "modality",
           "model",
@@ -10188,6 +10387,18 @@
             "maxLength": 4000,
             "minLength": 1,
             "title": "Text"
+          },
+          "assistant_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 900
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assistant Text"
           }
         },
         "type": "object",

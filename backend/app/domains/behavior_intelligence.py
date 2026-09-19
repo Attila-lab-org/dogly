@@ -106,69 +106,69 @@ SAFETY_COPY: dict[str, tuple[str, str, str]] = {
 }
 
 _HEADLINES: dict[IntentCode, str] = {
-    IntentCode.PLAY_INTERACTION: "{name} ti sta probabilmente invitando a giocare",
+    IntentCode.PLAY_INTERACTION: "{name} ti sta invitando a giocare",
     IntentCode.ATTENTION_REQUEST: "{name} sta cercando la tua attenzione",
-    IntentCode.OUTSIDE_REQUEST: "{name} probabilmente ti sta chiedendo di uscire",
-    IntentCode.ALERT_VIGILANCE: "{name} è in allerta e sta segnalando qualcosa",
-    IntentCode.DISCOMFORT_AVOIDANCE: "{name} non è a suo agio e preferisce più spazio",
+    IntentCode.OUTSIDE_REQUEST: "{name} ti sta chiedendo di uscire",
+    IntentCode.ALERT_VIGILANCE: "{name} sta segnalando qualcosa che lo ha messo in allerta",
+    IntentCode.DISCOMFORT_AVOIDANCE: "{name} non sembra a suo agio",
     IntentCode.FEAR_INSECURITY: "{name} si sente insicuro e cerca protezione",
-    IntentCode.HIGH_AROUSAL: "{name} è molto agitato e ha bisogno di rallentare",
-    IntentCode.FRUSTRATION: "{name} sembra frustrato e fatica a calmarsi",
-    IntentCode.RELAX_REST: "{name} sembra tranquillo e rilassato",
-    IntentCode.RESOURCE_TENSION: "{name} sembra chiedere più spazio intorno a questa risorsa",
-    IntentCode.AMBIGUOUS: "Ci sono due spiegazioni possibili",
-    IntentCode.INSUFFICIENT: "Non ho abbastanza elementi per capirlo bene",
+    IntentCode.HIGH_AROUSAL: "{name} è troppo carico: aiutalo a rallentare",
+    IntentCode.FRUSTRATION: "{name} è frustrato perché non ottiene ciò che vuole",
+    IntentCode.RELAX_REST: "{name} è tranquillo e rilassato",
+    IntentCode.RESOURCE_TENSION: "{name} chiede spazio intorno a qualcosa di importante",
+    IntentCode.AMBIGUOUS: "Questo momento può voler dire due cose diverse",
+    IntentCode.INSUFFICIENT: "Da questo video non si capisce ancora abbastanza",
 }
 
 _SUMMARIES: dict[IntentCode, str] = {
     IntentCode.PLAY_INTERACTION: (
-        "{name} sta probabilmente cercando uno scambio piacevole con te. "
-        "È un invito all’interazione, non soltanto movimento o eccitazione."
+        "In questo momento {name} cerca uno scambio di gioco con te. "
+        "Se ti va, rispondi con un gioco breve e leggero."
     ),
     IntentCode.ATTENTION_REQUEST: (
-        "{name} sta probabilmente cercando di coinvolgerti o di farti notare "
-        "qualcosa. La sua attenzione è rivolta a ottenere una risposta da te."
+        "{name} vuole coinvolgerti o ottenere una tua risposta. "
+        "Un contatto breve e chiaro è la cosa più utile ora."
     ),
     IntentCode.OUTSIDE_REQUEST: (
-        "{name} sta probabilmente collegando questo momento all’uscita. "
-        "La lettura più plausibile è una richiesta concreta, non semplice agitazione."
+        "{name} collega questo momento all’uscita. "
+        "Se puoi, accompagnarlo verso la porta chiarisce subito la richiesta."
     ),
     IntentCode.ALERT_VIGILANCE: (
-        "{name} ha probabilmente percepito qualcosa che considera importante e "
-        "ti sta avvisando. È concentrato e teso: questa lettura è più compatibile "
-        "con allerta e controllo dello stimolo che con un abbaio casuale."
+        "{name} ha notato qualcosa e ti sta avvisando. "
+        "Guarda nella sua direzione senza forzare il contatto."
     ),
     IntentCode.DISCOMFORT_AVOIDANCE: (
-        "{name} sta comunicando che questa situazione non gli piace e preferirebbe "
-        "allontanarsi. Rispettare questa richiesta evita di aumentare la pressione."
+        "{name} mostra segnali di disagio: può essere stress, bisogno di spazio "
+        "o un possibile malessere fisico. Non è una diagnosi: osserva con calma "
+        "e non forzare gioco o contatto."
     ),
     IntentCode.FEAR_INSECURITY: (
-        "{name} sembra sentirsi insicuro in questa situazione. In questo momento "
-        "ha bisogno di poter prendere distanza e ritrovare calma."
+        "{name} non si sente sicuro. "
+        "Lascialo prendere distanza e ritrovare calma."
     ),
     IntentCode.HIGH_AROUSAL: (
-        "{name} è molto coinvolto e fa fatica a regolare l’intensità del momento. "
-        "Prima di chiedergli altro, è utile aiutarlo a rallentare."
+        "{name} è troppo attivato per gestire bene il momento. "
+        "Prima di chiedergli altro, aiutalo a scendere di intensità."
     ),
     IntentCode.FRUSTRATION: (
-        "{name} sembra sapere cosa vorrebbe ottenere, ma non riesce a raggiungerlo. "
-        "La tensione può quindi crescere se il momento continua nello stesso modo."
+        "{name} sa cosa vuole, ma non riesce a ottenerlo. "
+        "Cambia il modo in cui il momento sta andando, invece di insistire."
     ),
     IntentCode.RELAX_REST: (
-        "{name} appare a suo agio e non sta chiedendo un cambiamento. "
-        "Puoi lasciargli continuare questo momento tranquillo."
+        "{name} sta bene così e non chiede un cambiamento. "
+        "Puoi lasciarlo continuare questo momento tranquillo."
     ),
     IntentCode.RESOURCE_TENSION: (
-        "{name} sta probabilmente chiedendo che nessuno si avvicini a ciò che "
-        "considera importante. È una richiesta di distanza da rispettare."
+        "{name} chiede che nessuno si avvicini a ciò che considera importante. "
+        "Rispetta la distanza."
     ),
     IntentCode.AMBIGUOUS: (
-        "I segnali sostengono due letture diverse che porterebbero a risposte "
-        "differenti. Una sola informazione sul contesto può chiarire quale è più probabile."
+        "I segnali puntano a due letture diverse, con risposte diverse. "
+        "Una sola informazione sul contesto può chiarire quale è più utile."
     ),
     IntentCode.INSUFFICIENT: (
-        "Il video non contiene abbastanza segnali coerenti per scegliere una lettura "
-        "utile senza inventare."
+        "Nel video non ci sono abbastanza segnali chiari per una lettura utile. "
+        "Riprova con un momento più vicino e meglio inquadrato."
     ),
 }
 
@@ -177,7 +177,9 @@ _DOG_VOICES: dict[IntentCode, str] = {
     IntentCode.ATTENTION_REQUEST: "«Guardami un momento: ho bisogno di una tua risposta.»",
     IntentCode.OUTSIDE_REQUEST: "«Vorrei uscire: mi accompagni?»",
     IntentCode.ALERT_VIGILANCE: "«C’è qualcosa qui: voglio che tu lo sappia.»",
-    IntentCode.DISCOMFORT_AVOIDANCE: "«Questa situazione non mi piace: lasciami spazio.»",
+    IntentCode.DISCOMFORT_AVOIDANCE: (
+        "«Qualcosa non mi torna: lasciami spazio e osservami.»"
+    ),
     IntentCode.FEAR_INSECURITY: "«Non mi sento sicuro: aiutami a prendere distanza.»",
     IntentCode.HIGH_AROUSAL: "«È tutto molto intenso: aiutami a rallentare.»",
     IntentCode.FRUSTRATION: "«Non riesco a ottenere ciò che cerco e mi sto innervosendo.»",

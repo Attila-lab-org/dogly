@@ -57,7 +57,7 @@ async def test_get_returns_one_structured_question(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["event_id"] == event_id
-    assert body["max_questions"] == 3
+    assert body["max_questions"] == 1
     assert body["answered_count"] == 0
     assert body["question"] is not None
     assert 2 <= len(body["question"]["options"]) <= 4
@@ -256,7 +256,7 @@ async def test_no_answers_keeps_reasoner_context_empty(
     assert captured["processing_owner_context"] == []
 
 
-async def test_server_rejects_unoffered_and_fourth_question(
+async def test_server_rejects_unoffered_and_second_question(
     client: httpx.AsyncClient, auth_headers, state
 ):
     event_id = await _queue_event(client, auth_headers, "proc-offered-0001", state=state)
@@ -274,26 +274,24 @@ async def test_server_rejects_unoffered_and_fourth_question(
     )
     assert hijack.status_code == 422
 
-    for index in range(3):
-        shown = (
-            await client.get(
-                f"/v1/behavior/events/{event_id}/processing-context",
-                headers=auth_headers,
-            )
-        ).json()["question"]
-        assert shown is not None
-        answered = await client.post(
+    shown = (
+        await client.get(
             f"/v1/behavior/events/{event_id}/processing-context",
-            json={
-                "question_id": shown["id"],
-                "answer_id": shown["options"][0]["id"],
-            },
             headers=auth_headers,
         )
-        assert answered.status_code == 200, answered.text
-        assert answered.json()["accepting_answers"] is True
-        if index == 2:
-            assert answered.json()["question"] is None
+    ).json()["question"]
+    assert shown is not None
+    answered = await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={
+            "question_id": shown["id"],
+            "answer_id": shown["options"][0]["id"],
+        },
+        headers=auth_headers,
+    )
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["accepting_answers"] is True
+    assert answered.json()["question"] is None
 
     overflow = await client.post(
         f"/v1/behavior/events/{event_id}/processing-context",

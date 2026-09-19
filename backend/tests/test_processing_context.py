@@ -15,6 +15,7 @@ from app.domains.processing_context import (
 from app.domains.processing_context_store import answer_from_row
 from app.knowledge.models import DogContextSnapshot, LifeStageContext, LifestyleFact
 from app.providers.base import EligiblePatternSummary
+from app.providers.mock import load_fixture
 
 
 def _plan(**overrides):
@@ -52,47 +53,95 @@ def _snapshot(**updates) -> DogContextSnapshot:
     return DogContextSnapshot.model_validate(payload)
 
 
-def test_planner_never_asks_more_than_three():
+def _observation(
+    *,
+    environment: str = "unknown",
+    objects: list[str] | None = None,
+    dog_count: int = 1,
+) -> dict:
+    raw = load_fixture("observation.fixture.json")
+    raw["capture_quality"].update(
+        {
+            "overall_quality": "good",
+            "audio_quality": "good",
+            "dog_visible_fraction": 0.8,
+        }
+    )
+    raw["scene"].update(
+        {
+            "environment_class": environment,
+            "visible_objects": objects or [],
+            "spatial_relations": [],
+            "dog_count": dog_count,
+        }
+    )
+    raw["body"]["posture"] = "unknown"
+    raw["body"]["orientation_target"] = "unknown"
+    raw["head_face"]["head_orientation"] = "unknown"
+    raw["head_face"]["gaze_target"] = "unknown"
+    return raw
+
+
+def test_planner_asks_at_most_one_question():
     ids = _collect(6, context_bucket=ContextBucket.UNKNOWN)
     assert len(ids) == MAX_PROCESSING_QUESTIONS
-    assert len(set(ids)) == 3
+    assert len(set(ids)) == 1
 
 
 def test_planner_does_not_repeat_answered_or_skipped():
     first = _plan()
     assert first is not None
     second = _plan(occupied_question_ids=[first.id])
-    assert second is not None
-    assert second.id != first.id
-    third = _plan(occupied_question_ids=[first.id, second.id])
-    assert third is not None
-    assert third.id not in {first.id, second.id}
-    assert _plan(occupied_question_ids=[first.id, second.id, third.id]) is None
+    assert second is None
 
 
 def test_other_dog_prioritizes_familiarity_and_freedom():
-    ids = _collect(3, context_bucket=ContextBucket.OTHER_DOG)
+    ids = _collect(
+        3,
+        context_bucket=ContextBucket.OTHER_DOG,
+        observation=_observation(dog_count=2),
+    )
     assert "other_dog_present" not in ids
-    assert "target_known" in ids
-    assert "freedom_to_move" in ids
+    assert ids[0] in {"target_known", "freedom_to_move"}
 
 
 def test_handling_can_ask_discomfort():
-    ids = _collect(3, context_bucket=ContextBucket.HANDLING)
-    assert "discomfort_today" in ids
+    ids = _collect(
+        3,
+        context_bucket=ContextBucket.HANDLING,
+        observation=_observation(),
+    )
+    assert ids[0] in {"owner_interaction", "discomfort_today", "usual_situation"}
 
 
 def test_missing_audio_makes_vocalization_eligible():
-    with_audio = _collect(3, context_bucket=ContextBucket.HOME, has_audio=True)
-    without = _collect(3, context_bucket=ContextBucket.HOME, has_audio=False)
+    observation = _observation(environment="indoor")
+    with_audio = _collect(
+        3, context_bucket=ContextBucket.HOME, has_audio=True, observation=observation
+    )
+    without = _collect(
+        3, context_bucket=ContextBucket.HOME, has_audio=False, observation=observation
+    )
     assert "owner_heard_vocalization" not in with_audio
     assert "owner_heard_vocalization" in without
 
 
 def test_appetite_is_not_asked_universally():
-    home = _collect(3, context_bucket=ContextBucket.HOME)
-    walk = _collect(3, context_bucket=ContextBucket.WALK)
-    feeding = _collect(3, context_bucket=ContextBucket.FEEDING)
+    home = _collect(
+        3,
+        context_bucket=ContextBucket.HOME,
+        observation=_observation(environment="indoor"),
+    )
+    walk = _collect(
+        3,
+        context_bucket=ContextBucket.WALK,
+        observation=_observation(environment="outdoor"),
+    )
+    feeding = _collect(
+        3,
+        context_bucket=ContextBucket.FEEDING,
+        observation=_observation(objects=["bowl"]),
+    )
     assert "appetite_today" not in home
     assert "appetite_today" not in walk
     assert "appetite_today" in feeding
@@ -120,6 +169,7 @@ def test_established_memory_suppresses_behavior_seen_before():
         3,
         context_bucket=ContextBucket.PLAY,
         eligible_memory=memory,
+        observation=_observation(objects=["toy"]),
     )
     assert "behavior_seen_before" not in asked
 
@@ -139,6 +189,7 @@ def test_recent_changes_suppress_duplicate_question():
         3,
         context_bucket=ContextBucket.VEHICLE,
         dog_context=context,
+        observation=_observation(objects=["car"]),
     )
     assert "recent_change" not in asked
 
@@ -173,22 +224,36 @@ def test_skip_does_not_create_owner_fact():
 def test_unknown_prefers_general_high_value_questions():
     ids = _collect(3, context_bucket=ContextBucket.UNKNOWN)
     assert ids[0] in {"before_moment", "usual_situation"}
-    assert "usual_situation" in ids
-    assert "before_moment" in ids
     assert "freedom_to_move" not in ids
     assert "target_known" not in ids
     assert "other_dog_present" not in ids
 
 
-def test_questions_use_dog_name_not_technical_codes():
-    planned = _plan(context_bucket=ContextBucket.DOOR_EXIT)
+def test_question_copy_never_exposes_technical_codes():
+    planned = _plan(
+        context_bucket=ContextBucket.DOOR_EXIT,
+        observation=_observation(objects=["door"]),
+    )
     assert planned is not None
-    assert "Rocky" in planned.text or planned.id == "usual_situation"
     assert "confidence" not in planned.text.lower()
     assert "observation" not in planned.text.lower()
     for option in planned.options:
         assert 2 <= len(planned.options) <= 4
         assert "_" not in option.label
+
+
+def test_garden_scene_never_asks_about_a_door_from_capture_hint():
+    planned = _plan(
+        context_bucket=ContextBucket.DOOR_EXIT,
+        observation=_observation(
+            environment="outdoor garden",
+            objects=["grass", "gravel", "stone_wall", "plant"],
+        ),
+    )
+    assert planned is not None
+    assert planned.id != "outside_trigger"
+    assert "porta" not in planned.text.casefold()
+    assert "finestra" not in planned.text.casefold()
 
 
 def test_answer_from_row_accepts_postgres_uuids():
