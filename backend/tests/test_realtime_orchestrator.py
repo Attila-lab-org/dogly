@@ -10,6 +10,7 @@ from app.contracts.realtime import RealtimeDecision
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
+    companion_science_brief,
     render_voice_brief,
     route_realtime_domains,
 )
@@ -92,11 +93,21 @@ def test_voice_brief_is_personal_and_ready_to_speak() -> None:
     )
     assert "Oreo" in brief
     assert "Attilio" in brief
+    assert "amico del proprietario" in brief
     assert "voce calma" in brief
     assert "Non ripetere quel saluto" in brief
     assert "Oreo sta digerendo bene" in brief
+    assert "Scodinzolare" in brief
     assert "modello" not in brief.lower()
     assert "database" not in brief.lower()
+
+
+def test_companion_science_lets_realtime_talk_about_dogs_in_general() -> None:
+    lines = companion_science_brief()
+    joined = "\n".join(lines)
+    assert any("Scodinzolare" in line for line in lines)
+    assert "abbaio" in joined.lower()
+    assert "veterinario" in joined.lower()
 
 
 def test_deterministic_safety_interrupt_precedes_ai() -> None:

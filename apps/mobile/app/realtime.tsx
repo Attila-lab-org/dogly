@@ -88,7 +88,7 @@ export default function RealtimeScreen() {
             <Text style={styles.title}>{status}</Text>
             <Text style={styles.subtitle}>
               {realtime.voiceState === 'idle'
-                ? `Sono qui per te e ${dog.name}. Cosa vuoi capire oggi?`
+                ? `Parliamo di cani, e di ${dog.name}. Cosa vuoi capire oggi?`
                 : realtime.voiceState === 'speaking'
                   ? `Ti rispondo di ${dog.name}.`
                   : realtime.voiceState === 'listening'

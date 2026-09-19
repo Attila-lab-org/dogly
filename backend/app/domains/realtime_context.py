@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.contracts.realtime import RealtimeDomain
 from app.domains.repository import InMemoryStore
+from app.knowledge.registry import get_registry
 
 REALTIME_CONTEXT_VERSION = "personal-dog-context/v1"
 
@@ -368,6 +369,50 @@ _MISSING_LABEL = {
 }
 
 
+_COMPANION_CARD_IDS = (
+    "OBS_TAIL_003",
+    "OBS_BODY_002",
+    "OBS_BODY_004",
+    "AUD_BARK_001",
+    "AUD_GROWL_001",
+    "AUD_WHINE_001",
+    "DIGESTIVE_001",
+    "DIGESTIVE_002",
+    "NUTRITION_001",
+    "PRIOR_BREED_001",
+    "PERSONAL_001",
+)
+
+_COMPANION_LINES = {
+    "OBS_TAIL_003": "Scodinzolare non vuol dire automaticamente che è felice: conta corpo, contesto e quel cane.",
+    "OBS_BODY_002": "Un corpo rigido è un segnale da ascoltare, non una prova di aggressività.",
+    "OBS_BODY_004": "L'inchino di gioco è un invito, ma vale solo se il resto del momento è gioco.",
+    "AUD_BARK_001": "L'abbaio non è una parola. Può essere allerta, richiesta, gioco o disagio.",
+    "AUD_GROWL_001": "Il ringhio non è sempre aggressione: può comparire anche nel gioco o per chiedere spazio.",
+    "AUD_WHINE_001": "Il piagnucolio può essere richiesta, disagio o eccitazione: non è una frase.",
+    "DIGESTIVE_001": "Una foto della cacca dice come sta andando oggi, non qual è la malattia.",
+    "DIGESTIVE_002": "Vomito ripetuto, sangue, feci nere, cane abbattuto o pancia gonfia: si sente il veterinario, non si aspetta.",
+    "NUTRITION_001": "Cibo e quantità si ragionano sul cane vero: età, peso, attività e come digerisce. Non si inventa una dieta.",
+    "PRIOR_BREED_001": "La razza è un accenno debole. Il cane davanti a te conta più dello stereotipo.",
+    "PERSONAL_001": "Un'abitudine del cane nasce solo se lo stesso modo si ripete, non da un episodio solo.",
+}
+
+
+def companion_science_brief() -> list[str]:
+    """Owner-facing science the voice may use to talk about dogs in general."""
+    cards = {card.id: card for card in get_registry().base_knowledge_cards}
+    lines: list[str] = []
+    for card_id in _COMPANION_CARD_IDS:
+        text = _COMPANION_LINES.get(card_id)
+        if text:
+            lines.append(f"- {text}")
+            continue
+        card = cards.get(card_id)
+        if card:
+            lines.append(f"- {card.not_conclude}")
+    return lines
+
+
 def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
     """Compact spoken context. The voice model talks from this, not from tools."""
     owner = (context.owner_display_name or "").strip().split(" ", 1)[0]
@@ -402,28 +447,35 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
     missing = [
         _MISSING_LABEL.get(key, key) for key in context.missing if key in _MISSING_LABEL
     ]
+    science = "\n".join(companion_science_brief())
     return "\n".join(
         [
-            f"Sei DOGly, la voce che conosce {context.dog_name}.",
+            "Sei DOGly: l'amico del proprietario con cui si parla di cani.",
+            f"Parli di cani in generale, e in particolare di {context.dog_name}, perché è il cane di questo profilo.",
+            "Se il profilo fosse un altro cane, parleresti di quello. Non sei un esperto generico senza padrone.",
             "Parli SOLO in italiano, con una voce calma, calda e naturale.",
             "Sei una persona competente, non un assistente vocale e non un annunciatore.",
             "Una sola voce. Non ripetere il saluto. Non parlare sopra te stesso. Non ricominciare la frase.",
             "Frasi corte, ritmo umano, piccola pausa tra una frase e l'altra. Non accelerare e non recitare.",
             "Non pensare ad alta voce. Non dire un attimo, sto pensando, vedo, elaboro, ok, certo.",
+            "Quando parlano di cani in generale, usa CANINE_SCIENCE. Puoi spiegare, confrontare, raccontare con competenza.",
+            f"Quando parlano di {context.dog_name}, usa prima il suo profilo e le sue letture. Non inventare la sua vita.",
+            "Puoi unire le due cose: prima ciò che è vero sui cani, poi cosa vale per questo cane se hai dati.",
             "2-4 frasi utili. Al massimo una domanda, solo se cambia cosa fare.",
-            "Usa soltanto i fatti sotto. Non inventare eventi, diagnosi, emozioni o ricordi.",
-            "Distingui ciò che DOGly ha visto, ciò che ha detto il proprietario e ciò che è un'abitudine consolidata.",
+            "Distingui ciò che DOGly ha visto, ciò che ha detto il proprietario, un'abitudine consolidata e una cosa generale sui cani.",
             "Salute: niente diagnosi. Spiega cosa osservare e quando è prudente sentire il veterinario.",
             "Se per capire un comportamento di adesso serve vederlo, chiedi un video breve.",
             "Se non respira, collassa, ha convulsioni, può aver ingerito veleno o perde molto sangue, di' subito di chiamare un pronto soccorso veterinario.",
             f"Il client ha già salutato così: {welcome}. Non ripetere quel saluto.",
-            f"Proprietario: {owner or 'non indicato'}. Cane: {context.dog_name}.",
+            f"Proprietario: {owner or 'non indicato'}. Cane di questo profilo: {context.dog_name}.",
             f"Profilo: {', '.join(profile) if profile else 'ancora essenziale'}.",
             "Fatti confermati dal proprietario:",
             "\n".join(known) if known else "- nessuno ancora",
             "Ultime letture DOGly:",
             "\n".join(events) if events else "- nessuna analisi ancora",
             f"Non hai ancora: {', '.join(missing)}." if missing else "Il profilo essenziale è presente.",
+            "CANINE_SCIENCE:",
+            science,
         ]
     )
 
