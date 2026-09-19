@@ -1,9 +1,13 @@
 """Deterministic Digestive Intelligence V2.
 
-The vision model only describes the image. This module combines that
-observation with the dog's prior baseline and verified context, then chooses
-the consumer state and a single useful next action without allowing generated
-text to lower a safety escalation.
+The vision model only describes the image. This module is the writer the
+owner reads: the expert friend of THIS dog. It combines the observation with
+the dog's baseline and verified context, then speaks as a clinician who
+already saw the stool.
+
+Owner-facing copy never talks about the photo, the app, missing fields, or
+"I cannot tell until you fill this in". It says what this means for the dog
+today and what to do. Safety text must not downgrade an escalation.
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v20"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v21"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -180,6 +184,19 @@ def _has_quantity(context: DigestiveContext) -> bool:
 
 def _food_known(context: DigestiveContext) -> bool:
     return context.has_active_food or bool(context.active_food_name)
+
+
+def _owner_watch_signal(context: DigestiveContext, consistency: str) -> bool:
+    """True when the owner should keep watching this dog, not the photo."""
+    return _is_loose(consistency) or any(
+        flag is True
+        for flag in (
+            context.appetite_reduced,
+            context.vomiting_today,
+            context.reduced_activity_today,
+            context.straining_or_urgency,
+        )
+    )
 
 
 def _owner_context_used(context: DigestiveContext) -> bool:
@@ -403,8 +420,8 @@ def _expert_food_line(
         )
     if not _food_known(context):
         return (
-            "Senza sapere cosa mangia non posso dirti se c’entra l’alimento: "
-            "è la prima cosa che chiederebbe un veterinario"
+            f"Per capire se c’entra il cibo, mi serve sapere cosa mangia "
+            f"{context.dog_name}"
         )
     return None
 
@@ -509,28 +526,25 @@ def _expert_owner_summary(
     name = context.dog_name
 
     if consistency == "formed":
-        food_bit = (
-            f"non è l’alimento ({context.active_food_name})"
-            if _food_known(context) and context.active_food_name
-            else "non è l’alimento"
-        )
-        rulings = [part for part in (food_bit, season) if part]
-        ruling = " e ".join(rulings)
         if other:
+            return f"{other}. Tieni la routine di oggi."
+        if _food_known(context) and context.active_food_name:
+            food_name = context.active_food_name
+            if season:
+                return (
+                    f"{name} sta digerendo bene {food_name}. "
+                    f"Non è l’alimento e {season}: tieni questa razione."
+                )
             return (
-                f"Oggi le feci di {name} non chiedono di toccare alimento o quantità. "
-                f"{other}."
+                f"{name} sta digerendo bene {food_name}. Tieni questa razione."
             )
-        if not _food_known(context):
+        if context.season_label:
             return (
-                "Oggi non serve cambiare alimento o quantità. "
-                "Se aggiungi cosa mangia e quanti grammi, le prossime volte "
-                "saprò se aumentare o ridurre."
+                f"{name} sta digerendo bene. Tieni la routine; in "
+                f"{context.season_label} ritocca i grammi solo se si muove "
+                "più o meno del solito."
             )
-        ruling_lead = ruling[:1].upper() + ruling[1:] if ruling else ruling
-        return (
-            f"Oggi non serve cambiare alimento o quantità: {ruling_lead}."
-        )
+        return f"{name} sta digerendo bene. Tieni la routine di oggi."
 
     symptom = None
     if other and any(
@@ -945,7 +959,9 @@ def _safety_state(
     ):
         return DigestiveState.ATTENTION
     if verification_unavailable(observation):
-        return DigestiveState.MONITOR
+        if _owner_watch_signal(context, consistency):
+            return DigestiveState.MONITOR
+        return DigestiveState.ROUTINE
     return DigestiveState.ROUTINE
 
 
@@ -1048,10 +1064,10 @@ def _choose_useful_action(
                 key="add_nutrition",
                 label="Aggiungi",
                 href=NUTRITION_HREF,
-                title="Alimentazione non impostata",
+                title=f"Cosa mangia {context.dog_name}?",
                 body=(
-                    f"Se aggiungi cosa mangia {context.dog_name}, "
-                    "le prossime letture saranno più precise."
+                    "Se me lo dici, la prossima volta ti dico se la razione "
+                    "è giusta."
                 ),
             ),
             None,
@@ -1063,10 +1079,10 @@ def _choose_useful_action(
                 key="complete_nutrition",
                 label="Completa",
                 href=_complete_nutrition_href(context),
-                title="Quantità non impostata",
+                title="Quanti grammi al giorno?",
                 body=(
-                    f"Se completi la quantità, le prossime letture di "
-                    f"{context.dog_name} saranno più precise."
+                    f"Così per {context.dog_name} ti dico se aumentare o "
+                    "ridurre."
                 ),
             ),
             None,
@@ -1090,10 +1106,7 @@ def _final_advice(
             f"Contatta il veterinario e descrivi ciò che hai visto oggi per {name}."
         )
     if verification_unavailable(observation) and consistency == "formed":
-        return (
-            "Continua normalmente. Non serve modificare alimento o quantità "
-            "sulla base di questa foto."
-        )
+        return "Continua normalmente."
     if verification_unavailable(observation):
         return unavailable_caution_detail(observation)
     if followup_question:
@@ -1124,10 +1137,7 @@ def _final_advice(
             f"o se {name} appare in difficoltà."
         )
     if safety is DigestiveState.ROUTINE and consistency == "formed":
-        return (
-            "Continua normalmente. Non serve modificare alimento o quantità "
-            "sulla base di questa foto."
-        )
+        return "Continua normalmente."
     level = _repetition_level(context, consistency)
     if level in {"hours", "trend"} and _is_loose(consistency):
         if context.unusual_food_48h is True:
@@ -1137,7 +1147,7 @@ def _final_advice(
             )
         if not _food_known(context):
             return (
-                "Per oggi non cambiare quantità o alimento sulla base della sola foto. "
+                "Per oggi non cambiare quantità o alimento. "
                 "Mantieni stabile la routine ed evita nuovi extra."
             )
         return (
@@ -1249,7 +1259,14 @@ def _owner_advice(
             f"Contatta il veterinario e descrivi ciò che hai visto oggi per {name}."
         ]
     if consistency == "formed":
-        items = ["Tieni lo stesso alimento e la stessa quantità."]
+        items: list[str] = []
+        if _food_known(context) and context.active_food_name:
+            items.append(
+                f"Con {context.active_food_name} la digestione tiene: "
+                "non cambiare marca oggi."
+            )
+        else:
+            items.append("Tieni la routine di oggi.")
         if context.appetite_reduced is True:
             items.append(
                 f"Guarda se {name} torna a mangiare nei prossimi pasti."
@@ -1265,13 +1282,15 @@ def _owner_advice(
                 "Un veterinario serve solo se le feci vere sono molto scure "
                 "o catramose."
             )
-        else:
-            items.append("Per queste feci un controllo veterinario non serve.")
+        elif not _food_known(context):
+            items.append(
+                "Dimmi cosa mangia e quanti grammi: così ti dico se la "
+                "razione è giusta."
+            )
         if (
             context.season_label
             and len(items) < 3
-            and "fresh_blood_candidate"
-            not in set(unavailable_anomaly_fields(observation))
+            and "fresh_blood_candidate" not in fields
         ):
             items.append(
                 f"In {context.season_label} conta quanto si muove {name}: "
@@ -1768,7 +1787,9 @@ def build_digestive_intelligence(
 
     if safety is DigestiveState.VET_CONTACT:
         state = safety
-    elif verification_unavailable(observation):
+    elif verification_unavailable(observation) and _owner_watch_signal(
+        context, consistency
+    ):
         state = DigestiveState.MONITOR
     elif safety is DigestiveState.ATTENTION:
         state = safety

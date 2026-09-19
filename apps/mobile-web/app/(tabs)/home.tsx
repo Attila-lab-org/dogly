@@ -34,7 +34,13 @@ import { nextCareEvent, useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { insightToneLabel } from '@/features/home/api';
-import { nextHomeTip, pickHomeTip, type HomeTip } from '@/features/home/tips';
+import {
+  HOME_BANNER_KIND_LABEL,
+  nextHomeTip,
+  pickHomeTip,
+  type HomeBannerAction,
+  type HomeTip,
+} from '@/features/home/tips';
 import { AnalyzeMomentSheet } from '@/features/home/AnalyzeMomentSheet';
 import type { InsightTone, LastInsight } from '@/features/core/types';
 
@@ -103,6 +109,30 @@ export default function HomeScreen() {
     setAnalyzeOpen(false);
     if (!dog.id) return;
     router.push('/realtime' as never);
+  };
+
+  const runBannerAction = (action: HomeBannerAction) => {
+    if (action === 'analyze') {
+      openAnalyze();
+      return;
+    }
+    if (action === 'realtime') {
+      startAudio();
+      return;
+    }
+    if (action === 'stories') {
+      router.push('/(tabs)/camera');
+      return;
+    }
+    if (action === 'diary') {
+      router.push('/(tabs)/diary');
+      return;
+    }
+    if (action === 'digestive') {
+      router.push('/digestive/capture');
+      return;
+    }
+    router.push('/(tabs)/rocky');
   };
 
   return (
@@ -346,23 +376,69 @@ export default function HomeScreen() {
             )}
           </ScrollView>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Consiglio per ${dog.name}: ${tip.title}. Tocca per un altro.`}
-            onPress={() => setTip(nextHomeTip(dog, tip.id))}
-            style={({ pressed }) => [
+          <View
+            style={[
               styles.adviceBanner,
-              pressed && styles.pressed,
+              tip.kind === 'use' && styles.adviceBannerUse,
+              tip.kind === 'news' && styles.adviceBannerNews,
             ]}
           >
-            <View style={styles.adviceIcon}>
-              <Ionicons name="bulb-outline" size={22} color={colors.warning} />
-            </View>
-            <View style={styles.adviceCopy}>
-              <Text style={styles.adviceTitle}>{tip.title}</Text>
-              <Text style={styles.adviceBody}>{tip.body}</Text>
-            </View>
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                tip.action
+                  ? `${HOME_BANNER_KIND_LABEL[tip.kind]}: ${tip.title}. ${tip.ctaLabel ?? 'Apri'}`
+                  : `${HOME_BANNER_KIND_LABEL[tip.kind]}: ${tip.title}. Tocca per un altro.`
+              }
+              onPress={() => {
+                if (tip.action) runBannerAction(tip.action);
+                else setTip(nextHomeTip(dog, tip.id));
+              }}
+              style={({ pressed }) => [
+                styles.adviceMain,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.adviceIcon}>
+                <Ionicons
+                  name={
+                    tip.kind === 'use'
+                      ? 'sparkles-outline'
+                      : tip.kind === 'news'
+                        ? 'newspaper-outline'
+                        : 'bulb-outline'
+                  }
+                  size={22}
+                  color={
+                    tip.kind === 'use'
+                      ? colors.primary
+                      : tip.kind === 'news'
+                        ? colors.accent
+                        : colors.warning
+                  }
+                />
+              </View>
+              <View style={styles.adviceCopy}>
+                <Text style={styles.adviceKind}>
+                  {HOME_BANNER_KIND_LABEL[tip.kind]}
+                </Text>
+                <Text style={styles.adviceTitle}>{tip.title}</Text>
+                <Text style={styles.adviceBody}>{tip.body}</Text>
+                {tip.ctaLabel ? (
+                  <Text style={styles.adviceCta}>{tip.ctaLabel}</Text>
+                ) : null}
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Mostra un altro suggerimento"
+              onPress={() => setTip(nextHomeTip(dog, tip.id))}
+              hitSlop={10}
+              style={styles.adviceShuffle}
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
 
           {nextCare ? (
             <Pressable
@@ -753,11 +829,23 @@ const styles = StyleSheet.create({
   adviceBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: spacing.sm,
     backgroundColor: '#FFF6E5',
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
+  },
+  adviceMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  adviceBannerUse: {
+    backgroundColor: '#E7F6FF',
+  },
+  adviceBannerNews: {
+    backgroundColor: '#F3EEFF',
   },
   adviceIcon: {
     width: 40,
@@ -770,6 +858,14 @@ const styles = StyleSheet.create({
   adviceCopy: {
     flex: 1,
   },
+  adviceKind: {
+    fontSize: 11,
+    fontWeight: typography.weight.bold,
+    color: colors.textSecondary,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
   adviceTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
@@ -781,6 +877,18 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  adviceCta: {
+    marginTop: spacing.sm,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    color: colors.primary,
+  },
+  adviceShuffle: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressed: {
     opacity: 0.88,

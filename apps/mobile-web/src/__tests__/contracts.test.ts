@@ -350,14 +350,14 @@ describe('digestive mapping — valori reali del backend, non mock', () => {
       useful_action: {
         key: 'add_nutrition',
         label: 'Aggiungi',
-        title: 'Alimentazione non impostata',
+        title: 'Cosa mangia Rocky?',
         href: '/nutrition/foods',
       },
       created_at: '2026-09-18T01:00:00Z',
     };
     const result = mapApiDigestiveEventToResult(event);
     expect(digestiveActionCardKind(result.usefulAction?.key)).toBe('nutrition');
-    expect(result.usefulAction?.title).toBe('Alimentazione non impostata');
+    expect(result.usefulAction?.title).toBe('Cosa mangia Rocky?');
     expect(result.usefulAction?.label).toBe('Aggiungi');
     expect(result.usefulAction?.body ?? null).toBeNull();
   });

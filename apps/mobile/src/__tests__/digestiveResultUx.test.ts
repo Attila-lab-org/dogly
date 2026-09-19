@@ -47,7 +47,7 @@ describe('digestive result UX', () => {
 
   it('keeps nutrition as a quiet completion after the analysis', () => {
     expect(resultScreen).toContain('nutritionQuiet');
-    expect(resultScreen).toContain('Alimentazione non impostata');
+    expect(resultScreen).toContain('Cosa mangia?');
     expect(resultScreen).not.toContain('nutritionChip');
     expect(resultScreen).not.toMatch(
       /digestiveActionCardKind\(action\?\.key\) === 'nutrition' \? \(\s*<Card/,

@@ -8,13 +8,16 @@ const rocky = {
   ageLabel: '4 anni',
   breedLabel: 'Labrador',
   sex: 'MALE' as const,
+  photoUri: 'https://example.com/rocky.jpg',
 };
 
 describe('pickHomeTip', () => {
-  it('inserisce il nome del cane e gira a un consiglio diverso', () => {
+  it('inserisce il nome del cane e può aprire un flusso reale', () => {
     const first = pickHomeTip(rocky, () => 0);
-    expect(first.body).toContain('Rocky');
-    expect(first.title.length).toBeGreaterThan(0);
+    expect(`${first.title} ${first.body}`).toContain('Rocky');
+    expect(first.kind).toBe('use');
+    expect(first.action).toBe('analyze');
+    expect(first.ctaLabel).toBe('Analizza');
     const next = nextHomeTip(rocky, first.id, () => 0);
     expect(next.id).not.toBe(first.id);
     expect(`${next.title} ${next.body}`).toContain('Rocky');
@@ -26,8 +29,10 @@ describe('pickHomeTip', () => {
       birthDate: '2025-08-01',
       ageLabel: 'Meno di 1 anno',
       breedLabel: null,
+      photoUri: null,
     };
     const tip = pickHomeTip(puppy, () => 0.92);
+    expect(tip.kind).toBe('advice');
     expect(tip.body).toContain('Rocky');
   });
 });

@@ -361,14 +361,14 @@ export default function DigestiveResultScreen() {
       {nutritionKind ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${action?.title ?? 'Alimentazione non impostata'} ${action?.label ?? 'Aggiungi'}`}
+          accessibilityLabel={`${action?.title ?? 'Cosa mangia?'} ${action?.label ?? 'Aggiungi'}`}
           onPress={() =>
             router.push(digestiveNutritionHref(action?.href) as Href)
           }
           style={styles.nutritionQuiet}
         >
           <Text style={styles.nutritionQuietText}>
-            {action?.title ?? 'Alimentazione non impostata'}
+            {action?.title ?? 'Cosa mangia?'}
             {' · '}
             <Text style={styles.nutritionQuietAction}>
               {action?.label ?? 'Aggiungi'}
