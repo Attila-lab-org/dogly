@@ -432,7 +432,9 @@ async def test_weight_events_and_opff_memory_path(
         owner_id=user_id,
         dog_id=dog_id,
         image_path="users/test/food.jpg",
+        client_request_id="photo-draft-1",
         guaranteed_analysis={"crude_protein_min": 24.0},
+        created_at=datetime.now(UTC),
     )
     draft_lookup_id, _ = await lookup_external_food(
         state.store,
