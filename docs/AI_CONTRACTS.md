@@ -112,3 +112,18 @@ implementato in `domains/billing.py` + `worker/handlers.py`).
 
 Fixture-based contract tests in CI (niente chiamate pagate, spec 0.2/26); real-provider
 eval separata, budgeted, dog-disjoint (spec 26/34 → `docs/EVALS.md`).
+
+
+## 8. Canine Intelligence claims (internal)
+
+Contratti interni in pp/contracts/canine_intelligence.py e
+pp/knowledge/claim_validation.py:
+
+- ReasoningClaim distingue base (GENERAL_MODEL, SCIENTIFIC_EVIDENCE,
+  CURRENT_OBSERVATION, OWNER_REPORTED, PERSONAL_KNOWLEDGE).
+- ClaimValidation classifica ogni claim senza inventare fatti.
+- Una buona ipotesi non coperta dalla KB resta HYPOTHESIS e hedged.
+- Causalita e diagnosi senza supporto vengono downgradate o bloccate.
+- Gli interrupt di safety deterministici restano prioritari.
+
+Il contratto pubblico RealtimeDecision non espone claims/validations.

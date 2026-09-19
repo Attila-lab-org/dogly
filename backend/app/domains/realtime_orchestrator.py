@@ -16,6 +16,12 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision, RealtimeDomain
 from app.domains.realtime_context import RealtimeDogContext, companion_science_brief
+from app.knowledge.claim_validation import (
+    extract_claims_from_provider_payload,
+    govern_assistant_text,
+    infer_claims_from_answer,
+    validate_claims,
+)
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v1"
 
@@ -243,6 +249,64 @@ def _fallback_decision(
     )
 
 
+
+def _context_ids(context: RealtimeDogContext) -> set[str]:
+    ids = {item.source_id for item in context.items}
+    for fact in context.stable_facts:
+        source_id = fact.get("source_id")
+        if source_id:
+            ids.add(str(source_id))
+    return ids
+
+
+def _apply_claim_governance(
+    decision: RealtimeDecision,
+    *,
+    context: RealtimeDogContext,
+    provider_raw: dict | None = None,
+    safety_blocked: bool = False,
+) -> tuple[RealtimeDecision, dict]:
+    claims = extract_claims_from_provider_payload(provider_raw)
+    if not claims:
+        claims = infer_claims_from_answer(
+            decision.assistant_text,
+            used_source_ids=list(decision.used_source_ids),
+        )
+    audit_decision = validate_claims(
+        claims,
+        context_ids=_context_ids(context),
+        safety_blocked=safety_blocked,
+    )
+    governed_text, downgraded = govern_assistant_text(
+        decision.assistant_text, audit_decision
+    )
+    updates: dict = {}
+    if governed_text != decision.assistant_text:
+        updates["assistant_text"] = governed_text
+    text_for_rule = updates.get("assistant_text", decision.assistant_text)
+    if (
+        "NUTRITION" in decision.domains
+        and "DIGESTIVE" in decision.domains
+        and "associazione temporale" not in text_for_rule.lower()
+    ):
+        updates["assistant_text"] = (
+            text_for_rule.rstrip()
+            + " Attenzione: e' un'associazione temporale, non una causalita'."
+        )
+        notes = list(audit_decision.notes) + [
+            "Explicit temporal-association rule applied for nutrition+digestive turn."
+        ]
+        audit_decision = audit_decision.model_copy(
+            update={"notes": notes, "downgraded": True}
+        )
+        downgraded = True
+    if updates:
+        decision = decision.model_copy(update=updates)
+    if downgraded and not audit_decision.downgraded:
+        audit_decision = audit_decision.model_copy(update={"downgraded": True})
+    return decision, audit_decision.model_dump(mode="json")
+
+
 async def orchestrate_realtime_turn(
     *,
     settings: Settings,
@@ -275,9 +339,12 @@ async def orchestrate_realtime_turn(
         or not settings.realtime_enabled
         or not settings.openai_api_key
     ):
-        return _fallback_decision(text=user_text, context=context, domains=domains), {
+        fallback = _fallback_decision(text=user_text, context=context, domains=domains)
+        fallback, canine_audit = _apply_claim_governance(fallback, context=context)
+        return fallback, {
             "provider": "deterministic",
             "version": REALTIME_ORCHESTRATOR_VERSION,
+            "canine_intelligence": canine_audit,
         }
 
     payload = {
@@ -316,10 +383,13 @@ async def orchestrate_realtime_turn(
             response.raise_for_status()
             raw = response.json()
     except httpx.HTTPError:
-        return _fallback_decision(text=user_text, context=context, domains=domains), {
+        fallback = _fallback_decision(text=user_text, context=context, domains=domains)
+        fallback, canine_audit = _apply_claim_governance(fallback, context=context)
+        return fallback, {
             "provider": "deterministic_fallback",
             "failed_provider": "openai",
             "version": REALTIME_ORCHESTRATOR_VERSION,
+            "canine_intelligence": canine_audit,
         }
     try:
         content = raw["choices"][0]["message"]["content"]
@@ -327,21 +397,37 @@ async def orchestrate_realtime_turn(
         content = ""
     decision = _provider_decision(content, domains=domains)
     if decision is None:
-        return _fallback_decision(text=user_text, context=context, domains=domains), {
+        fallback = _fallback_decision(text=user_text, context=context, domains=domains)
+        fallback, canine_audit = _apply_claim_governance(fallback, context=context)
+        return fallback, {
             "provider": "deterministic_fallback",
             "failed_provider": "openai_schema",
             "version": REALTIME_ORCHESTRATOR_VERSION,
+            "canine_intelligence": canine_audit,
         }
 
     allowed_ids = {item.source_id for item in context.items}
     decision.used_source_ids = [
         source_id for source_id in decision.used_source_ids if source_id in allowed_ids
     ]
+    safety_blocked = False
     if safety_flags := deterministic_safety_interrupt(decision.assistant_text):
         decision = safety_flags
+        safety_blocked = True
+    try:
+        provider_raw = json.loads(content) if content else None
+    except (TypeError, json.JSONDecodeError):
+        provider_raw = None
+    decision, canine_audit = _apply_claim_governance(
+        decision,
+        context=context,
+        provider_raw=provider_raw if isinstance(provider_raw, dict) else None,
+        safety_blocked=safety_blocked,
+    )
     return decision, {
         "provider": "openai",
         "model": settings.realtime_reasoning_model,
         "version": REALTIME_ORCHESTRATOR_VERSION,
         "usage": raw.get("usage", {}),
+        "canine_intelligence": canine_audit,
     }

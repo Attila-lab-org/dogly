@@ -81,9 +81,9 @@ from app.domains.digestive_verification import (
     apply_anomaly_verification,
     needed_anomaly_verifications,
 )
-from app.domains.dog_context import build_dog_context
 from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import BehaviorEventRec
+from app.domains.personal_dog_context import assemble_behavior_dog_context
 from app.domains.repository import now_utc
 from app.domains.retention import (
     arm_behavior_capture_expiry,
@@ -94,7 +94,6 @@ from app.domains.retention import (
     schedule_digestive_raw_expiry,
 )
 from app.knowledge.advice import build_advice
-from app.knowledge.models import LifestyleFact
 from app.knowledge.retrieval import retrieve_evidence
 from app.knowledge.safety import (
     deterministic_safety_flags as behavior_safety_flags,
@@ -330,44 +329,14 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
         ]
     dump = lifestyle.model_dump()
     owner_display_name = await _owner_display_name(state, event.user_id)
-    context = build_dog_context(
-        dog, dump, owner_display_name=owner_display_name
+    context, _personal = assemble_behavior_dog_context(
+        dog,
+        dump,
+        stories,
+        owner_display_name=owner_display_name,
     )
-    routine = dict(context.routine)
-    extras: dict[str, list] = {
-        "preferences": list(context.preferences),
-        "health_context": list(context.health_context),
-        "recent_changes": list(context.recent_changes),
-        "owner_reported": list(context.owner_reported),
-    }
-    for story in stories:
-        facts = story.get("facts") or []
-        if isinstance(facts, str):
-            facts = json.loads(facts)
-        confirmed_at = story.get("confirmed_at")
-        for fact in facts:
-            if not isinstance(fact, dict):
-                continue
-            statement = str(fact.get("statement") or "").strip()
-            if not statement:
-                continue
-            category = str(fact.get("category") or "GENERAL")
-            item = LifestyleFact(
-                key=f"owner_{category.lower()}",
-                value=statement,
-                provenance="OWNER_CONFIRMED",
-                last_confirmed_at=confirmed_at,
-            )
-            if category == "PREFERENCE":
-                extras["preferences"].append(item)
-            elif category in {"HEALTH", "DIET"}:
-                extras["health_context"].append(item)
-            elif category == "ROUTINE":
-                fact_id = str(fact.get("id") or len(routine))
-                routine[f"owner_{fact_id}"] = item
-            else:
-                extras["owner_reported"].append(item)
-    return dog, context.model_copy(update={**extras, "routine": routine}), dump
+    return dog, context, dump
+
 
 
 async def notify_analysis_failure(

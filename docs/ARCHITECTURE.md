@@ -247,3 +247,23 @@ Registro completo in `docs/DECISIONS.md` (non duplicato qui):
 ---
 
 Stato: creato 2026-09-06, colmando il requisito Appendix B della Spec V1.
+
+
+## 8. Canine Intelligence condivisa (incremento)
+
+DOGly non espone AIs separate al proprietario. Behavior, Digestive, Nutrition e
+Realtime restano pipeline specialistiche, ma condividono un read model tipizzato:
+
+- PersonalDogContext — conoscenza personale del cane con provenienza
+  (OBSERVED / OWNER_REPORTED / OWNER_CONFIRMED / IMPORTED / INFERRED /
+  ESTABLISHED_PATTERN).
+- evidenza corrente cross-domain (eventi, feeding period, pattern eleggibili).
+- reasoning generale del modello (ipotesi anche fuori dalle tassonomie chiuse).
+- claim_validation — validazione scientifica e governance (SUPPORTED /
+  HYPOTHESIS / CONTRADICTED / BLOCKED_BY_SAFETY).
+- safety deterministica invariata.
+
+Realtime adatta PersonalDogContext in RealtimeDogContext per voce/UI. I claim
+restano audit interni (canine_intelligence nel provider audit), non contratti
+mobile. Realtime non scrive pattern; un episodio non diventa abitudine;
+correlazione cibo-digestione e associazione temporale, non causalita.

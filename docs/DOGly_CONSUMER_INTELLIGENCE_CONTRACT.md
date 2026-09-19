@@ -75,3 +75,20 @@ Due cani con foto o video simili possono ricevere risultati diversi soltanto se
 profilo, situazione, sintomi o storia personale giustificano la differenza.
 Due risultati diversi devono poter essere spiegati con fatti visibili o dati
 confermati. Se DOGly non può spiegare la differenza, non deve inventarla.
+
+
+## Canine Intelligence condivisa
+
+Il proprietario parla con DOGly, non con modelli di dominio separati. Dietro le
+quinte:
+
+1. **Reasoning generale** — il modello puo formulare ipotesi utili.
+2. **Validazione scientifica** — i claim passano dai registry Behavior /
+   Digestive / Intelligence V3 e dalle regole di governance.
+3. **Conoscenza personale** — profilo, storie confermate, pattern eleggibili.
+4. **Evidenza corrente** — ultime letture Behavior/Digestive e feeding.
+5. **Safety** — gli interrupt deterministici non sono negoziabili.
+
+Le etichette consumer restano osservato / 
+accontato / imparato. Una
+coincidenza temporale cibo-feci non viene presentata come causa.

@@ -11,6 +11,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.contracts.realtime import RealtimeDomain
+from app.domains.dog_context import build_dog_context
+from app.domains.models import DogRec
+from app.domains.personal_dog_context import (
+    build_personal_dog_context,
+    load_cross_domain_evidence_db,
+    load_cross_domain_evidence_memory,
+    personal_to_realtime_items,
+    personal_to_stable_facts,
+)
 from app.domains.repository import InMemoryStore
 from app.knowledge.registry import get_registry
 
@@ -101,6 +110,37 @@ def route_realtime_domains(user_text: str) -> list[RealtimeDomain]:
     return domains[:3] or ["GENERAL"]
 
 
+
+def realtime_context_from_personal(
+    personal,
+    *,
+    previous_topic: str | None = None,
+    previous_turns: list[dict[str, str]] | None = None,
+) -> RealtimeDogContext:
+    """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
+    items = [
+        RealtimeContextItem(
+            source_id=str(raw["source_id"]),
+            source_type=str(raw["source_type"]),
+            occurred_at=raw.get("occurred_at"),
+            summary=str(raw["summary"]),
+            data=dict(raw.get("data") or {}),
+        )
+        for raw in personal_to_realtime_items(personal)
+    ]
+    return RealtimeDogContext(
+        dog_id=personal.dog_id,
+        dog_name=personal.dog_name,
+        owner_display_name=personal.owner_display_name,
+        identity=dict(personal.identity),
+        stable_facts=personal_to_stable_facts(personal),
+        items=items[:12],
+        missing=list(personal.missing),
+        previous_topic=previous_topic,
+        previous_turns=list(previous_turns or []),
+    )
+
+
 async def load_realtime_context_db(
     engine: AsyncEngine,
     *,
@@ -159,268 +199,49 @@ async def load_realtime_context_db(
             )
         ).mappings().all()
 
-        items: list[RealtimeContextItem] = []
-        if "BEHAVIOR" in domains or "GENERAL" in domains:
-            rows = (
-                await conn.execute(
-                    text(
-                        """
-                        select id, created_at, primary_intent, confidence_band,
-                               interpretation_json, summary
-                        from public.behavior_events
-                        where dog_id=cast(:dog_id as uuid)
-                          and user_id=cast(:user_id as uuid)
-                          and status='COMPLETED'
-                        order by created_at desc
-                        limit 4
-                        """
-                    ),
-                    {"dog_id": dog_id, "user_id": user_id},
-                )
-            ).mappings().all()
-            for row in rows:
-                interpretation = dict(row["interpretation_json"] or {})
-                consumer = dict(interpretation.get("consumer") or {})
-                items.append(
-                    RealtimeContextItem(
-                        source_id=str(row["id"]),
-                        source_type="BEHAVIOR_EVENT",
-                        occurred_at=row["created_at"],
-                        summary=str(
-                            interpretation.get("consumer_summary")
-                            or consumer.get("consumer_summary")
-                            or row["summary"]
-                            or "Analisi comportamentale completata"
-                        ),
-                        data={
-                            "headline": interpretation.get("consumer_headline")
-                            or consumer.get("consumer_headline"),
-                            "intent": row["primary_intent"],
-                            "confidence": row["confidence_band"],
-                            "evidence": interpretation.get("evidence", [])[:4],
-                        },
-                    )
-                )
-            patterns = (
-                await conn.execute(
-                    text(
-                        """
-                        select id, title, state, reliability_band, intent_code,
-                               context_bucket, support_count, confirm_count
-                        from public.personal_patterns
-                        where dog_id=cast(:dog_id as uuid)
-                          and state in ('PRELIMINARY','ESTABLISHED','STRONG')
-                        order by last_seen desc
-                        limit 2
-                        """
-                    ),
-                    {"dog_id": dog_id},
-                )
-            ).mappings().all()
-            for row in patterns:
-                items.append(
-                    RealtimeContextItem(
-                        source_id=str(row["id"]),
-                        source_type="PERSONAL_PATTERN",
-                        summary=str(row["title"]),
-                        data=dict(row),
-                    )
-                )
-
-        if "DIGESTIVE" in domains or "NUTRITION" in domains or "GENERAL" in domains:
-            rows = (
-                await conn.execute(
-                    text(
-                        """
-                        select id, created_at, consistency, fecal_score_estimate,
-                               intelligence_json, owner_context_json
-                        from public.fecal_events
-                        where dog_id=cast(:dog_id as uuid)
-                          and user_id=cast(:user_id as uuid)
-                          and status='COMPLETED'
-                        order by created_at desc
-                        limit 4
-                        """
-                    ),
-                    {"dog_id": dog_id, "user_id": user_id},
-                )
-            ).mappings().all()
-            for row in rows:
-                intelligence = dict(row["intelligence_json"] or {})
-                items.append(
-                    RealtimeContextItem(
-                        source_id=str(row["id"]),
-                        source_type="DIGESTIVE_EVENT",
-                        occurred_at=row["created_at"],
-                        summary=str(
-                            intelligence.get("consumer_summary")
-                            or "Analisi digestiva completata"
-                        ),
-                        data={
-                            "headline": intelligence.get("consumer_headline"),
-                            "state": intelligence.get("overall_state"),
-                            "consistency": row["consistency"],
-                            "next_step": intelligence.get("recommended_next_step"),
-                            "owner_context": row["owner_context_json"] or {},
-                        },
-                    )
-                )
-
-        if "NUTRITION" in domains or "DIGESTIVE" in domains or "GENERAL" in domains:
-            feedings = (
-                await conn.execute(
-                    text(
-                        """
-                        select fp.id, fp.quantity_per_day, fp.start_at, fp.end_at,
-                               fp.treats_notes, food.id food_id, food.name,
-                               food.brand, food.verified_at, food.feeding_directions
-                        from public.feeding_periods fp
-                        join public.food_products food on food.id=fp.food_product_id
-                        where fp.dog_id=cast(:dog_id as uuid)
-                        order by fp.end_at is null desc, fp.start_at desc
-                        limit 3
-                        """
-                    ),
-                    {"dog_id": dog_id},
-                )
-            ).mappings().all()
-            linked_food_ids = set()
-            for feeding in feedings:
-                linked_food_ids.add(str(feeding["food_id"]))
-                active = feeding["end_at"] is None
-                name = feeding["name"] or feeding["brand"] or "cibo"
-                items.append(
-                    RealtimeContextItem(
-                        source_id=str(feeding["id"]),
-                        source_type="FEEDING_PERIOD",
-                        occurred_at=feeding["start_at"],
-                        summary=(
-                            f"{'Alimentazione attiva' if active else 'Cibo precedente'}: {name}"
-                        ),
-                        data=dict(feeding),
-                    )
-                )
-            foods = (
-                await conn.execute(
-                    text(
-                        """
-                        select id, name, brand, verified_at, ingredients_raw,
-                               feeding_directions, created_at
-                        from public.food_products
-                        where dog_id=cast(:dog_id as uuid)
-                           or (dog_id is null and owner_id=cast(:user_id as uuid))
-                        order by verified_at desc nulls last, created_at desc
-                        limit 4
-                        """
-                    ),
-                    {"dog_id": dog_id, "user_id": user_id},
-                )
-            ).mappings().all()
-            for food in foods:
-                if str(food["id"]) in linked_food_ids:
-                    continue
-                name = food["name"] or food["brand"] or "cibo scansionato"
-                verified = food["verified_at"] is not None
-                items.append(
-                    RealtimeContextItem(
-                        source_id=str(food["id"]),
-                        source_type="FOOD_PRODUCT",
-                        occurred_at=food["created_at"],
-                        summary=(
-                            f"{'Cibo' if verified else 'Cibo da confermare'}: {name}"
-                        ),
-                        data={
-                            "name": food["name"],
-                            "brand": food["brand"],
-                            "verified": verified,
-                            "directions": food["feeding_directions"],
-                        },
-                    )
-                )
-
-        if "CARE" in domains or "GENERAL" in domains:
-            care = (
-                await conn.execute(
-                    text(
-                        """
-                        select id, event_type, title, scheduled_at, status, notes
-                        from public.care_events
-                        where dog_id=cast(:dog_id as uuid)
-                          and user_id=cast(:user_id as uuid)
-                          and scheduled_at >= now() - interval '30 days'
-                        order by scheduled_at desc
-                        limit 4
-                        """
-                    ),
-                    {"dog_id": dog_id, "user_id": user_id},
-                )
-            ).mappings().all()
-            for row in care:
-                items.append(
-                    RealtimeContextItem(
-                        source_id=str(row["id"]),
-                        source_type="CARE_EVENT",
-                        occurred_at=row["scheduled_at"],
-                        summary=str(row["title"]),
-                        data=dict(row),
-                    )
-                )
-
-    stable_facts: list[dict[str, Any]] = []
-    if lifestyle:
-        for bucket in ("routine_json", "preferences_json"):
-            for key, value in dict(lifestyle[bucket] or {}).items():
-                if value is not None:
-                    stable_facts.append(
-                        {
-                            "key": key,
-                            "value": value,
-                            "origin": "OWNER_REPORTED",
-                            "verification_status": (
-                                "CONFIRMED" if lifestyle["last_confirmed_at"] else "UNCONFIRMED"
-                            ),
-                        }
-                    )
-    for story in stories:
-        for fact in list(story["facts_json"] or [])[:4]:
-            stable_facts.append(
-                {
-                    **dict(fact),
-                    "origin": "OWNER_REPORTED",
-                    "verification_status": "CONFIRMED",
-                    "source_id": str(story["id"]),
-                }
-            )
-
-    identity = {
-        key: value
-        for key, value in dict(dog).items()
-        if key not in {"id", "name", "display_name"} and value is not None
-    }
-    missing: list[str] = []
-    if not any(
-        item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"} for item in items
-    ):
-        missing.append("active_feeding")
-    if dog.get("weight_kg") is None:
-        missing.append("weight")
-    if not stable_facts:
-        missing.append("confirmed_routine")
-    return RealtimeDogContext(
-        dog_id=str(dog["id"]),
-        dog_name=str(dog["name"]),
-        owner_display_name=(
-            str(dog["display_name"]) if dog.get("display_name") else None
-        ),
-        identity=identity,
-        stable_facts=stable_facts[:10],
-        items=sorted(
-            items,
-            key=lambda item: item.occurred_at or datetime.min.replace(tzinfo=UTC),
-            reverse=True,
-        )[:12],
-        missing=missing,
+    evidence = await load_cross_domain_evidence_db(
+        engine, user_id=user_id, dog_id=dog_id, domains=domains
     )
+    dog_rec = DogRec(
+        id=str(dog["id"]),
+        owner_id=user_id,
+        name=str(dog["name"]),
+        birth_date=dog.get("birth_date"),
+        age_stage=dog.get("age_stage"),
+        size=dog.get("size"),
+        breed_label=dog.get("breed_label"),
+        is_mix=bool(dog.get("is_mix") or False),
+        sex=dog.get("sex"),
+        weight_kg=dog.get("weight_kg"),
+        created_at=datetime.now(UTC),
+    )
+    lifestyle_dump = {
+        "routine": dict((lifestyle or {}).get("routine_json") or {}),
+        "preferences": dict((lifestyle or {}).get("preferences_json") or {}),
+        "provenance": dict((lifestyle or {}).get("provenance_json") or {}),
+        "last_confirmed_at": (lifestyle or {}).get("last_confirmed_at"),
+    }
+    story_rows = [
+        {
+            "id": str(row["id"]),
+            "facts": list(row["facts_json"] or []),
+            "confirmed_at": row["confirmed_at"],
+        }
+        for row in stories
+    ]
+    owner_name = str(dog["display_name"]) if dog.get("display_name") else None
+    dog_context = build_dog_context(
+        dog_rec, lifestyle_dump, owner_display_name=owner_name
+    )
+    personal = build_personal_dog_context(
+        dog=dog_rec,
+        dog_context=dog_context,
+        lifestyle_dump=lifestyle_dump,
+        stories=story_rows,
+        evidence=evidence,
+        owner_display_name=owner_name,
+    )
+    return realtime_context_from_personal(personal)
 
 
 _AGE_LABEL = {
@@ -508,7 +329,7 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             f"{fact.get('key')}: {fact.get('value')}" if fact.get("key") else None
         )
         if statement:
-            known.append(f"- {statement}")
+            known.append(f"- [{fact.get('owner_label') or 'raccontato'}] {statement}")
     events: list[str] = []
     for item in context.items:
         if item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"}:
@@ -521,7 +342,9 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             else ""
         )
         prefix = f"{label} {when}".strip()
-        events.append(f"- {prefix}: {headline or item.summary}")
+        prov = (item.data or {}).get("owner_label")
+        suffix = f" [{prov}]" if prov else ""
+        events.append(f"- {prefix}{suffix}: {headline or item.summary}")
     missing = [
         _MISSING_LABEL.get(key, key) for key in context.missing if key in _MISSING_LABEL
     ]
@@ -541,7 +364,7 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             "Puoi unire le due cose: prima ciò che è vero sui cani, poi cosa vale per questo cane se hai dati.",
             "3-6 frasi complete e utili. Poi fai spesso UNA domanda naturale da amico: cosa ha notato, come sta il cane, cosa vuole capire.",
             "Una domanda sola per turno, non un interrogatorio. Tieni viva la conversazione.",
-            "Distingui ciò che DOGly ha visto, ciò che ha detto il proprietario, un'abitudine consolidata e una cosa generale sui cani.",
+            "Distingui esplicitamente osservato / raccontato / imparato / generale sui cani.",
             "Salute: niente diagnosi. Spiega cosa osservare e quando è prudente sentire il veterinario.",
             "Se per capire un comportamento di adesso serve vederlo, chiedi un video breve.",
             "Se non respira, collassa, ha convulsioni, può aver ingerito veleno o perde molto sangue, di' subito di chiamare un pronto soccorso veterinario.",
@@ -583,48 +406,53 @@ def load_realtime_context_memory(
     domains: list[RealtimeDomain],
 ) -> RealtimeDogContext:
     dog = store.dogs[dog_id]
-    items: list[RealtimeContextItem] = []
-    missing = ["confirmed_routine"]
-    for food in store.food_products.values():
-        if food.dog_id != dog_id and food.owner_id != dog.owner_id:
-            continue
-        items.append(
-            RealtimeContextItem(
-                source_id=food.id,
-                source_type="FOOD_PRODUCT",
-                occurred_at=food.created_at,
-                summary=f"Cibo: {food.name or food.brand or 'scansionato'}",
-                data={"name": food.name, "brand": food.brand},
-            )
-        )
-    for period in store.feeding_periods.values():
-        if period.dog_id != dog_id:
-            continue
-        food = store.food_products.get(period.food_product_id)
-        items.append(
-            RealtimeContextItem(
-                source_id=period.id,
-                source_type="FEEDING_PERIOD",
-                occurred_at=period.start_at,
-                summary=f"Alimentazione attiva: {getattr(food, 'name', None) or 'cibo'}",
-                data={"quantity_per_day": period.quantity_per_day},
-            )
-        )
-    if not items:
-        missing.append("active_feeding")
+    evidence = load_cross_domain_evidence_memory(
+        store, dog_id=dog_id, domains=domains
+    )
+    lifestyle = store.dog_lifestyle_profiles.get((dog.owner_id, dog_id)) or {}
+    if hasattr(lifestyle, "model_dump"):
+        lifestyle_dump = lifestyle.model_dump()
+    elif isinstance(lifestyle, dict):
+        lifestyle_dump = {
+            "routine": dict(
+                lifestyle.get("routine") or lifestyle.get("routine_json") or {}
+            ),
+            "preferences": dict(
+                lifestyle.get("preferences")
+                or lifestyle.get("preferences_json")
+                or {}
+            ),
+            "provenance": dict(
+                lifestyle.get("provenance")
+                or lifestyle.get("provenance_json")
+                or {}
+            ),
+            "last_confirmed_at": lifestyle.get("last_confirmed_at"),
+        }
+    else:
+        lifestyle_dump = {}
+    stories = [
+        row
+        for row in store.owner_reported_observations.values()
+        if row.get("dog_id") == dog_id
+        and row.get("user_id") == dog.owner_id
+        and row.get("status") == "CONFIRMED"
+    ]
+    owner_name = getattr(store.profiles.get(dog.owner_id), "display_name", None)
+    dog_context = build_dog_context(
+        dog, lifestyle_dump, owner_display_name=owner_name
+    )
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=dog_context,
+        lifestyle_dump=lifestyle_dump,
+        stories=stories,
+        evidence=evidence,
+        owner_display_name=owner_name,
+    )
     memory = store.realtime_conversation_memories.get((dog.owner_id, dog_id), {})
-    return RealtimeDogContext(
-        dog_id=dog.id,
-        dog_name=dog.name,
-        owner_display_name=getattr(store.profiles.get(dog.owner_id), "display_name", None),
-        identity={
-            "sex": dog.sex,
-            "age_stage": dog.age_stage,
-            "size": dog.size,
-            "breed_label": dog.breed_label,
-        },
-        items=items,
-        missing=missing,
+    return realtime_context_from_personal(
+        personal,
         previous_topic=memory.get("topic"),
         previous_turns=list(memory.get("turns_json") or []),
     )

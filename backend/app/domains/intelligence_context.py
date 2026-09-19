@@ -135,3 +135,30 @@ def build_dog_intelligence_context(
         digestive=digestive,
         nutrition=nutrition,
     )
+
+
+def canine_intelligence_layers(
+    *,
+    settings: Settings | None = None,
+) -> dict[str, Any]:
+    """Facade for shared Canine Intelligence layers and feature flags.
+
+    Keeps scientific population claims distinct from personal dog knowledge,
+    current evidence, and governed reasoning claims.
+    """
+    return {
+        "version": "canine-intelligence/v1",
+        "layers": [
+            "general_model_reasoning",
+            "scientific_validation",
+            "personal_dog_knowledge",
+            "current_evidence",
+            "safety_governance",
+        ],
+        "flags": intelligence_flags(settings),
+        "contracts": {
+            "personal": "PersonalDogContext",
+            "claims": "ReasoningClaim/ClaimValidation",
+            "realtime_adapter": "RealtimeDogContext",
+        },
+    }

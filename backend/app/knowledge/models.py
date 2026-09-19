@@ -6,8 +6,9 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.contracts.provenance import PersonalFactProvenance, normalize_provenance
 from app.contracts.taxonomy import IntentCode
 
 
@@ -120,8 +121,13 @@ class LifeStageContext(BaseModel):
 class LifestyleFact(BaseModel):
     key: str
     value: Any
-    provenance: str
+    provenance: PersonalFactProvenance
     last_confirmed_at: datetime | None = None
+
+    @field_validator("provenance", mode="before")
+    @classmethod
+    def _normalize_provenance(cls, value: Any) -> PersonalFactProvenance:
+        return normalize_provenance(None if value is None else str(value))
 
 
 class DogContextSnapshot(BaseModel):

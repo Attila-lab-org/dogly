@@ -260,3 +260,19 @@ def test_food_change_stays_temporal_association_not_cause():
         f"{result.consumer_summary} {' '.join(result.possible_associations)}"
     ).lower()
     assert "causa" not in blob
+
+
+def test_behavior_and_digestive_remain_specialized_under_shared_canine_intelligence():
+    """Shared Canine Intelligence must not collapse specialist consumer contracts."""
+    from app.contracts.realtime import RealtimeDecision
+    from app.domains.intelligence_context import canine_intelligence_layers
+
+    layers = canine_intelligence_layers()
+    assert "personal_dog_knowledge" in layers["layers"]
+    assert "scientific_validation" in layers["layers"]
+    assert layers["contracts"]["realtime_adapter"] == "RealtimeDogContext"
+
+    fields = set(RealtimeDecision.model_fields)
+    assert "assistant_text" in fields
+    assert "claims" not in fields
+    assert "validations" not in fields
