@@ -215,11 +215,12 @@ export default function DigestiveResultScreen() {
     action?.key === 'ask_followup' &&
     event.followupQuestion &&
     event.followupKey;
+  const nutritionKind = actionKind === 'nutrition';
   const showAdvice =
     Boolean(advice) &&
     actionKind !== 'vet' &&
-    action?.key !== 'ask_followup';
-  const nutritionKind = actionKind === 'nutrition';
+    action?.key !== 'ask_followup' &&
+    !nutritionKind;
   const adviceTips = (event.ownerAdvice ?? [])
     .map((item) => sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name)))
     .filter(Boolean)
@@ -255,7 +256,32 @@ export default function DigestiveResultScreen() {
         </View>
         <Text style={styles.resultTitle}>{headline}</Text>
         <Text style={styles.resultSummary}>{summary}</Text>
-        {showAdvice ? (
+        {nutritionKind ? (
+          <View style={styles.nextBlock}>
+            <Text style={styles.nextKicker}>Cosa fare ora</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${action?.title ?? 'Cosa mangia?'} ${action?.label ?? 'Aggiungi'}`}
+              onPress={() =>
+                router.push(digestiveNutritionHref(action?.href) as Href)
+              }
+              style={styles.nutritionQuiet}
+            >
+              <Text style={styles.nutritionQuietText}>
+                {action?.title ?? 'Cosa mangia?'}
+                {' · '}
+                <Text style={styles.nutritionQuietAction}>
+                  {action?.label ?? 'Aggiungi'}
+                </Text>
+              </Text>
+              {action?.body ? (
+                <Text style={styles.nutritionQuietBody}>
+                  {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
+                </Text>
+              ) : null}
+            </Pressable>
+          </View>
+        ) : showAdvice ? (
           <View style={styles.nextBlock}>
             <Text style={styles.nextKicker}>Cosa fare ora</Text>
             <Text style={styles.resultAdvice}>{advice}</Text>
@@ -352,30 +378,6 @@ export default function DigestiveResultScreen() {
             </Text>
           ) : null}
         </Card>
-      ) : null}
-
-      {nutritionKind ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${action?.title ?? 'Cosa mangia?'} ${action?.label ?? 'Aggiungi'}`}
-          onPress={() =>
-            router.push(digestiveNutritionHref(action?.href) as Href)
-          }
-          style={styles.nutritionQuiet}
-        >
-          <Text style={styles.nutritionQuietText}>
-            {action?.title ?? 'Cosa mangia?'}
-            {' · '}
-            <Text style={styles.nutritionQuietAction}>
-              {action?.label ?? 'Aggiungi'}
-            </Text>
-          </Text>
-          {action?.body ? (
-            <Text style={styles.nutritionQuietBody}>
-              {sanitizeOwnerCopy(action.body.replace(/Rocky/g, dog.name))}
-            </Text>
-          ) : null}
-        </Pressable>
       ) : null}
 
       <Pressable

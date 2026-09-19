@@ -95,10 +95,11 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert "andamento abituale" not in result.consumer_summary.lower()
     assert "primo riferimento" not in result.consumer_headline.lower()
     assert "digerendo bene" in result.consumer_summary.lower()
-    assert "routine" in result.consumer_summary.lower()
     assert "aggiungi" not in result.consumer_summary.lower()
-    assert "questa foto" not in result.recommended_next_step.lower()
-    assert "continua normalmente" in result.recommended_next_step.lower()
+    assert "routine" not in result.consumer_summary.lower()
+    assert "grammi" not in result.consumer_summary.lower()
+    assert result.recommended_next_step == ""
+    assert result.useful_action.title == "Cosa mangia Rocky?"
 
 
 def test_general_layer_keeps_technical_scoring_out_of_owner_copy():
@@ -235,7 +236,8 @@ def test_missing_active_food_never_becomes_a_food_change_today():
     )
 
     assert result.possible_associations == []
-    assert "continua normalmente" in result.recommended_next_step.lower()
+    assert result.recommended_next_step == ""
+    assert result.useful_action.key == "add_nutrition"
 
 
 def test_repeated_food_association_requires_both_periods_and_stays_cautious():
@@ -610,13 +612,13 @@ def test_unverified_possible_blood_does_not_replace_formed_result():
     assert "confermare" not in result.consumer_headline.lower()
     assert "confermare" not in result.consumer_summary.lower()
     assert "mangiato meno" in result.consumer_summary.lower()
-    assert "routine" in result.consumer_summary.lower()
+    assert "routine" not in result.consumer_summary.lower()
     assert "questa foto" not in result.recommended_next_step.lower()
     assert "traccia rossa" not in result.consumer_summary.lower()
     assert "sangue" not in result.consumer_summary.lower()
     assert result.useful_action.key != "contact_vet"
-    assert any("traccia rossa" in item.lower() for item in result.owner_advice)
-    assert any("routine" in item.lower() or "mangiare" in item.lower() for item in result.owner_advice)
+    assert not any("traccia rossa" in item.lower() for item in result.owner_advice)
+    assert any("mangiare" in item.lower() for item in result.owner_advice)
     personal = " ".join(
         layer.summary for layer in result.interpretation_layers if layer.key == "longitudinal"
     )
@@ -640,11 +642,11 @@ def test_formed_stool_rules_out_food_and_season():
         ),
     )
     text = result.consumer_summary.lower()
-    assert "non è l’alimento" in text or "non è l'alimento" in text
-    assert "non è la stagione" in text
     assert "royal canin" in text
     assert "digerendo bene" in text
-    assert any("digestione tiene" in item.lower() for item in result.owner_advice)
+    assert "tieni questa razione" in result.recommended_next_step.lower()
+    assert "autunno" in result.recommended_next_step.lower()
+    assert any("si muove" in item.lower() for item in result.owner_advice)
     assert not any("autunno" in item.lower() for item in result.possible_associations)
 
 
@@ -710,7 +712,7 @@ def test_formed_with_reduced_appetite_points_to_eating_not_stool():
     text = result.consumer_summary.lower()
     assert "mangiato meno" in text
     assert "non le feci" in text
-    assert "routine" in text
+    assert "routine" not in text
     assert "appetito è il segnale" in result.recommended_next_step.lower()
     assert any("torna a mangiare" in item.lower() for item in result.owner_advice)
 
@@ -955,13 +957,15 @@ def test_formed_regular_speaks_as_expert_not_as_the_app():
     blob = _blob(result)
     assert result.overall_state is DigestiveState.ROUTINE
     assert result.consumer_headline == "Tutto regolare per Oreo"
-    assert "oreo sta digerendo bene" in result.consumer_summary.lower()
+    assert result.consumer_summary == "Oreo sta digerendo bene."
     assert "aggiungi" not in result.consumer_summary.lower()
     assert "letture" not in blob
     assert "foto" not in blob
-    assert result.recommended_next_step == "Continua normalmente."
+    assert "continua normalmente" not in blob
+    assert result.recommended_next_step == ""
     assert result.useful_action.title == "Cosa mangia Oreo?"
     assert "razione è giusta" in (result.useful_action.body or "").lower()
+    assert not any("traccia rossa" in item.lower() for item in result.owner_advice)
 
 
 def test_formed_unverified_without_symptoms_stays_regular():
@@ -981,8 +985,9 @@ def test_formed_unverified_without_symptoms_stays_regular():
     assert result.overall_state is DigestiveState.ROUTINE
     assert result.safety_state is DigestiveState.ROUTINE
     assert result.consumer_headline == "Tutto regolare per Oreo"
+    assert result.consumer_summary == "Oreo sta digerendo bene."
     assert "foto" not in _blob(result)
-    assert any("traccia rossa" in item.lower() for item in result.owner_advice)
+    assert not any("traccia rossa" in item.lower() for item in result.owner_advice)
 
 
 def test_possible_mucus_is_contextualized_not_an_alarm():

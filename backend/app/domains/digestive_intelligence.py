@@ -33,7 +33,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v21"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v22"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -527,24 +527,10 @@ def _expert_owner_summary(
 
     if consistency == "formed":
         if other:
-            return f"{other}. Tieni la routine di oggi."
+            return f"{other}."
         if _food_known(context) and context.active_food_name:
-            food_name = context.active_food_name
-            if season:
-                return (
-                    f"{name} sta digerendo bene {food_name}. "
-                    f"Non è l’alimento e {season}: tieni questa razione."
-                )
-            return (
-                f"{name} sta digerendo bene {food_name}. Tieni questa razione."
-            )
-        if context.season_label:
-            return (
-                f"{name} sta digerendo bene. Tieni la routine; in "
-                f"{context.season_label} ritocca i grammi solo se si muove "
-                "più o meno del solito."
-            )
-        return f"{name} sta digerendo bene. Tieni la routine di oggi."
+            return f"{name} sta digerendo bene {context.active_food_name}."
+        return f"{name} sta digerendo bene."
 
     symptom = None
     if other and any(
@@ -1091,6 +1077,16 @@ def _choose_useful_action(
     return DigestiveUsefulAction(key="none"), None, None
 
 
+def _formed_ration_step(context: DigestiveContext) -> str:
+    name = context.dog_name
+    if context.season_label:
+        return (
+            f"Tieni questa razione. Se in {context.season_label} {name} "
+            "si muove meno, togli un po’ di grammi."
+        )
+    return "Tieni questa razione."
+
+
 def _final_advice(
     *,
     observation: dict[str, Any],
@@ -1106,7 +1102,14 @@ def _final_advice(
             f"Contatta il veterinario e descrivi ciò che hai visto oggi per {name}."
         )
     if verification_unavailable(observation) and consistency == "formed":
-        return "Continua normalmente."
+        if context.appetite_reduced is True:
+            return (
+                f"Le feci vanno bene. Se {name} continua a mangiare meno, "
+                "senti il veterinario: l’appetito è il segnale, non il cibo."
+            )
+        if not _food_known(context) or not _has_quantity(context):
+            return ""
+        return _formed_ration_step(context)
     if verification_unavailable(observation):
         return unavailable_caution_detail(observation)
     if followup_question:
@@ -1137,7 +1140,9 @@ def _final_advice(
             f"o se {name} appare in difficoltà."
         )
     if safety is DigestiveState.ROUTINE and consistency == "formed":
-        return "Continua normalmente."
+        if not _food_known(context) or not _has_quantity(context):
+            return ""
+        return _formed_ration_step(context)
     level = _repetition_level(context, consistency)
     if level in {"hours", "trend"} and _is_loose(consistency):
         if context.unusual_food_48h is True:
@@ -1260,42 +1265,14 @@ def _owner_advice(
         ]
     if consistency == "formed":
         items: list[str] = []
-        if _food_known(context) and context.active_food_name:
-            items.append(
-                f"Con {context.active_food_name} la digestione tiene: "
-                "non cambiare marca oggi."
-            )
-        else:
-            items.append("Tieni la routine di oggi.")
         if context.appetite_reduced is True:
             items.append(
                 f"Guarda se {name} torna a mangiare nei prossimi pasti."
             )
-        fields = set(unavailable_anomaly_fields(observation))
-        if "fresh_blood_candidate" in fields:
+        elif context.season_label:
             items.append(
-                "Un veterinario serve solo se sulla cacca vera vedi una "
-                "traccia rossa evidente."
-            )
-        elif "melena_candidate" in fields:
-            items.append(
-                "Un veterinario serve solo se le feci vere sono molto scure "
-                "o catramose."
-            )
-        elif not _food_known(context):
-            items.append(
-                "Dimmi cosa mangia e quanti grammi: così ti dico se la "
-                "razione è giusta."
-            )
-        if (
-            context.season_label
-            and len(items) < 3
-            and "fresh_blood_candidate" not in fields
-        ):
-            items.append(
-                f"In {context.season_label} conta quanto si muove {name}: "
-                "più attività può voler dire un po’ più di razione, "
-                "meno attività un po’ meno."
+                f"In {context.season_label}, {name} si muove come nelle "
+                "settimane scorse o sta più fermo?"
             )
         return items[:3]
     if _recent_food_change(context) and _is_loose(consistency):
