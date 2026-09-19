@@ -290,7 +290,9 @@ def _baseline(
     if _owner_reported_off(dog_context):
         return (
             BaselineComparison.VARIATION,
-            f"Questa volta il comportamento è diverso dal solito di {dog_name}.",
+            (
+                f"Oggi mi hai detto che {dog_name} ti sembra diverso dal solito."
+            ),
         )
     if established:
         return (

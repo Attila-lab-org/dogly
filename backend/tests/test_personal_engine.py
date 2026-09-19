@@ -1,13 +1,70 @@
 """Personal Engine: patterns need repeated evidence; knowledge score is derived."""
 
-from app.contracts.taxonomy import PatternState
-from app.domains.models import PersonalPatternRec
+from datetime import UTC, datetime
+
+from app.contracts.taxonomy import ConfidenceBand, IntentCode, PatternState
+from app.domains.models import BehaviorEventRec, PersonalPatternRec
 from app.domains.personal_engine import (
     derive_pattern_state,
+    is_behavior_learning_eligible,
+    on_behavior_completed,
     semantic_pattern_similarity,
 )
 from app.domains.repository import new_id, now_utc
 from tests.conftest import create_dog
+
+
+def _learning_event(**updates) -> BehaviorEventRec:
+    payload = {
+        "id": "evt-learn-1",
+        "capture_id": "cap-learn-1",
+        "dog_id": "dog-learn-1",
+        "user_id": "user-learn-1",
+        "created_at": datetime.now(UTC),
+        "primary_intent": IntentCode.PLAY_INTERACTION,
+        "confidence_band": ConfidenceBand.HIGH,
+        "observation_json": {"capture_quality": {"overall_quality": "good"}},
+    }
+    payload.update(updates)
+    return BehaviorEventRec.model_validate(payload)
+
+
+def test_low_confidence_is_not_learning_eligible():
+    assert is_behavior_learning_eligible(_learning_event()) is True
+    assert (
+        is_behavior_learning_eligible(
+            _learning_event(confidence_band=ConfidenceBand.LOW)
+        )
+        is False
+    )
+
+
+def test_degraded_video_is_not_learning_eligible():
+    assert (
+        is_behavior_learning_eligible(
+            _learning_event(
+                observation_json={"capture_quality": {"overall_quality": "degraded"}}
+            )
+        )
+        is False
+    )
+
+
+async def test_low_confidence_event_does_not_write_pattern_signature(state):
+    event = _learning_event(confidence_band=ConfidenceBand.LOW)
+    state.store.behavior_events[event.id] = event
+    await on_behavior_completed(state, event)
+    assert event.id not in state.store.behavior_pattern_signatures
+
+
+async def test_good_medium_event_can_write_pattern_signature(state):
+    event = _learning_event(
+        id="evt-learn-ok",
+        confidence_band=ConfidenceBand.MEDIUM,
+    )
+    state.store.behavior_events[event.id] = event
+    await on_behavior_completed(state, event)
+    assert event.id in state.store.behavior_pattern_signatures
 
 
 def test_pattern_state_never_establishes_from_one_event():

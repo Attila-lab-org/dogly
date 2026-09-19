@@ -251,7 +251,7 @@ export function useDoglyRealtime(dogId: string) {
             type: 'response.create',
             response: {
               output_modalities: ['audio'],
-              instructions: `Pronuncia esattamente questa frase, una sola volta, con voce calma e naturale, e poi taci: ${JSON.stringify(
+              instructions: `Pronuncia esattamente questa frase, una sola volta, come se stessi parlando con un amico, e poi taci: ${JSON.stringify(
                 prepared.welcome_text,
               )}`,
             },

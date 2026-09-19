@@ -82,6 +82,8 @@ def test_checkin_off_is_personal_variation():
     )
     assert result.baseline_comparison is BaselineComparison.VARIATION
     assert "diverso dal solito" in result.baseline_note
+    assert "mi hai detto" in result.baseline_note
+    assert "DOGly" not in result.baseline_note
 
 
 def test_stale_checkin_is_ignored():

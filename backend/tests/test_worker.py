@@ -369,6 +369,7 @@ async def test_unknown_context_and_checkin_reach_the_composer(
     ).json()
     assert body["baseline_comparison"] == "VARIATION"
     assert "diverso dal solito" in body["baseline_note"]
+    assert "mi hai detto" in body["baseline_note"]
     # Fixture video shows a toy: UNKNOWN must not stay UNKNOWN.
     assert body["context_bucket"] == "PLAY"
     assert state.store.captures[capture_id].context_bucket == ContextBucket.PLAY

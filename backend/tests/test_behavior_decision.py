@@ -206,6 +206,54 @@ def test_fear_and_avoidance_exclude_automatic_alert_promotion():
     assert alert.excluded_by
 
 
+def test_rule_table_contradiction_does_not_cap_reasoner_confidence():
+    observation = ObservationContract.model_validate(
+        {
+            "observer_meta": {
+                "provider": "test",
+                "model": "test",
+                "request_id": "zoomies-loose",
+            },
+            "capture_quality": {
+                "overall_quality": "good",
+                "audio_quality": "good",
+                "dog_visible_fraction": 0.9,
+            },
+            "body": {
+                "posture": "loose",
+                "locomotion": "running",
+                "body_height": "neutral",
+                "rigidity_candidate": "no",
+                "approach_withdrawal_freeze": "none",
+            },
+            "vocalization": {
+                "present": "yes",
+                "type_candidates": ["bark"],
+                "intensity": "high",
+                "rhythm": "repetitive",
+            },
+        }
+    )
+    result, trace = apply_behavior_decision_policy(
+        _interpretation(
+            IntentCode.HIGH_AROUSAL,
+            confidence=ConfidenceBand.HIGH,
+        ),
+        observation,
+        dog_name="Oreo",
+        context_bucket=ContextBucket.OUTDOORS,
+        knowledge=_knowledge(),
+    )
+
+    arousal = next(
+        item for item in trace.candidates if item.intent is IntentCode.HIGH_AROUSAL
+    )
+    assert "body.loose" in arousal.contradictions
+    assert result.primary_intent is IntentCode.HIGH_AROUSAL
+    assert result.confidence_band is ConfidenceBand.HIGH
+    assert trace.confidence_ceiling is ConfidenceBand.HIGH
+
+
 def test_scientific_coverage_does_not_cap_reasoner_confidence():
     result, trace = apply_behavior_decision_policy(
         _interpretation(

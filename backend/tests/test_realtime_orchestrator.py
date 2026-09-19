@@ -80,11 +80,12 @@ def test_voice_session_speaks_without_waiting_for_tools() -> None:
     vad = config["audio"]["input"]["turn_detection"]
     assert vad["type"] == "server_vad"
     assert vad["create_response"] is True
-    assert vad["interrupt_response"] is False
-    assert vad["silence_duration_ms"] == 1200
-    assert vad["threshold"] == 0.72
+    assert vad["interrupt_response"] is True
+    assert vad["silence_duration_ms"] == 600
+    assert vad["threshold"] == 0.65
     assert config["audio"]["output"]["voice"] == "coral"
-    assert config["audio"]["output"]["speed"] == 0.92
+    assert config["audio"]["output"]["speed"] == 1.0
+    assert config["max_output_tokens"] == 180
 
 
 def test_voice_brief_is_personal_and_ready_to_speak() -> None:
@@ -113,14 +114,16 @@ def test_voice_brief_is_personal_and_ready_to_speak() -> None:
     )
     assert "Oreo" in brief
     assert "Attilio" in brief
-    assert "amico del proprietario" in brief
-    assert "voce calma" in brief
+    assert "amico intelligente" in brief
+    assert "1-2 frasi" in brief
     assert "Non ripetere quel saluto" in brief
     assert "Oreo sta digerendo bene" in brief
     assert "Scodinzolare" in brief
-    assert "domanda naturale" in brief
     assert "Alimentazione:" in brief
     assert "Royal Canin Adult" in brief
+    assert "3-6 frasi" not in brief
+    assert "voce calma" not in brief
+    assert "Distingui esplicitamente" not in brief
     assert "modello" not in brief.lower()
     assert "database" not in brief.lower()
 

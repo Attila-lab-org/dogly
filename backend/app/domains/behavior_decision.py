@@ -34,7 +34,7 @@ from app.contracts.taxonomy import ConfidenceBand, ContextBucket, IntentCode
 from app.domains.context_bucket import observation_supports_exit
 from app.knowledge.models import KnowledgeContext
 
-BEHAVIOR_DECISION_POLICY_VERSION = "behavior-boundary-audit/v4"
+BEHAVIOR_DECISION_POLICY_VERSION = "behavior-boundary-audit/v5"
 
 
 @dataclass(frozen=True)
@@ -454,13 +454,12 @@ def _confidence_ceiling(
     candidates: list[CandidateDecision],
     final_intent: IntentCode | None,
 ) -> ConfidenceBand:
+    del knowledge, candidates
     if final_intent in {None, IntentCode.INSUFFICIENT, IntentCode.AMBIGUOUS}:
         return ConfidenceBand.LOW
-    selected = next((item for item in candidates if item.intent is final_intent), None)
-    if selected and (selected.contradictions or selected.excluded_by):
-        return ConfidenceBand.LOW
-    # Scientific coverage governs claim strength, not whether the reasoner's
-    # interpretation exists. Only evidence quality caps interpretation confidence.
+    # Rule-table contradictions stay on the audit trace. They must not
+    # second-guess a semantically valid reasoner reading (zoomies can be
+    # high-arousal with a relatively loose body).
     if observation.capture_quality.overall_quality != "good":
         return ConfidenceBand.MEDIUM
     return ConfidenceBand.HIGH

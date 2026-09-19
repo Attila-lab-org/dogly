@@ -20,7 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api.deps import AppState
 from app.contracts.observation import ObservationContract
-from app.contracts.taxonomy import ContextBucket, IntentCode, PatternState
+from app.contracts.taxonomy import (
+    ConfidenceBand,
+    ContextBucket,
+    IntentCode,
+    PatternState,
+)
 from app.domains.behavior_decision import extract_behavior_signals
 from app.domains.models import BehaviorEventRec, PersonalPatternRec
 from app.domains.repository import InMemoryStore, new_id, now_utc
@@ -197,16 +202,42 @@ def _closest_pattern_key(
     return pattern_key if score >= 0.65 else None
 
 
+def is_behavior_learning_eligible(event: BehaviorEventRec) -> bool:
+    """Enough to answer the owner is not enough to write permanent memory."""
+    intent = event.primary_intent
+    if intent is None:
+        return False
+    intent_value = intent.value if hasattr(intent, "value") else str(intent)
+    if intent_value in {
+        IntentCode.AMBIGUOUS.value,
+        IntentCode.INSUFFICIENT.value,
+    }:
+        return False
+    confidence = event.confidence_band
+    confidence_value = (
+        confidence.value if hasattr(confidence, "value") else str(confidence or "")
+    )
+    if confidence_value not in {
+        ConfidenceBand.MEDIUM.value,
+        ConfidenceBand.HIGH.value,
+    }:
+        return False
+    quality = str(
+        ((event.observation_json or {}).get("capture_quality") or {}).get(
+            "overall_quality"
+        )
+        or ""
+    )
+    return quality == "good"
+
+
 async def on_behavior_completed(state: AppState, event: BehaviorEventRec) -> None:
     """Best-effort: analysis success must not fail because scoring failed."""
     intent = event.primary_intent
     if intent is None:
         return
     intent_value = intent.value if hasattr(intent, "value") else str(intent)
-    if intent_value in {
-        IntentCode.AMBIGUOUS.value,
-        IntentCode.INSUFFICIENT.value,
-    }:
+    if not is_behavior_learning_eligible(event):
         return
     try:
         if state.engine is not None:

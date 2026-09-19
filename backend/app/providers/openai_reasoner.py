@@ -344,16 +344,18 @@ class OpenAIReasoner:
         raw = json.loads(content)
         raw["policy_version"] = policy_version
         raw["context_bucket"] = user_payload["context_bucket"]
+        usage_payloads = [payload]
         try:
             contract = InterpretationContract.model_validate(raw)
         except ValidationError as exc:
-            raw = await self._repair(
+            raw, repair_payload = await self._repair(
                 raw,
                 policy_version,
                 user_payload["context_bucket"],
                 user_payload,
                 exc.errors(include_url=False),
             )
+            usage_payloads.append(repair_payload)
             contract = InterpretationContract.model_validate(raw)
         boundary_errors = grounding_errors(
             contract,
@@ -361,13 +363,14 @@ class OpenAIReasoner:
             eligible_pattern_ids={item.pattern_id for item in eligible_memory},
         )
         if boundary_errors:
-            repaired = await self._repair(
+            repaired, repair_payload = await self._repair(
                 raw,
                 policy_version,
                 user_payload["context_bucket"],
                 user_payload,
                 boundary_errors,
             )
+            usage_payloads.append(repair_payload)
             contract = InterpretationContract.model_validate(repaired)
             remaining = grounding_errors(
                 contract,
@@ -377,7 +380,7 @@ class OpenAIReasoner:
             if remaining:
                 raise ValueError(f"Reasoner output is not grounded: {remaining[:3]}")
 
-        usage_raw = payload.get("usage") or {}
+        usage_raw = merge_openai_usage(*usage_payloads)
         usage = ProviderUsage(
             provider="openai",
             model=self._model,
@@ -402,7 +405,7 @@ class OpenAIReasoner:
         context_bucket: str,
         grounded_input: dict[str, Any],
         validation_errors: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
             response = await self._client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -445,10 +448,21 @@ class OpenAIReasoner:
                 response.text[:2000],
             )
         response.raise_for_status()
-        fixed = json.loads(response.json()["choices"][0]["message"]["content"])
+        repair_payload = response.json()
+        fixed = json.loads(repair_payload["choices"][0]["message"]["content"])
         fixed["policy_version"] = policy_version
         fixed["context_bucket"] = context_bucket
-        return fixed
+        return fixed, repair_payload
+
+
+def merge_openai_usage(*payloads: dict[str, Any] | None) -> dict[str, int]:
+    """Sum prompt/completion tokens across the first call and any repairs."""
+    total = {"prompt_tokens": 0, "completion_tokens": 0}
+    for payload in payloads:
+        usage = (payload or {}).get("usage") or payload or {}
+        total["prompt_tokens"] += int(usage.get("prompt_tokens") or 0)
+        total["completion_tokens"] += int(usage.get("completion_tokens") or 0)
+    return total
 
 
 def _estimate_openai_cost(
