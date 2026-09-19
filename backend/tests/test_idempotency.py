@@ -157,3 +157,36 @@ async def test_fresh_inflight_idempotency_key_still_blocks(client, auth_headers,
     )
     assert r.status_code == 429
     assert r.json()["code"] == "RATE_LIMITED"
+
+
+async def test_unhandled_error_releases_inflight_idempotency_key(
+    state, auth_headers, monkeypatch
+):
+    from app.api.app import create_app
+    from app.domains import digestive
+
+    app = create_app(state)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        dog_id = await create_dog(client, auth_headers)
+
+        original = digestive.create_manual_food_product
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("manual food insert failed")
+
+        monkeypatch.setattr(digestive, "create_manual_food_product", boom)
+        payload = {
+            "dog_id": dog_id,
+            "client_request_id": "manual-food-500-retry",
+            "name": "Crocchette prova",
+        }
+        headers = {**auth_headers, "X-Idempotency-Key": "manual-food-500-retry"}
+        first = await client.post("/v1/nutrition/foods/manual", json=payload, headers=headers)
+        assert first.status_code == 500
+        assert first.json()["retryable"] is True
+
+        monkeypatch.setattr(digestive, "create_manual_food_product", original)
+        second = await client.post("/v1/nutrition/foods/manual", json=payload, headers=headers)
+        assert second.status_code == 201, second.text
+        assert second.json()["name"] == "Crocchette prova"

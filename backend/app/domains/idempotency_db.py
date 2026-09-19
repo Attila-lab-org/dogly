@@ -116,6 +116,21 @@ async def lookup(
     return {k: v for k, v in body.items() if k != "__payload_hash__"}
 
 
+async def release_inflight(engine: AsyncEngine, *, scope: str) -> None:
+    """Drop a failed in-flight claim so the owner can retry immediately."""
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                delete from internal.api_idempotency
+                where scope = :scope
+                  and status_code = 0
+                """
+            ),
+            {"scope": scope},
+        )
+
+
 async def record(
     engine: AsyncEngine,
     *,

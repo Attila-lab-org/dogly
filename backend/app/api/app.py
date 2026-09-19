@@ -120,8 +120,21 @@ def create_app(state: AppState | None = None) -> FastAPI:
             )
         return await unhandled_error_handler(_, exc)
 
+    async def _release_failed_idempotency(request: Request) -> None:
+        scope = getattr(request.state, "idempotency_scope", None)
+        if not scope:
+            return
+        state = getattr(request.app.state, "cbi", resolved)
+        rec = state.store.idempotency.get(scope)
+        if rec is not None and rec.status_code == 0:
+            state.store.idempotency.pop(scope, None)
+        if state.engine is not None:
+            from app.domains import idempotency_db
+
+            await idempotency_db.release_inflight(state.engine, scope=scope)
+
     @app.exception_handler(Exception)
-    async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
         # Never expose provider/internal stack traces (sez. 9.1 / 24.1).
         logger.exception("Unhandled API error")
         try:
@@ -130,10 +143,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
             sentry_sdk.capture_exception(exc)
         except ImportError:
             logger.debug("sentry-sdk not installed; skipping capture")
+        await _release_failed_idempotency(request)
         body = ErrorBody(
             code=ErrorCode.INTERNAL_ERROR,
             message="An internal error occurred.",
-            retryable=False,
+            retryable=True,
             correlation_id=get_request_id() or uuid.uuid4().hex,
         )
         return JSONResponse(status_code=500, content=body.model_dump(mode="json"))

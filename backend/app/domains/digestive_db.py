@@ -1073,7 +1073,9 @@ async def create_manual_food_product(
                       :ingredients_raw, cast(:guaranteed_analysis as jsonb),
                       :calories, :feeding_directions, now()
                     )
-                    on conflict (owner_id, client_request_id) do update
+                    on conflict (owner_id, client_request_id)
+                      where client_request_id is not null
+                    do update
                     set updated_at = public.food_products.updated_at
                     returning *
                     """

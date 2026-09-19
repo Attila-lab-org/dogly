@@ -301,3 +301,13 @@ def test_quantity_update_keeps_food_start_and_notes():
     context = build_inmemory_digestive_context(store, event=event)
     assert context.food_started_days_ago == 10
     assert context.quantity_per_day == "250 g"
+
+
+def test_manual_food_insert_matches_partial_unique_index():
+    import inspect
+
+    from app.domains import digestive_db
+
+    source = inspect.getsource(digestive_db.create_manual_food_product)
+    assert "on conflict (owner_id, client_request_id)" in source
+    assert "where client_request_id is not null" in source

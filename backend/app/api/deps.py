@@ -231,6 +231,7 @@ async def idempotency_guard(
             state.store.idempotency[guard._scope] = IdempotencyRec(
                 scope=guard._scope, status_code=200, response_body=cached, created_at=now_utc()
             )
+    request.state.idempotency_scope = guard._scope
     return guard
 
 
