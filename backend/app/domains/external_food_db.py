@@ -8,12 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.contracts.api import (
     ExternalFoodConfirmRequest,
     ExternalFoodLookupRequest,
+    ExternalFoodSearchRequest,
     FoodManualCreateRequest,
     GuaranteedAnalysis,
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive_db, dogs_db
 from app.domains.external_food import default_opff_client, fetch_candidate
+from app.providers.base import ProviderRateLimitError
 from app.domains.ids import require_uuid
 from app.domains.models import FoodProductRec
 from app.domains.repository import new_id
@@ -92,6 +94,79 @@ async def lookup_external_food(
             },
         )
     return lookup_id, candidate
+
+
+async def search_external_foods(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    payload: ExternalFoodSearchRequest,
+    enabled: bool,
+    client: OpenPetFoodFactsClient | None = None,
+) -> list[tuple[str, ExternalFoodCandidate]]:
+    _require_feature(enabled)
+    require_uuid(payload.dog_id, not_found="Dog not found")
+    await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=payload.dog_id)
+    adapter = client or default_opff_client()
+    try:
+        hits = await adapter.search_products(payload.query)
+    except ProviderRateLimitError as exc:
+        raise ApiError(
+            ErrorCode.RATE_LIMITED,
+            "Troppe richieste in questo momento.",
+        ) from exc
+    except TimeoutError as exc:
+        raise ApiError(
+            ErrorCode.PROVIDER_TIMEOUT,
+            "Il catalogo alimenti non è raggiungibile.",
+        ) from exc
+    results: list[tuple[str, ExternalFoodCandidate]] = []
+    async with engine.begin() as conn:
+        for index, candidate in enumerate(hits):
+            lookup_id = _uuid_id()
+            crid = f"{payload.client_request_id}-{candidate.barcode or index}"
+            existing = (
+                await conn.execute(
+                    text(
+                        """
+                        select id
+                        from public.external_food_lookups
+                        where user_id = cast(:user_id as uuid)
+                          and client_request_id = :crid
+                        """
+                    ),
+                    {"user_id": user_id, "crid": crid},
+                )
+            ).mappings().first()
+            if existing:
+                results.append((str(existing["id"]), candidate))
+                continue
+            await conn.execute(
+                text(
+                    """
+                    insert into public.external_food_lookups (
+                      id, user_id, dog_id, barcode, provider, provider_code,
+                      raw_payload, status, client_request_id
+                    ) values (
+                      cast(:id as uuid), cast(:user_id as uuid),
+                      cast(:dog_id as uuid), :barcode, :provider,
+                      :provider_code, cast(:raw as jsonb), 'CANDIDATE', :crid
+                    )
+                    """
+                ),
+                {
+                    "id": lookup_id,
+                    "user_id": user_id,
+                    "dog_id": payload.dog_id,
+                    "barcode": candidate.barcode,
+                    "provider": candidate.provider,
+                    "provider_code": candidate.provider_code,
+                    "raw": candidate.model_dump_json(),
+                    "crid": crid,
+                },
+            )
+            results.append((lookup_id, candidate))
+    return results
 
 
 async def confirm_external_food(

@@ -9,6 +9,7 @@ from app.providers.base import ProviderRateLimitError
 from app.providers.open_pet_food_facts import (
     OpenPetFoodFactsClient,
     clear_barcode_cache,
+    spoken_product_name,
 )
 
 
@@ -112,4 +113,84 @@ async def test_barcode_cache_avoids_repeat_requests():
     second = await client.lookup_barcode("8000000000000")
     assert first is not None and second is not None
     assert first.name == second.name
+    assert calls["n"] == 1
+
+
+def test_spoken_product_name_keeps_one_italian_label():
+    assert (
+        spoken_product_name(
+            "Salmon with Rice\nSalmone con Riso · Lachs mit Reis"
+        )
+        == "Salmone con Riso"
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_returns_dog_food_list():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "search.pl" in str(request.url)
+        assert "salmone" in str(request.url)
+        assert "en:dog-food" not in str(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "products": [
+                    {
+                        "code": "8000000000001",
+                        "product_name": "Salmon with Rice\nSalmone con Riso · Lachs mit Reis",
+                        "brands": "Acme",
+                        "categories_tags": ["en:dog-food"],
+                    },
+                    {
+                        "code": "8000000000002",
+                        "product_name": "Lechat excellence pollo",
+                        "brands": "Monge",
+                        "categories_tags": ["en:cat-food"],
+                    },
+                    {
+                        "code": "12",
+                        "product_name": "Troppo corto",
+                    },
+                ]
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    hits = await client.search_products("salmone riso")
+    assert len(hits) == 1
+    assert hits[0].name == "Salmone con Riso"
+    assert hits[0].brand == "Acme"
+
+
+@pytest.mark.asyncio
+async def test_search_keeps_brand_only_products_and_caches():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(
+            200,
+            json={
+                "products": [
+                    {
+                        "code": "8000000000099",
+                        "brands": "Monge",
+                    }
+                ]
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    first = await client.search_products("Monge")
+    second = await client.search_products("monge")
+    assert [item.name for item in first] == ["Monge"]
+    assert [item.name for item in second] == ["Monge"]
     assert calls["n"] == 1

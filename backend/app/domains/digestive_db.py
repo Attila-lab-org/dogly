@@ -643,6 +643,7 @@ async def load_digestive_context(
                            food.name as active_food_name,
                            period.food_product_id is not null as has_active_food,
                            period.quantity_per_day,
+                           life.routine_json ->> 'activity' as activity_level,
                            case
                              when period.start_at is null then null
                              else greatest(
@@ -664,6 +665,8 @@ async def load_digestive_context(
                     ) period on true
                     left join public.food_products food
                       on food.id = period.food_product_id
+                    left join public.dog_lifestyle_profiles life
+                      on life.dog_id = event.dog_id
                     where event.id = cast(:event_id as uuid)
                     """
                 ),
@@ -804,6 +807,7 @@ async def load_digestive_context(
         ),
         latest_weight_kg=nutrition.get("latest_kg"),
         weight_delta_kg=nutrition.get("delta_kg"),
+        activity_level=profile.get("activity_level"),
     )
 
 

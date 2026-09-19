@@ -322,6 +322,47 @@ async def test_opff_lookup_requires_flag(
 
 
 @pytest.mark.asyncio
+async def test_opff_search_lists_confirmable_foods(
+    client: httpx.AsyncClient, auth_headers: dict[str, str], state
+):
+    state.settings.open_pet_food_facts_v1 = True
+    from app.contracts.api import ExternalFoodSearchRequest
+    from app.domains.external_food import search_external_foods
+    from app.providers.open_pet_food_facts import ExternalFoodCandidate
+
+    created = await client.post(
+        "/v1/dogs", json={"name": "Rocky"}, headers=auth_headers
+    )
+    dog_id = created.json()["id"]
+    user_id = state.store.dogs[dog_id].owner_id
+
+    class SearchClient(OpenPetFoodFactsClient):
+        async def search_products(self, query: str, *, limit: int = 12):
+            assert "salmone" in query
+            return [
+                ExternalFoodCandidate(
+                    barcode="8000000000001",
+                    name="Salmone con Riso",
+                    brand="Acme",
+                )
+            ]
+
+    hits = await search_external_foods(
+        state.store,
+        user_id=user_id,
+        payload=ExternalFoodSearchRequest(
+            dog_id=dog_id,
+            query="salmone riso",
+            client_request_id="opff-search-1",
+        ),
+        enabled=True,
+        client=SearchClient(),
+    )
+    assert hits[0][1].name == "Salmone con Riso"
+    assert hits[0][0] in state.store.external_food_lookups
+
+
+@pytest.mark.asyncio
 async def test_weight_events_and_opff_memory_path(
     client: httpx.AsyncClient,
     auth_headers: dict[str, str],

@@ -40,6 +40,7 @@ import {
   startWebVideoRecording,
   type WebVideoRecording,
 } from '@/features/behavior/webRecord';
+import { wakeIosCameraPreview } from '@/features/behavior/iosCameraPreview';
 
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
@@ -57,6 +58,7 @@ export default function BehaviorCaptureScreen() {
   const [canStop, setCanStop] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [webPreviewArmed, setWebPreviewArmed] = useState(Platform.OS !== 'web');
 
   const cameraRef = useRef<CameraView | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -131,6 +133,19 @@ export default function BehaviorCaptureScreen() {
     requestCameraPermission,
     requestMicPermission,
   ]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (!cameraPermission?.granted) {
+      setWebPreviewArmed(false);
+      setCameraReady(false);
+      return;
+    }
+    setWebPreviewArmed(false);
+    setCameraReady(false);
+    const arm = window.setTimeout(() => setWebPreviewArmed(true), 280);
+    return () => window.clearTimeout(arm);
+  }, [cameraPermission?.granted]);
 
   useEffect(() => {
     const onAppState = (next: AppStateStatus) => {
@@ -383,7 +398,20 @@ export default function BehaviorCaptureScreen() {
 
   const progress = state.elapsedSeconds / CAPTURE_MAX_SECONDS;
   const showCamera =
-    state.phase !== 'permission_denied' && Boolean(cameraPermission?.granted);
+    state.phase !== 'permission_denied' &&
+    Boolean(cameraPermission?.granted) &&
+    webPreviewArmed;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showCamera) return;
+    wakeIosCameraPreview();
+    const tick = window.setInterval(() => wakeIosCameraPreview(), 250);
+    const stop = window.setTimeout(() => window.clearInterval(tick), 4000);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(stop);
+    };
+  }, [showCamera]);
 
   return (
     <ScreenContainer padded={false}>
@@ -439,15 +467,22 @@ export default function BehaviorCaptureScreen() {
               {showCamera ? (
                 <CameraView
                   ref={cameraRef}
-                  style={StyleSheet.absoluteFill}
+                  style={styles.camera}
                   facing="back"
                   mode="video"
                   mute={!micGranted}
                   videoQuality="720p"
-                  videoStabilizationMode="auto"
                   active
-                  onCameraReady={() => setCameraReady(true)}
-                  onMountError={() => setCameraReady(false)}
+                  onCameraReady={() => {
+                    setCameraReady(true);
+                    wakeIosCameraPreview();
+                  }}
+                  onMountError={() => {
+                    setCameraReady(false);
+                    setUploadError(
+                      'Non riesco ad accendere la fotocamera. Chiudi altre app che la usano e riprova.',
+                    );
+                  }}
                 />
               ) : (
                 <View style={styles.previewCenter}>
@@ -619,10 +654,15 @@ const styles = StyleSheet.create({
   },
   preview: {
     flex: 1,
+    minHeight: 240,
     borderRadius: radius.lg,
     backgroundColor: colors.text,
-    overflow: 'hidden',
     justifyContent: 'center',
+  },
+  camera: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   previewCenter: {
     alignItems: 'center',

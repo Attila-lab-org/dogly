@@ -12,6 +12,7 @@ today and what to do. Safety text must not downgrade an escalation.
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -33,7 +34,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v22"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v23"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -88,6 +89,7 @@ class DigestiveContext(BaseModel):
     supplements_or_medication: bool | None = None
     latest_weight_kg: float | None = None
     weight_delta_kg: float | None = None
+    activity_level: str | None = None
 
 
 class DigestiveUsefulAction(BaseModel):
@@ -184,6 +186,65 @@ def _has_quantity(context: DigestiveContext) -> bool:
 
 def _food_known(context: DigestiveContext) -> bool:
     return context.has_active_food or bool(context.active_food_name)
+
+
+_ITALIAN_FOOD_HINTS = (
+    "con ",
+    " di ",
+    "salmone",
+    "pollo",
+    "manzo",
+    "agnello",
+    "riso",
+    "patate",
+    "crocchette",
+    "anatra",
+    "tacchino",
+    "pesce",
+    "verdure",
+)
+
+
+def _human_food_name(raw: str | None) -> str | None:
+    """Speak the food like a person, not like a catalog row."""
+    if not raw or not str(raw).strip():
+        return None
+    text = re.sub(r"[\n\r]+", " · ", str(raw))
+    parts = [
+        part.strip(" ·/\t")
+        for part in re.split(r"[·|/]+", text)
+        if part.strip(" ·/\t")
+    ]
+    if not parts:
+        return None
+    chosen = parts[0]
+    for part in parts:
+        low = part.lower()
+        if any(hint in low for hint in _ITALIAN_FOOD_HINTS):
+            chosen = part
+            break
+    else:
+        chosen = min(parts, key=len) if len(parts) > 1 else parts[0]
+    cleaned = re.sub(r"\s+", " ", chosen).strip()
+    if not cleaned:
+        return None
+    return cleaned[0].upper() + cleaned[1:]
+
+
+def _food_spoken(context: DigestiveContext) -> str | None:
+    return _human_food_name(context.active_food_name)
+
+
+def _activity_phrase(context: DigestiveContext) -> str | None:
+    raw = str(context.activity_level or "").upper()
+    name = context.dog_name
+    if raw == "VERY_ACTIVE":
+        return f"{name} è un cane molto attivo"
+    if raw == "CALM":
+        return f"{name} è un cane piuttosto calmo"
+    if raw == "MODERATE":
+        return f"{name} ha un ritmo di movimento normale"
+    return None
 
 
 def _owner_watch_signal(context: DigestiveContext, consistency: str) -> bool:
@@ -382,10 +443,11 @@ def _expert_food_line(
     if safety is DigestiveState.VET_CONTACT:
         return None
     if consistency == "formed":
-        if _food_known(context) and context.active_food_name:
+        spoken = _food_spoken(context)
+        if spoken:
             return (
                 f"Non è l’alimento: con feci formate {context.dog_name} sta "
-                f"digerendo bene {context.active_food_name}"
+                f"digerendo bene {spoken}"
             )
         return "Non è l’alimento: le feci formate dicono che sta digerendo bene"
     if consistency == "hard":
@@ -400,7 +462,8 @@ def _expert_food_line(
         )
     if _recent_food_change(context):
         span = _food_started_span(context)
-        named = f" {context.active_food_name}" if context.active_food_name else ""
+        spoken = _food_spoken(context)
+        named = f" {spoken}" if spoken else ""
         when = f" da {span}" if span else ""
         return (
             f"Il primo sospetto è l’alimento{named} iniziato{when}: "
@@ -528,9 +591,27 @@ def _expert_owner_summary(
     if consistency == "formed":
         if other:
             return f"{other}."
-        if _food_known(context) and context.active_food_name:
-            return f"{name} sta digerendo bene {context.active_food_name}."
-        return f"{name} sta digerendo bene."
+        food = _food_spoken(context)
+        life = _activity_phrase(context)
+        if life and food:
+            return (
+                f"{life}. Con {food} sta andando bene: oggi la razione "
+                "resta così."
+            )
+        if food:
+            return (
+                f"Con {food} {name} sta andando bene: oggi la razione "
+                "resta così."
+            )
+        if life:
+            return (
+                f"{life}. Oggi la digestione tiene: non c’è da toccare "
+                "la razione."
+            )
+        return (
+            f"Oggi per {name} la digestione tiene: non c’è da toccare "
+            "la razione."
+        )
 
     symptom = None
     if other and any(
@@ -1044,6 +1125,9 @@ def _choose_useful_action(
             followup_question,
         )
 
+    if state is DigestiveState.ROUTINE:
+        return DigestiveUsefulAction(key="none"), None, None
+
     if not _food_known(context):
         return (
             DigestiveUsefulAction(
@@ -1079,12 +1163,24 @@ def _choose_useful_action(
 
 def _formed_ration_step(context: DigestiveContext) -> str:
     name = context.dog_name
-    if context.season_label:
+    season = context.season_label
+    activity = str(context.activity_level or "").upper()
+    if activity == "VERY_ACTIVE" and season:
         return (
-            f"Tieni questa razione. Se in {context.season_label} {name} "
-            "si muove meno, togli un po’ di grammi."
+            f"Se in {season} le uscite restano lunghe, tieni i grammi; "
+            f"se {name} si ferma di più, togline un po’."
         )
-    return "Tieni questa razione."
+    if activity == "CALM" and season:
+        return (
+            f"In {season} un cane calmo come {name} spesso ha bisogno "
+            "di un po’ meno razione."
+        )
+    if season:
+        return (
+            f"In {season} ritocca i grammi solo se {name} si muove "
+            "davvero più o meno del solito."
+        )
+    return "Oggi non c’è da cambiare niente."
 
 
 def _final_advice(
@@ -1107,8 +1203,6 @@ def _final_advice(
                 f"Le feci vanno bene. Se {name} continua a mangiare meno, "
                 "senti il veterinario: l’appetito è il segnale, non il cibo."
             )
-        if not _food_known(context) or not _has_quantity(context):
-            return ""
         return _formed_ration_step(context)
     if verification_unavailable(observation):
         return unavailable_caution_detail(observation)
@@ -1140,8 +1234,6 @@ def _final_advice(
             f"o se {name} appare in difficoltà."
         )
     if safety is DigestiveState.ROUTINE and consistency == "formed":
-        if not _food_known(context) or not _has_quantity(context):
-            return ""
         return _formed_ration_step(context)
     level = _repetition_level(context, consistency)
     if level in {"hours", "trend"} and _is_loose(consistency):
@@ -1269,10 +1361,15 @@ def _owner_advice(
             items.append(
                 f"Guarda se {name} torna a mangiare nei prossimi pasti."
             )
-        elif context.season_label:
+        elif _food_known(context) and not _has_quantity(context):
             items.append(
-                f"In {context.season_label}, {name} si muove come nelle "
-                "settimane scorse o sta più fermo?"
+                f"Quando vuoi, dimmi i grammi di {name}: così la razione "
+                "la ragioniamo su come vive."
+            )
+        elif not _food_known(context):
+            items.append(
+                f"Quando vuoi, dimmi cosa mangia {name}: così la razione "
+                "la ragioniamo su come vive."
             )
         return items[:3]
     if _recent_food_change(context) and _is_loose(consistency):

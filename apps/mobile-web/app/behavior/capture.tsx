@@ -40,6 +40,7 @@ import {
   startWebVideoRecording,
   type WebVideoRecording,
 } from '@/features/behavior/webRecord';
+import { wakeIosCameraPreview } from '@/features/behavior/iosCameraPreview';
 
 const TITLE_COLOR = '#1A2B48';
 const HINT_COLOR = '#64748B';
@@ -65,6 +66,7 @@ export default function BehaviorCaptureScreen() {
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [torchOn, setTorchOn] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [webPreviewArmed, setWebPreviewArmed] = useState(Platform.OS !== 'web');
 
   const cameraRef = useRef<CameraView | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -176,6 +178,21 @@ export default function BehaviorCaptureScreen() {
     requestCameraPermission,
     requestMicPermission,
   ]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (!cameraPermission?.granted) {
+      setWebPreviewArmed(false);
+      setCameraReady(false);
+      return;
+    }
+    // Safari iOS: dopo lo stop dei track del permesso la camera
+    // resta nera se si riapre troppo in fretta.
+    setWebPreviewArmed(false);
+    setCameraReady(false);
+    const arm = window.setTimeout(() => setWebPreviewArmed(true), 280);
+    return () => window.clearTimeout(arm);
+  }, [cameraPermission?.granted]);
 
   useEffect(() => {
     const onAppState = (next: AppStateStatus) => {
@@ -364,7 +381,19 @@ export default function BehaviorCaptureScreen() {
   const showCamera =
     !handedOff &&
     state.phase !== 'permission_denied' &&
-    Boolean(cameraPermission?.granted);
+    Boolean(cameraPermission?.granted) &&
+    webPreviewArmed;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showCamera) return;
+    wakeIosCameraPreview();
+    const tick = window.setInterval(() => wakeIosCameraPreview(), 250);
+    const stop = window.setTimeout(() => window.clearInterval(tick), 4000);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(stop);
+    };
+  }, [showCamera, facing]);
 
   const timerLabel =
     state.phase === 'recording'
@@ -417,6 +446,7 @@ export default function BehaviorCaptureScreen() {
               accessibilityLabel="Inverti fotocamera"
               onPress={() => {
                 setTorchOn(false);
+                setCameraReady(false);
                 setFacing((f) => (f === 'back' ? 'front' : 'back'));
               }}
               hitSlop={10}
@@ -463,17 +493,25 @@ export default function BehaviorCaptureScreen() {
             <>
               {showCamera ? (
                 <CameraView
+                  key={facing}
                   ref={cameraRef}
-                  style={StyleSheet.absoluteFill}
+                  style={styles.camera}
                   facing={facing}
                   mode="video"
                   mute={!micGranted}
                   videoQuality="720p"
-                  videoStabilizationMode="auto"
                   enableTorch={torchOn && facing === 'back'}
                   active={state.phase === 'ready' || state.phase === 'recording'}
-                  onCameraReady={() => setCameraReady(true)}
-                  onMountError={() => setCameraReady(false)}
+                  onCameraReady={() => {
+                    setCameraReady(true);
+                    wakeIosCameraPreview();
+                  }}
+                  onMountError={() => {
+                    setCameraReady(false);
+                    setUploadError(
+                      'Non riesco ad accendere la fotocamera. Chiudi altre app che la usano e riprova.',
+                    );
+                  }}
                 />
               ) : (
                 <View style={styles.previewCenter}>
@@ -690,13 +728,18 @@ const styles = StyleSheet.create({
   },
   preview: {
     flex: 1,
+    minHeight: 240,
     borderRadius: 24,
     backgroundColor: '#0F172A',
-    overflow: 'hidden',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: CARD_BORDER,
-    ...shadows.card,
+    // overflow+radius spegne il <video> su Safari iOS (layer nera).
+  },
+  camera: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   previewCenter: {
     alignItems: 'center',

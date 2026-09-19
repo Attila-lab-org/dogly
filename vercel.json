@@ -12,6 +12,7 @@
     "BREED_INTELLIGENCE_V1": "true",
     "MORPHOLOGY_OBSERVER_CONTEXT_V1": "true",
     "DIGESTIVE_LONGITUDINAL_V3": "true",
+    "OPEN_PET_FOOD_FACTS_V1": "true",
     "REALTIME_ENABLED": "true",
     "REALTIME_REASONING_MODEL": "gpt-5.2",
     "REALTIME_VOICE_MODEL": "gpt-realtime-2.1",

@@ -183,6 +183,22 @@ export type ExternalFoodCandidate = {
   confirmation_required: boolean;
 };
 
+export async function searchFoodsByName(options: {
+  dogId: string;
+  query: string;
+}): Promise<{ items: ExternalFoodCandidate[]; attribution: string }> {
+  const clientRequestId = newId('opff-search');
+  return api.post<{ items: ExternalFoodCandidate[]; attribution: string }>(
+    '/v1/nutrition/foods/external/search',
+    {
+      dog_id: options.dogId,
+      query: options.query.trim(),
+      client_request_id: clientRequestId,
+    },
+    { headers: { 'X-Idempotency-Key': clientRequestId } },
+  );
+}
+
 export async function lookupFoodByBarcode(options: {
   dogId: string;
   barcode: string;

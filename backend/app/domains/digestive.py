@@ -268,6 +268,11 @@ def build_inmemory_digestive_context(
         ),
         latest_weight_kg=nutrition.get("latest_kg"),
         weight_delta_kg=nutrition.get("delta_kg"),
+        activity_level=(
+            (store.dog_lifestyle_profiles.get(event.dog_id) or {}).get("routine")
+            or (store.dog_lifestyle_profiles.get(event.dog_id) or {}).get("routine_json")
+            or {}
+        ).get("activity"),
     )
 
 

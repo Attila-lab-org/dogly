@@ -8,6 +8,7 @@ from typing import Any
 from app.contracts.api import (
     ExternalFoodConfirmRequest,
     ExternalFoodLookupRequest,
+    ExternalFoodSearchRequest,
     FoodManualCreateRequest,
     GuaranteedAnalysis,
 )
@@ -87,6 +88,47 @@ async def lookup_external_food(
         "client_request_id": payload.client_request_id,
     }
     return lookup_id, candidate
+
+
+async def search_external_foods(
+    store: InMemoryStore,
+    *,
+    user_id: str,
+    payload: ExternalFoodSearchRequest,
+    enabled: bool,
+    client: OpenPetFoodFactsClient | None = None,
+) -> list[tuple[str, ExternalFoodCandidate]]:
+    _require_feature(enabled)
+    get_owned_dog(store, user_id=user_id, dog_id=payload.dog_id)
+    try:
+        hits = await (client or default_opff_client()).search_products(payload.query)
+    except ProviderRateLimitError as exc:
+        raise ApiError(
+            ErrorCode.RATE_LIMITED,
+            "Troppe richieste in questo momento.",
+        ) from exc
+    except TimeoutError as exc:
+        raise ApiError(
+            ErrorCode.PROVIDER_TIMEOUT,
+            "Il catalogo alimenti non è raggiungibile.",
+        ) from exc
+    results: list[tuple[str, ExternalFoodCandidate]] = []
+    for index, candidate in enumerate(hits):
+        lookup_id = new_id()
+        store.external_food_lookups[lookup_id] = {
+            "id": lookup_id,
+            "user_id": user_id,
+            "dog_id": payload.dog_id,
+            "barcode": candidate.barcode,
+            "provider": candidate.provider,
+            "provider_code": candidate.provider_code,
+            "status": "CANDIDATE",
+            "candidate": candidate.model_dump(mode="json"),
+            "created_at": now_utc(),
+            "client_request_id": f"{payload.client_request_id}-{candidate.barcode or index}",
+        }
+        results.append((lookup_id, candidate))
+    return results
 
 
 def confirm_external_food(

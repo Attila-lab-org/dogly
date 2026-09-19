@@ -11,6 +11,8 @@ from app.contracts.api import (
     ExternalFoodCandidateOut,
     ExternalFoodConfirmRequest,
     ExternalFoodLookupRequest,
+    ExternalFoodSearchOut,
+    ExternalFoodSearchRequest,
     FeedingPeriodCreate,
     FeedingPeriodOut,
     FeedingPeriodUpdate,
@@ -408,6 +410,61 @@ async def lookup_external_food(
         calories=candidate.calories,
         image_url=candidate.image_url,
         attribution=candidate.attribution,
+    )
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
+
+
+def _candidate_out(
+    lookup_id: str, candidate: object
+) -> ExternalFoodCandidateOut:
+    return ExternalFoodCandidateOut(
+        lookup_id=lookup_id,
+        barcode=candidate.barcode,
+        brand=candidate.brand,
+        name=candidate.name,
+        ingredients_raw=candidate.ingredients_raw,
+        calories=candidate.calories,
+        image_url=candidate.image_url,
+        attribution=candidate.attribution,
+    )
+
+
+@router.post(
+    "/nutrition/foods/external/search",
+    response_model=ExternalFoodSearchOut,
+)
+async def search_external_foods(
+    payload: ExternalFoodSearchRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
+) -> ExternalFoodSearchOut:
+    if cached := guard.lookup():
+        return ExternalFoodSearchOut.model_validate(cached)
+    enabled = state.settings.open_pet_food_facts_v1
+    if state.engine is not None:
+        hits = await external_food_db.search_external_foods(
+            state.engine,
+            user_id=user_id,
+            payload=payload,
+            enabled=enabled,
+        )
+    else:
+        hits = await external_food.search_external_foods(
+            state.store,
+            user_id=user_id,
+            payload=payload,
+            enabled=enabled,
+        )
+    response = ExternalFoodSearchOut(
+        items=[_candidate_out(lookup_id, candidate) for lookup_id, candidate in hits],
+        attribution=(
+            hits[0][1].attribution
+            if hits
+            else "Dati alimento da Open Pet Food Facts (ODbL). "
+            "https://world.openpetfoodfacts.org"
+        ),
     )
     await _record_guard(state, guard, response.model_dump(mode="json"))
     return response

@@ -978,6 +978,12 @@ class ExternalFoodLookupRequest(BaseModel):
     client_request_id: str = Field(min_length=8, max_length=128)
 
 
+class ExternalFoodSearchRequest(BaseModel):
+    dog_id: str
+    query: str = Field(min_length=2, max_length=80)
+    client_request_id: str = Field(min_length=8, max_length=128)
+
+
 class ExternalFoodCandidateOut(BaseModel):
     lookup_id: str
     barcode: str
@@ -988,6 +994,11 @@ class ExternalFoodCandidateOut(BaseModel):
     image_url: str | None = None
     attribution: str
     confirmation_required: bool = True
+
+
+class ExternalFoodSearchOut(BaseModel):
+    items: list[ExternalFoodCandidateOut] = Field(default_factory=list)
+    attribution: str
 
 
 class ExternalFoodConfirmRequest(BaseModel):
