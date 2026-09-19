@@ -67,7 +67,10 @@ from app.domains.digestive import (
     build_inmemory_digestive_context,
     contextual_safety_flags,
 )
-from app.domains.digestive_intelligence import build_digestive_intelligence
+from app.domains.digestive_intelligence import (
+    build_digestive_intelligence,
+    govern_digestive_with_core,
+)
 from app.domains.digestive_observation import (
     persistable_image_quality,
     prepare_digestive_observation,
@@ -516,12 +519,8 @@ def _enforce_capture_modalities(
 def _calibrated_confidence(
     interpretation: InterpretationContract,
     observation: ObservationContract,
-    knowledge_coverage: str,
 ) -> ConfidenceBand:
-    if (
-        knowledge_coverage == "LOW"
-        or interpretation.primary_intent in {None, IntentCode.INSUFFICIENT}
-    ):
+    if interpretation.primary_intent in {None, IntentCode.INSUFFICIENT}:
         return ConfidenceBand.LOW
     if (
         observation.capture_quality.overall_quality != "good"
@@ -909,7 +908,6 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         confidence = _calibrated_confidence(
             interpretation,
             observation,
-            knowledge_context.coverage,
         )
         if confidence != interpretation.confidence_band:
             interpretation = interpretation.model_copy(
@@ -1654,7 +1652,11 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         digestive_context,
         longitudinal=state.settings.digestive_longitudinal_v3,
     )
-    event.intelligence_json = intelligence.model_dump(mode="json")
+    intelligence, canine_audit = govern_digestive_with_core(intelligence)
+    event.intelligence_json = {
+        **intelligence.model_dump(mode="json"),
+        "canine_intelligence": canine_audit,
+    }
     event.summary = intelligence.consumer_summary
     event.status = "COMPLETED"
     event.completed_at = now_utc()

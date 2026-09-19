@@ -821,11 +821,11 @@ def test_confidence_is_capped_by_quality_and_abstention():
     abstained = high.model_copy(update={"primary_intent": IntentCode.INSUFFICIENT})
 
     assert (
-        _calibrated_confidence(high, degraded, "MEDIUM")
+        _calibrated_confidence(high, degraded)
         is ConfidenceBand.MEDIUM
     )
     assert (
-        _calibrated_confidence(abstained, _obs(), "HIGH")
+        _calibrated_confidence(abstained, _obs())
         is ConfidenceBand.LOW
     )
 

@@ -142,6 +142,20 @@ def _sound_note(event: BehaviorEventRec, interp: dict) -> str | None:
     )
 
 
+def _consumer_evidence(interp: dict, consumer: dict) -> list[dict]:
+    raw = (
+        consumer["consumer_evidence"]
+        if "consumer_evidence" in consumer
+        else interp.get("evidence", [])
+    )
+    return [
+        item
+        for item in raw
+        if not isinstance(item, dict)
+        or str(item.get("source") or "").casefold() != "scientific_kb"
+    ]
+
+
 def event_out(
     event: BehaviorEventRec,
     feedback: FeedbackValue | None = None,
@@ -196,11 +210,7 @@ def event_out(
             if "consumer_alternatives" in consumer
             else interp.get("alternatives", [])
         ),
-        evidence=(
-            consumer["consumer_evidence"]
-            if "consumer_evidence" in consumer
-            else interp.get("evidence", [])
-        ),
+        evidence=_consumer_evidence(interp, consumer),
         safety_flags=interp.get("safety_flags", []),
         needs_context=interp.get("needs_context", False),
         context_question=interp.get("context_question"),

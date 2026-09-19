@@ -318,13 +318,23 @@ def _baseline(
 def _select_consumer_evidence(
     interpretation: InterpretationContract,
 ) -> list[EvidenceItem]:
-    """Owner-facing evidence that supported the reading."""
+    """Owner-facing facts only; scientific audit evidence stays internal."""
     observed = [
         item
         for item in interpretation.evidence
         if item.source is EvidenceSource.OBSERVATION
     ]
-    chosen = observed or list(interpretation.evidence)
+    chosen = observed or [
+        item
+        for item in interpretation.evidence
+        if item.source
+        in {
+            EvidenceSource.CONTEXT,
+            EvidenceSource.PERSONAL_PATTERN,
+            EvidenceSource.LIFE_STAGE,
+            EvidenceSource.LIFESTYLE_BASELINE,
+        }
+    ]
     return chosen[:5]
 
 

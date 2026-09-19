@@ -1,9 +1,14 @@
 from datetime import UTC, datetime, timedelta
 
+from app.api.routes.behavior import _consumer_evidence
 from app.contracts.interpretation import EvidenceItem, InterpretationContract
 from app.contracts.observation import ObservationContract, normalize_observation_dict
 from app.contracts.taxonomy import ConfidenceBand, ContextBucket, IntentCode
 from app.domains.behavior_decision import apply_behavior_decision_policy
+from app.domains.digestive_intelligence import (
+    DigestiveIntelligenceResult,
+    govern_digestive_with_core,
+)
 from app.knowledge.models import (
     DogContextSnapshot,
     KnowledgeContext,
@@ -190,3 +195,35 @@ def test_grounding_boundary_rejects_invisible_tail_claim() -> None:
     )
     errors = grounding_errors(interpretation, _observation())
     assert any(error["loc"] == ["tail"] for error in errors)
+
+
+def test_internal_scientific_evidence_never_reaches_behavior_consumer() -> None:
+    evidence = _consumer_evidence(
+        {
+            "evidence": [
+                {"source": "scientific_kb", "description": "internal claim"},
+                {"source": "observation", "description": "visible fact"},
+            ]
+        },
+        {},
+    )
+    assert evidence == [{"source": "observation", "description": "visible fact"}]
+
+
+def test_digestive_specialist_is_audited_by_shared_claim_core() -> None:
+    result = DigestiveIntelligenceResult(
+        overall_state="ROUTINE",
+        consumer_headline="Le feci sono ben formate.",
+        consumer_summary="Oggi la consistenza appare regolare.",
+        baseline_comparison="Non ho ancora una baseline personale.",
+        safety_state="ROUTINE",
+        observation_reliability="La foto è chiara.",
+        knowledge_claim_ids=["DIG_SCORE_2_001"],
+    )
+    governed, audit = govern_digestive_with_core(result)
+    assert governed.consumer_headline == result.consumer_headline
+    assert audit["claims"][0]["claim_id"] == "digestive-consumer-1"
+    assert audit["validations"][0]["status"] in {
+        "SUPPORTED",
+        "PARTIALLY_SUPPORTED",
+    }

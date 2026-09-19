@@ -63,7 +63,7 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
     expect(['LOW', 'MEDIUM', 'HIGH']).toContain(result.confidence_band);
   });
 
-  it('preserva schema, safety e provenienza scientifica dalla API', () => {
+  it('preserva schema e safety ma nasconde la provenienza scientifica interna', () => {
     const event: ApiBehaviorEvent = {
       id: 'evt-1',
       dog_id: 'dog-1',
@@ -97,10 +97,7 @@ describe('contracts — tassonomia intent chiusa (sez. 16.2)', () => {
 
     const result = mapApiEventToResult(event);
     expect(result.schema_version).toBe('interpretation.v0');
-    expect(result.evidence.map((item) => item.source)).toEqual([
-      'SCIENTIFIC_KB',
-      'UNKNOWN',
-    ]);
+    expect(result.evidence.map((item) => item.source)).toEqual(['UNKNOWN']);
     expect(result.safety_flags).toEqual(event.safety_flags);
     expect(result.needs_context).toBe(true);
     expect(result.context_question).toBe('Cosa è successo prima?');

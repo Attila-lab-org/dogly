@@ -143,6 +143,52 @@ class DigestiveIntelligenceResult(BaseModel):
     baseline_version: str = DIGESTIVE_BASELINE_VERSION
 
 
+def govern_digestive_with_core(
+    result: DigestiveIntelligenceResult,
+) -> tuple[DigestiveIntelligenceResult, dict[str, Any]]:
+    """Audit Digestive claims through the same claim-strength Core.
+
+    Digestive's deterministic specialist remains the capability writer; the
+    shared Core calibrates diagnosis/causality/certainty without reinterpreting
+    the stool observation or replacing contextual safety actions.
+    """
+    from app.contracts.canine_intelligence import ReasoningClaim
+    from app.knowledge.claim_validation import (
+        govern_assistant_text,
+        validate_claims,
+    )
+
+    statement = f"{result.consumer_headline} {result.consumer_summary}".strip()
+    claim = ReasoningClaim(
+        claim_id="digestive-consumer-1",
+        statement=statement[:280],
+        basis=(
+            "SCIENTIFIC_EVIDENCE"
+            if result.knowledge_claim_ids
+            else "GENERAL_MODEL"
+        ),
+        strength="MODERATE",
+        scientific_card_ids=result.knowledge_claim_ids[:8],
+        asserts_causation=False,
+        asserts_diagnosis=False,
+    )
+    decision = validate_claims([claim])
+    headline, headline_changed = govern_assistant_text(
+        result.consumer_headline, decision
+    )
+    summary, summary_changed = govern_assistant_text(
+        result.consumer_summary, decision
+    )
+    if headline_changed or summary_changed:
+        result = result.model_copy(
+            update={
+                "consumer_headline": headline,
+                "consumer_summary": summary,
+            }
+        )
+    return result, decision.model_dump(mode="json")
+
+
 _QUALITY_COPY = {
     "filmed_screen": (
         "alcuni dettagli si perdono perché la foto non è stata scattata direttamente"

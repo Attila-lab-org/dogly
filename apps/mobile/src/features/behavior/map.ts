@@ -23,11 +23,13 @@ const SOURCE_MAP: Record<string, EvidenceSource> = {
 };
 
 function mapEvidence(items: ApiEvidenceItem[]): EvidenceItem[] {
-  return items.map((item) => ({
-    source: SOURCE_MAP[item.source] ?? 'UNKNOWN',
-    label: consumerCopy(item.label ?? item.description ?? 'Segnale osservato'),
-    ref: item.ref ?? undefined,
-  }));
+  return items
+    .filter((item) => SOURCE_MAP[item.source] !== 'SCIENTIFIC_KB')
+    .map((item) => ({
+      source: SOURCE_MAP[item.source] ?? 'UNKNOWN',
+      label: consumerCopy(item.label ?? item.description ?? 'Segnale osservato'),
+      ref: item.ref ?? undefined,
+    }));
 }
 
 export function mapApiEventToResult(
