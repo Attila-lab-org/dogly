@@ -81,7 +81,11 @@ export async function listFeedingPeriods(
 export async function scanAndUploadFoodLabel(options: {
   dogId: string;
   localUri: string;
-}): Promise<{ foodId: string; readAutomatically: boolean }> {
+}): Promise<{
+  foodId: string;
+  food: ApiFoodProduct | null;
+  readAutomatically: boolean;
+}> {
   const contentType = await detectImageContentType(options.localUri);
   const bytes = await fileBytes(options.localUri);
   const clientRequestId = newId('food');
@@ -106,10 +110,15 @@ export async function scanAndUploadFoodLabel(options: {
     );
     return {
       foodId: init.food_product_id,
+      food: extracted,
       readAutomatically: hasReadableFoodLabelData(extracted),
     };
   } catch {
-    return { foodId: init.food_product_id, readAutomatically: false };
+    return {
+      foodId: init.food_product_id,
+      food: null,
+      readAutomatically: false,
+    };
   }
 }
 
@@ -177,8 +186,12 @@ export type ExternalFoodCandidate = {
   barcode: string;
   brand: string | null;
   name: string | null;
+  variant?: string | null;
+  package_size?: string | null;
+  food_form?: string | null;
   ingredients_raw?: string | null;
   calories?: string | null;
+  image_url?: string | null;
   attribution: string;
   confirmation_required: boolean;
 };
@@ -188,11 +201,12 @@ export async function searchFoodsByName(options: {
   query: string;
 }): Promise<{ items: ExternalFoodCandidate[]; attribution: string }> {
   const clientRequestId = newId('opff-search');
+  const query = options.query.trim().slice(0, 80);
   return api.post<{ items: ExternalFoodCandidate[]; attribution: string }>(
     '/v1/nutrition/foods/external/search',
     {
       dog_id: options.dogId,
-      query: options.query.trim(),
+      query,
       client_request_id: clientRequestId,
     },
     { headers: { 'X-Idempotency-Key': clientRequestId } },
@@ -218,6 +232,7 @@ export async function lookupFoodByBarcode(options: {
 export async function confirmExternalFood(options: {
   dogId: string;
   lookupId: string;
+  draftFoodId?: string;
   brand?: string;
   name: string;
   ingredientsRaw?: string;
@@ -230,6 +245,7 @@ export async function confirmExternalFood(options: {
     {
       dog_id: options.dogId,
       lookup_id: options.lookupId,
+      draft_food_id: options.draftFoodId || null,
       brand: options.brand?.trim() || null,
       name: options.name.trim(),
       ingredients_raw: options.ingredientsRaw?.trim() || null,

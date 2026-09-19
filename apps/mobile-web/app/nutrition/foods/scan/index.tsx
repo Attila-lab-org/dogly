@@ -30,11 +30,16 @@ export default function FoodScanScreen() {
         dogId: dog.id,
         localUri: uri,
       });
-      router.replace(
-        `/nutrition/foods/${result.foodId}/verify?reading=${
-          result.readAutomatically ? 'complete' : 'manual'
-        }`,
-      );
+      const query = [result.food?.brand, result.food?.name]
+        .filter(Boolean)
+        .join(' ');
+      router.replace({
+        pathname: '/nutrition/foods/new' as never,
+        params: {
+          photoFoodId: result.foodId,
+          photoQuery: query,
+        },
+      });
     } catch {
       setError(
         'Non sono riuscito a leggere l’etichetta. Controlla che la foto sia nitida e riprova.',
@@ -45,10 +50,10 @@ export default function FoodScanScreen() {
 
   return (
     <ScreenContainer scroll>
-      <StackScreenHeader title="Scansiona etichetta" />
+      <StackScreenHeader title="Fotografa la confezione" />
       <Text style={styles.intro}>
-        Fotografa ingredienti e valori nutrizionali. Compilerò ciò che riesco a
-        leggere, poi controllerai tutto prima di salvarlo.
+        Inquadra il lato dove si vedono bene marca e nome. Ti mostrerò gli
+        alimenti possibili: sarai tu a scegliere quello giusto.
       </Text>
 
       {error ? (
@@ -64,8 +69,8 @@ export default function FoodScanScreen() {
           />
           <Text style={styles.frameLabel}>
             {phase === 'ready'
-              ? 'Inquadra bene il retro della confezione'
-              : 'Sto leggendo l’etichetta…'}
+              ? 'Marca e nome devono essere leggibili'
+              : 'Sto cercando gli alimenti possibili…'}
           </Text>
         </View>
       </Card>
@@ -73,7 +78,7 @@ export default function FoodScanScreen() {
       <View style={styles.actions}>
         {phase === 'ready' && (
           <Button
-            title="Scansiona etichetta"
+            title="Scatta la foto"
             icon={<Ionicons name="scan" size={18} color={colors.textOnPrimary} />}
             onPress={() => void startScan()}
           />

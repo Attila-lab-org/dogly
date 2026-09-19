@@ -10,11 +10,16 @@ from app.contracts.api import (
     ExternalFoodLookupRequest,
     ExternalFoodSearchRequest,
     FoodManualCreateRequest,
+    FoodVerifyRequest,
     GuaranteedAnalysis,
 )
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive_db, dogs_db
-from app.domains.external_food import default_opff_client, fetch_candidate
+from app.domains.external_food import (
+    confirmation_values,
+    default_opff_client,
+    fetch_candidate,
+)
 from app.providers.base import ProviderRateLimitError
 from app.domains.ids import require_uuid
 from app.domains.models import FoodProductRec
@@ -51,14 +56,12 @@ async def lookup_external_food(
     _require_feature(enabled)
     require_uuid(payload.dog_id, not_found="Dog not found")
     await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=payload.dog_id)
-    candidate = await fetch_candidate(client or default_opff_client(), payload.barcode)
-    lookup_id = _uuid_id()
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
         existing = (
             await conn.execute(
                 text(
                     """
-                    select id, status
+                    select id, status, raw_payload
                     from public.external_food_lookups
                     where user_id = cast(:user_id as uuid)
                       and client_request_id = :crid
@@ -67,8 +70,14 @@ async def lookup_external_food(
                 {"user_id": user_id, "crid": payload.client_request_id},
             )
         ).mappings().first()
-        if existing:
-            return str(existing["id"]), candidate
+    if existing:
+        return (
+            str(existing["id"]),
+            ExternalFoodCandidate.model_validate(existing["raw_payload"]),
+        )
+    candidate = await fetch_candidate(client or default_opff_client(), payload.barcode)
+    lookup_id = _uuid_id()
+    async with engine.begin() as conn:
         await conn.execute(
             text(
                 """
@@ -203,18 +212,46 @@ async def confirm_external_food(
         return await digestive_db.get_food_product(
             engine, user_id=user_id, food_id=str(lookup["food_product_id"])
         )
-    product = await digestive_db.create_manual_food_product(
-        engine,
-        user_id=user_id,
-        payload=FoodManualCreateRequest(
-            dog_id=payload.dog_id,
-            client_request_id=f"opff-{payload.lookup_id}",
-            brand=payload.brand,
-            name=payload.name,
-            ingredients_raw=payload.ingredients_raw,
-            guaranteed_analysis=GuaranteedAnalysis(calories=payload.calories),
-        ),
+    brand, name, ingredients, calories = confirmation_values(
+        payload,
+        lookup.get("raw_payload"),
     )
+    if payload.draft_food_id:
+        draft = await digestive_db.get_food_product(
+            engine,
+            user_id=user_id,
+            food_id=payload.draft_food_id,
+        )
+        if draft.dog_id != payload.dog_id:
+            raise ApiError(ErrorCode.NOT_FOUND, "Food draft not found")
+        analysis = GuaranteedAnalysis.model_validate(draft.guaranteed_analysis or {})
+        if calories:
+            analysis = analysis.model_copy(update={"calories": calories})
+        product = await digestive_db.verify_food_product(
+            engine,
+            user_id=user_id,
+            food_id=draft.id,
+            payload=FoodVerifyRequest(
+                brand=brand or draft.brand,
+                name=name,
+                ingredients_raw=ingredients or draft.ingredients_raw,
+                guaranteed_analysis=analysis,
+                feeding_directions=draft.feeding_directions,
+            ),
+        )
+    else:
+        product = await digestive_db.create_manual_food_product(
+            engine,
+            user_id=user_id,
+            payload=FoodManualCreateRequest(
+                dog_id=payload.dog_id,
+                client_request_id=f"opff-{payload.lookup_id}",
+                brand=brand,
+                name=name,
+                ingredients_raw=ingredients,
+                guaranteed_analysis=GuaranteedAnalysis(calories=calories),
+            ),
+        )
     async with engine.begin() as conn:
         await conn.execute(
             text(

@@ -886,7 +886,7 @@ class FoodLabelExtraction(BaseModel):
 class FoodVerifyRequest(BaseModel):
     """Only user-verified fields become durable data (sez. 20.1)."""
 
-    brand: str = Field(min_length=1, max_length=120)
+    brand: str | None = Field(default=None, max_length=120)
     name: str = Field(min_length=1, max_length=200)
     ingredients_raw: str | None = None
     guaranteed_analysis: GuaranteedAnalysis = Field(default_factory=GuaranteedAnalysis)
@@ -989,6 +989,9 @@ class ExternalFoodCandidateOut(BaseModel):
     barcode: str
     brand: str | None = None
     name: str | None = None
+    variant: str | None = None
+    package_size: str | None = None
+    food_form: str | None = None
     ingredients_raw: str | None = None
     calories: str | None = None
     image_url: str | None = None
@@ -1004,6 +1007,7 @@ class ExternalFoodSearchOut(BaseModel):
 class ExternalFoodConfirmRequest(BaseModel):
     dog_id: str
     lookup_id: str
+    draft_food_id: str | None = None
     brand: str | None = Field(default=None, max_length=120)
     name: str = Field(min_length=1, max_length=200)
     ingredients_raw: str | None = None

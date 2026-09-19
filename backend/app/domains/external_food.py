@@ -63,6 +63,19 @@ def _require_feature(enabled: bool) -> None:
         )
 
 
+def confirmation_values(
+    payload: ExternalFoodConfirmRequest,
+    candidate_raw: Any,
+) -> tuple[str | None, str, str | None, str | None]:
+    """Owner edits win; omitted optional fields fall back to the audited hit."""
+    raw = candidate_raw if isinstance(candidate_raw, dict) else {}
+    brand = payload.brand or raw.get("brand")
+    name = payload.name or raw.get("name")
+    ingredients = payload.ingredients_raw or raw.get("ingredients_raw")
+    calories = payload.calories or raw.get("calories")
+    return brand, name, ingredients, calories
+
+
 async def lookup_external_food(
     store: InMemoryStore,
     *,
@@ -148,18 +161,46 @@ def confirm_external_food(
         raise ApiError(ErrorCode.NOT_FOUND, "Lookup not found")
     if lookup["status"] == "CONFIRMED" and lookup.get("food_product_id"):
         return store.food_products[lookup["food_product_id"]]
-    product = create_manual_food_product(
-        store,
-        user_id=user_id,
-        payload=FoodManualCreateRequest(
-            dog_id=payload.dog_id,
-            client_request_id=f"opff-{payload.lookup_id}",
-            brand=payload.brand,
-            name=payload.name,
-            ingredients_raw=payload.ingredients_raw,
-            guaranteed_analysis=GuaranteedAnalysis(calories=payload.calories),
-        ),
+    brand, name, ingredients, calories = confirmation_values(
+        payload,
+        lookup.get("candidate"),
     )
+    draft = (
+        store.food_products.get(payload.draft_food_id)
+        if payload.draft_food_id
+        else None
+    )
+    if payload.draft_food_id and draft is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Food draft not found")
+    if draft is not None:
+        if draft.owner_id != user_id or draft.dog_id != payload.dog_id:
+            raise ApiError(ErrorCode.NOT_FOUND, "Food draft not found")
+        analysis = dict(draft.guaranteed_analysis or {})
+        if calories:
+            analysis["calories"] = calories
+        product = draft.model_copy(
+            update={
+                "brand": brand,
+                "name": name,
+                "ingredients_raw": ingredients or draft.ingredients_raw,
+                "guaranteed_analysis": analysis,
+                "verified_at": now_utc(),
+            }
+        )
+        store.food_products[product.id] = product
+    else:
+        product = create_manual_food_product(
+            store,
+            user_id=user_id,
+            payload=FoodManualCreateRequest(
+                dog_id=payload.dog_id,
+                client_request_id=f"opff-{payload.lookup_id}",
+                brand=brand,
+                name=name,
+                ingredients_raw=ingredients,
+                guaranteed_analysis=GuaranteedAnalysis(calories=calories),
+            ),
+        )
     updated = product.model_copy(
         update={
             "barcode": lookup["barcode"],

@@ -125,6 +125,13 @@ def test_spoken_product_name_keeps_one_italian_label():
     )
 
 
+def test_spoken_product_name_keeps_the_specific_variant():
+    assert (
+        spoken_product_name("Royal Canin", "Royal Canin Mini Adult")
+        == "Royal Canin Mini Adult"
+    )
+
+
 @pytest.mark.asyncio
 async def test_search_returns_dog_food_list():
     def handler(request: httpx.Request) -> httpx.Response:
@@ -161,8 +168,7 @@ async def test_search_returns_dog_food_list():
         search_cache={},
     )
     hits = await client.search_products("salmone riso")
-    assert len(hits) == 1
-    assert hits[0].name == "Salmone con Riso"
+    assert [item.name for item in hits] == ["Salmone con Riso"]
     assert hits[0].brand == "Acme"
 
 
@@ -179,6 +185,7 @@ async def test_search_keeps_brand_only_products_and_caches():
                     {
                         "code": "8000000000099",
                         "brands": "Monge",
+                        "quantity": "12 kg",
                     }
                 ]
             },
@@ -192,5 +199,115 @@ async def test_search_keeps_brand_only_products_and_caches():
     first = await client.search_products("Monge")
     second = await client.search_products("monge")
     assert [item.name for item in first] == ["Monge"]
+    assert first[0].variant == "12 kg"
     assert [item.name for item in second] == ["Monge"]
-    assert calls["n"] == 1
+    # One-word sparse searches read page 2 once; the repeated query is cached.
+    assert calls["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_search_keeps_multiple_variants_choosable():
+    def handler(request: httpx.Request) -> httpx.Response:
+        terms = str(request.url)
+        if "Monge+salmone" in terms or "Monge%20salmone" in terms:
+            products = [
+                {
+                    "code": "8000000000001",
+                    "product_name": "Special dog excellence monoprotein salmone",
+                    "brands": "Monge",
+                    "quantity": "3kg",
+                    "categories_tags": ["en:dog-food", "en:dry-dog-food"],
+                }
+            ]
+        else:
+            products = [
+                {
+                    "code": "8000000000001",
+                    "product_name": "Special dog excellence monoprotein salmone",
+                    "brands": "Monge",
+                    "quantity": "3kg",
+                    "categories_tags": ["en:dog-food", "en:dry-dog-food"],
+                },
+                {
+                    "code": "8000000000003",
+                    "product_name": "Monge salmon with rice",
+                    "brands": "Monge",
+                    "quantity": "12 kg",
+                    "categories_tags": ["en:dog-food"],
+                },
+                {
+                    "code": "8000000000004",
+                    "product_name": "Special dog excellence medium adulti pollo#HK km",
+                    "brands": "Monge",
+                    "quantity": "3 kg",
+                    "categories_tags": ["en:dog-food"],
+                },
+                {
+                    "code": "8000000000005",
+                    "product_name": "Lechat excellence sterilised pollo",
+                    "brands": "Monge",
+                    "quantity": "1,5 kg",
+                    "categories_tags": ["en:cat-food"],
+                },
+            ]
+        return httpx.Response(200, json={"products": products})
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    hits = await client.search_products("Monge salmone")
+    names = [item.name for item in hits]
+    assert "Special dog excellence monoprotein salmone" in names
+    assert "Monge salmon with rice" in names
+    assert "Special dog excellence medium adulti pollo" in names
+    assert all("lechat" not in (item.name or "").lower() for item in hits)
+    salmon = next(item for item in hits if "salmone" in (item.name or "").lower())
+    assert salmon.variant == "3 kg · crocchette"
+    assert names.index("Special dog excellence monoprotein salmone") < names.index(
+        "Special dog excellence medium adulti pollo"
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_recovers_missing_brand_from_catalog_siblings_and_deduplicates():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "products": [
+                    {
+                        "code": "8000000000101",
+                        "product_name": "Monge salmon with rice",
+                        "brands": "monge",
+                        "quantity": "12 kg",
+                        "categories_tags": ["en:dog-food"],
+                    },
+                    {
+                        "code": "8000000000102",
+                        "product_name": "Monge salmon with rice",
+                        "quantity": "12kg",
+                        "categories_tags": ["en:dog-food"],
+                    },
+                    {
+                        "code": "8000000000103",
+                        "product_name": "Monge salmon with rice",
+                        "brands_tags": ["monge"],
+                        "quantity": "3 kg",
+                        "categories_tags": ["en:dog-food"],
+                    },
+                ]
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    hits = await client.search_products("Monge salmone")
+    assert [(item.brand, item.package_size) for item in hits] == [
+        ("Monge", "12 kg"),
+        ("Monge", "3 kg"),
+    ]

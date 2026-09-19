@@ -16,16 +16,20 @@ from app.domains.db import get_engine
 from app.providers.base import ProviderUsage
 from app.providers.budget import check_daily_budget
 
-_SYSTEM = """You read commercial dog-food labels for a consumer app.
-Transcribe only text that is genuinely visible in the supplied image.
-Never infer ingredients, percentages, calories, brand, product name, or feeding
-directions from packaging style or prior knowledge. Keep ingredient and feeding
-texts in their original language and order. Percent fields are numbers without
-the percent sign. Keep calories exactly as printed, including unit and basis.
-Use null for every field that is absent, cropped, blurred, or uncertain.
-For each field return confidence from 0 to 1 based only on legibility.
-Warnings must be short Italian instructions about portions worth photographing
-again. Return one JSON object only.
+_SYSTEM = """You identify commercial dog food from one package photo.
+Transcribe only text that is genuinely visible in the supplied image. Brand and
+the complete product/line name are the first priority because they will be used
+to search a catalog and show the owner possible matches. Keep size, life stage,
+protein/flavour, breed/size range, veterinary line, and dry/wet wording inside
+the product name when printed: they distinguish variants. Never infer any field
+from packaging style, logos you cannot read, or prior product knowledge.
+If ingredients, percentages, calories, or feeding directions are visible,
+transcribe them too, in their original language and order. Percent fields are
+numbers without the percent sign. Keep calories exactly as printed, including
+unit and basis. Use null for every field that is absent, cropped, blurred, or
+uncertain. For each field return confidence from 0 to 1 based only on
+legibility. Warnings must be short Italian instructions about what to
+photograph again. Return one JSON object only.
 """
 
 _CONFIDENCE_KEYS = frozenset(
@@ -127,7 +131,7 @@ async def extract_food_label(
                     {
                         "type": "text",
                         "text": (
-                            "Leggi questa etichetta. JSON only. Schema: "
+                            "Identifica questa confezione. JSON only. Schema: "
                             f"{json.dumps(schema_hint, ensure_ascii=False)}"
                         ),
                     },

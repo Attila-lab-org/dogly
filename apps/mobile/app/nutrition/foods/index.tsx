@@ -63,8 +63,7 @@ export default function FoodsScreen() {
 
       {foods.length === 0 && (
         <Text style={styles.intro}>
-          Non hai ancora salvato alimenti. Cercalo nell’elenco, oppure
-          fotografa l’etichetta.
+          Non hai ancora salvato alimenti.
         </Text>
       )}
 
@@ -125,15 +124,9 @@ export default function FoodsScreen() {
       })}
 
       <Button
-        title="Cerca nell’elenco"
-        icon={<Ionicons name="search-outline" size={18} color={colors.textOnPrimary} />}
+        title="Aggiungi alimento"
+        icon={<Ionicons name="add" size={18} color={colors.textOnPrimary} />}
         onPress={() => router.push('/nutrition/foods/new' as never)}
-      />
-      <Button
-        title="Fotografa un’etichetta"
-        variant="outline"
-        icon={<Ionicons name="scan-outline" size={18} color={colors.accent} />}
-        onPress={() => router.push('/nutrition/foods/scan')}
       />
     </ScreenContainer>
   );

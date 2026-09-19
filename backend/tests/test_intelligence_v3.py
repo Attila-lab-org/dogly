@@ -19,7 +19,7 @@ from app.domains.digestive_intelligence import (
 from app.domains.dog_context import build_dog_context
 from app.domains.external_food import confirm_external_food, lookup_external_food
 from app.domains.intelligence_context import build_dog_intelligence_context
-from app.domains.models import DogRec
+from app.domains.models import DogRec, FoodProductRec
 from app.knowledge.breed_resolver import resolve_breed
 from app.knowledge.intelligence_v3 import get_intelligence_v3, select_claims
 from app.knowledge.retrieval import breed_prior_eligible, retrieve_evidence
@@ -423,6 +423,44 @@ async def test_weight_events_and_opff_memory_path(
     assert product.verified_at is not None
     assert product.barcode == "8000000000000"
     assert product.external_source == "open_pet_food_facts"
+    assert product.ingredients_raw == "pollo, riso"
+    assert product.guaranteed_analysis["calories"] == "350 kcal/100g"
+
+    draft_id = "photo-draft"
+    state.store.food_products[draft_id] = FoodProductRec(
+        id=draft_id,
+        owner_id=user_id,
+        dog_id=dog_id,
+        image_path="users/test/food.jpg",
+        guaranteed_analysis={"crude_protein_min": 24.0},
+    )
+    draft_lookup_id, _ = await lookup_external_food(
+        state.store,
+        user_id=user_id,
+        payload=ExternalFoodLookupRequest(
+            dog_id=dog_id,
+            barcode="8000000000001",
+            client_request_id="opff-photo-1",
+        ),
+        enabled=True,
+        client=FakeClient(),
+    )
+    from_photo = confirm_external_food(
+        state.store,
+        user_id=user_id,
+        payload=ExternalFoodConfirmRequest(
+            dog_id=dog_id,
+            lookup_id=draft_lookup_id,
+            draft_food_id=draft_id,
+            brand="Acme",
+            name="Crocchette prova",
+        ),
+        enabled=True,
+    )
+    assert from_photo.id == draft_id
+    assert from_photo.image_path == "users/test/food.jpg"
+    assert from_photo.guaranteed_analysis["crude_protein_min"] == 24.0
+    assert from_photo.guaranteed_analysis["calories"] == "350 kcal/100g"
 
 
 @pytest.mark.asyncio
