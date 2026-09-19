@@ -41,10 +41,12 @@ export function useDoglyRealtime(dogId: string) {
   const channelRef = useRef<RTCDataChannel | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const handledCallsRef = useRef(new Set<string>());
   const sessionRef = useRef<string | null>(null);
   const sessionDataRef = useRef<RealtimeSession | null>(null);
   const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
+  const userTranscriptRef = useRef('');
+  const assistantRef = useRef('');
+  const persistLockRef = useRef(false);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -55,7 +57,7 @@ export function useDoglyRealtime(dogId: string) {
     peerRef.current = null;
     streamRef.current = null;
     audioRef.current = null;
-    handledCallsRef.current.clear();
+    persistLockRef.current = false;
   }, []);
 
   const ensureSession = useCallback(async () => {
@@ -75,82 +77,91 @@ export function useDoglyRealtime(dogId: string) {
     }
   }, [dogId]);
 
-  const handleToolCall = useCallback(async (event: RealtimeServerEvent) => {
+  const persistSpokenTurn = useCallback(async () => {
     const activeSession = sessionRef.current;
-    const channel = channelRef.current;
-    const callId = event.call_id;
-    if (
-      !activeSession ||
-      !channel ||
-      !callId ||
-      handledCallsRef.current.has(callId)
-    ) {
+    const userText = userTranscriptRef.current.trim();
+    const assistantText = assistantRef.current.trim();
+    if (!activeSession || !userText || !assistantText || persistLockRef.current) {
       return;
     }
-    handledCallsRef.current.add(callId);
-    setVoiceState('thinking');
+    persistLockRef.current = true;
     try {
-      const args = JSON.parse(event.arguments ?? '{}') as { user_text?: string };
-      const userText = args.user_text?.trim();
-      if (!userText) throw new Error('Trascrizione non disponibile');
-      setTranscript(userText);
-      const turn = await createRealtimeTurn(activeSession, userText);
+      const turn = await createRealtimeTurn(activeSession, userText, assistantText);
       setLastTurn(turn);
-      setAssistantDraft('');
-      channel.send(
-        JSON.stringify({
-          type: 'conversation.item.create',
-          item: {
-            type: 'function_call_output',
-            call_id: callId,
-            output: JSON.stringify({
-              assistant_text: turn.assistant_text,
-              question: turn.question,
-            }),
-          },
-        }),
-      );
-      channel.send(
-        JSON.stringify({
-          type: 'response.create',
-          response: {
-            output_modalities: ['audio'],
-            tool_choice: 'none',
-            instructions:
-              'Pronuncia fedelmente assistant_text e poi question, se presente. Non aggiungere altro.',
-          },
-        }),
-      );
-      setVoiceState('speaking');
     } catch {
-      setError('DOGly non è riuscito a completare questa risposta.');
-      setVoiceState('error');
+      // Voice already answered; audit persistence must never block the conversation.
+    } finally {
+      persistLockRef.current = false;
     }
+  }, []);
+
+  const sendVoiceText = useCallback((text: string) => {
+    const channel = channelRef.current;
+    if (!channel || channel.readyState !== 'open') return false;
+    userTranscriptRef.current = text;
+    assistantRef.current = '';
+    setTranscript(text);
+    setAssistantDraft('');
+    channel.send(
+      JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text }],
+        },
+      }),
+    );
+    channel.send(
+      JSON.stringify({
+        type: 'response.create',
+        response: { output_modalities: ['audio'] },
+      }),
+    );
+    setVoiceState('speaking');
+    return true;
   }, []);
 
   const handleServerEvent = useCallback(
     (event: RealtimeServerEvent) => {
       switch (event.type) {
         case 'input_audio_buffer.speech_started':
+          userTranscriptRef.current = '';
+          assistantRef.current = '';
           setTranscript('');
           setAssistantDraft('');
           setVoiceState('listening');
           break;
-        case 'input_audio_buffer.speech_stopped':
-          setVoiceState('thinking');
+        case 'conversation.item.input_audio_transcription.delta':
+          if (event.delta) {
+            userTranscriptRef.current += event.delta;
+            setTranscript(userTranscriptRef.current);
+          }
           break;
         case 'conversation.item.input_audio_transcription.completed':
-          if (event.transcript) setTranscript(event.transcript);
-          break;
-        case 'response.function_call_arguments.done':
-          if (event.name === 'dogly_turn') void handleToolCall(event);
+          if (event.transcript) {
+            userTranscriptRef.current = event.transcript;
+            setTranscript(event.transcript);
+          }
           break;
         case 'response.output_audio_transcript.delta':
-          setAssistantDraft((current) => current + (event.delta ?? ''));
+        case 'response.audio_transcript.delta':
+          if (event.delta) {
+            assistantRef.current += event.delta;
+            setAssistantDraft(assistantRef.current);
+          }
           setVoiceState('speaking');
+          break;
+        case 'response.output_audio_transcript.done':
+        case 'response.audio_transcript.done':
+          if (event.transcript) {
+            assistantRef.current = event.transcript;
+            setAssistantDraft(event.transcript);
+          }
           break;
         case 'response.done':
           setVoiceState('listening');
+          void persistSpokenTurn();
           break;
         case 'error':
           setError(event.error?.message ?? 'La voce DOGly si è interrotta.');
@@ -158,7 +169,7 @@ export function useDoglyRealtime(dogId: string) {
           break;
       }
     },
-    [handleToolCall],
+    [persistSpokenTurn],
   );
 
   const connect = useCallback(async () => {
@@ -196,7 +207,6 @@ export function useDoglyRealtime(dogId: string) {
             type: 'response.create',
             response: {
               output_modalities: ['audio'],
-              tool_choice: 'none',
               instructions: `Pronuncia esattamente questa frase e nulla di più: ${JSON.stringify(
                 prepared.welcome_text,
               )}`,
@@ -250,13 +260,14 @@ export function useDoglyRealtime(dogId: string) {
   const sendText = useCallback(
     async (text: string) => {
       if (!dogId || !text.trim()) return;
+      const spoken = text.trim();
       setError(null);
+      if (sendVoiceText(spoken)) return;
       setVoiceState('thinking');
       try {
         const prepared = await ensureSession();
-        const activeSession = prepared.id;
-        setTranscript(text.trim());
-        const turn = await createRealtimeTurn(activeSession, text.trim());
+        setTranscript(spoken);
+        const turn = await createRealtimeTurn(prepared.id, spoken);
         setLastTurn(turn);
         setAssistantDraft(turn.assistant_text);
         setVoiceState('idle');
@@ -265,7 +276,7 @@ export function useDoglyRealtime(dogId: string) {
         setVoiceState('error');
       }
     },
-    [dogId, ensureSession],
+    [dogId, ensureSession, sendVoiceText],
   );
 
   const toggleMute = useCallback(() => {

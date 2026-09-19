@@ -347,6 +347,85 @@ async def load_realtime_context_db(
     )
 
 
+_AGE_LABEL = {
+    "PUPPY": "cucciolo",
+    "JUNIOR": "giovane",
+    "ADULT": "adulto",
+    "SENIOR": "anziano",
+}
+_SEX_LABEL = {"MALE": "maschio", "FEMALE": "femmina"}
+_SOURCE_LABEL = {
+    "BEHAVIOR_EVENT": "Lettura comportamentale",
+    "DIGESTIVE_EVENT": "Lettura digestiva",
+    "PERSONAL_PATTERN": "Abitudine già consolidata",
+    "FEEDING_PERIOD": "Alimentazione",
+    "CARE_EVENT": "Cura",
+}
+_MISSING_LABEL = {
+    "active_feeding": "alimentazione attiva",
+    "weight": "peso attuale",
+    "confirmed_routine": "routine confermata",
+}
+
+
+def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
+    """Compact spoken context. The voice model talks from this, not from tools."""
+    owner = (context.owner_display_name or "").strip().split(" ", 1)[0]
+    profile: list[str] = []
+    breed = context.identity.get("breed_label")
+    if breed:
+        profile.append(str(breed))
+    age = _AGE_LABEL.get(str(context.identity.get("age_stage") or ""), "")
+    if age:
+        profile.append(age)
+    sex = _SEX_LABEL.get(str(context.identity.get("sex") or ""), "")
+    if sex:
+        profile.append(sex)
+    known: list[str] = []
+    for fact in context.stable_facts[:6]:
+        statement = fact.get("statement") or (
+            f"{fact.get('key')}: {fact.get('value')}" if fact.get("key") else None
+        )
+        if statement:
+            known.append(f"- {statement}")
+    events: list[str] = []
+    for item in context.items[:8]:
+        label = _SOURCE_LABEL.get(item.source_type, "Nota")
+        headline = item.data.get("headline") if item.data else None
+        when = (
+            item.occurred_at.strftime("%d/%m")
+            if item.occurred_at
+            else ""
+        )
+        prefix = f"{label} {when}".strip()
+        events.append(f"- {prefix}: {headline or item.summary}")
+    missing = [
+        _MISSING_LABEL.get(key, key) for key in context.missing if key in _MISSING_LABEL
+    ]
+    return "\n".join(
+        [
+            f"Sei DOGly, la voce che conosce {context.dog_name}.",
+            "Parli in italiano come una persona competente che ha già il cane davanti.",
+            "Questa è una conversazione vocale in tempo reale: rispondi SUBITO.",
+            "Non pensare ad alta voce. Non dire un attimo, sto pensando, vedo, elaboro.",
+            "2-4 frasi corte, calde, utili. Al massimo una domanda, solo se cambia cosa fare.",
+            "Usa soltanto i fatti sotto. Non inventare eventi, diagnosi, emozioni o ricordi.",
+            "Distingui ciò che DOGly ha visto, ciò che ha detto il proprietario e ciò che è un'abitudine consolidata.",
+            "Salute: niente diagnosi. Spiega cosa osservare e quando è prudente sentire il veterinario.",
+            "Se per capire un comportamento di adesso serve vederlo, chiedi un video breve.",
+            "Se non respira, collassa, ha convulsioni, può aver ingerito veleno o perde molto sangue, di' subito di chiamare un pronto soccorso veterinario.",
+            f"All'avvio saluta UNA volta sola con: {welcome}",
+            f"Proprietario: {owner or 'non indicato'}. Cane: {context.dog_name}.",
+            f"Profilo: {', '.join(profile) if profile else 'ancora essenziale'}.",
+            "Fatti confermati dal proprietario:",
+            "\n".join(known) if known else "- nessuno ancora",
+            "Ultime letture DOGly:",
+            "\n".join(events) if events else "- nessuna analisi ancora",
+            f"Non hai ancora: {', '.join(missing)}." if missing else "Il profilo essenziale è presente.",
+        ]
+    )
+
+
 def load_realtime_context_memory(
     store: InMemoryStore,
     *,

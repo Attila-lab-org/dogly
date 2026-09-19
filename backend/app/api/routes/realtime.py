@@ -12,6 +12,7 @@ from app.api.deps import StateDep, UserIdDep, rate_limit
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.realtime import (
     RealtimeClientSecretOut,
+    RealtimeDecision,
     RealtimeMemoryDecision,
     RealtimeMemoryDecisionOut,
     RealtimeMemoryProposal,
@@ -25,9 +26,13 @@ from app.domains.realtime_context import (
     REALTIME_CONTEXT_VERSION,
     load_realtime_context_db,
     load_realtime_context_memory,
+    render_voice_brief,
     route_realtime_domains,
 )
-from app.domains.realtime_orchestrator import orchestrate_realtime_turn
+from app.domains.realtime_orchestrator import (
+    deterministic_safety_interrupt,
+    orchestrate_realtime_turn,
+)
 from app.domains.repository import now_utc
 from app.providers.openai_realtime import create_realtime_client_secret
 
@@ -117,7 +122,7 @@ async def create_voice_client_secret(
         )
     else:
         session = state.store.realtime_sessions.get(session_id)
-    if not _is_owned_active_voice_session(session, user_id):
+    if session is None or not _is_owned_active_voice_session(session, user_id):
         raise ApiError(ErrorCode.NOT_FOUND, "Conversazione vocale non trovata.")
     if (
         not state.settings.realtime_enabled
@@ -128,9 +133,27 @@ async def create_voice_client_secret(
             ErrorCode.INVALID_STATE, "La conversazione vocale non è ancora disponibile."
         )
     try:
+        if state.engine is not None:
+            context = await load_realtime_context_db(
+                state.engine,
+                user_id=user_id,
+                dog_id=str(session["dog_id"]),
+                domains=["BEHAVIOR", "DIGESTIVE", "NUTRITION", "CARE", "GENERAL"],
+            )
+        else:
+            context = load_realtime_context_memory(
+                state.store,
+                dog_id=str(session["dog_id"]),
+                domains=["GENERAL"],
+            )
+        welcome = _welcome_text(context.owner_display_name, context.dog_name)
         secret = await create_realtime_client_secret(
-            state.settings, user_id=user_id
+            state.settings,
+            user_id=user_id,
+            instructions=render_voice_brief(context, welcome=welcome),
         )
+    except LookupError as exc:
+        raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.") from exc
     except httpx.HTTPError as exc:
         raise ApiError(
             ErrorCode.PROCESSING_FAILED,
@@ -144,6 +167,7 @@ async def create_voice_client_secret(
         session_config={
             "voice": state.settings.realtime_voice,
             "turn_detection": "semantic_vad",
+            "mode": "speech_to_speech",
         },
     )
 
@@ -179,8 +203,25 @@ async def create_realtime_turn(
         raise ApiError(ErrorCode.INVALID_STATE, "Questa conversazione è terminata.")
 
     domains = route_realtime_domains(body.text)
+    source_refs: list[dict[str, str]] = []
     try:
-        if state.engine is not None:
+        if body.assistant_text:
+            safety = deterministic_safety_interrupt(body.text)
+            spoken = body.assistant_text.strip()
+            wants_video = (
+                "BEHAVIOR" in domains
+                and any(token in spoken.lower() for token in ("video", "filma", "momento"))
+            )
+            decision = safety or RealtimeDecision(
+                assistant_text=spoken,
+                domains=domains,
+                behavior_handoff=wants_video,
+            )
+            provider_audit = {
+                "provider": "voice_live",
+                "version": "speech-to-speech/v1",
+            }
+        elif state.engine is not None:
             context = await load_realtime_context_db(
                 state.engine,
                 user_id=user_id,
@@ -190,6 +231,17 @@ async def create_realtime_turn(
             history = await realtime_db.load_history_db(
                 state.engine, session_id=session_id, user_id=user_id
             )
+            decision, provider_audit = await orchestrate_realtime_turn(
+                settings=state.settings,
+                user_text=body.text,
+                domains=domains,
+                context=context,
+                history=history,
+            )
+            used = set(decision.used_source_ids)
+            source_refs = [
+                ref for ref in context.source_refs() if ref["source_id"] in used
+            ]
         else:
             context = load_realtime_context_memory(
                 state.store, dog_id=str(session["dog_id"]), domains=domains
@@ -202,13 +254,13 @@ async def create_realtime_turn(
                         {"role": "assistant", "content": turn["assistant_text"]},
                     ]
                 )
-        decision, provider_audit = await orchestrate_realtime_turn(
-            settings=state.settings,
-            user_text=body.text,
-            domains=domains,
-            context=context,
-            history=history,
-        )
+            decision, provider_audit = await orchestrate_realtime_turn(
+                settings=state.settings,
+                user_text=body.text,
+                domains=domains,
+                context=context,
+                history=history,
+            )
     except LookupError as exc:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.") from exc
     except Exception as exc:
@@ -219,10 +271,6 @@ async def create_realtime_turn(
         ) from exc
 
     decision_json = decision.model_dump(mode="json")
-    used = set(decision.used_source_ids)
-    source_refs = [
-        ref for ref in context.source_refs() if ref["source_id"] in used
-    ]
     if state.engine is not None:
         row, proposal = await realtime_db.record_turn_db(
             state.engine,

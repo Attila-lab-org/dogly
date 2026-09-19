@@ -70,7 +70,7 @@ export default function RealtimeScreen() {
     idle: ownerName ? `Ciao ${ownerName}` : `Ciao, sono qui`,
     connecting: 'Un attimo, apro la conversazione…',
     listening: 'Ti ascolto',
-    thinking: `Sto pensando a ${dog.name}`,
+    thinking: `Parliamo di ${dog.name}`,
     speaking: 'DOGly',
     error: `Sono ancora qui per ${dog.name}`,
   }[realtime.voiceState];
@@ -151,16 +151,25 @@ export default function RealtimeScreen() {
             </View>
 
             {active && (
-              <Pressable onPress={realtime.toggleMute} style={styles.muteButton}>
-                <Ionicons
-                  name={realtime.muted ? 'mic-off' : 'mic'}
-                  size={17}
-                  color={colors.text}
-                />
-                <Text style={styles.muteText}>
-                  {realtime.muted ? 'Riattiva microfono' : 'Silenzia'}
-                </Text>
-              </Pressable>
+              <View style={styles.liveActions}>
+                <Pressable onPress={realtime.toggleMute} style={styles.muteButton}>
+                  <Ionicons
+                    name={realtime.muted ? 'mic-off' : 'mic'}
+                    size={17}
+                    color={colors.text}
+                  />
+                  <Text style={styles.muteText}>
+                    {realtime.muted ? 'Riattiva microfono' : 'Silenzia'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push('/behavior/capture')}
+                  style={styles.muteButton}
+                >
+                  <Ionicons name="videocam" size={17} color={colors.text} />
+                  <Text style={styles.muteText}>Mostra un momento</Text>
+                </Pressable>
+              </View>
             )}
 
             {!!realtime.transcript && (
@@ -235,7 +244,7 @@ export default function RealtimeScreen() {
             <Pressable
               accessibilityLabel="Invia"
               onPress={send}
-              disabled={!text.trim() || realtime.voiceState === 'thinking'}
+              disabled={!text.trim() || realtime.voiceState === 'connecting'}
               style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
             >
               <Ionicons name="arrow-up" size={21} color="#FFFFFF" />
@@ -317,6 +326,13 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 9,
   },
+  liveActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: spacing.lg,
+  },
   muteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -325,7 +341,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 18,
     backgroundColor: '#FFFFFF',
-    marginBottom: spacing.lg,
   },
   muteText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   ownerBubble: {

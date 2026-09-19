@@ -295,7 +295,7 @@ async def orchestrate_realtime_turn(
         "response_format": {"type": "json_object"},
     }
     if settings.realtime_reasoning_model.lower().startswith("gpt-5"):
-        body["reasoning_effort"] = "high"
+        body["reasoning_effort"] = "none"
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:

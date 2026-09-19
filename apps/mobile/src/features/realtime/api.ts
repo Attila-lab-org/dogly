@@ -51,9 +51,14 @@ export function createRealtimeSession(dogId: string, modality: 'VOICE' | 'TEXT')
   });
 }
 
-export function createRealtimeTurn(sessionId: string, text: string) {
+export function createRealtimeTurn(
+  sessionId: string,
+  text: string,
+  assistantText?: string,
+) {
   return api.post<RealtimeTurn>(`/v1/realtime/sessions/${sessionId}/turns`, {
     text,
+    ...(assistantText ? { assistant_text: assistantText } : {}),
   });
 }
 

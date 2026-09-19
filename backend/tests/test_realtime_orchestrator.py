@@ -10,6 +10,7 @@ from app.contracts.realtime import RealtimeDecision
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
+    render_voice_brief,
     route_realtime_domains,
 )
 from app.domains.realtime_orchestrator import (
@@ -17,6 +18,7 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
+from app.providers.openai_realtime import realtime_session_config
 from tests.conftest import create_dog
 
 
@@ -55,6 +57,43 @@ def test_welcome_is_personal_and_never_technical() -> None:
         "Ciao Attilio, sono qui per te e Oreo. Cosa vuoi capire oggi?"
     )
     assert "modello" not in welcome
+
+
+def test_voice_session_speaks_without_waiting_for_tools() -> None:
+    config = realtime_session_config(Settings(), instructions="ciao")
+    assert "tools" not in config
+    assert "tool_choice" not in config
+    vad = config["audio"]["input"]["turn_detection"]
+    assert vad["create_response"] is True
+    assert vad["interrupt_response"] is True
+    assert vad["eagerness"] == "high"
+
+
+def test_voice_brief_is_personal_and_ready_to_speak() -> None:
+    welcome = _welcome_text("attilio", "Oreo")
+    brief = render_voice_brief(
+        RealtimeDogContext(
+            dog_id="dog-1",
+            dog_name="Oreo",
+            owner_display_name="Attilio",
+            identity={"breed_label": "Meticcio", "age_stage": "ADULT"},
+            items=[
+                RealtimeContextItem(
+                    source_id="fecal-1",
+                    source_type="DIGESTIVE_EVENT",
+                    summary="La digestione è stabile e oggi non serve cambiare alimentazione.",
+                    data={"headline": "Oreo sta digerendo bene"},
+                )
+            ],
+        ),
+        welcome=welcome,
+    )
+    assert "Oreo" in brief
+    assert "Attilio" in brief
+    assert "rispondi SUBITO" in brief
+    assert "Oreo sta digerendo bene" in brief
+    assert "modello" not in brief.lower()
+    assert "database" not in brief.lower()
 
 
 def test_deterministic_safety_interrupt_precedes_ai() -> None:
@@ -137,6 +176,17 @@ async def test_realtime_api_session_turn_and_close(
     body = turn_response.json()
     assert body["terminal_state"] == "BEHAVIOR_VIDEO_HANDOFF"
     assert body["behavior_handoff_href"].startswith("/behavior/capture")
+
+    persist_response = await client.post(
+        f"/v1/realtime/sessions/{session_id}/turns",
+        headers=auth_headers,
+        json={
+            "text": "Come sta Oreo oggi?",
+            "assistant_text": "Oreo sta bene da quello che ho già visto. Cosa vuoi capire adesso?",
+        },
+    )
+    assert persist_response.status_code == 201
+    assert persist_response.json()["assistant_text"].startswith("Oreo sta bene")
 
     close_response = await client.delete(
         f"/v1/realtime/sessions/{session_id}", headers=auth_headers

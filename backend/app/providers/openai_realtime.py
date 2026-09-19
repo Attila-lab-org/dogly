@@ -9,23 +9,13 @@ import httpx
 
 from app.config import Settings
 
-_VOICE_INSTRUCTIONS = """Sei la voce di DOGly. Non rispondere direttamente alle
-domande sul cane e non inventare memoria. Prima dello strumento mantieni SILENZIO
-ASSOLUTO: niente "un attimo", conferme, riempitivi o spiegazioni. Per ogni turno
-completo del proprietario chiama subito e una sola volta lo strumento dogly_turn
-con la trascrizione italiana.
-Il server restituisce la risposta governata dal Personal Dog Model. Dopo il risultato
-dello strumento, pronuncia fedelmente assistant_text con tono caldo, competente e
-naturale; non aggiungere diagnosi, fatti, domande o consigli. Se è presente question,
-pronunciala subito dopo assistant_text. Non leggere campi tecnici o codici."""
 
-
-def realtime_session_config(settings: Settings) -> dict[str, Any]:
+def realtime_session_config(settings: Settings, *, instructions: str) -> dict[str, Any]:
     return {
         "type": "realtime",
         "model": settings.realtime_voice_model,
         "output_modalities": ["audio"],
-        "instructions": _VOICE_INSTRUCTIONS,
+        "instructions": instructions,
         "audio": {
             "input": {
                 "noise_reduction": {"type": "near_field"},
@@ -35,51 +25,26 @@ def realtime_session_config(settings: Settings) -> dict[str, Any]:
                 },
                 "turn_detection": {
                     "type": "semantic_vad",
-                    "eagerness": "medium",
+                    "eagerness": "high",
                     "create_response": True,
                     "interrupt_response": True,
                 },
             },
-            "output": {"voice": settings.realtime_voice, "speed": 1.0},
+            "output": {"voice": settings.realtime_voice, "speed": 1.05},
         },
-        "reasoning": {"effort": "low"},
-        "tools": [
-            {
-                "type": "function",
-                "name": "dogly_turn",
-                "description": (
-                    "Invia ogni richiesta del proprietario al Personal Dog Model "
-                    "governato prima di formulare una risposta."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "user_text": {
-                            "type": "string",
-                            "description": "Trascrizione fedele del turno del proprietario.",
-                        }
-                    },
-                    "required": ["user_text"],
-                    "additionalProperties": False,
-                },
-            }
-        ],
-        "tool_choice": {"type": "function", "name": "dogly_turn"},
-        "max_output_tokens": 220,
+        "max_output_tokens": 280,
         "tracing": {
             "workflow_name": "DOGly Realtime",
-            "metadata": {"orchestrator": "realtime-orchestrator/v1"},
+            "metadata": {"mode": "speech-to-speech"},
         },
     }
 
 
 async def create_realtime_client_secret(
-    settings: Settings, *, user_id: str
+    settings: Settings, *, user_id: str, instructions: str
 ) -> dict[str, Any]:
-    config = realtime_session_config(settings)
-    safety_identifier = hashlib.sha256(
-        f"dogly:{user_id}".encode()
-    ).hexdigest()
+    config = realtime_session_config(settings, instructions=instructions)
+    safety_identifier = hashlib.sha256(f"dogly:{user_id}".encode()).hexdigest()
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             "https://api.openai.com/v1/realtime/client_secrets",
@@ -89,7 +54,7 @@ async def create_realtime_client_secret(
                 "OpenAI-Safety-Identifier": safety_identifier,
             },
             json={
-                "expires_after": {"anchor": "created_at", "seconds": 120},
+                "expires_after": {"anchor": "created_at", "seconds": 900},
                 "session": config,
             },
         )

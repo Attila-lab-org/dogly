@@ -45,7 +45,7 @@ export default function RealtimeScreen() {
     idle: ownerName ? `Ciao ${ownerName}` : 'Ciao, sono qui',
     connecting: 'Apro la conversazione…',
     listening: 'Ti ascolto',
-    thinking: `Sto pensando a ${dog.name}`,
+    thinking: `Parliamo di ${dog.name}`,
     speaking: 'DOGly',
     error: `Sono ancora qui per ${dog.name}`,
   }[realtime.voiceState];
@@ -121,16 +121,25 @@ export default function RealtimeScreen() {
               </Pressable>
             </View>
             {active && (
-              <Pressable onPress={realtime.toggleMute} style={styles.mute}>
-                <Ionicons
-                  name={realtime.muted ? 'mic-off' : 'mic'}
-                  size={17}
-                  color={colors.text}
-                />
-                <Text style={styles.muteText}>
-                  {realtime.muted ? 'Riattiva microfono' : 'Silenzia'}
-                </Text>
-              </Pressable>
+              <View style={styles.liveActions}>
+                <Pressable onPress={realtime.toggleMute} style={styles.mute}>
+                  <Ionicons
+                    name={realtime.muted ? 'mic-off' : 'mic'}
+                    size={17}
+                    color={colors.text}
+                  />
+                  <Text style={styles.muteText}>
+                    {realtime.muted ? 'Riattiva microfono' : 'Silenzia'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push('/behavior/capture')}
+                  style={styles.mute}
+                >
+                  <Ionicons name="videocam" size={17} color={colors.text} />
+                  <Text style={styles.muteText}>Mostra un momento</Text>
+                </Pressable>
+              </View>
             )}
 
             {!!realtime.transcript && (
@@ -272,6 +281,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 10,
+  },
+  liveActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: spacing.md,
   },
   mute: {
     flexDirection: 'row',
