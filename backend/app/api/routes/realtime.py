@@ -166,7 +166,7 @@ async def create_voice_client_secret(
         model=state.settings.realtime_voice_model,
         session_config={
             "voice": state.settings.realtime_voice,
-            "turn_detection": "semantic_vad",
+            "turn_detection": "server_vad",
             "mode": "speech_to_speech",
         },
     )

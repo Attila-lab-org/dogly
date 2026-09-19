@@ -157,9 +157,7 @@ export function useDoglyRealtime(dogId: string) {
         case 'input_audio_buffer.speech_started':
           if (greetingRef.current) return;
           userTranscriptRef.current = '';
-          assistantRef.current = '';
           setTranscript('');
-          setAssistantDraft('');
           setVoiceState('listening');
           break;
         case 'conversation.item.input_audio_transcription.delta':

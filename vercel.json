@@ -15,7 +15,7 @@
     "REALTIME_ENABLED": "true",
     "REALTIME_REASONING_MODEL": "gpt-5.2",
     "REALTIME_VOICE_MODEL": "gpt-realtime-2.1",
-    "REALTIME_VOICE": "cedar",
+    "REALTIME_VOICE": "coral",
     "OWNER_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe",
     "CORS_ORIGINS": "https://dogly-eight.vercel.app,https://dogly-l2g6.vercel.app,https://dogly-web.vercel.app,http://localhost:8083,http://127.0.0.1:8083"
   },
