@@ -218,20 +218,10 @@ export default function DigestiveResultScreen() {
     actionKind !== 'vet' &&
     action?.key !== 'ask_followup';
   const nutritionKind = actionKind === 'nutrition';
-  const interpretationLayers = event.interpretationLayers ?? [];
-  const generalLayer = interpretationLayers.find(
-    (layer) => layer.key === 'general',
-  );
-  const detailLayers = interpretationLayers.filter(
-    (layer) => layer.key !== 'general',
-  );
-  const photoSummary = sanitizeOwnerCopy(
-    (generalLayer?.summary ?? summary).replace(/Rocky/g, dog.name),
-  );
-  const whatToWatch =
-    event.overallState !== 'ROUTINE'
-      ? (event.whatToWatch ?? []).slice(0, 3)
-      : [];
+  const adviceTips = (event.ownerAdvice ?? [])
+    .map((item) => sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name)))
+    .filter(Boolean)
+    .slice(0, 3);
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title={`Digestione di ${dog.name}`} />
@@ -398,7 +388,7 @@ export default function DigestiveResultScreen() {
         onPress={() => setDetailsOpen((open) => !open)}
         style={styles.detailsToggle}
       >
-        <Text style={styles.detailsToggleText}>Scopri perché</Text>
+        <Text style={styles.detailsToggleText}>Consigli</Text>
         <Ionicons
           name={detailsOpen ? 'chevron-up' : 'chevron-down'}
           size={20}
@@ -408,46 +398,16 @@ export default function DigestiveResultScreen() {
 
       {detailsOpen ? (
         <>
-          <Card style={styles.photoCard}>
-            <Text style={styles.cardTitle}>Cosa ha considerato DOGly</Text>
-            <Text style={styles.comparisonText}>{photoSummary}</Text>
-          </Card>
-          {detailLayers.length > 0
-            ? detailLayers.map((layer) => (
-                <Card key={layer.key} style={styles.notableCard}>
-                  <Text style={styles.cardTitle}>
-                    {sanitizeOwnerCopy(layer.title.replace(/Rocky/g, dog.name))}
-                  </Text>
-                  <Text style={styles.comparisonText}>
-                    {sanitizeOwnerCopy(layer.summary.replace(/Rocky/g, dog.name))}
-                  </Text>
-                </Card>
-              ))
-            : null}
-          {whatToWatch.length > 0 ? (
+          {adviceTips.length > 0 ? (
             <Card style={styles.watchCard}>
-              <Text style={styles.cardTitle}>Se vuoi, osserva anche</Text>
-              {whatToWatch.map((item) => (
+              <Text style={styles.cardTitle}>Cosa ti consiglio</Text>
+              {adviceTips.map((item) => (
                 <View key={item} style={styles.watchRow}>
                   <Text style={styles.watchBullet}>•</Text>
-                  <Text style={styles.comparisonText}>
-                    {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
-                  </Text>
+                  <Text style={styles.comparisonText}>{item}</Text>
                 </View>
               ))}
             </Card>
-          ) : null}
-          {(event.possibleAssociations?.length ?? 0) > 0
-            ? event.possibleAssociations?.map((item) => (
-                <Text key={item} style={styles.contextText}>
-                  {sanitizeOwnerCopy(item.replace(/Rocky/g, dog.name))}
-                </Text>
-              ))
-            : null}
-          {event.observationReliability ? (
-            <Text style={styles.comparisonText}>
-              {sanitizeOwnerCopy(event.observationReliability)}
-            </Text>
           ) : null}
           <View style={styles.disclaimer}>
             <Ionicons

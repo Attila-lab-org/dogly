@@ -239,7 +239,7 @@ export default function BehaviorCaptureScreen() {
     allowStopTimerRef.current = setTimeout(() => {
       canStopRef.current = true;
       if (mountedRef.current) setCanStop(true);
-    }, 700);
+    }, CAPTURE_MIN_SECONDS * 1000);
 
     try {
       const result = await recording;

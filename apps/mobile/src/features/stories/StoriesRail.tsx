@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { DogStory } from './data';
+import { storyRailLabel } from './labels';
 
 export function StoriesRail({
   stories,
@@ -21,24 +22,12 @@ export function StoriesRail({
   onAdd: () => void;
   onOpen: (story: DogStory) => void;
 }) {
-  const previews = stories
-    .filter(
-      (story, index) =>
-        stories.findIndex((candidate) => candidate.dogId === story.dogId) === index,
-    )
-    .map((story) => ({
-      ...story,
-      unseen: stories.some(
-        (candidate) => candidate.dogId === story.dogId && candidate.unseen,
-      ),
-    }));
+  const previews = [...stories]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 8);
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Storie</Text>
-        <Text style={styles.hint}>Scorri e tocca per vedere</Text>
-      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -51,10 +40,10 @@ export function StoriesRail({
           style={styles.item}
         >
           <View style={styles.addRing}>
-            <Ionicons name="camera" size={26} color={colors.primary} />
+            <Ionicons name="add" size={28} color={colors.primary} />
           </View>
           <Text style={styles.label} numberOfLines={1}>
-            La tua
+            La tua storia
           </Text>
         </Pressable>
 
@@ -62,31 +51,28 @@ export function StoriesRail({
           <Pressable
             key={story.id}
             accessibilityRole="button"
-            accessibilityLabel={`Storia di ${story.dogName}`}
+            accessibilityLabel={`Storia: ${storyRailLabel(story)}`}
             onPress={() => onOpen(story)}
             style={styles.item}
           >
             {story.unseen ? (
               <LinearGradient
-                colors={[colors.primary, colors.accent]}
+                colors={[colors.primary, colors.primaryBright]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.ring}
               >
                 <View style={styles.ringInner}>
-                  <Image
-                    source={{ uri: story.photoUri }}
-                    style={styles.avatar}
-                  />
+                  <Image source={{ uri: story.photoUri }} style={styles.avatar} />
                 </View>
               </LinearGradient>
             ) : (
               <View style={styles.ringSeen}>
-                  <Image source={{ uri: story.photoUri }} style={styles.avatar} />
+                <Image source={{ uri: story.photoUri }} style={styles.avatar} />
               </View>
             )}
             <Text style={styles.label} numberOfLines={1}>
-              {story.dogName}
+              {storyRailLabel(story)}
             </Text>
           </Pressable>
         ))}
@@ -95,33 +81,18 @@ export function StoriesRail({
   );
 }
 
-const SIZE = 68;
+const SIZE = 64;
 
 const styles = StyleSheet.create({
   wrap: {
     marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  hint: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
   },
   row: {
     gap: spacing.md,
     paddingRight: spacing.lg,
   },
   item: {
-    width: SIZE + 8,
+    width: SIZE + 12,
     alignItems: 'center',
     gap: spacing.xs,
   },
@@ -129,10 +100,7 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -140,7 +108,7 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    padding: 3,
+    padding: 2,
   },
   ringInner: {
     flex: 1,
@@ -153,7 +121,7 @@ const styles = StyleSheet.create({
     height: SIZE,
     borderRadius: SIZE / 2,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.primarySoft,
     padding: 2,
   },
   avatar: {
@@ -162,8 +130,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   label: {
-    fontSize: typography.size.xs,
-    color: colors.text,
+    fontSize: 11,
+    fontWeight: typography.weight.medium,
+    color: colors.textSecondary,
     textAlign: 'center',
     width: '100%',
   },

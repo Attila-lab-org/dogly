@@ -15,6 +15,7 @@ from app.contracts.api import (
     BehaviorFeedbackRequest,
     BehaviorFeedbackResponse,
     CaptureCompleteResponse,
+    ProcessingAcceptedAnswer,
     ProcessingContextAnswerRequest,
     ProcessingContextOption,
     ProcessingContextOut,
@@ -43,9 +44,11 @@ from app.domains.models import BehaviorEventRec
 from app.domains.processing_context import (
     MAX_PROCESSING_QUESTIONS,
     PLANNER_VERSION,
-    is_collecting_status,
+    accepted_answers_for_event,
+    is_collection_open,
     owner_facts_for_reasoner,
     plan_next_question,
+    question_short_label,
     resolve_question,
 )
 from app.knowledge.advice import alert_vigilance_advice
@@ -220,6 +223,15 @@ def event_out(
         or interp.get("personal_memory_used")
         or [],
         context_bucket=interp.get("context_bucket"),
+        processing_owner_context=[
+            {
+                **item,
+                "title": question_short_label(str(item.get("question_id") or "")),
+            }
+            if isinstance(item, dict)
+            else item
+            for item in (interp.get("processing_owner_context") or [])
+        ],
         created_at=event.created_at,
         completed_at=event.completed_at,
     )
@@ -469,7 +481,7 @@ async def _processing_out(
     applied_to_interpretation: bool | None = None,
 ) -> ProcessingContextOut:
     rows, _occupied, planned = await _processing_plan_state(state, event)
-    accepting = is_collecting_status(event.status)
+    accepting = is_collection_open(event)
     answered = sum(1 for row in rows if not row.skipped and row.answer_id)
     return ProcessingContextOut(
         event_id=event.id,
@@ -480,6 +492,10 @@ async def _processing_out(
         planner_version=PLANNER_VERSION,
         applied_to_interpretation=applied_to_interpretation,
         accepting_answers=accepting,
+        accepted_answers=[
+            ProcessingAcceptedAnswer.model_validate(item)
+            for item in accepted_answers_for_event(event, rows)
+        ],
     )
 
 
@@ -531,7 +547,6 @@ async def post_processing_context(
         (row for row in rows if row.question_id == payload.question_id),
         None,
     )
-    collecting = is_collecting_status(event.status)
     if existing is None:
         if len(occupied) >= MAX_PROCESSING_QUESTIONS:
             raise ApiError(
@@ -543,30 +558,31 @@ async def post_processing_context(
                 ErrorCode.VALIDATION_FAILED,
                 "This question is not the current processing question.",
             )
-        if state.engine is not None:
-            await processing_context_store.upsert_answer_db(
-                state.engine,
-                event_id=event.id,
-                user_id=user_id,
-                question_id=payload.question_id,
-                answer_id=payload.answer_id,
-                skipped=payload.skipped,
-            )
-        else:
-            processing_context_store.upsert_answer(
-                state.store,
-                event_id=event.id,
-                user_id=user_id,
-                question_id=payload.question_id,
-                answer_id=payload.answer_id,
-                skipped=payload.skipped,
-            )
+    # Insert and cutoff share one lock so applied_to_interpretation means
+    # "this answer is in the INTERPRETING snapshot", never a stale read.
+    if state.engine is not None:
+        _rec, applied = await processing_context_store.upsert_answer_atomic_db(
+            state.engine,
+            event,
+            question_id=payload.question_id,
+            answer_id=payload.answer_id,
+            skipped=payload.skipped,
+        )
+    else:
+        _rec, applied = await processing_context_store.upsert_answer_atomic(
+            state.store,
+            event,
+            question_id=payload.question_id,
+            answer_id=payload.answer_id,
+            skipped=payload.skipped,
+        )
+    del _rec
     # Late in-flight taps stay audited. They never re-run the Observer
     # and are not presented as applied to the first interpretation.
     return await _processing_out(
         state,
         event=event,
-        applied_to_interpretation=collecting,
+        applied_to_interpretation=applied,
     )
 
 

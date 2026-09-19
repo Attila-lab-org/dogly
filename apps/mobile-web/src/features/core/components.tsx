@@ -361,6 +361,7 @@ export function BehaviorResultView({
       result.alternatives.length ||
       evidenceSections.observed.length ||
       evidenceSections.ownerContext.length ||
+      (result.processingOwnerContext?.length ?? 0) > 0 ||
       evidenceSections.personalMemory.length ||
       isPersonalBaselineNote(result.baseline_note) ||
       careNote,
@@ -521,6 +522,26 @@ export function BehaviorResultView({
                       {ownerCopy(result.sound_note)}
                     </Text>
                   </View>
+                </View>
+              ) : null}
+
+              {result.processingOwnerContext &&
+              result.processingOwnerContext.length > 0 ? (
+                <View
+                  style={styles.contextEvidenceCard}
+                  testID="processing-owner-context"
+                >
+                  <Text style={styles.baselineKicker}>
+                    Ciò che hai raccontato durante l’analisi
+                  </Text>
+                  {result.processingOwnerContext.map((item, index) => (
+                    <Text
+                      key={`${item.title}-${index}`}
+                      style={styles.baselineNote}
+                    >
+                      {item.title}: {ownerCopy(item.label)}
+                    </Text>
+                  ))}
                 </View>
               ) : null}
 

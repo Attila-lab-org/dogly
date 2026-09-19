@@ -82,6 +82,12 @@ export type ApiBehaviorEvent = {
     support_summary: string;
   }>;
   context_bucket?: string | null;
+  processing_owner_context?: Array<{
+    question_id?: string;
+    answer_id?: string;
+    label?: string;
+    title?: string;
+  }>;
   created_at: string;
   completed_at: string | null;
 };
@@ -154,6 +160,12 @@ export type ProcessingContextOut = {
   planner_version: string;
   applied_to_interpretation?: boolean | null;
   accepting_answers?: boolean;
+  accepted_answers?: Array<{
+    question_id: string;
+    answer_id: string;
+    title: string;
+    label: string;
+  }>;
 };
 
 export async function getProcessingContext(

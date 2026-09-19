@@ -258,6 +258,36 @@ def transition(event: BehaviorEventRec, to: BehaviorEventStatus) -> None:
     event.status = to
 
 
+def _attach_processing_snapshot(
+    interpretation_json: dict, snapshot: list[dict] | None
+) -> dict:
+    from app.domains.processing_context import PROCESSING_CONTEXT_CLOSED_KEY
+
+    interpretation_json[PROCESSING_CONTEXT_CLOSED_KEY] = True
+    interpretation_json["processing_owner_context"] = snapshot or []
+    return interpretation_json
+
+
+async def _close_processing_collection(
+    state: AppState,
+    event: BehaviorEventRec,
+    *,
+    next_status: BehaviorEventStatus | None,
+) -> list[dict]:
+    from app.domains import processing_context_store
+
+    if state.engine is not None:
+        snapshot = await processing_context_store.close_collection_db(
+            state.engine, event, next_status=next_status
+        )
+    else:
+        snapshot = await processing_context_store.close_collection(
+            state.store, event, next_status=next_status
+        )
+    state.store.behavior_events[event.id] = event
+    return snapshot
+
+
 async def _eligible_memory(state: AppState, dog_id: str) -> list[EligiblePatternSummary]:
     """Only eligible pattern summaries reach the reasoner (sez. 16.1/17.2);
     never the unfiltered history."""
@@ -778,6 +808,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     # before meaningful AI work and refund the reservation (sez. 7.3).
     quality = observation.capture_quality
     if quality.overall_quality == "insufficient" or (quality.dog_visible_fraction or 0.0) <= 0.0:
+        await _close_processing_collection(state, event, next_status=None)
         transition(event, BehaviorEventStatus.REJECTED_QUALITY)
         if not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
@@ -799,11 +830,13 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         )
         return {"event_id": event.id, "status": event.status.value}
 
-    # Persist the observer checkpoint before entering the paid reasoner step.
-    if event.status != BehaviorEventStatus.INTERPRETING:
-        transition(event, BehaviorEventStatus.INTERPRETING)
-        if state.engine is not None:
-            await behavior_db.save_event_state(state.engine, event)
+    # Close collection atomically with the INTERPRETING transition so later
+    # answers cannot be reported as applied to this snapshot.
+    processing_owner_context = await _close_processing_collection(
+        state, event, next_status=BehaviorEventStatus.INTERPRETING
+    )
+    if state.engine is not None:
+        await behavior_db.save_event_state(state.engine, event)
     try:
         dog, dog_context, lifestyle_dump = await _dog_context(state, event)
         context_bucket = resolve_context_bucket(
@@ -828,21 +861,6 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
         det_flags = behavior_safety_flags(observation, dog_context)
         eligible_memory = await _eligible_memory(state, event.dog_id)
-        from app.domains import processing_context_store
-        from app.domains.processing_context import owner_facts_for_reasoner
-
-        if state.engine is not None:
-            processing_rows = await processing_context_store.list_answers_db(
-                state.engine, event_id=event.id, user_id=event.user_id
-            )
-        else:
-            processing_rows = processing_context_store.list_answers(
-                state.store, event_id=event.id, user_id=event.user_id
-            )
-        processing_owner_context = [
-            item.model_dump(mode="json")
-            for item in owner_facts_for_reasoner(processing_rows)
-        ]
         interpret_kwargs: dict = {
             "observation": observation,
             "context_bucket": context_bucket,
@@ -947,7 +965,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         if hasattr(capture.context_bucket, "value")
         else capture.context_bucket
     )
-    interpretation_json["processing_owner_context"] = processing_owner_context
+    _attach_processing_snapshot(interpretation_json, processing_owner_context)
     if state.engine is not None:
         await behavior_db.save_behavior_decision_audit(
             state.engine,
@@ -1089,17 +1107,31 @@ async def refine_behavior_event_context(
     )
     deterministic_flags = behavior_safety_flags(observation, dog_context)
 
-    from app.domains import processing_context_store as _proc_store
-    from app.domains.processing_context import owner_facts_for_reasoner as _owner_facts
+    from app.domains.processing_context import (
+        owner_facts_for_reasoner as _owner_facts,
+    )
+    from app.domains.processing_context import (
+        snapshot_from_event,
+    )
 
-    if state.engine is not None:
-        refine_rows = await _proc_store.list_answers_db(
-            state.engine, event_id=event.id, user_id=event.user_id
-        )
-    else:
-        refine_rows = _proc_store.list_answers(
-            state.store, event_id=event.id, user_id=event.user_id
-        )
+    previous_interp = event.interpretation_json or {}
+    processing_owner_context = snapshot_from_event(event)
+    if processing_owner_context is None:
+        processing_owner_context = previous_interp.get("processing_owner_context")
+    if not isinstance(processing_owner_context, list):
+        from app.domains import processing_context_store as _proc_store
+
+        if state.engine is not None:
+            refine_rows = await _proc_store.list_answers_db(
+                state.engine, event_id=event.id, user_id=event.user_id
+            )
+        else:
+            refine_rows = _proc_store.list_answers(
+                state.store, event_id=event.id, user_id=event.user_id
+            )
+        processing_owner_context = [
+            item.model_dump(mode="json") for item in _owner_facts(refine_rows)
+        ]
     eligible_memory = await _eligible_memory(state, event.dog_id)
     refine_kwargs: dict = {
         "observation": observation,
@@ -1112,9 +1144,7 @@ async def refine_behavior_event_context(
         "owner_context_answer": owner_answer,
         "deterministic_safety_flags": deterministic_flags,
         "operation": "reasoner.refine_context",
-        "processing_owner_context": [
-            item.model_dump(mode="json") for item in _owner_facts(refine_rows)
-        ],
+        "processing_owner_context": processing_owner_context,
     }
     if any(intelligence.flags.values()):
         refine_kwargs["intelligence_context"] = intelligence.reasoner_payload()
@@ -1201,6 +1231,7 @@ async def refine_behavior_event_context(
         interpretation_json["context_response"] = owner_answer.model_dump(
             mode="json"
         )
+    _attach_processing_snapshot(interpretation_json, processing_owner_context)
     if state.engine is not None:
         await behavior_db.save_behavior_decision_audit(
             state.engine,

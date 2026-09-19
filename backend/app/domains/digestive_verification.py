@@ -102,16 +102,17 @@ def unavailable_caution_detail(observation: dict[str, Any]) -> str:
     melena = "melena_candidate" in fields
     if blood and melena:
         return (
-            "Se noti una traccia rossa evidente o feci molto scure e catramose, "
-            "è meglio sentire il veterinario."
+            "Guarda le feci dal vivo: se noti una traccia rossa evidente o feci "
+            "molto scure e catramose, è meglio sentire il veterinario."
         )
     if melena:
         return (
-            "Se noti feci molto scure o dall’aspetto catramoso, "
-            "è meglio sentire il veterinario."
+            "Guarda le feci dal vivo: se noti feci molto scure o dall’aspetto "
+            "catramoso, è meglio sentire il veterinario."
         )
     return (
-        "Se noti una traccia rossa evidente, è meglio sentire il veterinario."
+        "Guarda le feci dal vivo: se noti una traccia rossa evidente, "
+        "è meglio sentire il veterinario."
     )
 
 

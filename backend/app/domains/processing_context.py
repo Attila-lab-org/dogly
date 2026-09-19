@@ -30,6 +30,24 @@ COLLECTING_STATUSES = frozenset(
         BehaviorEventStatus.FAILED_RETRYABLE,
     }
 )
+PROCESSING_CONTEXT_CLOSED_KEY = "processing_context_closed"
+QUESTION_SHORT_LABELS: dict[str, str] = {
+    "before_moment": "Prima",
+    "usual_situation": "Situazione",
+    "other_dog_present": "Altri cani",
+    "target_known": "Conosceva",
+    "freedom_to_move": "Libertà",
+    "outside_trigger": "Fuori",
+    "resource_nearby": "Vicino",
+    "owner_interaction": "Tu",
+    "familiar_place": "Posto",
+    "behavior_seen_before": "Già visto",
+    "recent_change": "Cambiamenti",
+    "activity_today": "Attività",
+    "appetite_today": "Appetito",
+    "discomfort_today": "Fastidio",
+    "owner_heard_vocalization": "Vocalizzazione",
+}
 UNKNOWN_GENERIC_QUESTION_IDS = frozenset(
     {
         "before_moment",
@@ -293,6 +311,67 @@ def is_collecting_status(status: BehaviorEventStatus | str | None) -> bool:
         return BehaviorEventStatus(value) in COLLECTING_STATUSES
     except ValueError:
         return False
+
+
+def is_collection_open(event: Any) -> bool:
+    """Collection stays closed after the OBSERVING → INTERPRETING snapshot."""
+    interp = getattr(event, "interpretation_json", None) or {}
+    if isinstance(interp, dict) and interp.get(PROCESSING_CONTEXT_CLOSED_KEY):
+        return False
+    return is_collecting_status(getattr(event, "status", None))
+
+
+def question_short_label(question_id: str) -> str:
+    return QUESTION_SHORT_LABELS.get(question_id, "Contesto")
+
+
+def snapshot_from_event(event: Any) -> list[dict[str, Any]] | None:
+    interp = getattr(event, "interpretation_json", None) or {}
+    if not isinstance(interp, dict) or not interp.get(PROCESSING_CONTEXT_CLOSED_KEY):
+        return None
+    value = interp.get("processing_owner_context")
+    return list(value) if isinstance(value, list) else []
+
+
+def merge_closed_snapshot(
+    interp: dict[str, Any] | None, snapshot: list[dict[str, Any]]
+) -> dict[str, Any]:
+    merged = dict(interp or {})
+    merged[PROCESSING_CONTEXT_CLOSED_KEY] = True
+    merged["processing_owner_context"] = snapshot
+    return merged
+
+
+def accepted_answers_from_rows(rows: Iterable[Any]) -> list[dict[str, str]]:
+    return [
+        {
+            "question_id": fact.question_id,
+            "answer_id": fact.answer_id,
+            "title": question_short_label(fact.question_id),
+            "label": fact.label,
+        }
+        for fact in owner_facts_for_reasoner(rows)
+    ]
+
+
+def accepted_answers_for_event(event: Any, rows: Iterable[Any]) -> list[dict[str, str]]:
+    snapshot = snapshot_from_event(event)
+    if snapshot is None:
+        return accepted_answers_from_rows(rows)
+    return [
+        {
+            "question_id": str(item.get("question_id") or ""),
+            "answer_id": str(item.get("answer_id") or ""),
+            "title": question_short_label(str(item.get("question_id") or "")),
+            "label": str(item.get("label") or ""),
+        }
+        for item in snapshot
+        if item.get("question_id") and item.get("answer_id")
+    ]
+
+
+def answer_is_in_snapshot(snapshot: list[dict[str, Any]] | None, question_id: str) -> bool:
+    return any(item.get("question_id") == question_id for item in snapshot or [])
 
 
 def _as_bucket(context_bucket: ContextBucket | str | None) -> ContextBucket:

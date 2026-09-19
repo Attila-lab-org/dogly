@@ -9,10 +9,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { spacing, typography } from '../../theme/tokens';
 import type { DogStory } from './data';
-
-const SIZE = 72;
+import { storyRailLabel } from './labels';
 
 export function StoriesRail({
   stories,
@@ -23,24 +21,12 @@ export function StoriesRail({
   onAdd: () => void;
   onOpen: (story: DogStory) => void;
 }) {
-  const previews = stories
-    .filter(
-      (story, index) =>
-        stories.findIndex((candidate) => candidate.dogId === story.dogId) === index,
-    )
-    .map((story) => ({
-      ...story,
-      unseen: stories.some(
-        (candidate) => candidate.dogId === story.dogId && candidate.unseen,
-      ),
-    }));
+  const previews = [...stories]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 8);
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Storie</Text>
-        <Text style={styles.hint}>Scorri e tocca per vedere</Text>
-      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -53,10 +39,10 @@ export function StoriesRail({
           style={styles.item}
         >
           <View style={styles.addRing}>
-            <Ionicons name="camera" size={26} color="#2DAAAB" />
+            <Ionicons name="add" size={28} color="#2563EB" />
           </View>
           <Text style={styles.label} numberOfLines={1}>
-            La tua
+            La tua storia
           </Text>
         </Pressable>
 
@@ -64,13 +50,13 @@ export function StoriesRail({
           <Pressable
             key={story.id}
             accessibilityRole="button"
-            accessibilityLabel={`Storia di ${story.dogName}`}
+            accessibilityLabel={`Storia: ${storyRailLabel(story)}`}
             onPress={() => onOpen(story)}
             style={styles.item}
           >
             {story.unseen ? (
               <LinearGradient
-                colors={['#0050d8', '#01AEC5']}
+                colors={['#2563EB', '#38BDF8']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.ring}
@@ -85,7 +71,7 @@ export function StoriesRail({
               </View>
             )}
             <Text style={styles.label} numberOfLines={1}>
-              {story.dogName}
+              {storyRailLabel(story)}
             </Text>
           </Pressable>
         ))}
@@ -94,42 +80,26 @@ export function StoriesRail({
   );
 }
 
+const SIZE = 64;
+
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: 12,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A2B48',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#8295A8',
+    marginBottom: 16,
   },
   row: {
-    gap: 14,
-    paddingRight: spacing.lg,
+    gap: 12,
+    paddingRight: 16,
   },
   item: {
-    width: SIZE + 8,
+    width: SIZE + 12,
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   addRing: {
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: 1.5,
-    borderColor: '#E0F7F6',
-    borderStyle: 'dashed',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -137,12 +107,12 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    padding: 3,
+    padding: 2,
   },
   ringInner: {
     flex: 1,
     borderRadius: 9999,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F4F7FB',
     padding: 2,
   },
   ringSeen: {
@@ -150,7 +120,7 @@ const styles = StyleSheet.create({
     height: SIZE,
     borderRadius: SIZE / 2,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
+    borderColor: '#DBEAFE',
     padding: 2,
   },
   avatar: {

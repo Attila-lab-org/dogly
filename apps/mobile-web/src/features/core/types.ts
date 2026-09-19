@@ -52,6 +52,9 @@ export function knowledgeLevelLabel(score: number): string {
   return 'Iniziale';
 }
 
+/** Tono visivo della card in Home: mai un giudizio sul cane. */
+export type InsightTone = 'positive' | 'neutral' | 'watch';
+
 /** Ultima analisi mostrata in Home (mockup-home: "sembra rilassato"). */
 export interface LastInsight {
   eventId: string;
@@ -59,6 +62,7 @@ export interface LastInsight {
   label: string;
   /** Timestamp già formattato (es. "Oggi, 09:30") */
   timestampLabel: string;
+  tone: InsightTone;
 }
 
 /** Domini rappresentati nella timeline unificata del Diario (sez. 5.1). */

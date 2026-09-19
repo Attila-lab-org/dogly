@@ -9,6 +9,8 @@
 import {
   deriveHomeState,
   formatInsightTimestamp,
+  insightToneFromTitle,
+  insightToneLabel,
   mapDiaryItemToEntry,
   probabilisticInsightLabel,
   type ApiDiaryItem,
@@ -83,6 +85,7 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     const derived = deriveHomeState([], now);
     expect(derived.isNewUser).toBe(true);
     expect(derived.lastInsight).toBeNull();
+    expect(derived.recentInsights).toEqual([]);
     expect(derived.processingEventId).toBeNull();
   });
 
@@ -107,6 +110,10 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     expect(derived.processingEventId).toBe('evt-proc');
     expect(derived.lastInsight?.eventId).toBe('evt-done');
     expect(derived.lastInsight?.label).toBe('Sembra rilassato');
+    expect(derived.lastInsight?.tone).toBe('positive');
+    expect(derived.recentInsights.map((item) => item.eventId)).toEqual([
+      'evt-done',
+    ]);
   });
 
   it('upload bloccato non tiene la Home sul banner analisi in corso', () => {
@@ -125,6 +132,25 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     expect(derived.processingEventId).toBeNull();
     expect(derived.lastInsight).toBeNull();
   });
+
+  it('recentInsights tiene al massimo tre COMPLETED, più recenti prima', () => {
+    const derived = deriveHomeState(
+      [
+        diaryItem({ id: 'a', title: 'PLAY_INTERACTION', created_at: '2026-09-04T12:00:00Z' }),
+        diaryItem({ id: 'b', title: 'ALERT_VIGILANCE', created_at: '2026-09-04T11:00:00Z' }),
+        diaryItem({ id: 'c', title: 'RELAX_REST', created_at: '2026-09-04T10:00:00Z' }),
+        diaryItem({ id: 'd', title: 'FRUSTRATION', created_at: '2026-09-04T09:00:00Z' }),
+      ],
+      now,
+    );
+    expect(derived.recentInsights.map((item) => item.eventId)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(derived.recentInsights[0]?.tone).toBe('positive');
+    expect(derived.recentInsights[1]?.tone).toBe('neutral');
+  });
 });
 
 describe('probabilisticInsightLabel', () => {
@@ -133,6 +159,17 @@ describe('probabilisticInsightLabel', () => {
     expect(probabilisticInsightLabel('Probabilmente vuole uscire')).toBe(
       'Probabilmente vuole uscire',
     );
+  });
+});
+
+describe('insightToneFromTitle', () => {
+  it('mappa gioco/relax a Positivo e disagio a Da osservare', () => {
+    expect(insightToneFromTitle('PLAY_INTERACTION')).toBe('positive');
+    expect(insightToneFromTitle('Sembra rilassato')).toBe('positive');
+    expect(insightToneFromTitle('FEAR_INSECURITY')).toBe('watch');
+    expect(insightToneFromTitle('ALERT_VIGILANCE')).toBe('neutral');
+    expect(insightToneLabel('positive')).toBe('Positivo');
+    expect(insightToneLabel('watch')).toBe('Da osservare');
   });
 });
 

@@ -111,6 +111,7 @@ export interface FecalEventResult {
   followupKey?: DigestiveFollowupKey | null;
   followupQuestion?: string | null;
   usefulAction?: DigestiveUsefulAction | null;
+  ownerAdvice?: string[];
   whatToWatch?: string[];
   observationReliability?: string | null;
   reasoningVersion?: string | null;

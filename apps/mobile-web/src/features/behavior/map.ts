@@ -83,5 +83,11 @@ export function mapApiEventToResult(
       ? consumerCopy(event.what_to_watch)
       : null,
     safety: event.safety ?? null,
+    processingOwnerContext: (event.processing_owner_context ?? [])
+      .filter((item) => Boolean(item.label))
+      .map((item) => ({
+        title: item.title || 'Contesto',
+        label: item.label || '',
+      })),
   };
 }

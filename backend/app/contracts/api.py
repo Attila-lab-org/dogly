@@ -530,6 +530,7 @@ class BehaviorEventOut(BaseModel):
     safety: dict[str, Any] | None = None
     personal_memory_used: list[dict[str, Any]] = Field(default_factory=list)
     context_bucket: ContextBucket | None = None
+    processing_owner_context: list[dict[str, Any]] = Field(default_factory=list)
     created_at: datetime
     completed_at: datetime | None = None
 
@@ -558,6 +559,13 @@ class ProcessingContextQuestion(BaseModel):
     options: list[ProcessingContextOption]
 
 
+class ProcessingAcceptedAnswer(BaseModel):
+    question_id: str
+    answer_id: str
+    title: str
+    label: str
+
+
 class ProcessingContextOut(BaseModel):
     event_id: str
     analysis_status: str
@@ -567,6 +575,7 @@ class ProcessingContextOut(BaseModel):
     planner_version: str
     applied_to_interpretation: bool | None = None
     accepting_answers: bool = True
+    accepted_answers: list[ProcessingAcceptedAnswer] = Field(default_factory=list)
 
 
 class ProcessingContextAnswerRequest(BaseModel):
@@ -815,6 +824,7 @@ class DigestiveEventOut(BaseModel):
         ]
     ] = Field(default_factory=list)
     useful_action: DigestiveUsefulActionOut | None = None
+    owner_advice: list[str] = Field(default_factory=list)
     what_to_watch: list[str] = Field(default_factory=list)
     observation_reliability: str | None = None
     knowledge_references: list[dict[str, str]] = Field(default_factory=list)

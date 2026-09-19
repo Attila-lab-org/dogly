@@ -249,6 +249,7 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
             if intelligence.get("useful_action")
             else None
         ),
+        owner_advice=intelligence.get("owner_advice", []),
         what_to_watch=intelligence.get("what_to_watch", []),
         observation_reliability=intelligence.get("observation_reliability"),
         knowledge_references=intelligence.get("knowledge_references", []),

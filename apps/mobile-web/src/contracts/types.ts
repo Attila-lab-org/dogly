@@ -189,4 +189,8 @@ export interface BehaviorEventResult {
     message: string;
     action: string;
   } | null;
+  processingOwnerContext?: Array<{
+    title: string;
+    label: string;
+  }>;
 }

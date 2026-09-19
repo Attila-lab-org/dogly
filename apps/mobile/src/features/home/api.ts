@@ -12,7 +12,13 @@
 import type { BehaviorEventStatus } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import { sanitizeOwnerCopy } from '../core/copy';
-import type { DiaryDomain, DiaryEntry, LastInsight, UsageSummary } from '../core/types';
+import type {
+  DiaryDomain,
+  DiaryEntry,
+  InsightTone,
+  LastInsight,
+  UsageSummary,
+} from '../core/types';
 
 export type ApiDiaryDomain = 'BEHAVIOR' | 'DIGESTIVE' | 'FOOD_LABEL';
 
@@ -63,7 +69,7 @@ export async function fetchHomeBehaviorPage(dogId: string): Promise<DiaryPage> {
   const items = [...page.items];
   while (
     page.next_cursor &&
-    !items.some((item) => item.status === 'COMPLETED')
+    items.filter((item) => item.status === 'COMPLETED').length < 3
   ) {
     page = await fetchDiaryPage({
       dogId,
@@ -149,8 +155,55 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
 
 export interface DerivedHomeState {
   lastInsight: LastInsight | null;
+  recentInsights: LastInsight[];
   processingEventId: string | null;
   isNewUser: boolean;
+}
+
+const POSITIVE_INTENTS = new Set([
+  'PLAY_INTERACTION',
+  'RELAX_REST',
+  'ATTENTION_REQUEST',
+]);
+const WATCH_INTENTS = new Set([
+  'DISCOMFORT_AVOIDANCE',
+  'FEAR_INSECURITY',
+  'FRUSTRATION',
+  'RESOURCE_TENSION',
+]);
+
+/** Tono della card Home da tassonomia o wording già consumer. */
+export function insightToneFromTitle(title: string): InsightTone {
+  const key = title.trim().toUpperCase();
+  if (POSITIVE_INTENTS.has(key)) return 'positive';
+  if (WATCH_INTENTS.has(key)) return 'watch';
+  const lower = title.toLowerCase();
+  if (
+    /gioc|rilass|calma|pappa|affetto|cerca la tua attenzione|vuole uscire/.test(
+      lower,
+    )
+  ) {
+    return 'positive';
+  }
+  if (/disagio|paura|frustrat|tensione|insicur|spazio/.test(lower)) {
+    return 'watch';
+  }
+  return 'neutral';
+}
+
+export function insightToneLabel(tone: InsightTone): string {
+  if (tone === 'positive') return 'Positivo';
+  if (tone === 'watch') return 'Da osservare';
+  return 'Neutro';
+}
+
+function toLastInsight(item: ApiDiaryItem, now: Date): LastInsight {
+  return {
+    eventId: item.id,
+    label: probabilisticInsightLabel(item.title),
+    timestampLabel: formatInsightTimestamp(item.created_at, now),
+    tone: insightToneFromTitle(item.title),
+  };
 }
 
 /** Garantisce che il titolo consumer della Home resti un'ipotesi, non un fatto. */
@@ -203,17 +256,13 @@ export function deriveHomeState(
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 
   const processing = behavior.find((item) => IN_PROGRESS_STATUSES.has(item.status));
-  const lastCompleted = behavior.find((item) => item.status === 'COMPLETED');
+  const completed = behavior.filter((item) => item.status === 'COMPLETED');
+  const recentInsights = completed.slice(0, 3).map((item) => toLastInsight(item, now));
 
   return {
     processingEventId: processing?.id ?? null,
-    lastInsight: lastCompleted
-      ? {
-          eventId: lastCompleted.id,
-          label: probabilisticInsightLabel(lastCompleted.title),
-          timestampLabel: formatInsightTimestamp(lastCompleted.created_at, now),
-        }
-      : null,
+    lastInsight: recentInsights[0] ?? null,
+    recentInsights,
     isNewUser: items.length === 0,
   };
 }

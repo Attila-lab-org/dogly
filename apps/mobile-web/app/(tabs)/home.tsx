@@ -1,10 +1,12 @@
 /**
- * Home Dogly: identità del cane, un unico invito a comprenderlo e l'ultimo
- * momento utile. La complessità dei servizi resta fuori dalla superficie.
+ * Tab Home — layout mockup: saluto, storie, card cane,
+ * CTA “Analizza un momento”, ultime analisi, consiglio randomico.
+ * Stati obbligatori: offline, loading, errore, processing, quota.
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,58 +15,39 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { currentAgeLabel } from '@/features/dogs/profileDates';
-import { useHomeData } from '@/features/home/useHomeData';
-import { useNetworkStatus } from '@/features/home/useNetworkStatus';
-import { DoglyLogo } from '@/features/brand/DoglyLogo';
 import { StoriesRail } from '@/features/stories/StoriesRail';
 import { useStories } from '@/features/stories/data';
+import {
+  currentAgeLabel,
+  isBirthdayToday,
+} from '@/features/dogs/profileDates';
+import { sexLabel } from '@/features/dogs/map';
+import {
+  formatCareDate,
+  relativeCareDate,
+} from '@/features/care/date';
+import { nextCareEvent, useCareEvents } from '@/features/care/store';
+import { useHomeData } from '@/features/home/useHomeData';
+import { useNetworkStatus } from '@/features/home/useNetworkStatus';
+import { insightToneLabel } from '@/features/home/api';
+import { nextHomeTip, pickHomeTip, type HomeTip } from '@/features/home/tips';
+import { AnalyzeMomentSheet } from '@/features/home/AnalyzeMomentSheet';
+import type { InsightTone, LastInsight } from '@/features/core/types';
 
-function CakeIcon() {
-  return (
-    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4 10h16v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9z"
-        stroke="#06B6D4"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M2 10h20M9 6v4M15 6v4"
-        stroke="#06B6D4"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <Circle cx="9" cy="4" r="1.2" fill="#06B6D4" />
-      <Circle cx="15" cy="4" r="1.2" fill="#06B6D4" />
-    </Svg>
-  );
-}
-
-function DogSizeIcon() {
-  return (
-    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4 8.5C4 7.67 4.67 7 5.5 7H7l1.5-2.5 2 1-1 2.5h5l1.5-2 1.5 1-1 3.5h1.5a1.5 1.5 0 011.5 1.5V17h-2v-3h-2v3h-2v-4.5H9V17H7v-5.5H5.5A1.5 1.5 0 014 10V8.5z"
-        fill="#06B6D4"
-      />
-    </Svg>
-  );
-}
+const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const stories = useStories(dog.id, dog.name);
+  const birthdayToday = isBirthdayToday(dog.birthDate);
   const {
     usage,
-    lastInsight,
+    recentInsights,
     processingEventId,
     loading,
     error,
@@ -72,20 +55,39 @@ export default function HomeScreen() {
   } = useHomeData(dog.id);
 
   const network = useNetworkStatus();
-  const stories = useStories(dog.id, dog.name);
   const offline = network.offline;
 
-  const behaviorRemaining = usage ? usage.behaviorLimit - usage.behaviorUsed : null;
+  const behaviorRemaining = usage
+    ? usage.behaviorLimit - usage.behaviorUsed
+    : null;
   const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
-
+  useCareEvents(dog.id, dog.name);
+  const nextCare = nextCareEvent(dog.id);
   const ageLabel = currentAgeLabel(dog.birthDate, dog.ageLabel);
-  const sizeLabel = dog.sizeLabel;
-  const breedLabel = dog.breedLabel;
+  const genderLabel = sexLabel(dog.sex);
 
-  const displayInsight = lastInsight;
+  const [tip, setTip] = useState<HomeTip>(() => pickHomeTip(dog));
+  const [analyzeOpen, setAnalyzeOpen] = useState(false);
+  const skipTipReset = useRef(true);
+  useEffect(() => {
+    if (skipTipReset.current) {
+      skipTipReset.current = false;
+      return;
+    }
+    setTip(pickHomeTip(dog));
+  }, [dog.id, dog.name, dog.birthDate, dog.ageLabel, dog.breedLabel, dog.sex]);
 
-  const startVideoCapture = () => {
+  const greeting = birthdayToday
+    ? `Buon compleanno, ${dog.name}!`
+    : 'Ciao!';
+
+  const openAnalyze = () => {
     if (!dog.id || loading) return;
+    setAnalyzeOpen(true);
+  };
+
+  const startVideo = () => {
+    setAnalyzeOpen(false);
     if (processingEventId) {
       router.push(`/behavior/processing/${processingEventId}`);
       return;
@@ -97,89 +99,87 @@ export default function HomeScreen() {
     router.push('/behavior/capture');
   };
 
-  const startAudioTell = () => {
+  const startAudio = () => {
+    setAnalyzeOpen(false);
     if (!dog.id) return;
-    router.push('/realtime');
-  };
-
-  const openLastInsight = () => {
-    if (!displayInsight) return;
-    router.push(`/behavior/result/${displayInsight.eventId}`);
+    router.push('/realtime' as never);
   };
 
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Header Row: Logo Dogly centrato + campanella notifiche a destra */}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.headerRow}>
-            <View style={styles.headerSpacer} />
-            <DoglyLogo width={120} style={styles.headerLogo} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Notifiche"
-              onPress={() => router.push('/notifications')}
-              hitSlop={12}
-              style={styles.bellButton}
-            >
-              <Ionicons name="notifications-outline" size={26} color="#0E2A47" />
-            </Pressable>
+            <View style={styles.brand} accessible accessibilityLabel="Dogly">
+              <Image
+                source={logoMarkSource}
+                style={styles.logoMark}
+                resizeMode="contain"
+              />
+              <Text style={styles.wordmark}>Dogly</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Apri il diario"
+                onPress={() => router.push('/(tabs)/diary')}
+                hitSlop={12}
+                style={styles.headerIcon}
+              >
+                <Ionicons name="book-outline" size={22} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  nextCare
+                    ? 'Notifiche, hai un promemoria in agenda'
+                    : 'Notifiche'
+                }
+                onPress={() => router.push('/notifications')}
+                hitSlop={12}
+                style={styles.headerIcon}
+              >
+                <Ionicons
+                  name="notifications-outline"
+                  size={22}
+                  color={colors.primary}
+                />
+                {nextCare ? <View style={styles.badge} /> : null}
+              </Pressable>
+            </View>
           </View>
 
-          {/* Storie: rail orizzontale con anteprime (sez. 6 Home) */}
+          <Text style={styles.greeting} accessibilityRole="header">
+            {greeting}
+          </Text>
+          <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
+
           <StoriesRail
             stories={stories}
             onAdd={() => router.push('/(tabs)/camera')}
             onOpen={(story) => router.push(`/stories/${story.id}` as never)}
           />
 
-          {/* Profile Card: Rocky, Avatar, Heart, 3 meta rows (without "Quanto conosco Rocky") */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Apri il profilo di ${dog.name}`}
-            onPress={() => router.push('/(tabs)/rocky')}
-            style={styles.dogCard}
-          >
-            <DogAvatar
-              size={112}
-              photoUri={dog.photoUri}
-              dogName={dog.name}
-            />
-            <View style={styles.dogCardBody}>
-              <View style={styles.dogNameRow}>
-                <Text style={styles.dogName}>{dog.name}</Text>
-              </View>
-              <View style={styles.dogMetaList}>
-                {ageLabel ? (
-                <View style={styles.dogMetaRow}>
-                  <CakeIcon />
-                  <Text style={styles.dogMetaText}>{ageLabel}</Text>
-                </View>
-                ) : null}
-                {sizeLabel ? (
-                <View style={styles.dogMetaRow}>
-                  <DogSizeIcon />
-                  <Text style={styles.dogMetaText}>{sizeLabel}</Text>
-                </View>
-                ) : null}
-                {breedLabel ? (
-                <View style={styles.dogMetaRow}>
-                  <Ionicons name="paw" size={15} color="#06B6D4" />
-                  <Text style={styles.dogMetaText}>{breedLabel}</Text>
-                </View>
-                ) : null}
-              </View>
-            </View>
-          </Pressable>
-
           {offline && (
             <View style={styles.statusBanner} accessibilityLiveRegion="polite">
-              <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
-              <Text style={styles.statusText}>Sei offline: ti mostro gli ultimi dati disponibili.</Text>
+              <Ionicons
+                name="cloud-offline-outline"
+                size={18}
+                color={colors.danger}
+              />
+              <Text style={styles.statusText}>
+                Sei offline: ti mostro gli ultimi dati disponibili. Le nuove
+                analisi richiedono connessione.
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Riprova connessione"
-                onPress={() => { void network.refresh(); }}
+                onPress={() => {
+                  void network.refresh();
+                }}
                 hitSlop={8}
               >
                 <Text style={styles.statusRetry}>Riprova</Text>
@@ -190,14 +190,25 @@ export default function HomeScreen() {
           {loading && !offline ? (
             <View style={styles.statusBanner} accessibilityLiveRegion="polite">
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.statusText}>Sto caricando i dati di {dog.name}.</Text>
+              <Text style={styles.statusText}>
+                Sto caricando i dati di {dog.name}.
+              </Text>
             </View>
           ) : null}
 
           {error && !offline ? (
-            <View style={styles.statusBanner} accessibilityLiveRegion="assertive">
-              <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
-              <Text style={styles.statusText}>Non sono riuscito ad aggiornare la Home.</Text>
+            <View
+              style={styles.statusBanner}
+              accessibilityLiveRegion="assertive"
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={18}
+                color={colors.danger}
+              />
+              <Text style={styles.statusText}>
+                Non sono riuscito ad aggiornare la Home.
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Riprova a caricare i dati"
@@ -209,130 +220,280 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {processingEventId && (
+          {processingEventId ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Apri l'analisi in corso di ${dog.name}`}
-              onPress={() => router.push(`/behavior/processing/${processingEventId}`)}
+              onPress={() =>
+                router.push(`/behavior/processing/${processingEventId}`)
+              }
               style={styles.processingBanner}
             >
-              <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
-              <Text style={styles.processingText}>Sto osservando il video: ti avviso quando è pronto</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-            </Pressable>
-          )}
-
-          {/* CTA dominante gradiente CAPISCI ROCKY */}
-          <View style={styles.ctaWrap}>
-            <LinearGradient
-              colors={['#0050d8', '#01aec5']}
-              start={{ x: 0, y: 0.2 }}
-              end={{ x: 1, y: 0.8 }}
-              style={styles.cta}
-            >
-              {/* Equalizzatore waveform audio a sinistra */}
-              <View style={styles.waveformWrap} pointerEvents="none">
-                <Svg width={72} height={60} viewBox="0 0 72 60" fill="none">
-                  <Rect x="4" y="20" width="2.5" height="20" rx="1.25" fill="rgba(255,255,255,0.2)" />
-                  <Rect x="11" y="14" width="2.5" height="32" rx="1.25" fill="rgba(255,255,255,0.25)" />
-                  <Rect x="18" y="24" width="2.5" height="12" rx="1.25" fill="rgba(255,255,255,0.18)" />
-                  <Rect x="25" y="8" width="2.5" height="44" rx="1.25" fill="rgba(255,255,255,0.28)" />
-                  <Rect x="32" y="16" width="2.5" height="28" rx="1.25" fill="rgba(255,255,255,0.22)" />
-                  <Rect x="39" y="10" width="2.5" height="40" rx="1.25" fill="rgba(255,255,255,0.25)" />
-                  <Rect x="46" y="22" width="2.5" height="16" rx="1.25" fill="rgba(255,255,255,0.2)" />
-                  <Rect x="53" y="15" width="2.5" height="30" rx="1.25" fill="rgba(255,255,255,0.22)" />
-                  <Rect x="60" y="22" width="2.5" height="16" rx="1.25" fill="rgba(255,255,255,0.18)" />
-                </Svg>
-              </View>
-
-              {/* Swoosh curva in basso a destra */}
-              <View style={styles.swooshWrap} pointerEvents="none">
-                <Svg width={140} height={80} viewBox="0 0 140 80" fill="none">
-                  <Path
-                    d="M0 80 C50 65, 80 35, 140 10 L140 80 Z"
-                    fill="rgba(255, 255, 255, 0.08)"
-                  />
-                  <Path
-                    d="M30 80 C70 70, 100 50, 140 30 L140 80 Z"
-                    fill="rgba(255, 255, 255, 0.12)"
-                  />
-                </Svg>
-              </View>
-
-              <Text style={styles.ctaTitle}>CAPISCI {dog.name.toUpperCase()}</Text>
-              <Text style={styles.ctaSubtitle}>
-                Mostrami un momento oppure raccontami cosa hai notato
+              <Ionicons
+                name="hourglass-outline"
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={styles.processingText}>
+                Sto osservando il video: ti avviso quando è pronto
               </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.primary}
+              />
+            </Pressable>
+          ) : null}
 
-              <View style={styles.ctaButtons}>
-                <View style={styles.ctaAction}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Parla di ${dog.name}`}
-                    onPress={startAudioTell}
-                    style={({ pressed }) => [
-                      styles.ctaCircle,
-                      pressed && styles.buttonPressed,
-                    ]}
-                  >
-                    <Ionicons name="mic" size={30} color="#10B981" />
-                  </Pressable>
-                  <Text style={styles.ctaActionLabel}>Chiedi a DOGly</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Apri il profilo di ${dog.name}`}
+            onPress={() => router.push('/(tabs)/rocky')}
+            style={styles.dogCard}
+          >
+            <DogAvatar size={72} photoUri={dog.photoUri} dogName={dog.name} />
+            <View style={styles.dogCardBody}>
+              <Text style={styles.dogName}>{dog.name}</Text>
+              {ageLabel ? (
+                <View style={styles.metaRow}>
+                  <Ionicons name="gift-outline" size={14} color={colors.primaryBright} />
+                  <Text style={styles.metaText}>{ageLabel}</Text>
                 </View>
-
-                <View style={styles.ctaAction}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Registra un video di ${dog.name}`}
-                    onPress={startVideoCapture}
-                    disabled={!dog.id || loading}
-                    style={({ pressed }) => [
-                      styles.ctaCircle,
-                      pressed && styles.buttonPressed,
-                    ]}
-                  >
-                    <Ionicons name="videocam" size={30} color="#0284C7" />
-                  </Pressable>
-                  <Text style={styles.ctaActionLabel}>Video</Text>
+              ) : null}
+              {dog.breedLabel ? (
+                <View style={styles.metaRow}>
+                  <Ionicons name="paw-outline" size={14} color={colors.primaryBright} />
+                  <Text style={styles.metaText}>{dog.breedLabel}</Text>
                 </View>
-              </View>
-            </LinearGradient>
-          </View>
+              ) : null}
+              {genderLabel ? (
+                <View style={styles.metaRow}>
+                  <Ionicons
+                    name={dog.sex === 'FEMALE' ? 'female' : 'male'}
+                    size={14}
+                    color={colors.primaryBright}
+                  />
+                  <Text style={styles.metaText}>{genderLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.seeProfile}>Vedi profilo</Text>
+          </Pressable>
 
-          {/* Riga "Ultima analisi": faccina sorridente verde in cerchio menta */}
-          {displayInsight ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Analizza un momento di ${dog.name}: video o audio`}
+            onPress={openAnalyze}
+            disabled={!dog.id || loading}
+            style={({ pressed }) => [
+              styles.analyzeBanner,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.analyzeIcon}>
+              <Ionicons name="videocam" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.analyzeCopy}>
+              <Text style={styles.analyzeTitle}>Analizza un momento</Text>
+              <Text style={styles.analyzeSubtitle}>Video o audio</Text>
+            </View>
+            <View style={styles.analyzeTrail}>
+              <Ionicons name="paw" size={18} color={colors.primary} />
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </View>
+          </Pressable>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Ultime analisi</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Apri l'ultima lettura: ${displayInsight.label}`}
-              onPress={openLastInsight}
-              style={styles.lastInsightRow}
+              accessibilityLabel="Vedi tutte le analisi nel diario"
+              onPress={() => router.push('/(tabs)/diary')}
+              hitSlop={8}
+              style={styles.seeAll}
             >
-              <View style={styles.lastInsightIcon}>
-                <Ionicons name="happy-outline" size={24} color="#10B981" />
-              </View>
-              <View style={styles.lastInsightText}>
-                <Text style={styles.lastInsightLabel}>Ultima lettura</Text>
-                <Text style={styles.lastInsightValue}>{displayInsight.label}</Text>
-                <Text style={styles.lastInsightTime}>{displayInsight.timestampLabel}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              <Text style={styles.seeAllText}>Vedi tutte</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
             </Pressable>
-          ) : (
-            <View style={styles.lastInsightRow}>
-              <View style={styles.lastInsightIcon}>
-                <Ionicons name="videocam-outline" size={24} color="#10B981" />
-              </View>
-              <View style={styles.lastInsightText}>
-                <Text style={styles.lastInsightLabel}>Le vostre traduzioni</Text>
-                <Text style={styles.lastInsightValue}>Ancora nessun momento</Text>
-                <Text style={styles.lastInsightTime}>
-                  Registra un video per iniziare a capire i suoi segnali.
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.insightRow}
+          >
+            {recentInsights.length > 0 ? (
+              recentInsights.map((insight) => (
+                <InsightCard
+                  key={insight.eventId}
+                  insight={insight}
+                  photoUri={dog.photoUri}
+                  onPress={() =>
+                    router.push(`/behavior/result/${insight.eventId}`)
+                  }
+                />
+              ))
+            ) : (
+              <View style={styles.emptyInsight}>
+                <View style={styles.emptyPhoto}>
+                  <Ionicons name="videocam-outline" size={28} color={colors.primary} />
+                </View>
+                <Text style={styles.insightTitle}>Ancora nessun momento</Text>
+                <Text style={styles.insightTime}>
+                  Analizza un momento per vedere qui le letture.
                 </Text>
               </View>
+            )}
+          </ScrollView>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Consiglio per ${dog.name}: ${tip.title}. Tocca per un altro.`}
+            onPress={() => setTip(nextHomeTip(dog, tip.id))}
+            style={({ pressed }) => [
+              styles.adviceBanner,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.adviceIcon}>
+              <Ionicons name="bulb-outline" size={22} color={colors.warning} />
             </View>
+            <View style={styles.adviceCopy}>
+              <Text style={styles.adviceTitle}>{tip.title}</Text>
+              <Text style={styles.adviceBody}>{tip.body}</Text>
+            </View>
+          </Pressable>
+
+          {nextCare ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Prossimo appuntamento: ${nextCare.title}`}
+              onPress={() => router.push(`/care/${nextCare.id}` as never)}
+              style={({ pressed }) => [
+                styles.careCard,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.careIcon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={22}
+                  color={colors.warning}
+                />
+              </View>
+              <View style={styles.careText}>
+                <Text style={styles.careLabel}>
+                  {relativeCareDate(nextCare.scheduledAt)}
+                </Text>
+                <Text style={styles.careTitle}>{nextCare.title}</Text>
+                <Text style={styles.careDate}>
+                  {formatCareDate(nextCare.scheduledAt, nextCare.allDay)}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={19}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Controlla la digestione di ${dog.name}`}
+            onPress={() => router.push('/digestive/capture')}
+            style={styles.digestiveCta}
+          >
+            <View style={styles.secondaryIcon}>
+              <Ionicons name="leaf-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.secondaryCopy}>
+              <Text style={styles.digestiveCtaText}>Controlla la digestione</Text>
+              <Text style={styles.digestiveCtaHint}>
+                Osserva una nuova evacuazione
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+          </Pressable>
+
+          {behaviorRemaining === null ||
+          (!quotaExhausted && behaviorRemaining > 2) ? null : quotaExhausted ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scopri il piano per continuare le analisi"
+              onPress={() => router.push('/paywall')}
+            >
+              <Text style={styles.quotaExhausted}>
+                Hai usato tutti i video disponibili questo mese. Scopri il
+                piano per continuare.
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.quota}>
+              {behaviorRemaining}{' '}
+              {behaviorRemaining === 1
+                ? 'video disponibile'
+                : 'video disponibili'}{' '}
+              questo mese
+            </Text>
           )}
         </ScrollView>
+        <AnalyzeMomentSheet
+          visible={analyzeOpen}
+          dogName={dog.name}
+          onClose={() => setAnalyzeOpen(false)}
+          onVideo={startVideo}
+          onAudio={startAudio}
+        />
       </SafeAreaView>
+    </View>
+  );
+}
+
+function InsightCard({
+  insight,
+  photoUri,
+  onPress,
+}: {
+  insight: LastInsight;
+  photoUri: string | null;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Apri l'analisi: ${insight.label}`}
+      onPress={onPress}
+      style={styles.insightCard}
+    >
+      {photoUri ? (
+        <Image source={{ uri: photoUri }} style={styles.insightPhoto} />
+      ) : (
+        <View style={styles.emptyPhoto}>
+          <Ionicons name="paw-outline" size={26} color={colors.primary} />
+        </View>
+      )}
+      <Text style={styles.insightTitle} numberOfLines={2}>
+        {insight.label}
+      </Text>
+      <Text style={styles.insightTime}>{insight.timestampLabel}</Text>
+      <TonePill tone={insight.tone} />
+    </Pressable>
+  );
+}
+
+function TonePill({ tone }: { tone: InsightTone }) {
+  const palette =
+    tone === 'positive'
+      ? { bg: colors.successSoft, fg: colors.success }
+      : tone === 'watch'
+        ? { bg: colors.warningSoft, fg: colors.warning }
+        : { bg: colors.surfaceMuted, fg: colors.textSecondary };
+  return (
+    <View style={[styles.tonePill, { backgroundColor: palette.bg }]}>
+      <Text style={[styles.toneText, { color: palette.fg }]}>
+        {insightToneLabel(tone)}
+      </Text>
     </View>
   );
 }
@@ -340,79 +501,69 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#EDF4F9',
+    backgroundColor: '#F4F7FB',
   },
   safe: {
     flex: 1,
   },
   content: {
     width: '100%',
+    maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
-    flexGrow: 1,
-  },
-  headerLogo: {
-    marginBottom: 0,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
-  headerSpacer: {
-    width: 40,
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  bellButton: {
-    width: 40,
-    height: 40,
+  logoMark: {
+    width: 28,
+    height: 21,
+  },
+  wordmark: {
+    fontSize: 22,
+    fontWeight: typography.weight.bold,
+    color: colors.primary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dogCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 18,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    shadowColor: '#0E2A47',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+  badge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
   },
-  dogCardBody: {
-    flex: 1,
-    marginLeft: 18,
+  greeting: {
+    fontSize: 34,
+    fontWeight: typography.weight.bold,
+    color: colors.primary,
+    letterSpacing: -0.6,
   },
-  dogNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  dogName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0E2A47',
-  },
-  dogMetaList: {
-    gap: 6,
-  },
-  dogMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dogMetaText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#64748B',
+  tagline: {
+    marginTop: 2,
+    marginBottom: spacing.lg,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
   },
   statusBanner: {
     flexDirection: 'row',
@@ -425,13 +576,13 @@ const styles = StyleSheet.create({
   },
   statusText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: typography.size.sm,
     color: colors.text,
-    lineHeight: 16,
+    lineHeight: typography.size.sm * typography.lineHeight.normal,
   },
   statusRetry: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
     color: colors.primary,
   },
   processingBanner: {
@@ -445,127 +596,277 @@ const styles = StyleSheet.create({
   },
   processingText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: typography.size.sm,
     color: colors.primary,
-    fontWeight: '500',
+    fontWeight: typography.weight.medium,
   },
-  ctaWrap: {
-    marginBottom: 14,
-    shadowColor: '#0050d8',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  cta: {
-    borderRadius: 24,
-    paddingTop: 36,
-    paddingBottom: 38,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  waveformWrap: {
-    position: 'absolute',
-    left: 8,
-    top: '32%',
-    opacity: 0.85,
-  },
-  swooshWrap: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    opacity: 0.8,
-  },
-  ctaTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.8,
-  },
-  ctaSubtitle: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#FFFFFF',
-    opacity: 0.92,
-    marginTop: 6,
-  },
-  ctaButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 32,
-    marginTop: 32,
-  },
-  ctaAction: {
-    alignItems: 'center',
-    gap: 7,
-  },
-  ctaActionLabel: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  ctaCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#002B75',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.96 }],
-  },
-  lastInsightRow: {
+  dogCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    shadowColor: '#0E2A47',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    marginTop: 2,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.card,
   },
-  lastInsightIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#E6F8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lastInsightText: {
+  dogCardBody: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: spacing.md,
+    gap: 3,
   },
-  lastInsightLabel: {
-    fontSize: 11,
-    color: '#8295A8',
-    fontWeight: '400',
+  dogName: {
+    fontSize: 20,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
+    marginBottom: 4,
   },
-  lastInsightValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  seeProfile: {
+    fontSize: 13,
+    fontWeight: typography.weight.semibold,
+    color: colors.primary,
+    alignSelf: 'flex-start',
     marginTop: 2,
-    marginBottom: 2,
   },
-  lastInsightTime: {
+  analyzeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E7F6FF',
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  analyzeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analyzeCopy: {
+    flex: 1,
+  },
+  analyzeTitle: {
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    color: colors.primary,
+  },
+  analyzeSubtitle: {
+    marginTop: 2,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+  },
+  analyzeTrail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
+  },
+  seeAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  seeAllText: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: colors.primary,
+  },
+  insightRow: {
+    gap: spacing.md,
+    paddingRight: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  insightCard: {
+    width: 148,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    ...shadows.card,
+  },
+  insightPhoto: {
+    width: '100%',
+    height: 92,
+    borderRadius: 12,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.primarySoft,
+  },
+  emptyInsight: {
+    width: 168,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    ...shadows.card,
+  },
+  emptyPhoto: {
+    width: '100%',
+    height: 92,
+    borderRadius: 12,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightTitle: {
+    fontSize: 13,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
+    minHeight: 34,
+  },
+  insightTime: {
+    marginTop: 2,
     fontSize: 11,
-    color: '#8295A8',
-    fontWeight: '400',
+    color: colors.textMuted,
+  },
+  tonePill: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  toneText: {
+    fontSize: 11,
+    fontWeight: typography.weight.semibold,
+  },
+  adviceBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: '#FFF6E5',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  adviceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adviceCopy: {
+    flex: 1,
+  },
+  adviceTitle: {
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    color: colors.primary,
+    lineHeight: 22,
+  },
+  adviceBody: {
+    marginTop: 4,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  pressed: {
+    opacity: 0.88,
+  },
+  quota: {
+    marginTop: spacing.xs,
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  quotaExhausted: {
+    marginTop: spacing.xs,
+    fontSize: typography.size.xs,
+    color: colors.primary,
+    fontWeight: typography.weight.medium,
+    textAlign: 'center',
+  },
+  digestiveCta: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  secondaryIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.accentSoft,
+  },
+  secondaryCopy: {
+    flex: 1,
+  },
+  digestiveCtaText: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    color: colors.text,
+  },
+  digestiveCtaHint: {
+    marginTop: 2,
+    fontSize: typography.size.xs,
+    color: colors.textSecondary,
+  },
+  careCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warningSoft,
+    backgroundColor: colors.surface,
+  },
+  careIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.warningSoft,
+  },
+  careText: {
+    flex: 1,
+  },
+  careLabel: {
+    color: colors.warning,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
+  careTitle: {
+    marginTop: spacing.xxs,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  careDate: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
   },
 });

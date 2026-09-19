@@ -57,6 +57,7 @@ export type ApiDigestiveEvent = {
     title?: string | null;
     body?: string | null;
   } | null;
+  owner_advice?: string[];
   what_to_watch?: string[];
   observation_reliability?: string | null;
   reasoning_version?: string | null;
@@ -281,6 +282,7 @@ export function mapApiDigestiveEventToResult(
       ? consumerCopy(event.followup_question)
       : event.followup_question,
     usefulAction: mapUsefulAction(event.useful_action),
+    ownerAdvice: (event.owner_advice ?? []).map(consumerCopy),
     whatToWatch: (event.what_to_watch ?? []).map(consumerCopy),
     observationReliability: event.observation_reliability
       ? consumerCopy(event.observation_reliability)

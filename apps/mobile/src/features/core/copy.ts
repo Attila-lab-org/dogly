@@ -122,3 +122,31 @@ export const PROCESSING_STEP_ORDER: Record<string, number> = {
   INTERPRETING: 2,
   COMPLETED: 3,
 };
+
+export function processingCompanionCopy(
+  dogName: string,
+  status: BehaviorEventStatus,
+  finishing: boolean,
+): { title: string; detail?: string } {
+  if (finishing || status === 'COMPLETED') {
+    return { title: 'Lettura pronta ✓' };
+  }
+  if (status === 'FAILED_RETRYABLE') {
+    return { title: 'Ci riprovo…' };
+  }
+  if (status === 'QUEUED') {
+    return { title: 'Video ricevuto ✓' };
+  }
+  if (status === 'OBSERVING') {
+    return {
+      title: 'Sto osservando movimenti, postura e suoni',
+      detail: 'Quello che mi racconti mi aiuta a leggere il contesto',
+    };
+  }
+  if (status === 'INTERPRETING') {
+    return {
+      title: `Sto confrontando il momento con contesto, conoscenza e storia di ${dogName}`,
+    };
+  }
+  return { title: `Analizzando ${dogName}…` };
+}

@@ -20,14 +20,13 @@ describe('digestive result UX', () => {
     expect(resultScreen).not.toContain('hasKnownBaseline');
   });
 
-  it('keeps the photo analysis behind progressive disclosure', () => {
-    expect(resultScreen).not.toContain('Dalla foto');
-    expect(resultScreen).toContain('Cosa ha considerato DOGly');
-    expect(resultScreen).toContain("layer.key === 'general'");
-    expect(resultScreen).toContain('generalLayer?.summary ?? summary');
-    expect(resultScreen.indexOf('Scopri perché')).toBeLessThan(
-      resultScreen.indexOf('Cosa ha considerato DOGly'),
-    );
+  it('puts practical advice in the accordion, not a repeat of the analysis', () => {
+    expect(resultScreen).toContain('Consigli');
+    expect(resultScreen).toContain('Cosa ti consiglio');
+    expect(resultScreen).toContain('ownerAdvice');
+    expect(resultScreen).not.toContain('Cosa ha considerato DOGly');
+    expect(resultScreen).not.toContain('Se vuoi, osserva anche');
+    expect(resultScreen).not.toContain('generalLayer?.summary');
   });
 
   it('keeps vet contact and safety immediately visible and distinct', () => {
@@ -35,7 +34,7 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain("label: 'Veterinario', kind: 'vet'");
     expect(resultScreen).toContain("label: 'Attenzione', kind: 'attention'");
     expect(resultScreen.indexOf('event.safetyFlags.map')).toBeLessThan(
-      resultScreen.indexOf('Scopri perché'),
+      resultScreen.indexOf('Consigli'),
     );
   });
 
@@ -44,15 +43,6 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain("actionKind === 'nutrition'");
     expect(resultScreen).toContain("action?.key === 'ask_followup'");
     expect(resultScreen).toContain("actionKind !== 'vet'");
-  });
-
-  it('keeps the short watch list inside optional details', () => {
-    expect(resultScreen).toContain('Se vuoi, osserva anche');
-    expect(resultScreen).toContain("event.overallState !== 'ROUTINE'");
-    expect(resultScreen).toContain('.slice(0, 3)');
-    expect(resultScreen.indexOf('Scopri perché')).toBeLessThan(
-      resultScreen.indexOf('Se vuoi, osserva anche'),
-    );
   });
 
   it('keeps nutrition as a quiet completion after the analysis', () => {
@@ -75,17 +65,15 @@ describe('digestive result UX', () => {
     expect(resultScreen).toContain('postDigestiveFeedback');
   });
 
-  it('keeps only explanatory evidence in the why accordion', () => {
-    expect(resultScreen).toContain('interpretationLayers');
-    expect(resultScreen).toContain("layer.key !== 'general'");
-    expect(resultScreen).toContain('possibleAssociations');
-    expect(resultScreen).toContain('observationReliability');
+  it('keeps engine dump out of the advice accordion', () => {
+    expect(resultScreen).not.toContain('observationReliability');
+    expect(resultScreen).not.toContain('possibleAssociations');
     expect(resultScreen).toContain('DIGESTIVE_DISCLAIMER');
     expect(resultScreen).not.toContain('uncertainVisualNotes');
     expect(resultScreen).not.toContain('Alimento registrato');
     expect(resultScreen).not.toContain('claim_ids');
     expect(resultScreen).not.toContain('DIG_');
-    expect(mapSource).toContain('interpretation_layers');
-    expect(mapSource).toContain('interpretationLayers');
+    expect(mapSource).toContain('owner_advice');
+    expect(mapSource).toContain('ownerAdvice');
   });
 });

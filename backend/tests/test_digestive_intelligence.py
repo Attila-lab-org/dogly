@@ -92,10 +92,10 @@ def test_first_formed_photo_does_not_claim_similarity_to_usual():
     assert result.baseline_comparison == "INSUFFICIENT"
     assert result.consumer_headline == "Tutto regolare per Rocky"
     assert result.consumer_summary.count(".") <= 2
-    assert "ben formate" in result.consumer_summary.lower()
     assert "andamento abituale" not in result.consumer_summary.lower()
     assert "primo riferimento" not in result.consumer_headline.lower()
     assert "cambiare alimento o quantità" in result.consumer_summary.lower()
+    assert "aumentare o ridurre" in result.consumer_summary.lower()
     assert "continua normalmente" in result.recommended_next_step.lower()
 
 
@@ -560,10 +560,13 @@ def test_verification_unavailable_keeps_controlled_caution():
     assert result.safety_state is DigestiveState.MONITOR
     assert result.overall_state is DigestiveState.MONITOR
     assert result.overall_state is not DigestiveState.ROUTINE
-    assert "confermare" in result.consumer_summary.lower()
+    assert result.consumer_headline == "La digestione di Rocky è da osservare oggi"
+    assert "confermare" not in result.consumer_headline.lower()
+    assert "confermare" not in result.consumer_summary.lower()
     assert "sangue" not in result.consumer_summary.lower()
-    assert "traccia rossa" in result.consumer_summary.lower()
-    assert result.useful_action.key == "contact_vet"
+    assert "traccia rossa" not in result.consumer_headline.lower()
+    assert result.useful_action.key != "contact_vet"
+    assert any("traccia rossa" in item.lower() for item in result.owner_advice)
 
 
 def test_verification_unavailable_melena_does_not_mention_red_trace():
@@ -577,9 +580,137 @@ def test_verification_unavailable_melena_does_not_mention_red_trace():
         context(prior_scores=[4, 4, 4, 4]),
     )
     assert result.safety_state is DigestiveState.MONITOR
-    assert "catramos" in result.consumer_summary.lower()
+    assert "catramos" in " ".join(result.owner_advice).lower()
     assert "traccia rossa" not in result.consumer_summary.lower()
-    assert "catramos" in (result.useful_action.body or "").lower()
+    assert "confermare" not in result.consumer_summary.lower()
+    assert result.useful_action.key != "contact_vet"
+
+
+def test_unverified_possible_blood_does_not_replace_formed_result():
+    from app.domains.digestive_verification import apply_anomaly_verification
+
+    result = build_digestive_intelligence(
+        apply_anomaly_verification(
+            observation(
+                consistency="formed",
+                fecal_score_estimate=3,
+                color="dark brown",
+                color_family="DARK_BROWN",
+                fresh_blood_candidate="possible",
+            ),
+            {"fresh_blood_candidate": "verification_unavailable"},
+        ),
+        context(appetite_reduced=True),
+    )
+    assert result.safety_state is DigestiveState.MONITOR
+    assert result.overall_state is DigestiveState.MONITOR
+    assert result.consumer_headline == "Il segnale di Rocky è l’appetito, non le feci"
+    assert "confermare" not in result.consumer_headline.lower()
+    assert "confermare" not in result.consumer_summary.lower()
+    assert "mangiato meno" in result.consumer_summary.lower()
+    assert "alimento o quantità" in result.consumer_summary.lower()
+    assert "alimento o quantità" in result.recommended_next_step.lower()
+    assert "traccia rossa" not in result.consumer_summary.lower()
+    assert "sangue" not in result.consumer_summary.lower()
+    assert result.useful_action.key != "contact_vet"
+    assert any("traccia rossa" in item.lower() for item in result.owner_advice)
+    assert any("stesso alimento" in item.lower() for item in result.owner_advice)
+    personal = " ".join(
+        layer.summary for layer in result.interpretation_layers if layer.key == "longitudinal"
+    )
+    assert "mangiato meno" in personal.lower()
+
+
+def test_formed_stool_rules_out_food_and_season():
+    result = build_digestive_intelligence(
+        observation(
+            consistency="formed",
+            fecal_score_estimate=3,
+            color="dark brown",
+            color_family="DARK_BROWN",
+        ),
+        context(
+            active_food_name="Royal Canin",
+            has_active_food=True,
+            quantity_per_day="200g",
+            food_started_days_ago=40,
+            season_label="autunno",
+        ),
+    )
+    text = result.consumer_summary.lower()
+    assert "non è l’alimento" in text or "non è l'alimento" in text
+    assert "non è la stagione" in text
+    assert "royal canin" in text
+    assert "cambiare alimento o quantità" in text
+    assert any("veterinario non serve" in item.lower() for item in result.owner_advice)
+    assert not any("autunno" in item.lower() for item in result.possible_associations)
+
+
+def test_loose_after_food_change_names_food_as_first_suspicion():
+    result = build_digestive_intelligence(
+        observation(consistency="soft"),
+        context(
+            prior_scores=[2, 2, 2],
+            active_food_name="Royal Canin Labrador Adult",
+            has_active_food=True,
+            quantity_per_day="280g",
+            food_started_days_ago=3,
+        ),
+    )
+    text = result.consumer_summary.lower()
+    assert "primo sospetto" in text
+    assert "3 giorni" in text
+    assert "royal canin" in text
+    assert "causa" not in text
+    assert "non cambiare di nuovo" in result.recommended_next_step.lower()
+
+
+def test_loose_with_extras_prefers_indiscretion_over_usual_food():
+    result = build_digestive_intelligence(
+        observation(consistency="soft"),
+        context(
+            active_food_name="Crocchette",
+            has_active_food=True,
+            quantity_per_day="200g",
+            food_started_days_ago=40,
+            unusual_food_48h=True,
+        ),
+    )
+    text = result.consumer_summary.lower()
+    assert "mangiato di diverso" in text
+    assert "primo sospetto" in text
+
+
+def test_loose_stable_food_uses_season_as_next_check():
+    result = build_digestive_intelligence(
+        observation(consistency="soft"),
+        context(
+            active_food_name="Crocchette",
+            has_active_food=True,
+            quantity_per_day="200g",
+            food_started_days_ago=40,
+            season_label="estate",
+        ),
+    )
+    text = result.consumer_summary.lower()
+    assert "non è un cambio di alimento" in text
+    assert "estate" in text
+    assert "avanzi" in text
+    assert result.consumer_summary.count(".") <= 2
+    assert not any("estate" in item.lower() for item in result.possible_associations)
+
+
+def test_formed_with_reduced_appetite_points_to_eating_not_stool():
+    result = build_digestive_intelligence(
+        observation(consistency="formed", fecal_score_estimate=3),
+        context(appetite_reduced=True, season_label="estate"),
+    )
+    text = result.consumer_summary.lower()
+    assert "mangiato meno" in text
+    assert "non le feci" in text
+    assert "alimento o quantità" in text
+    assert "appetito è il segnale" in result.recommended_next_step.lower()
+    assert any("torna a mangiare" in item.lower() for item in result.owner_advice)
 
 
 def test_stable_routine_with_complete_nutrition_has_no_useful_cta():

@@ -20,6 +20,7 @@ from app.domains.digestive_observation import (
 )
 from app.domains.digestive_verification import (
     safety_candidate,
+    unavailable_anomaly_fields,
     unavailable_caution_detail,
     verification_unavailable,
 )
@@ -28,7 +29,7 @@ from app.knowledge.digestive import (
     retrieve_digestive_knowledge,
 )
 
-DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v16"
+DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v20"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
@@ -123,6 +124,7 @@ class DigestiveIntelligenceResult(BaseModel):
     useful_action: DigestiveUsefulAction = Field(
         default_factory=DigestiveUsefulAction
     )
+    owner_advice: list[str] = Field(default_factory=list)
     what_to_watch: list[str] = Field(default_factory=list)
     observation_reliability: str
     knowledge_references: list[DigestiveKnowledgeReference] = Field(
@@ -350,6 +352,209 @@ def _weight_phrase(context: DigestiveContext) -> str | None:
 
 def _is_loose(consistency: str) -> bool:
     return consistency in _LOOSE
+
+
+def _expert_food_line(
+    context: DigestiveContext,
+    consistency: str,
+    *,
+    safety: DigestiveState,
+) -> str | None:
+    """What a vet says about food after looking at this stool and this dog's diet."""
+
+    if safety is DigestiveState.VET_CONTACT:
+        return None
+    if consistency == "formed":
+        if _food_known(context) and context.active_food_name:
+            return (
+                f"Non è l’alimento: con feci formate {context.dog_name} sta "
+                f"digerendo bene {context.active_food_name}"
+            )
+        return "Non è l’alimento: le feci formate dicono che sta digerendo bene"
+    if consistency == "hard":
+        return (
+            "Le feci più compatte spesso dipendono da poca acqua o da un "
+            "alimento troppo secco"
+        )
+    if context.unusual_food_48h is True:
+        return (
+            "Il primo sospetto non è il cibo abituale, ma quello che ha "
+            "mangiato di diverso"
+        )
+    if _recent_food_change(context):
+        span = _food_started_span(context)
+        named = f" {context.active_food_name}" if context.active_food_name else ""
+        when = f" da {span}" if span else ""
+        return (
+            f"Il primo sospetto è l’alimento{named} iniziato{when}: "
+            "i veterinari lo vedono spesso dopo un cambio troppo rapido"
+        )
+    if (
+        _food_known(context)
+        and context.food_started_days_ago is not None
+        and context.food_started_days_ago > 7
+    ):
+        stable = _food_stability_phrase(context)
+        if stable:
+            return f"{stable}, quindi non è un cambio di alimento"
+        return (
+            "Il cibo abituale è lo stesso da più di una settimana, "
+            "quindi non è un cambio di alimento"
+        )
+    if not _food_known(context):
+        return (
+            "Senza sapere cosa mangia non posso dirti se c’entra l’alimento: "
+            "è la prima cosa che chiederebbe un veterinario"
+        )
+    return None
+
+
+def _expert_season_line(
+    context: DigestiveContext,
+    consistency: str,
+    *,
+    food_is_primary: bool,
+) -> str | None:
+    """Season only as vets use it: rule-out on formed stool, routine check on loose."""
+
+    if consistency in {"formed", "hard"}:
+        return "non è la stagione"
+    if food_is_primary:
+        return None
+    label = str(context.season_label or "").lower()
+    if label == "estate":
+        return (
+            "In estate i veterinari guardano prima avanzi, acqua e ciò che "
+            "raccoglie fuori, non il mese in sé"
+        )
+    if label == "autunno":
+        return (
+            "In autunno conta più il cambio di routine e gli extra, "
+            "non il calendario"
+        )
+    if label == "inverno":
+        return (
+            "In inverno i veterinari guardano prima snack più ricchi e poca "
+            "acqua, non il freddo da solo"
+        )
+    if label == "primavera":
+        return (
+            "In primavera si guarda prima a extra e a ciò che raccoglie fuori, "
+            "non al cambio di stagione da solo"
+        )
+    return None
+
+
+def _expert_other_line(
+    context: DigestiveContext,
+    consistency: str,
+    observation: dict[str, Any],
+) -> str | None:
+    if verification_unavailable(observation):
+        if consistency == "formed" and context.appetite_reduced is True:
+            return (
+                f"Il segnale da seguire è che {context.dog_name} ha mangiato meno, "
+                "non le feci"
+            )
+        return None
+    if consistency == "formed" and context.appetite_reduced is True:
+        return (
+            f"Il segnale da seguire è che {context.dog_name} ha mangiato meno, "
+            "non le feci"
+        )
+    if context.vomiting_today is True:
+        if consistency == "formed":
+            return (
+                f"Le feci sono regolari: il segnale da seguire è il vomito di "
+                f"{context.dog_name}"
+            )
+        return f"Hai segnalato che {context.dog_name} ha vomitato oggi"
+    if _is_loose(consistency) and context.appetite_reduced is True:
+        return (
+            "Appetito basso insieme a feci più morbide è il quadro che i "
+            "veterinari vogliono sentire se non rientra in uno o due giorni"
+        )
+    level = _repetition_level(context, consistency)
+    if level == "once":
+        return "Un cambiamento simile era già comparso"
+    if level == "hours":
+        return "Questo tipo di cambiamento si è ripetuto nelle ultime ore"
+    if level == "trend" and _is_loose(consistency):
+        return "La consistenza non è ancora tornata stabile"
+    return None
+
+
+def _food_is_primary_suspicion(food_line: str | None) -> bool:
+    if not food_line:
+        return False
+    return "primo sospetto" in food_line or "mangiato di diverso" in food_line
+
+
+def _expert_owner_summary(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    safety: DigestiveState,
+    observation: dict[str, Any],
+) -> str:
+    """What this means for this dog. The owner already saw the stool."""
+
+    food = _expert_food_line(context, consistency, safety=safety)
+    season = _expert_season_line(
+        context,
+        consistency,
+        food_is_primary=_food_is_primary_suspicion(food),
+    )
+    other = _expert_other_line(context, consistency, observation)
+    name = context.dog_name
+
+    if consistency == "formed":
+        food_bit = (
+            f"non è l’alimento ({context.active_food_name})"
+            if _food_known(context) and context.active_food_name
+            else "non è l’alimento"
+        )
+        rulings = [part for part in (food_bit, season) if part]
+        ruling = " e ".join(rulings)
+        if other:
+            return (
+                f"Oggi le feci di {name} non chiedono di toccare alimento o quantità. "
+                f"{other}."
+            )
+        if not _food_known(context):
+            return (
+                "Oggi non serve cambiare alimento o quantità. "
+                "Se aggiungi cosa mangia e quanti grammi, le prossime volte "
+                "saprò se aumentare o ridurre."
+            )
+        ruling_lead = ruling[:1].upper() + ruling[1:] if ruling else ruling
+        return (
+            f"Oggi non serve cambiare alimento o quantità: {ruling_lead}."
+        )
+
+    symptom = None
+    if other and any(
+        token in other for token in ("vomitat", "mangiato meno", "appetito")
+    ):
+        symptom = other
+    first = food or season
+    if food and season and not _food_is_primary_suspicion(food):
+        season_tail = season[0].lower() + season[1:]
+        first = f"{food}: {season_tail}"
+    if other and not symptom:
+        if first:
+            return f"{other}. {first}."
+        return f"{other}."
+    if first and symptom and symptom not in first:
+        return f"{first}. {symptom}."
+    if first:
+        return f"{first}."
+    if symptom:
+        return f"{symptom}."
+    return (
+        f"Per {name} oggi conta la razione, gli extra e come sta, "
+        "non solo l’aspetto delle feci."
+    )
 
 
 
@@ -591,11 +796,6 @@ def _useful_info(
     safety: DigestiveState,
     observation: dict[str, Any],
 ) -> str:
-    if verification_unavailable(observation):
-        return (
-            "Non riesco a confermare bene questo dettaglio dalla foto. "
-            f"{unavailable_caution_detail(observation)}"
-        )
     visual = _visual_safety_why(observation, context.dog_name)
     if safety is DigestiveState.VET_CONTACT:
         return visual or (
@@ -636,7 +836,11 @@ def _consumer_headline(
     if safety is DigestiveState.VET_CONTACT:
         return "È prudente sentire il veterinario"
     if verification_unavailable(observation):
-        return "Non riesco a confermare un dettaglio"
+        return _unverified_photo_headline(
+            name,
+            consistency,
+            appetite_reduced=context.appetite_reduced is True,
+        )
     if safety is DigestiveState.ATTENTION and (
         _visual_safety_action(observation)
         or context.vomiting_today is True
@@ -831,20 +1035,6 @@ def _choose_useful_action(
             None,
         )
 
-    if verification_unavailable(observation):
-        return (
-            DigestiveUsefulAction(
-                key="contact_vet",
-                label="Contatta il veterinario",
-                body=(
-                    "Non riesco a confermare bene questo dettaglio dalla foto. "
-                    f"{unavailable_caution_detail(observation)}"
-                ),
-            ),
-            None,
-            None,
-        )
-
     if followup_key and followup_question:
         return (
             DigestiveUsefulAction(key="ask_followup"),
@@ -899,11 +1089,13 @@ def _final_advice(
         return (
             f"Contatta il veterinario e descrivi ciò che hai visto oggi per {name}."
         )
-    if verification_unavailable(observation):
+    if verification_unavailable(observation) and consistency == "formed":
         return (
-            f"Se il dubbio resta, senti il veterinario e descrivi ciò che hai visto "
-            f"sulla foto di {name}."
+            "Continua normalmente. Non serve modificare alimento o quantità "
+            "sulla base di questa foto."
         )
+    if verification_unavailable(observation):
+        return unavailable_caution_detail(observation)
     if followup_question:
         return followup_question
     if context.vomiting_today is True:
@@ -917,6 +1109,11 @@ def _final_advice(
             "resta spento o se gli episodi continuano."
         )
     if context.appetite_reduced is True:
+        if consistency == "formed":
+            return (
+                f"Le feci vanno bene. Se {name} continua a mangiare meno, "
+                "senti il veterinario: l’appetito è il segnale, non il cibo."
+            )
         return (
             f"Hai segnalato appetito ridotto: senti il veterinario se {name} "
             "continua a mangiare meno o se compaiono altri sintomi."
@@ -949,13 +1146,28 @@ def _final_advice(
         )
     if _recent_food_change(context) and _is_loose(consistency):
         return (
-            "Il cambiamento coincide con il nuovo alimento: osserva l’andamento "
-            "senza attribuirlo al cibo."
+            "Non cambiare di nuovo il cibo oggi. Dopo un passaggio recente i "
+            "veterinari tengono lo stesso alimento e guardano le prossime feci."
+        )
+    if context.unusual_food_48h is True and _is_loose(consistency):
+        return (
+            "Evita altri extra e mantieni il cibo abituale. Se non rientra "
+            "in uno o due giorni, senti il veterinario."
         )
     if baseline_code in {"ABOVE_USUAL", "BELOW_USUAL"}:
         return (
             "Controlla la prossima evacuazione: se torna più formata, "
             "il cambiamento può restare un episodio occasionale."
+        )
+    if (
+        baseline_code == "INSUFFICIENT"
+        and _is_loose(consistency)
+        and _food_known(context)
+        and not _recent_food_change(context)
+    ):
+        return (
+            "Mantieni lo stesso alimento. Guarda se ha preso extra, acqua o "
+            "qualcosa fuori: se non rientra in uno o due giorni, senti il veterinario."
         )
     if baseline_code == "INSUFFICIENT":
         return (
@@ -994,6 +1206,16 @@ def _what_to_watch(
             "vomito ripetuto o difficoltà a bere",
             "altro sangue o feci molto scure",
         ]
+    if verification_unavailable(observation):
+        fields = set(unavailable_anomaly_fields(observation))
+        items: list[str] = []
+        if "fresh_blood_candidate" in fields:
+            items.append("una traccia rossa evidente sulle feci")
+        if "melena_candidate" in fields:
+            items.append("feci molto scure o dall’aspetto catramoso")
+        if context.appetite_reduced is True:
+            items.append("appetito che resta basso")
+        return items[:3]
 
     items: list[str] = []
     if _is_loose(consistency):
@@ -1010,6 +1232,83 @@ def _what_to_watch(
     if context.reduced_activity_today is not True:
         items.append("energia molto più bassa del normale")
     return list(dict.fromkeys(items))[:3]
+
+
+def _owner_advice(
+    *,
+    observation: dict[str, Any],
+    context: DigestiveContext,
+    consistency: str,
+    safety: DigestiveState,
+) -> list[str]:
+    """Practical tips for the owner. Vet only when a vet would really call."""
+
+    name = context.dog_name
+    if safety is DigestiveState.VET_CONTACT or _visual_safety_action(observation):
+        return [
+            f"Contatta il veterinario e descrivi ciò che hai visto oggi per {name}."
+        ]
+    if consistency == "formed":
+        items = ["Tieni lo stesso alimento e la stessa quantità."]
+        if context.appetite_reduced is True:
+            items.append(
+                f"Guarda se {name} torna a mangiare nei prossimi pasti."
+            )
+        fields = set(unavailable_anomaly_fields(observation))
+        if "fresh_blood_candidate" in fields:
+            items.append(
+                "Un veterinario serve solo se sulla cacca vera vedi una "
+                "traccia rossa evidente."
+            )
+        elif "melena_candidate" in fields:
+            items.append(
+                "Un veterinario serve solo se le feci vere sono molto scure "
+                "o catramose."
+            )
+        else:
+            items.append("Per queste feci un controllo veterinario non serve.")
+        if (
+            context.season_label
+            and len(items) < 3
+            and "fresh_blood_candidate"
+            not in set(unavailable_anomaly_fields(observation))
+        ):
+            items.append(
+                f"In {context.season_label} conta quanto si muove {name}: "
+                "più attività può voler dire un po’ più di razione, "
+                "meno attività un po’ meno."
+            )
+        return items[:3]
+    if _recent_food_change(context) and _is_loose(consistency):
+        return [
+            "Non cambiare di nuovo il cibo oggi.",
+            "Niente extra per un paio di giorni.",
+            "Se non si formano in uno o due giorni, o compare vomito, senti il veterinario.",
+        ]
+    if context.unusual_food_48h is True and _is_loose(consistency):
+        return [
+            "Evita altri extra e tieni il cibo abituale.",
+            "Se non rientra in uno o due giorni, senti il veterinario.",
+        ]
+    if _is_loose(consistency):
+        items = [
+            "Mantieni lo stesso alimento e la routine.",
+            "Niente avanzi o extra nuovi.",
+        ]
+        if verification_unavailable(observation):
+            items.append(unavailable_caution_detail(observation))
+        else:
+            items.append(
+                "Se non rientra in uno o due giorni, o compare vomito, "
+                "senti il veterinario."
+            )
+        return items[:3]
+    if consistency == "hard":
+        return [
+            "Offri più acqua e non cambiare marca oggi.",
+            "Se fa fatica a fare la cacca, senti il veterinario.",
+        ]
+    return ["Tieni stabile cibo, quantità e routine."]
 
 
 def _evidence_lines(
@@ -1127,6 +1426,35 @@ def _visible_observation_details(
     return "Dalla foto risultano " + " e ".join(details) + "."
 
 
+def _unverified_photo_headline(
+    name: str,
+    consistency: str,
+    *,
+    appetite_reduced: bool = False,
+) -> str:
+    if consistency == "formed" and appetite_reduced:
+        return f"Il segnale di {name} è l’appetito, non le feci"
+    if consistency == "formed":
+        return f"Tutto regolare per {name}"
+    if _is_loose(consistency):
+        return f"La digestione di {name} è da osservare oggi"
+    return f"Ecco il risultato di {name}"
+
+
+def _photo_first_unavailable_summary(
+    *,
+    context: DigestiveContext,
+    consistency: str,
+    safety: DigestiveState,
+    observation: dict[str, Any],
+) -> str:
+    return _expert_owner_summary(
+        context=context,
+        consistency=consistency,
+        safety=safety,
+        observation=observation,
+    )
+
 
 def _general_layer_summary(
     *,
@@ -1138,17 +1466,19 @@ def _general_layer_summary(
     texture = _texture_phrase(consistency)
     details = _visible_observation_details(consistency, observation)
     if verification_unavailable(observation):
-        caution = (
-            f"Non riesco a confermare bene questo dettaglio dalla foto di {name}. "
-            f"{unavailable_caution_detail(observation)}"
+        return _photo_first_unavailable_summary(
+            context=context,
+            consistency=consistency,
+            safety=DigestiveState.MONITOR,
+            observation=observation,
         )
-        return f"{details} {caution}".strip()
     visual = _visual_safety_why(observation, name)
     if visual:
         return f"{details} {visual}".strip()
     if consistency == "formed":
         meaning = "Non emergono anomalie visibili."
-        return f"{details} {meaning}".strip()
+        ruling = "Non è l’alimento e non è la stagione."
+        return f"{details} {meaning} {ruling}".strip()
     if texture:
         meaning = "Questo aspetto merita di essere seguito nelle prossime evacuazioni."
         return f"{details} {meaning}".strip()
@@ -1354,9 +1684,21 @@ def _synthesize_from_layers(
         observation=observation,
     )
 
-    if safety is DigestiveState.VET_CONTACT or verification_unavailable(observation):
+    if safety is DigestiveState.VET_CONTACT:
         summary = general.summary
-    elif safety is DigestiveState.ATTENTION:
+    elif verification_unavailable(observation):
+        headline = _unverified_photo_headline(
+            context.dog_name,
+            consistency,
+            appetite_reduced=context.appetite_reduced is True,
+        )
+        summary = _photo_first_unavailable_summary(
+            context=context,
+            consistency=consistency,
+            safety=safety,
+            observation=observation,
+        )
+    elif safety is DigestiveState.ATTENTION and _visual_safety_action(observation):
         summary = _useful_info(
             context=context,
             consistency=consistency,
@@ -1366,65 +1708,36 @@ def _synthesize_from_layers(
         )
     elif state is DigestiveState.ROUTINE and consistency == "formed":
         headline = f"Tutto regolare per {context.dog_name}"
-        summary = (
-            "Le feci sono ben formate e non mostrano anomalie visibili. "
-            "Da questa foto non emerge alcun motivo per cambiare alimento o quantità."
+        summary = _expert_owner_summary(
+            context=context,
+            consistency=consistency,
+            safety=safety,
+            observation=observation,
         )
     elif followup_question:
-        repetition = _repetition_level(context, consistency)
+        summary = _expert_owner_summary(
+            context=context,
+            consistency=consistency,
+            safety=safety,
+            observation=observation,
+        )
         if "mangiato qualcosa di diverso" in followup_question:
             summary = (
-                "Non emergono segnali visivi di urgenza. Sapere se ha mangiato "
-                "qualcosa di diverso può chiarire quale scelta è più utile oggi."
-            )
-        elif repetition == "hours":
-            summary = (
-                "Il cambiamento si è ripetuto nelle ultime ore. "
-                "Per capire se basta monitorare, mi serve sapere come sta oggi."
-            )
-        elif repetition == "once":
-            summary = (
-                "Un cambiamento simile era già comparso. "
-                "Per capire se basta monitorare, mi serve sapere come sta oggi."
+                f"{summary} Un veterinario chiederebbe se ha mangiato qualcosa "
+                "di diverso: quella risposta cambia cosa fare oggi."
             )
         else:
             summary = (
-                "Dalla foto non emergono segnali che richiedono urgenza. "
-                "Per capire se basta monitorare, mi serve sapere come sta oggi."
+                f"{summary} Per capire se basta osservare, mi serve sapere "
+                "come sta oggi."
             )
     else:
-        repetition = _repetition_level(context, consistency)
-        factor = _personal_factor(
-            context,
-            baseline_code=baseline_code,
+        summary = _expert_owner_summary(
+            context=context,
             consistency=consistency,
+            safety=safety,
+            observation=observation,
         )
-        if repetition in {"hours", "trend"} and _is_loose(consistency):
-            if context.unusual_food_48h is True:
-                summary = (
-                    "Non emergono segnali visivi di urgenza. Quello che ha mangiato "
-                    "di diverso può coincidere con il cambiamento, senza provarne la causa."
-                )
-            else:
-                summary = (
-                    "Non emergono segnali visivi di urgenza, ma la consistenza "
-                    "non è ancora tornata stabile. Dai dati disponibili non emerge "
-                    "una causa precisa."
-                )
-        elif repetition == "once":
-            summary = (
-                "Un cambiamento simile era già comparso. "
-                "Controlla il prossimo episodio per vedere se rientra."
-            )
-        elif factor:
-            summary = factor
-        elif state is DigestiveState.MONITOR:
-            summary = (
-                "Dalla foto non emergono segnali che richiedono urgenza. "
-                "Controlla il prossimo episodio per vedere se rientra."
-            )
-        else:
-            summary = general.summary
 
     next_step = _final_advice(
         observation=observation,
@@ -1598,6 +1911,12 @@ def build_digestive_intelligence(
         followup_key=followup_key,
         followup_question=followup_question,
         useful_action=useful_action,
+        owner_advice=_owner_advice(
+            observation=observation,
+            context=context,
+            consistency=consistency,
+            safety=safety,
+        ),
         what_to_watch=_what_to_watch(
             observation=observation,
             context=context,

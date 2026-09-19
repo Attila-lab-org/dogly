@@ -20,6 +20,7 @@ import {
 export interface HomeDataState {
   usage: UsageSummary | null;
   lastInsight: LastInsight | null;
+  recentInsights: LastInsight[];
   processingEventId: string | null;
   isNewUser: boolean;
   loading: boolean;
@@ -58,6 +59,7 @@ export function useHomeData(dogId: string): HomeDataState {
   return {
     usage: usageQuery.data ?? null,
     lastInsight: derived?.lastInsight ?? null,
+    recentInsights: derived?.recentInsights ?? [],
     processingEventId: derived?.processingEventId ?? null,
     // Cold-start solo dopo una query account+dog esplicitamente scoped.
     isNewUser,

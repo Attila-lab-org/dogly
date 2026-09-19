@@ -333,3 +333,149 @@ async def test_interpreting_cutoff_does_not_present_late_answer_as_applied(
     assert late.json()["applied_to_interpretation"] is False
     assert late.json()["accepting_answers"] is False
     assert late.json()["question"] is None
+
+
+async def test_cutoff_and_answer_are_never_ambiguous(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    import asyncio
+
+    from app.domains.processing_context_store import close_collection
+
+    event_id = await _queue_event(client, auth_headers, "proc-race-0001", state=state)
+    shown = (
+        await client.get(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            headers=auth_headers,
+        )
+    ).json()["question"]
+    event = state.store.behavior_events[event_id]
+    event.status = BehaviorEventStatus.OBSERVING
+
+    async def post_answer():
+        return await client.post(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            json={
+                "question_id": shown["id"],
+                "answer_id": shown["options"][0]["id"],
+            },
+            headers=auth_headers,
+        )
+
+    post_resp, snapshot = await asyncio.gather(
+        post_answer(),
+        close_collection(state.store, event),
+    )
+    assert post_resp.status_code == 200, post_resp.text
+    applied = post_resp.json()["applied_to_interpretation"]
+    snapshot_ids = {item["question_id"] for item in snapshot}
+    if applied:
+        assert shown["id"] in snapshot_ids
+    else:
+        assert shown["id"] not in snapshot_ids
+    stored = state.store.behavior_events[event_id].interpretation_json or {}
+    assert stored.get("processing_context_closed") is True
+    assert stored.get("processing_owner_context") == snapshot
+
+
+async def test_answer_after_close_is_audited_but_not_applied(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    from app.domains.processing_context_store import close_collection, list_answers
+
+    event_id = await _queue_event(client, auth_headers, "proc-race-0002", state=state)
+    shown = (
+        await client.get(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            headers=auth_headers,
+        )
+    ).json()["question"]
+    event = state.store.behavior_events[event_id]
+    event.status = BehaviorEventStatus.OBSERVING
+    snapshot = await close_collection(state.store, event)
+    late = await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={
+            "question_id": shown["id"],
+            "answer_id": shown["options"][0]["id"],
+        },
+        headers=auth_headers,
+    )
+    assert late.status_code == 200
+    assert late.json()["applied_to_interpretation"] is False
+    assert shown["id"] not in {item["question_id"] for item in snapshot}
+    rows = list_answers(
+        state.store, event_id=event_id, user_id=event.user_id
+    )
+    assert any(row.question_id == shown["id"] for row in rows)
+
+
+async def test_answer_before_close_is_applied_and_in_snapshot(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    from app.domains.processing_context_store import close_collection
+
+    event_id = await _queue_event(client, auth_headers, "proc-race-0003", state=state)
+    shown = (
+        await client.get(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            headers=auth_headers,
+        )
+    ).json()["question"]
+    event = state.store.behavior_events[event_id]
+    event.status = BehaviorEventStatus.OBSERVING
+    posted = await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={
+            "question_id": shown["id"],
+            "answer_id": shown["options"][0]["id"],
+        },
+        headers=auth_headers,
+    )
+    assert posted.status_code == 200
+    assert posted.json()["applied_to_interpretation"] is True
+    assert posted.json()["accepted_answers"]
+    snapshot = await close_collection(state.store, event)
+    assert shown["id"] in {item["question_id"] for item in snapshot}
+
+
+async def test_refine_preserves_processing_owner_context(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    from app.worker.handlers import refine_behavior_event_context
+
+    event_id = await _queue_event(client, auth_headers, "proc-ref-0001", state=state)
+    question = (
+        await client.get(
+            f"/v1/behavior/events/{event_id}/processing-context",
+            headers=auth_headers,
+        )
+    ).json()["question"]
+    await client.post(
+        f"/v1/behavior/events/{event_id}/processing-context",
+        json={
+            "question_id": question["id"],
+            "answer_id": question["options"][0]["id"],
+        },
+        headers=auth_headers,
+    )
+    result = await process_behavior_event(state, event_id=event_id)
+    assert result["status"] == "COMPLETED"
+    first = state.store.behavior_events[event_id].interpretation_json
+    facts = first["processing_owner_context"]
+    assert facts
+    first["needs_context"] = True
+    first["context_question"] = "Stavi cercando di togliere la calza?"
+    first["context_options"] = [
+        {"id": "removing_sock", "label": "Sì, la stavo togliendo"},
+        {"id": "already_playing", "label": "No, stavamo giocando"},
+    ]
+    await refine_behavior_event_context(
+        state,
+        event=state.store.behavior_events[event_id],
+        answer_id="removing_sock",
+    )
+    stored = state.store.behavior_events[event_id].interpretation_json
+    assert stored["processing_owner_context"] == facts
+    assert stored["processing_context_closed"] is True
+    assert stored["context_response"]["label"] == "Sì, la stavo togliendo"

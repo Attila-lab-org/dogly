@@ -3014,7 +3014,7 @@
           "digestive"
         ],
         "summary": "Update Digestive Context",
-        "description": "Save one sparse owner answer and deterministically refresh the result.",
+        "description": "Save sparse owner context during processing or refresh a completed result.",
         "operationId": "update_digestive_context_v1_digestive_events__event_id__context_patch",
         "parameters": [
           {
@@ -3060,6 +3060,90 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DigestiveEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/digestive/events/{event_id}/feedback": {
+      "post": {
+        "tags": [
+          "digestive"
+        ],
+        "summary": "Post Digestive Feedback",
+        "operationId": "post_digestive_feedback_v1_digestive_events__event_id__feedback_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DigestiveFeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigestiveFeedbackResponse"
                 }
               }
             }
@@ -4338,6 +4422,310 @@
         }
       }
     },
+    "/v1/realtime/sessions": {
+      "post": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "Create Realtime Session",
+        "operationId": "create_realtime_session_v1_realtime_sessions_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RealtimeSessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealtimeSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/realtime/sessions/{session_id}/client-secret": {
+      "post": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "Create Voice Client Secret",
+        "operationId": "create_voice_client_secret_v1_realtime_sessions__session_id__client_secret_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealtimeClientSecretOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/realtime/sessions/{session_id}/turns": {
+      "post": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "Create Realtime Turn",
+        "operationId": "create_realtime_turn_v1_realtime_sessions__session_id__turns_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RealtimeTurnCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealtimeTurnOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/realtime/memory-proposals/{proposal_id}/decision": {
+      "post": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "Decide Realtime Memory",
+        "operationId": "decide_realtime_memory_v1_realtime_memory_proposals__proposal_id__decision_post",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proposal Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RealtimeMemoryDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealtimeMemoryDecisionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/realtime/sessions/{session_id}": {
+      "delete": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "End Realtime Session",
+        "operationId": "end_realtime_session_v1_realtime_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/subscription/status": {
       "get": {
         "tags": [
@@ -5247,6 +5635,14 @@
                 "type": "null"
               }
             ]
+          },
+          "processing_owner_context": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Processing Owner Context"
           },
           "created_at": {
             "type": "string",
@@ -6236,7 +6632,10 @@
                 "enum": [
                   "vomiting_today",
                   "reduced_activity_today",
-                  "unusual_food_48h"
+                  "unusual_food_48h",
+                  "appetite_reduced",
+                  "straining_or_urgency",
+                  "supplements_or_medication"
                 ]
               },
               {
@@ -6255,6 +6654,21 @@
               }
             ],
             "title": "Followup Question"
+          },
+          "context_answered_keys": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "vomiting_today",
+                "reduced_activity_today",
+                "unusual_food_48h",
+                "appetite_reduced",
+                "straining_or_urgency",
+                "supplements_or_medication"
+              ]
+            },
+            "type": "array",
+            "title": "Context Answered Keys"
           },
           "useful_action": {
             "anyOf": [
@@ -6359,6 +6773,40 @@
           "created_at"
         ],
         "title": "DigestiveEventOut"
+      },
+      "DigestiveFeedbackRequest": {
+        "properties": {
+          "value": {
+            "$ref": "#/components/schemas/FeedbackValue"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "DigestiveFeedbackRequest"
+      },
+      "DigestiveFeedbackResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "value": {
+            "$ref": "#/components/schemas/FeedbackValue"
+          },
+          "recorded": {
+            "type": "boolean",
+            "title": "Recorded",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "value"
+        ],
+        "title": "DigestiveFeedbackResponse"
       },
       "DigestiveInterpretationLayerOut": {
         "properties": {
@@ -9270,6 +9718,34 @@
         ],
         "title": "PrivacyExportStatusResponse"
       },
+      "ProcessingAcceptedAnswer": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "title": "Question Id"
+          },
+          "answer_id": {
+            "type": "string",
+            "title": "Answer Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "answer_id",
+          "title",
+          "label"
+        ],
+        "title": "ProcessingAcceptedAnswer"
+      },
       "ProcessingContextAnswerRequest": {
         "properties": {
           "question_id": {
@@ -9372,6 +9848,13 @@
             "type": "boolean",
             "title": "Accepting Answers",
             "default": true
+          },
+          "accepted_answers": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessingAcceptedAnswer"
+            },
+            "type": "array",
+            "title": "Accepted Answers"
           }
         },
         "type": "object",
@@ -9523,6 +10006,289 @@
         },
         "type": "object",
         "title": "PushTokenResponse"
+      },
+      "RealtimeClientSecretOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "expires_at": {
+            "type": "integer",
+            "title": "Expires At"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "session_config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Session Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "expires_at",
+          "model",
+          "session_config"
+        ],
+        "title": "RealtimeClientSecretOut"
+      },
+      "RealtimeMemoryDecision": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "CONFIRM",
+              "REJECT"
+            ],
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "RealtimeMemoryDecision"
+      },
+      "RealtimeMemoryDecisionOut": {
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "title": "Proposal Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CONFIRMED",
+              "REJECTED"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "status"
+        ],
+        "title": "RealtimeMemoryDecisionOut"
+      },
+      "RealtimeMemoryProposal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "ROUTINE",
+              "PREFERENCE",
+              "DIET",
+              "HEALTH",
+              "GENERAL"
+            ],
+            "title": "Category"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "statement"
+        ],
+        "title": "RealtimeMemoryProposal"
+      },
+      "RealtimeSessionCreate": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "modality": {
+            "type": "string",
+            "enum": [
+              "VOICE",
+              "TEXT"
+            ],
+            "title": "Modality",
+            "default": "VOICE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id"
+        ],
+        "title": "RealtimeSessionCreate"
+      },
+      "RealtimeSessionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ENDED",
+              "EXPIRED"
+            ],
+            "title": "Status"
+          },
+          "modality": {
+            "type": "string",
+            "enum": [
+              "VOICE",
+              "TEXT"
+            ],
+            "title": "Modality"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dog_id",
+          "status",
+          "modality",
+          "model",
+          "started_at",
+          "expires_at"
+        ],
+        "title": "RealtimeSessionOut"
+      },
+      "RealtimeTurnCreate": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "RealtimeTurnCreate"
+      },
+      "RealtimeTurnOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "assistant_text": {
+            "type": "string",
+            "title": "Assistant Text"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "terminal_state": {
+            "type": "string",
+            "enum": [
+              "ANSWERED",
+              "ABSTAINED",
+              "SAFETY_INTERRUPT",
+              "BEHAVIOR_VIDEO_HANDOFF",
+              "MEMORY_CONFIRMATION_REQUIRED"
+            ],
+            "title": "Terminal State"
+          },
+          "domains": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "BEHAVIOR",
+                "DIGESTIVE",
+                "NUTRITION",
+                "CARE",
+                "GENERAL"
+              ]
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "safety_flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Safety Flags"
+          },
+          "memory_proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RealtimeMemoryProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "behavior_handoff_href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Behavior Handoff Href"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "assistant_text",
+          "terminal_state",
+          "created_at"
+        ],
+        "title": "RealtimeTurnOut"
       },
       "RetentionState": {
         "type": "string",

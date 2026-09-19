@@ -10,6 +10,7 @@ import {
 import { CuteIcon } from '../../components';
 import type { BehaviorEventStatus } from '../../contracts/types';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { processingCompanionCopy } from '../core/copy';
 
 export function ProcessingCompanion({
   dogName,
@@ -57,10 +58,8 @@ export function ProcessingCompanion({
     return () => animation.stop();
   }, [finishing, nativeDriver, pulse, reduceMotion]);
 
-  const title =
-    status === 'FAILED_RETRYABLE'
-      ? 'Ci riprovo…'
-      : `Analizzando ${dogName}…`;
+  const copy = processingCompanionCopy(dogName, status, finishing);
+  const title = copy.title;
 
   const ringScale = pulse.interpolate({
     inputRange: [0, 1],
@@ -129,6 +128,7 @@ export function ProcessingCompanion({
         <View style={styles.liveDot} />
         <Text style={styles.title}>{title}</Text>
       </View>
+      {copy.detail ? <Text style={styles.detail}>{copy.detail}</Text> : null}
       <View style={styles.glowTrack} accessibilityElementsHidden>
         <Animated.View
           style={[
@@ -209,6 +209,14 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
     textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  detail: {
+    marginTop: spacing.sm,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
   glowTrack: {
     width: 96,

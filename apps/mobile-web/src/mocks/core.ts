@@ -249,6 +249,7 @@ export const homeDataMock: HomeData = {
     eventId: resultRelax.eventId,
     label: 'sembra rilassato',
     timestampLabel: 'Oggi, 09:30',
+    tone: 'positive',
   },
   processingEventId: null,
   isNewUser: false,
