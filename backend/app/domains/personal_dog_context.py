@@ -663,6 +663,8 @@ def assemble_behavior_dog_context(
     stories: list[dict[str, Any]],
     *,
     owner_display_name: str | None = None,
+    eligible_patterns: list[EligiblePatternSummary] | None = None,
+    evidence: list[CanineEvidenceItem] | None = None,
 ) -> tuple[DogContextSnapshot, PersonalDogContext]:
     """Shared Behavior path: same merge order, typed personal context alongside."""
     base = build_dog_context(
@@ -673,6 +675,8 @@ def assemble_behavior_dog_context(
         dog_context=base,
         lifestyle_dump=lifestyle_dump,
         stories=stories,
+        eligible_patterns=eligible_patterns,
+        evidence=evidence,
         owner_display_name=owner_display_name,
     )
     return personal.dog_context, personal

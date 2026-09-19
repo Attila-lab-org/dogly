@@ -82,13 +82,23 @@ confermati. Se DOGly non può spiegare la differenza, non deve inventarla.
 Il proprietario parla con DOGly, non con modelli di dominio separati. Dietro le
 quinte:
 
-1. **Reasoning generale** — il modello puo formulare ipotesi utili.
-2. **Validazione scientifica** — i claim passano dai registry Behavior /
-   Digestive / Intelligence V3 e dalle regole di governance.
-3. **Conoscenza personale** — profilo, storie confermate, pattern eleggibili.
-4. **Evidenza corrente** — ultime letture Behavior/Digestive e feeding.
-5. **Safety** — gli interrupt deterministici non sono negoziabili.
+1. **Reasoner centrale** — il modello genera, confronta e sceglie ipotesi usando
+   conoscenza canina generale, scienza, storia personale, contesto, evidenza e
+   sequenza temporale. La tassonomia descrive il risultato: non limita il
+   pensiero.
+2. **Realtà in ingresso** — Observer, proprietario e memoria hanno provenance
+   distinta. Un controllo di grounding impedisce di presentare come visto o
+   ricordato ciò che non è disponibile.
+3. **Forza dei claim** — i registry distinguono `SUPPORTED`,
+   `PARTIALLY_SUPPORTED`, `NOT_COVERED`, `CONTRADICTED` e `FORBIDDEN`.
+   `NOT_COVERED` non significa falso e l'overlap lessicale resta solo audit.
+4. **Safety di confine** — interviene soltanto quando cambia davvero l'azione,
+   senza rifare l'interpretazione comportamentale o sostituire una risposta
+   contestuale con un fallback generico.
+5. **Memoria rigorosa** — rispondere e imparare sono soglie diverse. I pattern
+   richiedono episodi indipendenti, ricorrenza e conferma; un refinement
+   sostituisce la firma precedente dell'evento.
 
-Le etichette consumer restano osservato / 
-accontato / imparato. Una
-coincidenza temporale cibo-feci non viene presentata come causa.
+Il percorso è: evidenza → Reasoner → pochi guardrail di confine → risposta.
+Le etichette consumer restano osservato / raccontato / imparato. Una coincidenza
+temporale cibo-feci non viene presentata come causa.

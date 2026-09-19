@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -45,12 +47,12 @@ def pattern_title_for_intent(intent: str) -> str:
 
 
 def derive_pattern_state(support_count: int, confirm_count: int) -> PatternState | None:
-    """Anti-bias: one event is never a pattern; ESTABLISHED needs owner confirm."""
+    """Thresholds apply to independent episode buckets, not raw clip count."""
     if support_count < 2:
         return None
-    if support_count >= 8 and confirm_count >= 1:
+    if support_count >= 4 and confirm_count >= 1:
         return PatternState.ESTABLISHED
-    if support_count >= 4:
+    if support_count >= 3:
         return PatternState.PRELIMINARY
     return PatternState.CANDIDATE
 
@@ -106,14 +108,93 @@ def _pattern_signature(
         for item in (interpretation.get("processing_owner_context") or [])
         if isinstance(item, dict)
     ]
+    candidate = interpretation.get("personal_pattern_candidate") or {}
+    raw_semantic_key = str(candidate.get("semantic_key") or "").casefold()
+    semantic_key = re.sub(r"[^a-z0-9à-ÿ]+", " ", raw_semantic_key).strip()
+    action_terms = sorted(
+        {
+            re.sub(r"[^a-z0-9à-ÿ]+", " ", str(item.get("action") or "").casefold()).strip()
+            for item in (event.observation_json or {}).get("salient_actions", [])
+            if isinstance(item, dict) and item.get("action")
+        }
+    )
+    # Model-authored meaning is preferred. The fallback groups by broad meaning
+    # and context, deliberately ignoring tiny technical signal differences.
+    meaning_key = semantic_key or intent.casefold()
+    context_key = str(candidate.get("context_key") or context.value).casefold()
     signature = {
+        "meaning_key": meaning_key,
+        "title": str(candidate.get("title") or pattern_title_for_intent(intent)),
+        "support_summary": str(candidate.get("support_summary") or ""),
         "intent": intent,
         "context_bucket": context.value,
-        "signals": signal_keys,
+        "context_key": context_key,
+        "salient_actions": action_terms,
+        "signal_families": sorted({key.split(".", 1)[0] for key in signal_keys}),
     }
     encoded = json.dumps(signature, sort_keys=True, separators=(",", ":"))
     pattern_key = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
     return pattern_key, context.value, signature, owner_context
+
+
+def _episode_bucket(value: datetime) -> str:
+    """Six-hour buckets prevent burst uploads from counting as independent."""
+    aware = value
+    return f"{aware.date().isoformat()}:{aware.hour // 6}"
+
+
+def _pattern_title(intent: str, signature: dict[str, Any]) -> str:
+    return str(signature.get("title") or pattern_title_for_intent(intent))[:120]
+
+
+def _semantic_tokens(value: str) -> set[str]:
+    stop = {"il", "la", "lo", "un", "una", "di", "a", "the", "to", "and", "dog", "cane"}
+    return {
+        token
+        for token in re.findall(r"[a-z0-9à-ÿ]{3,}", value.casefold())
+        if token not in stop
+    }
+
+
+def semantic_pattern_similarity(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> float:
+    """Meaning/context similarity; technical signal equality is not required."""
+    left_tokens = _semantic_tokens(str(left.get("meaning_key") or ""))
+    right_tokens = _semantic_tokens(str(right.get("meaning_key") or ""))
+    if not left_tokens or not right_tokens:
+        return 0.0
+    union = left_tokens | right_tokens
+    meaning = len(left_tokens & right_tokens) / len(union)
+    context_bonus = (
+        0.15
+        if left.get("context_key")
+        and left.get("context_key") == right.get("context_key")
+        else 0.0
+    )
+    action_left = set(left.get("salient_actions") or [])
+    action_right = set(right.get("salient_actions") or [])
+    action_bonus = (
+        0.15 * len(action_left & action_right) / len(action_left | action_right)
+        if action_left and action_right
+        else 0.0
+    )
+    return min(1.0, meaning + context_bonus + action_bonus)
+
+
+def _closest_pattern_key(
+    signature: dict[str, Any],
+    candidates: list[tuple[str, dict[str, Any]]],
+) -> str | None:
+    scored = [
+        (semantic_pattern_similarity(signature, candidate), pattern_key)
+        for pattern_key, candidate in candidates
+    ]
+    if not scored:
+        return None
+    score, pattern_key = max(scored)
+    return pattern_key if score >= 0.65 else None
 
 
 async def on_behavior_completed(state: AppState, event: BehaviorEventRec) -> None:
@@ -349,6 +430,16 @@ def upsert_intent_pattern_memory(
         event,
         intent=intent,
     )
+    similar_key = _closest_pattern_key(
+        signature,
+        [
+            (str(item["pattern_key"]), dict(item.get("signal_signature") or {}))
+            for item in store.behavior_pattern_signatures.values()
+            if item["dog_id"] == dog_id
+        ],
+    )
+    pattern_key = similar_key or pattern_key
+    previous_signature = store.behavior_pattern_signatures.get(event_id)
     store.behavior_pattern_signatures[event_id] = {
         "dog_id": dog_id,
         "pattern_key": pattern_key,
@@ -357,10 +448,39 @@ def upsert_intent_pattern_memory(
         "signal_signature": signature,
         "owner_context_signature": owner_context,
     }
-    support = sum(
-        1
-        for item in store.behavior_pattern_signatures.values()
+    if previous_signature and previous_signature["pattern_key"] != pattern_key:
+        old_key = previous_signature["pattern_key"]
+        for pattern in list(store.patterns.values()):
+            if pattern.dog_id != dog_id or pattern.pattern_key != old_key:
+                continue
+            store.pattern_event_links.discard((pattern.id, event_id))
+            old_ids = {
+                linked_id
+                for linked_id, item in store.behavior_pattern_signatures.items()
+                if item["dog_id"] == dog_id and item["pattern_key"] == old_key
+            }
+            old_support = len(
+                {
+                    _episode_bucket(store.behavior_events[item_id].created_at)
+                    for item_id in old_ids
+                    if item_id in store.behavior_events
+                }
+            )
+            pattern.support_count = old_support
+            if old_support < 2:
+                pattern.state = PatternState.ARCHIVED
+            pattern.version += 1
+    matching_event_ids = {
+        signature_event_id
+        for signature_event_id, item in store.behavior_pattern_signatures.items()
         if item["dog_id"] == dog_id and item["pattern_key"] == pattern_key
+    }
+    support = len(
+        {
+            _episode_bucket(store.behavior_events[item_id].created_at)
+            for item_id in matching_event_ids
+            if item_id in store.behavior_events
+        }
     )
     if support < 2:
         return None
@@ -373,11 +493,7 @@ def upsert_intent_pattern_memory(
         ),
         None,
     )
-    linked_event_ids = {
-        signature_event_id
-        for signature_event_id, item in store.behavior_pattern_signatures.items()
-        if item["dog_id"] == dog_id and item["pattern_key"] == pattern_key
-    }
+    linked_event_ids = matching_event_ids
     confirm = sum(
         store.behavior_feedback[item_id].value.value == "YES"
         for item_id in linked_event_ids
@@ -398,7 +514,7 @@ def upsert_intent_pattern_memory(
         existing = PersonalPatternRec(
             id=new_id(),
             dog_id=dog_id,
-            title=pattern_title_for_intent(intent),
+            title=_pattern_title(intent, signature),
             state=state,
             support_count=support,
             confirm_count=confirm,
@@ -415,7 +531,7 @@ def upsert_intent_pattern_memory(
         )
         store.patterns[existing.id] = existing
     else:
-        existing.title = pattern_title_for_intent(intent)
+        existing.title = _pattern_title(intent, signature)
         existing.support_count = support
         existing.confirm_count = confirm
         existing.contradict_count = contradict
@@ -504,16 +620,49 @@ async def upsert_intent_pattern_db(
 ) -> None:
     dog_id = event.dog_id
     event_id = event.id
-    title = pattern_title_for_intent(intent)
     pattern_key, context_bucket, signature, owner_context = _pattern_signature(
         event,
         intent=intent,
     )
+    title = _pattern_title(intent, signature)
     async with engine.begin() as conn:
+        previous_key = (
+            await conn.execute(
+                text(
+                    """
+                    select pattern_key
+                    from internal.behavior_pattern_signatures
+                    where event_id = cast(:event_id as uuid)
+                    """
+                ),
+                {"event_id": event_id},
+            )
+        ).scalar_one_or_none()
         await conn.execute(
             text("select id from public.dogs where id = cast(:dog_id as uuid) for update"),
             {"dog_id": dog_id},
         )
+        semantic_rows = (
+            await conn.execute(
+                text(
+                    """
+                    select distinct on (pattern_key) pattern_key, signal_signature
+                    from internal.behavior_pattern_signatures
+                    where dog_id = cast(:dog_id as uuid)
+                    order by pattern_key, event_id desc
+                    """
+                ),
+                {"dog_id": dog_id},
+            )
+        ).mappings().all()
+        similar_key = _closest_pattern_key(
+            signature,
+            [
+                (str(row["pattern_key"]), dict(row["signal_signature"] or {}))
+                for row in semantic_rows
+            ],
+        )
+        pattern_key = similar_key or pattern_key
         await conn.execute(
             text(
                 """
@@ -547,15 +696,57 @@ async def upsert_intent_pattern_db(
             await conn.execute(
                 text(
                     """
-                    select count(*)::int as n
-                    from internal.behavior_pattern_signatures
-                    where dog_id = cast(:dog_id as uuid)
-                      and pattern_key = :pattern_key
+                    select count(distinct (
+                      date_trunc('day', e.created_at)
+                      + floor(extract(hour from e.created_at) / 6) * interval '6 hours'
+                    ))::int as n
+                    from internal.behavior_pattern_signatures s
+                    join public.behavior_events e on e.id = s.event_id
+                    where s.dog_id = cast(:dog_id as uuid)
+                      and s.pattern_key = :pattern_key
                     """
                 ),
                 {"dog_id": dog_id, "pattern_key": pattern_key},
             )
         ).mappings().one()["n"]
+        if previous_key and str(previous_key) != pattern_key:
+            await conn.execute(
+                text(
+                    """
+                    delete from internal.pattern_event_links l
+                    using public.personal_patterns p
+                    where l.pattern_id = p.id
+                      and l.event_id = cast(:event_id as uuid)
+                      and p.dog_id = cast(:dog_id as uuid)
+                      and p.pattern_key = :old_key
+                    """
+                ),
+                {"event_id": event_id, "dog_id": dog_id, "old_key": str(previous_key)},
+            )
+            await conn.execute(
+                text(
+                    """
+                    update public.personal_patterns p
+                    set support_count = counts.n,
+                        state = case when counts.n < 2 then 'ARCHIVED' else p.state end,
+                        version = p.version + 1,
+                        updated_at = now()
+                    from (
+                      select count(distinct (
+                        date_trunc('day', e.created_at)
+                        + floor(extract(hour from e.created_at) / 6) * interval '6 hours'
+                      ))::int as n
+                      from internal.behavior_pattern_signatures s
+                      join public.behavior_events e on e.id = s.event_id
+                      where s.dog_id = cast(:dog_id as uuid)
+                        and s.pattern_key = :old_key
+                    ) counts
+                    where p.dog_id = cast(:dog_id as uuid)
+                      and p.pattern_key = :old_key
+                    """
+                ),
+                {"dog_id": dog_id, "old_key": str(previous_key)},
+            )
         if int(support) < 2:
             return
         feedback = (

@@ -22,7 +22,7 @@ def test_uncovered_hypothesis_stays_hedged() -> None:
         strength="MODERATE",
     )
     result = validate_claim(claim)
-    assert result.status == "HYPOTHESIS"
+    assert result.status == "NOT_COVERED"
     assert result.owner_facing_strength == "HEDGED"
 
 
@@ -49,7 +49,7 @@ def test_diagnosis_is_blocked_by_safety() -> None:
         asserts_diagnosis=True,
     )
     result = validate_claim(claim)
-    assert result.status == "BLOCKED_BY_SAFETY"
+    assert result.status == "FORBIDDEN"
 
 
 def test_known_scientific_id_supports_only_when_content_matches() -> None:
@@ -72,7 +72,7 @@ def test_known_scientific_id_supports_only_when_content_matches() -> None:
     assert semantic_overlap(statement, records[card_id]) >= 0.12
 
 
-def test_irrelevant_scientific_id_is_contradicted() -> None:
+def test_lexically_different_scientific_id_is_partial_not_false() -> None:
     sci = known_scientific_ids()
     assert sci
     card_id = next(iter(sci))
@@ -86,9 +86,10 @@ def test_irrelevant_scientific_id_is_contradicted() -> None:
         scientific_card_ids=[card_id],
     )
     result = validate_claim(claim)
-    assert result.status == "CONTRADICTED"
+    assert result.status == "PARTIALLY_SUPPORTED"
     assert card_id not in result.matched_scientific_ids
-    assert any("support" in reason.lower() for reason in result.reasons)
+    assert result.semantic_overlap_score is not None
+    assert result.owner_facing_strength != "STRONG"
 
 
 def test_govern_text_downgrades_certainty_and_causation() -> None:

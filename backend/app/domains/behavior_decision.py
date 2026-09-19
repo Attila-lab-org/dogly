@@ -1,9 +1,8 @@
-"""Governed, auditable behavior decision policy.
+"""Non-competing boundary audit for Behavior reasoning.
 
-The reasoner proposes a hypothesis. This module checks whether observable
-signal families, scientific coverage, context and contradictions support it.
-It may promote an abstention only when one bounded candidate is both uniquely
-supported and already present among the reasoner's alternatives.
+The capable reasoner owns semantic interpretation. This module records how its
+answer relates to deterministic observable signals and applies only confidence
+ceilings caused by media quality. It never replaces intent or consumer meaning.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ from app.contracts.taxonomy import ConfidenceBand, ContextBucket, IntentCode
 from app.domains.context_bucket import observation_supports_exit
 from app.knowledge.models import KnowledgeContext
 
-BEHAVIOR_DECISION_POLICY_VERSION = "behavior-decision/v3"
+BEHAVIOR_DECISION_POLICY_VERSION = "behavior-boundary-audit/v4"
 
 
 @dataclass(frozen=True)
@@ -460,12 +459,9 @@ def _confidence_ceiling(
     selected = next((item for item in candidates if item.intent is final_intent), None)
     if selected and (selected.contradictions or selected.excluded_by):
         return ConfidenceBand.LOW
-    if knowledge.coverage == "LOW":
-        return ConfidenceBand.LOW
-    if (
-        knowledge.coverage == "MEDIUM"
-        or observation.capture_quality.overall_quality != "good"
-    ):
+    # Scientific coverage governs claim strength, not whether the reasoner's
+    # interpretation exists. Only evidence quality caps interpretation confidence.
+    if observation.capture_quality.overall_quality != "good":
         return ConfidenceBand.MEDIUM
     return ConfidenceBand.HIGH
 
@@ -849,158 +845,19 @@ def apply_behavior_decision_policy(
     context_bucket: ContextBucket,
     knowledge: KnowledgeContext,
 ) -> tuple[InterpretationContract, BehaviorDecisionTrace]:
+    """Audit a reasoner decision without becoming a second reasoner.
+
+    Candidate rules remain useful for observability, evals and detecting drift.
+    They cannot promote, replace or null a semantically richer model result.
+    """
     signals = extract_behavior_signals(observation, context_bucket)
     candidates = [_candidate(policy, signals) for policy in _POLICIES]
     initial_intent = interpretation.primary_intent
     final = interpretation
     resolution = "ACCEPTED_REASONER"
     copy_source = "REASONER"
-    eligible = sorted(
-        (item for item in candidates if item.eligible),
-        key=lambda item: item.score,
-        reverse=True,
-    )
-
     if initial_intent in {None, IntentCode.INSUFFICIENT}:
-        alternative_intents = {item.intent for item in interpretation.alternatives}
-        unique = (
-            eligible[0]
-            if eligible
-            and (len(eligible) == 1 or eligible[0].score >= eligible[1].score + 2)
-            else None
-        )
-        if (
-            unique is not None
-            and unique.intent in alternative_intents
-            and unique.intent in _PROMOTION_COPY
-        ):
-            final = _sync_promoted_copy(
-                interpretation,
-                intent=unique.intent,
-                dog_name=dog_name,
-                signals=signals,
-                candidate=unique,
-            )
-            resolution = "PROMOTED_BOUNDED_CANDIDATE"
-            copy_source = "DECISION_FALLBACK"
-        else:
-            resolution = "ABSTAINED"
-    else:
-        selected = next(
-            (item for item in candidates if item.intent is initial_intent),
-            None,
-        )
-        if (
-            not interpretation.safety_flags
-            and selected is not None
-            and not selected.eligible
-        ):
-            alternative_intents = {
-                item.intent for item in interpretation.alternatives
-            }
-            bounded_eligible = [
-                item for item in eligible if item.intent in alternative_intents
-            ]
-            unique = _best_override_candidate(bounded_eligible)
-            if unique is not None and unique.intent in _PROMOTION_COPY:
-                final = _sync_promoted_copy(
-                    interpretation,
-                    intent=unique.intent,
-                    dog_name=dog_name,
-                    signals=signals,
-                    candidate=unique,
-                )
-                # Keep the next everyday option as a soft alternative, not as
-                # the main (ambiguous) answer the owner sees first.
-                if len(bounded_eligible) >= 2:
-                    runner_up = next(
-                        (
-                            item
-                            for item in bounded_eligible
-                            if item.intent is not unique.intent
-                        ),
-                        None,
-                    )
-                    if runner_up is not None:
-                        final = final.model_copy(
-                            update={
-                                "alternatives": [
-                                    AlternativeIntent(
-                                        intent=runner_up.intent,
-                                        rationale=(
-                                            "È un’altra lettura possibile, "
-                                            "ma meno sostenuta di quella principale."
-                                        ),
-                                    ),
-                                    *[
-                                        item
-                                        for item in final.alternatives
-                                        if item.intent is not runner_up.intent
-                                    ],
-                                ][:2]
-                            }
-                        )
-                resolution = "OVERRIDDEN_UNSUPPORTED"
-                copy_source = "DECISION_FALLBACK"
-            elif len(bounded_eligible) >= 2:
-                final = _sync_ambiguous_result(
-                    interpretation,
-                    dog_name=dog_name,
-                    signals=signals,
-                    candidates=bounded_eligible,
-                )
-                resolution = "OVERRIDDEN_UNSUPPORTED"
-                copy_source = "DECISION_FALLBACK"
-            else:
-                final = interpretation.model_copy(
-                    update={
-                        "primary_intent": IntentCode.INSUFFICIENT,
-                        "confidence_band": ConfidenceBand.LOW,
-                        "consumer_headline": (
-                            f"Non ho ancora abbastanza elementi su {dog_name}"
-                        ),
-                        "consumer_summary": (
-                            "Il momento è visibile, ma i segnali non sostengono "
-                            "una lettura abbastanza solida."
-                        ),
-                        "dog_voice": "«Serve un momento un po’ più chiaro.»",
-                        "alternatives": [],
-                        "needs_context": False,
-                        "context_question": None,
-                        "context_options": [],
-                    }
-                )
-                resolution = "OVERRIDDEN_UNSUPPORTED"
-                copy_source = "DECISION_FALLBACK"
-    if (
-        resolution == "ACCEPTED_REASONER"
-        and
-        initial_intent in _PROMOTION_COPY
-        and _is_observation_inventory(interpretation)
-    ):
-        selected = next(
-            (
-                item
-                for item in candidates
-                if item.intent is initial_intent and item.eligible
-            ),
-            None,
-        )
-        if selected is not None:
-            final = _sync_promoted_copy(
-                interpretation,
-                intent=initial_intent,
-                dog_name=dog_name,
-                signals=signals,
-                candidate=selected,
-            )
-            copy_source = "DECISION_FALLBACK"
-
-    final = _ground_context_question(
-        final,
-        candidates=candidates,
-        exit_supported=observation_supports_exit(observation),
-    )
+        resolution = "ABSTAINED"
 
     ceiling = _confidence_ceiling(
         observation,

@@ -157,7 +157,7 @@ def _maya_garden_observation() -> ObservationContract:
     )
 
 
-def test_unique_grounded_candidate_can_promote_reasoner_abstention():
+def test_candidate_rules_audit_but_do_not_promote_reasoner_abstention():
     result, trace = apply_behavior_decision_policy(
         _interpretation(),
         _observation(),
@@ -166,10 +166,9 @@ def test_unique_grounded_candidate_can_promote_reasoner_abstention():
         knowledge=_knowledge(),
     )
 
-    assert result.primary_intent is IntentCode.ALERT_VIGILANCE
+    assert result.primary_intent is IntentCode.INSUFFICIENT
     assert result.confidence_band is ConfidenceBand.LOW
-    assert "fuori campo" in result.consumer_headline
-    assert trace.resolution == "PROMOTED_BOUNDED_CANDIDATE"
+    assert trace.resolution == "ABSTAINED"
     alert = next(
         item for item in trace.candidates if item.intent is IntentCode.ALERT_VIGILANCE
     )
@@ -207,7 +206,7 @@ def test_fear_and_avoidance_exclude_automatic_alert_promotion():
     assert alert.excluded_by
 
 
-def test_medium_scientific_coverage_caps_high_confidence():
+def test_scientific_coverage_does_not_cap_reasoner_confidence():
     result, trace = apply_behavior_decision_policy(
         _interpretation(
             IntentCode.ALERT_VIGILANCE,
@@ -220,11 +219,11 @@ def test_medium_scientific_coverage_caps_high_confidence():
     )
 
     assert result.primary_intent is IntentCode.ALERT_VIGILANCE
-    assert result.confidence_band is ConfidenceBand.MEDIUM
-    assert trace.confidence_ceiling is ConfidenceBand.MEDIUM
+    assert result.confidence_band is ConfidenceBand.HIGH
+    assert trace.confidence_ceiling is ConfidenceBand.HIGH
 
 
-def test_observation_inventory_is_replaced_before_it_reaches_the_composer():
+def test_boundary_audit_does_not_rewrite_reasoner_copy():
     interpretation = _interpretation(IntentCode.ALERT_VIGILANCE).model_copy(
         update={
             "consumer_headline": (
@@ -244,9 +243,11 @@ def test_observation_inventory_is_replaced_before_it_reaches_the_composer():
     )
 
     assert result.primary_intent is IntentCode.ALERT_VIGILANCE
-    assert result.consumer_headline == "Oreo è molto attento a qualcosa fuori campo"
-    assert "corpo è rigido" not in result.consumer_summary.casefold()
-    assert trace.copy_source == "DECISION_FALLBACK"
+    assert result.consumer_headline == (
+        "Oreo è rigido e abbaia verso qualcosa a sinistra fuori campo"
+    )
+    assert "corpo è rigido" in result.consumer_summary.casefold()
+    assert trace.copy_source == "REASONER"
 
 
 def test_policy_never_creates_intent_from_profile_or_breed_alone():
@@ -275,7 +276,7 @@ def test_policy_never_creates_intent_from_profile_or_breed_alone():
     assert not any(item.eligible for item in trace.candidates)
 
 
-def test_maya_garden_case_rejects_unsupported_arousal_and_door_question():
+def test_maya_garden_case_is_not_reinterpreted_by_closed_rules():
     interpretation = _interpretation(IntentCode.HIGH_AROUSAL).model_copy(
         update={
             "consumer_headline": "Un picco di energia",
@@ -308,17 +309,11 @@ def test_maya_garden_case_rejects_unsupported_arousal_and_door_question():
         knowledge=_knowledge("MEDIUM"),
     )
 
-    assert result.primary_intent is IntentCode.PLAY_INTERACTION
-    assert "giocare" in result.consumer_headline.casefold()
-    assert "probabil" not in result.consumer_headline.casefold()
-    assert result.needs_context is False
-    assert result.context_question is None
-    assert any(
-        item.intent is IntentCode.ATTENTION_REQUEST for item in result.alternatives
-    )
-    assert len(result.evidence) >= 3
-    assert all("Segnale" not in item.description for item in result.evidence)
-    assert trace.resolution == "OVERRIDDEN_UNSUPPORTED"
+    assert result.primary_intent is IntentCode.HIGH_AROUSAL
+    assert result.consumer_headline == "Un picco di energia"
+    assert result.needs_context is True
+    assert result.context_question == "Stava andando verso la porta?"
+    assert trace.resolution == "ACCEPTED_REASONER"
     arousal = next(
         item for item in trace.candidates if item.intent is IntentCode.HIGH_AROUSAL
     )
@@ -350,7 +345,7 @@ def test_maya_garden_case_rejects_unsupported_arousal_and_door_question():
     assert refined.context_question is None
 
 
-def test_ineligible_primary_without_supported_alternative_abstains():
+def test_ineligible_rule_candidate_does_not_force_abstention():
     interpretation = _interpretation(IntentCode.HIGH_AROUSAL).model_copy(
         update={"alternatives": []}
     )
@@ -361,8 +356,8 @@ def test_ineligible_primary_without_supported_alternative_abstains():
         context_bucket=ContextBucket.OUTDOORS,
         knowledge=_knowledge("MEDIUM"),
     )
-    assert result.primary_intent is IntentCode.INSUFFICIENT
-    assert trace.resolution == "OVERRIDDEN_UNSUPPORTED"
+    assert result.primary_intent is IntentCode.HIGH_AROUSAL
+    assert trace.resolution == "ACCEPTED_REASONER"
 
 
 def test_safety_flag_preserves_reasoner_primary():
@@ -431,8 +426,8 @@ def _unwell_approach_observation() -> ObservationContract:
     )
 
 
-def test_unwell_approach_is_not_collapsed_to_play():
-    """Soft approach + stress/somatic cues → discomfort, not automatic play."""
+def test_rules_do_not_replace_reasoner_with_discomfort_label():
+    """The differential belongs in the model, not a post-model rule table."""
     interpretation = _interpretation(IntentCode.PLAY_INTERACTION).model_copy(
         update={
             "consumer_headline": "Vuole giocare",
@@ -460,12 +455,8 @@ def test_unwell_approach_is_not_collapsed_to_play():
         knowledge=_knowledge("MEDIUM"),
     )
 
-    assert result.primary_intent is IntentCode.DISCOMFORT_AVOIDANCE
-    assert "agio" in result.consumer_headline.casefold() or "disagio" in (
-        result.consumer_headline + result.consumer_summary
-    ).casefold()
-    assert "diagnosi" in result.consumer_summary.casefold()
-    assert result.primary_intent is not IntentCode.PLAY_INTERACTION
+    assert result.primary_intent is IntentCode.PLAY_INTERACTION
+    assert result.consumer_headline == "Vuole giocare"
     discomfort = next(
         item
         for item in trace.candidates

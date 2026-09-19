@@ -68,9 +68,10 @@ ClaimBasis = Literal[
 
 ClaimValidationStatus = Literal[
     "SUPPORTED",
-    "HYPOTHESIS",
+    "PARTIALLY_SUPPORTED",
+    "NOT_COVERED",
     "CONTRADICTED",
-    "BLOCKED_BY_SAFETY",
+    "FORBIDDEN",
 ]
 
 ClaimStrength = Literal["HEDGED", "MODERATE", "STRONG"]
@@ -181,6 +182,8 @@ class ClaimValidation(BaseModel):
     status: ClaimValidationStatus
     reasons: list[str] = Field(default_factory=list)
     matched_scientific_ids: list[str] = Field(default_factory=list)
+    # Lexical overlap is an audit hint only. It never decides truth by itself.
+    semantic_overlap_score: float | None = Field(default=None, ge=0.0, le=1.0)
     owner_facing_strength: ClaimStrength = "HEDGED"
 
 

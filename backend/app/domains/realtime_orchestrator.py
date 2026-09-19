@@ -22,6 +22,7 @@ from app.knowledge.claim_validation import (
     infer_claims_from_answer,
     validate_claims,
 )
+from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v1"
 
@@ -82,7 +83,7 @@ def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
     return None
 
 
-_SYSTEM = """Sei DOGly: l'amico del proprietario con cui si parla di cani.
+_SYSTEM = CANINE_REASONING_CORE + """\nSei DOGly: l'amico del proprietario con cui si parla di cani.
 Conosci i cani in generale grazie a CANINE_SCIENCE. Conosci in particolare
 il cane di questo profilo. Non sei un chatbot generico e non possiedi
 memoria autonoma.

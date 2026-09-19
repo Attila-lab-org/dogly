@@ -432,7 +432,9 @@ def govern_behavior_consumer_with_core(
     decision = validate_claims(
         [claim],
         context_ids=set(personal_source_ids or []),
-        safety_blocked=consumer.safety is not None,
+        # Behavior safety copy is already contextual and action-specific. It
+        # must not be replaced by a generic validator fallback.
+        safety_blocked=False,
     )
     governed_headline, downgraded = govern_assistant_text(
         consumer.consumer_headline, decision

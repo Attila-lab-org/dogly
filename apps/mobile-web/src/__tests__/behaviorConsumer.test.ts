@@ -80,7 +80,8 @@ describe('risultato comportamento consumer', () => {
   it('mostra il risultato immediato e rimanda gli approfondimenti ai dettagli', () => {
     expect(resultViewSource).toContain('In questo momento');
     expect(resultViewSource).toContain('needsDeepDive');
-    expect(resultViewSource).toContain('pattern-recognition-note');
+    expect(resultViewSource).not.toContain('pattern-recognition-note');
+    expect(resultViewSource).not.toContain('pattern-chips');
     expect(resultViewSource).toContain('Perché');
     expect(resultViewSource).not.toContain(
       'Quanto è prudente questa lettura',

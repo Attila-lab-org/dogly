@@ -86,7 +86,11 @@ from app.domains.digestive_verification import (
 )
 from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import BehaviorEventRec
-from app.domains.personal_dog_context import assemble_behavior_dog_context
+from app.domains.personal_dog_context import (
+    assemble_behavior_dog_context,
+    load_cross_domain_evidence_db,
+    load_cross_domain_evidence_memory,
+)
 from app.domains.repository import now_utc
 from app.domains.retention import (
     arm_behavior_capture_expiry,
@@ -332,13 +336,25 @@ async def _dog_context(state: AppState, event: BehaviorEventRec):
         ]
     dump = lifestyle.model_dump()
     owner_display_name = await _owner_display_name(state, event.user_id)
-    context, _personal = assemble_behavior_dog_context(
+    eligible_memory = await _eligible_memory(state, event.dog_id)
+    evidence = (
+        await load_cross_domain_evidence_db(
+            state.engine,
+            user_id=event.user_id,
+            dog_id=event.dog_id,
+        )
+        if state.engine is not None
+        else load_cross_domain_evidence_memory(state.store, dog_id=event.dog_id)
+    )
+    context, personal = assemble_behavior_dog_context(
         dog,
         dump,
         stories,
         owner_display_name=owner_display_name,
+        eligible_patterns=eligible_memory,
+        evidence=evidence,
     )
-    return dog, context, dump
+    return dog, context, dump, personal, eligible_memory
 
 
 
@@ -810,7 +826,9 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     if state.engine is not None:
         await behavior_db.save_event_state(state.engine, event)
     try:
-        dog, dog_context, lifestyle_dump = await _dog_context(state, event)
+        dog, dog_context, lifestyle_dump, personal, eligible_memory = (
+            await _dog_context(state, event)
+        )
         context_bucket = resolve_context_bucket(
             capture.context_bucket,
             observation=observation,
@@ -841,7 +859,6 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         # come vincoli stabiliti e il merge finale le rende effettive anche se
         # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
         det_flags = behavior_safety_flags(observation, dog_context)
-        eligible_memory = await _eligible_memory(state, event.dog_id)
         interpret_kwargs: dict = {
             "observation": observation,
             "context_bucket": context_bucket,
@@ -854,7 +871,10 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             "deterministic_safety_flags": det_flags,
             "processing_owner_context": processing_owner_context,
             # Always pass the shared Canine Intelligence payload (science + claims).
-            "intelligence_context": intelligence.reasoner_payload(),
+            "intelligence_context": {
+                **intelligence.reasoner_payload(),
+                "personal_dog_context": personal.reasoner_payload(),
+            },
         }
         interpretation, rea_usage = await state.reasoner.interpret(**interpret_kwargs)
         if state.engine is not None:
@@ -1087,7 +1107,9 @@ async def refine_behavior_event_context(
             )
 
     observation = ObservationContract.model_validate(event.observation_json)
-    dog, dog_context, _lifestyle_dump = await _dog_context(state, event)
+    dog, dog_context, _lifestyle_dump, personal, eligible_memory = (
+        await _dog_context(state, event)
+    )
     knowledge_context = retrieve_evidence(
         observation, context_bucket, dog_context
     )
@@ -1124,7 +1146,6 @@ async def refine_behavior_event_context(
         processing_owner_context = [
             item.model_dump(mode="json") for item in _owner_facts(refine_rows)
         ]
-    eligible_memory = await _eligible_memory(state, event.dog_id)
     refine_kwargs: dict = {
         "observation": observation,
         "context_bucket": context_bucket,
@@ -1137,7 +1158,10 @@ async def refine_behavior_event_context(
         "deterministic_safety_flags": deterministic_flags,
         "operation": "reasoner.refine_context",
         "processing_owner_context": processing_owner_context,
-        "intelligence_context": intelligence.reasoner_payload(),
+        "intelligence_context": {
+            **intelligence.reasoner_payload(),
+            "personal_dog_context": personal.reasoner_payload(),
+        },
     }
 
     try:
@@ -1267,6 +1291,11 @@ async def refine_behavior_event_context(
     else:
         state.store.captures[capture.id] = capture
         state.store.behavior_events[event.id] = event
+    # Refinement replaces the event's meaning. Rebuild its semantic signature so
+    # permanent memory cannot keep learning the superseded interpretation.
+    from app.domains.personal_engine import on_behavior_completed
+
+    await on_behavior_completed(state, event)
     return event
 
 

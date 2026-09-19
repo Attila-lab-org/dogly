@@ -204,6 +204,29 @@ class TimelineSegment(BaseModel):
     observed_changes: list[str] = Field(default_factory=list)
 
 
+class ObservedAction(BaseModel):
+    """Open semantic action preserved without assigning emotion or intent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: str = Field(min_length=1, max_length=80)
+    actor: str = Field(default="dog", max_length=40)
+    target: str | None = Field(default=None, max_length=80)
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(ge=0)
+    description: str = Field(min_length=1, max_length=240)
+
+
+class ObservedTransition(BaseModel):
+    """Ordered change between two observable actions or states."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_observation: str = Field(min_length=1, max_length=160)
+    to_observation: str = Field(min_length=1, max_length=160)
+    at_ms: int = Field(ge=0)
+
+
 class ObserverMeta(BaseModel):
     """Mandatory audit metadata (sez. 15)."""
 
@@ -228,6 +251,8 @@ class ObservationContract(BaseModel):
     ears: Ears = Field(default_factory=Ears)
     tail: Tail = Field(default_factory=Tail)
     vocalization: Vocalization = Field(default_factory=Vocalization)
+    salient_actions: list[ObservedAction] = Field(default_factory=list, max_length=12)
+    transitions: list[ObservedTransition] = Field(default_factory=list, max_length=12)
     timeline: list[TimelineSegment] = Field(default_factory=list)
     # Features not observable or quality-limited.
     unknowns: list[str] = Field(default_factory=list)
@@ -530,6 +555,72 @@ def _normalize_timeline(raw: object) -> list[dict]:
     return segments
 
 
+def _normalize_salient_actions(raw: object) -> list[dict]:
+    if not isinstance(raw, list):
+        return []
+    actions: list[dict] = []
+    for item in raw[:12]:
+        if isinstance(item, str) and item.strip():
+            actions.append(
+                {
+                    "action": item.strip()[:80],
+                    "actor": "dog",
+                    "target": None,
+                    "start_ms": 0,
+                    "end_ms": 0,
+                    "description": item.strip()[:240],
+                }
+            )
+            continue
+        if not isinstance(item, dict):
+            continue
+        description = str(
+            item.get("description")
+            or item.get("observable")
+            or item.get("action")
+            or ""
+        ).strip()
+        action = str(item.get("action") or item.get("verb") or description).strip()
+        if not action or not description:
+            continue
+        start_ms = _coerce_ms(item.get("start_ms"))
+        actions.append(
+            {
+                "action": action[:80],
+                "actor": str(item.get("actor") or "dog")[:40],
+                "target": (
+                    str(item["target"])[:80]
+                    if item.get("target") not in (None, "")
+                    else None
+                ),
+                "start_ms": start_ms,
+                "end_ms": max(_coerce_ms(item.get("end_ms", start_ms)), start_ms),
+                "description": description[:240],
+            }
+        )
+    return actions
+
+
+def _normalize_transitions(raw: object) -> list[dict]:
+    if not isinstance(raw, list):
+        return []
+    transitions: list[dict] = []
+    for item in raw[:12]:
+        if not isinstance(item, dict):
+            continue
+        before = str(item.get("from_observation") or item.get("from") or "").strip()
+        after = str(item.get("to_observation") or item.get("to") or "").strip()
+        if before and after:
+            transitions.append(
+                {
+                    "from_observation": before[:160],
+                    "to_observation": after[:160],
+                    "at_ms": _coerce_ms(item.get("at_ms")),
+                }
+            )
+    return transitions
+
+
 def normalize_observation_dict(raw: dict) -> dict:
     """Normalizza un payload grezzo del provider PRIMA della validazione pydantic.
 
@@ -590,4 +681,12 @@ def normalize_observation_dict(raw: dict) -> dict:
         normalized["vocalization"] = vocalization
     if "timeline" in normalized:
         normalized["timeline"] = _normalize_timeline(normalized.get("timeline"))
+    if "salient_actions" in normalized:
+        normalized["salient_actions"] = _normalize_salient_actions(
+            normalized.get("salient_actions")
+        )
+    if "transitions" in normalized:
+        normalized["transitions"] = _normalize_transitions(
+            normalized.get("transitions")
+        )
     return _keep_model_fields(normalized, ObservationContract)

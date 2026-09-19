@@ -642,12 +642,27 @@ def test_contradictions_lower_coverage():
 # ---------------------------------------------------------------------------
 
 
-def test_rigidity_plus_growl_fires_safe_escalation():
+def test_rigidity_plus_growl_without_target_is_not_automatically_escalation():
     obs = _obs(rigidity_candidate="yes")
     obs = ObservationContract.model_validate(
         {
             **obs.model_dump(mode="json"),
             "vocalization": {"type_candidates": ["growl"]},
+        }
+    )
+    flags = deterministic_safety_flags(obs, _context())
+    assert flags == []
+
+
+def test_rigidity_plus_growl_toward_person_fires_safe_escalation():
+    obs = _obs(rigidity_candidate="yes").model_copy(
+        update={
+            "body": _obs(rigidity_candidate="yes").body.model_copy(
+                update={"orientation_target": "person"}
+            ),
+            "vocalization": _obs().vocalization.model_copy(
+                update={"present": "yes", "type_candidates": ["growl"]}
+            ),
         }
     )
     flags = deterministic_safety_flags(obs, _context())
@@ -657,7 +672,7 @@ def test_rigidity_plus_growl_fires_safe_escalation():
     assert result.cards[0].card_id == SAFE_ESCALATION_001
 
 
-def test_two_distress_signals_fire_safe_distress():
+def test_lowered_body_and_tucked_tail_without_distance_are_not_hard_distress():
     obs = ObservationContract.model_validate(
         {
             **(_obs()).model_dump(mode="json"),
@@ -665,9 +680,7 @@ def test_two_distress_signals_fire_safe_distress():
             "tail": {"neutral_relative_height": "tucked"},
         }
     )
-    assert "SAFE_DISTRESS_001" in fired_safety_ids(obs, _context())
-    flags = deterministic_safety_flags(obs, _context())
-    assert flags[0].severity == "high"
+    assert "SAFE_DISTRESS_001" not in fired_safety_ids(obs, _context())
 
 
 def test_health_context_pain_fires_safe_pain():
@@ -677,7 +690,12 @@ def test_health_context_pain_fires_safe_pain():
             value="MATURE_ADULT", source="DERIVED", confidence="MEDIUM"
         ),
         health_context=[
-            LifestyleFact(key="reported_pain", value=True, provenance="VET_REPORTED")
+            LifestyleFact(
+                key="reported_pain",
+                value=True,
+                provenance="VET_REPORTED",
+                last_confirmed_at=datetime.now(UTC),
+            )
         ],
     )
     obs = _obs()
@@ -703,6 +721,7 @@ def test_health_context_detects_pain_in_owner_report_value():
                     key="owner_health",
                     value="Sembra dolorante oggi",
                     provenance="OWNER_REPORTED",
+                    last_confirmed_at=datetime.now(UTC),
                 )
             ]
         }
@@ -845,12 +864,16 @@ async def test_worker_merges_deterministic_flags_and_urgent_gate(
     auth_headers,
     state,
 ):
-    # Observer stub: osservazione con rigidity + growl (SAFE_ESCALATION_001).
+    # Observer stub: rigidity + growl directed at a person.
     async def fake_observe(*, video_ref, content_type, policy_version, duration_ms):
         del video_ref, content_type, policy_version, duration_ms
         obs = ObservationContract.model_validate(
             {
                 **(_obs(rigidity_candidate="yes")).model_dump(mode="json"),
+                "body": {
+                    **(_obs(rigidity_candidate="yes")).body.model_dump(mode="json"),
+                    "orientation_target": "person",
+                },
                 "vocalization": {"type_candidates": ["growl"]},
             }
         )

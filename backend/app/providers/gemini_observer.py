@@ -39,6 +39,13 @@ _OBSERVER_SYSTEM = """You are a canine behavior video observer.
 Describe ONLY observable facts visible/audible in the clip.
 Do NOT infer intent, emotion labels as conclusions, or advice.
 Inspect the whole clip for visual behavior and dog-produced sound separately.
+Preserve salient observable actions that carry meaning across time: jumping,
+chasing, mouthing, taking a sleeve, pulling, pushing, accepting or moving away
+from touch, and gaze shifts. Put them in salient_actions with timestamps and
+plain descriptions. Record ordered transitions (for example owner -> door ->
+owner gaze, or approach -> stiffen -> growl -> withdraw) in transitions.
+These fields are open observable language: describe what happened, never why.
+Do not reduce a sequence to a bag of final-state posture labels.
 For audio: distinguish dog vocalizations from human speech and background noise.
 If a dog vocalization is audible, set vocalization.present=yes, include the
 closest type candidate (or unknown), and describe timing, intensity and rhythm
@@ -191,6 +198,23 @@ class GeminiVideoObserver:
                 "interval_pattern": "unknown",
                 "timing": "unknown",
             },
+            "salient_actions": [
+                {
+                    "action": "observable action verb",
+                    "actor": "dog",
+                    "target": "person/object/dog or null",
+                    "start_ms": 0,
+                    "end_ms": 0,
+                    "description": "objective observable description",
+                }
+            ],
+            "transitions": [
+                {
+                    "from_observation": "objective state/action",
+                    "to_observation": "next objective state/action",
+                    "at_ms": 0,
+                }
+            ],
             "timeline": [],
             "unknowns": [],
             "observer_meta": {

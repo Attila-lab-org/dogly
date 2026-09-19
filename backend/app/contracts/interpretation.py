@@ -55,6 +55,17 @@ class PersonalMemoryUsed(BaseModel):
     support_summary: str
 
 
+class PersonalPatternCandidate(BaseModel):
+    """Meaning-level recurrence candidate; not permanent memory by itself."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    semantic_key: str = Field(min_length=3, max_length=100)
+    title: str = Field(min_length=3, max_length=120)
+    support_summary: str = Field(min_length=3, max_length=240)
+    context_key: str | None = Field(default=None, max_length=80)
+
+
 class SafetyFlag(BaseModel):
     """Structured flags consumed by the deterministic copy layer (sez. 16.3).
     Generated text may never downgrade a safety flag (sez. 19.3)."""
@@ -113,6 +124,7 @@ class InterpretationContract(BaseModel):
     # Signals that reduce confidence.
     contradictions: list[str] = Field(default_factory=list)
     personal_memory_used: list[PersonalMemoryUsed] = Field(default_factory=list)
+    personal_pattern_candidate: PersonalPatternCandidate | None = None
     needs_context: bool = False
     # At most one simple question if the result materially improves.
     context_question: str | None = None

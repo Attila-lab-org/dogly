@@ -10,8 +10,10 @@ Le stesse regole alimentano due consumatori:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from app.contracts.interpretation import SafetyFlag
-from app.contracts.observation import ObservationContract, TriState
+from app.contracts.observation import ObservationContract, Posture, TriState
 from app.knowledge.models import DogContextSnapshot
 
 SAFE_DISTRESS_001 = "SAFE_DISTRESS_001"
@@ -46,6 +48,38 @@ def _fact_reports_pain(fact: object) -> bool:
     )
 
 
+def _fact_is_current(fact: object) -> bool:
+    """Old medical history is context, not a permanent current-pain alarm."""
+    confirmed = getattr(fact, "last_confirmed_at", None)
+    if not isinstance(confirmed, datetime):
+        return False
+    if confirmed.tzinfo is None:
+        confirmed = confirmed.replace(tzinfo=UTC)
+    return confirmed >= datetime.now(UTC) - timedelta(days=7)
+
+
+def _play_context(observation: ObservationContract) -> bool:
+    text = " ".join(
+        [
+            observation.scene.environment_class,
+            *observation.scene.visible_objects,
+            *observation.scene.spatial_relations,
+            *[
+                change
+                for segment in observation.timeline
+                for change in segment.observed_changes
+            ],
+        ]
+    ).casefold()
+    return (
+        observation.body.posture is Posture.PLAY_BOW
+        or (
+            observation.body.posture is Posture.LOOSE
+            and any(token in text for token in ("play", "gioco", "tug", "tirare"))
+        )
+    )
+
+
 def fired_safety_ids(
     observation: ObservationContract,
     dog_context: DogContextSnapshot,
@@ -57,19 +91,43 @@ def fired_safety_ids(
     body = observation.body
     vocalizations = {item.lower() for item in observation.vocalization.type_candidates}
     ids: list[str] = []
-    distress_signals = sum(
+    distance_signal = body.approach_withdrawal_freeze in {"freeze", "withdrawal"}
+    supporting_distress = sum(
         (
-            body.body_height == "lowered",
-            body.approach_withdrawal_freeze in {"freeze", "withdrawal"},
             observation.tail.neutral_relative_height == "tucked",
             observation.head_face.lip_lick_candidate == TriState.YES,
+            observation.ears.position in {"back", "flat_back"},
         )
     )
-    if distress_signals >= 2:
+    # Lowered morphology or one displacement signal is never an emergency.
+    if distance_signal and supporting_distress >= 2 and not _play_context(observation):
         ids.append(SAFE_DISTRESS_001)
-    if body.rigidity_candidate == TriState.YES and "growl" in vocalizations:
+    escalation_target = " ".join(
+        [
+            body.orientation_target,
+            observation.head_face.gaze_target,
+            *observation.scene.spatial_relations,
+        ]
+    ).casefold()
+    if (
+        body.rigidity_candidate == TriState.YES
+        and "growl" in vocalizations
+        and not _play_context(observation)
+        and any(
+            marker in escalation_target
+            for marker in ("person", "persona", "owner", "propriet", "dog", "cane", "resource", "risorsa")
+        )
+    ):
         ids.append(SAFE_ESCALATION_001)
-    if any(_fact_reports_pain(fact) for fact in dog_context.health_context):
+    current_health = [
+        *dog_context.today_vs_usual,
+        *dog_context.recent_changes,
+        *dog_context.health_context,
+    ]
+    if any(
+        _fact_reports_pain(fact) and _fact_is_current(fact)
+        for fact in current_health
+    ):
         ids.append(SAFE_PAIN_001)
     return ids
 

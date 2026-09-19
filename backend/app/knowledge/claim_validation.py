@@ -1,6 +1,7 @@
-"""Scientific validation and governance for general-model reasoning claims.
+"""Claim-strength governance for DOGly's central reasoner.
 
-Validates claim ↔ evidence content, not only that cited IDs exist.
+The validator audits provenance and scientific coverage. It does not perform a
+second behavioral interpretation and lexical overlap never disproves a claim.
 """
 
 from __future__ import annotations
@@ -8,6 +9,8 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 from typing import Any
+
+from pydantic import ValidationError
 
 from app.contracts.canine_intelligence import (
     CanineIntelligenceDecision,
@@ -186,7 +189,7 @@ def validate_claim(
 ) -> ClaimValidation:
     reasons: list[str] = []
     matched: list[str] = []
-    status: ClaimValidationStatus = "HYPOTHESIS"
+    status: ClaimValidationStatus = "NOT_COVERED"
     strength: ClaimStrength = claim.strength
     records = _scientific_records()
     known = scientific_ids if scientific_ids is not None else set(records)
@@ -194,28 +197,29 @@ def validate_claim(
     if safety_blocked:
         return ClaimValidation(
             claim_id=claim.claim_id,
-            status="BLOCKED_BY_SAFETY",
-            reasons=["Deterministic safety interrupt precedes free reasoning."],
+            status="FORBIDDEN",
+            reasons=["A deterministic emergency boundary forbids this claim."],
             owner_facing_strength="HEDGED",
         )
 
     if context_ids is None:
         context_ids = personal.evidence_ids() if personal is not None else set()
 
-    semantically_supported = False
+    overlap_scores: list[float] = []
+    known_citations: list[str] = []
     for card_id in claim.scientific_card_ids:
         if card_id not in known:
             reasons.append(f"Unknown scientific id: {card_id}")
             continue
+        known_citations.append(card_id)
         evidence_text = records.get(card_id, "")
         overlap = semantic_overlap(claim.statement, evidence_text)
+        overlap_scores.append(overlap)
         if overlap >= _MIN_SEMANTIC_OVERLAP:
             matched.append(card_id)
-            semantically_supported = True
         else:
             reasons.append(
-                f"Scientific id {card_id} exists but does not semantically "
-                "support this claim."
+                f"Scientific id {card_id} has low lexical overlap; audit only."
             )
 
     missing_sources = [
@@ -237,21 +241,19 @@ def validate_claim(
                 # ID exists in context_ids but we lack text; allow weak support.
                 personal_supported = True
                 continue
-            if semantic_overlap(claim.statement, evidence_text) >= _MIN_SEMANTIC_OVERLAP:
-                personal_supported = True
-            else:
-                reasons.append(
-                    f"Personal source {source_id} is present but does not "
-                    "support the claim content."
-                )
+            # A source that exists is grounded. Lexical mismatch may be caused by
+            # paraphrase, translation or a richer model formulation.
+            personal_supported = True
+            overlap_scores.append(semantic_overlap(claim.statement, evidence_text))
 
     if claim.asserts_diagnosis or _DIAGNOSIS.search(claim.statement):
         reasons.append("Diagnosis language is not allowed without clinical authority.")
         return ClaimValidation(
             claim_id=claim.claim_id,
-            status="BLOCKED_BY_SAFETY",
+            status="FORBIDDEN",
             reasons=reasons,
             matched_scientific_ids=matched,
+            semantic_overlap_score=max(overlap_scores, default=None),
             owner_facing_strength="HEDGED",
         )
 
@@ -260,33 +262,29 @@ def validate_claim(
             "Temporal association is allowed; causation requires stronger support."
         )
         strength = _min_strength(strength, "HEDGED")
-        if claim.basis in {"CURRENT_OBSERVATION", "OWNER_REPORTED"} and not semantically_supported:
-            status = "HYPOTHESIS"
 
     if _CERTAINTY.search(claim.statement) and (
-        claim.basis == "GENERAL_MODEL" or not semantically_supported
+        claim.basis == "GENERAL_MODEL" or not matched
     ):
         reasons.append("Certainty without scientific support was downgraded.")
         strength = "HEDGED"
-        if status == "SUPPORTED":
-            status = "HYPOTHESIS"
 
     if claim.basis == "SCIENTIFIC_EVIDENCE":
-        if semantically_supported and not missing_sources:
+        if matched and not missing_sources:
             status = "SUPPORTED"
-            reasons.append("Claim is semantically backed by cited scientific evidence.")
-        elif claim.scientific_card_ids and not matched:
-            status = "CONTRADICTED"
-            strength = "HEDGED"
+            reasons.append("Claim is directly aligned with cited registry evidence.")
+        elif known_citations:
+            status = "PARTIALLY_SUPPORTED"
+            strength = _min_strength(strength, "MODERATE")
             reasons.append(
-                "Cited scientific IDs do not support the claim content."
+                "Registry evidence is relevant provenance, but lexical alignment "
+                "alone cannot establish full support."
             )
         else:
             reasons.append(
-                "Scientific basis claimed without resolvable registry support; "
-                "kept as prudent hypothesis."
+                "Scientific basis claimed without resolvable registry support."
             )
-            status = "HYPOTHESIS"
+            status = "NOT_COVERED"
             strength = "HEDGED"
     elif claim.basis in {"CURRENT_OBSERVATION", "PERSONAL_KNOWLEDGE", "OWNER_REPORTED"}:
         if missing_sources:
@@ -295,39 +293,39 @@ def validate_claim(
         elif claim.source_ids and personal_supported:
             status = "SUPPORTED"
             reasons.append(
-                "Claim is grounded in personal/observational evidence content."
+                "Claim is grounded in available personal/observational provenance."
             )
             strength = _min_strength(strength, "MODERATE")
-        elif claim.source_ids and not personal_supported:
-            status = "HYPOTHESIS"
-            strength = "HEDGED"
-            reasons.append(
-                "Personal sources were cited but do not clearly support the claim."
-            )
         else:
-            status = "HYPOTHESIS"
+            status = "NOT_COVERED"
             strength = "HEDGED"
             reasons.append("Personal/observational claim without cited source IDs.")
     elif claim.basis == "GENERAL_MODEL":
-        if semantically_supported:
+        if matched:
             status = "SUPPORTED"
             reasons.append("General reasoning is backed by relevant registry evidence.")
+        elif known_citations:
+            status = "PARTIALLY_SUPPORTED"
+            strength = _min_strength(strength, "MODERATE")
+            reasons.append("General reasoning has registry context but no direct match.")
         else:
-            status = "HYPOTHESIS"
+            status = "NOT_COVERED"
             strength = "HEDGED"
             reasons.append(
-                "Uncovered general hypothesis allowed only as a prudent possibility."
+                "General canine reasoning is not covered by the current registry; "
+                "this is not evidence that it is false."
             )
 
-    if status == "SUPPORTED" and strength == "STRONG" and not semantically_supported:
+    if status != "SUPPORTED" and strength == "STRONG":
         strength = "MODERATE"
-        reasons.append("Strong wording without semantic scientific support was moderated.")
+        reasons.append("Strong wording without direct support was moderated.")
 
     return ClaimValidation(
         claim_id=claim.claim_id,
         status=status,
         reasons=reasons,
         matched_scientific_ids=matched,
+        semantic_overlap_score=max(overlap_scores, default=None),
         owner_facing_strength=strength,
     )
 
@@ -350,7 +348,7 @@ def validate_claims(
         )
         for claim in claims
     ]
-    blocked = any(item.status == "BLOCKED_BY_SAFETY" for item in validations)
+    blocked = any(item.status == "FORBIDDEN" for item in validations)
     downgraded = False
     for item in validations:
         original = next(
@@ -359,7 +357,7 @@ def validate_claims(
         )
         if (
             original != item.owner_facing_strength
-            or item.status in {"HYPOTHESIS", "CONTRADICTED"}
+            or item.status in {"NOT_COVERED", "CONTRADICTED", "FORBIDDEN"}
         ):
             downgraded = True
             break
@@ -370,11 +368,8 @@ def validate_claims(
         notes.append(
             "Claims were contradicted by missing or non-supporting evidence."
         )
-    if any(
-        item.status == "HYPOTHESIS" and not item.matched_scientific_ids
-        for item in validations
-    ):
-        notes.append("Uncovered hypotheses remain hedged possibilities only.")
+    if any(item.status == "NOT_COVERED" for item in validations):
+        notes.append("Not-covered reasoning remains available with prudent strength.")
     return CanineIntelligenceDecision(
         claims=claims,
         validations=validations,
@@ -430,7 +425,7 @@ def extract_claims_from_provider_payload(
                     asserts_diagnosis=bool(item.get("asserts_diagnosis", False)),
                 )
             )
-        except Exception:
+        except (TypeError, ValueError, ValidationError):
             continue
     return claims
 
@@ -464,19 +459,24 @@ def govern_assistant_text(
 ) -> tuple[str, bool]:
     if decision.blocked:
         return (
-            "Su questo punto e' piu' prudente non andare oltre senza un parere "
-            "professionale. Se noti peggioramento, contatta il veterinario.",
+            "Non posso confermare una diagnosi o una certezza clinica da qui. "
+            + assistant_text,
             True,
         )
     text = assistant_text
     downgraded = decision.downgraded
-    if any(item.status == "CONTRADICTED" for item in decision.validations):
+    if any(item.status == "CONTRADICTED" for item in decision.validations) and any(
+        claim.source_ids for claim in decision.claims
+    ):
         text = (
             "Non ho un dato personale sufficiente per confermare quel collegamento. "
             + text
         )
         downgraded = True
-    if any(item.status == "HYPOTHESIS" for item in decision.validations) and _CERTAINTY.search(
+    if any(
+        item.status in {"NOT_COVERED", "PARTIALLY_SUPPORTED"}
+        for item in decision.validations
+    ) and _CERTAINTY.search(
         text
     ):
         text = re.sub(
@@ -486,7 +486,10 @@ def govern_assistant_text(
             flags=re.IGNORECASE,
         )
         downgraded = True
-    if any(item.status == "HYPOTHESIS" for item in decision.validations) and _CAUSATION.search(
+    if any(
+        item.status in {"NOT_COVERED", "PARTIALLY_SUPPORTED"}
+        for item in decision.validations
+    ) and _CAUSATION.search(
         text
     ):
         text = (

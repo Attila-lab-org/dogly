@@ -2,7 +2,10 @@
 
 from app.contracts.taxonomy import PatternState
 from app.domains.models import PersonalPatternRec
-from app.domains.personal_engine import derive_pattern_state
+from app.domains.personal_engine import (
+    derive_pattern_state,
+    semantic_pattern_similarity,
+)
 from app.domains.repository import new_id, now_utc
 from tests.conftest import create_dog
 
@@ -10,12 +13,32 @@ from tests.conftest import create_dog
 def test_pattern_state_never_establishes_from_one_event():
     assert derive_pattern_state(1, 0) is None
     assert derive_pattern_state(2, 0) == PatternState.CANDIDATE
-    assert derive_pattern_state(4, 0) == PatternState.PRELIMINARY
+    assert derive_pattern_state(3, 0) == PatternState.PRELIMINARY
     assert derive_pattern_state(8, 0) == PatternState.PRELIMINARY
-    assert derive_pattern_state(8, 1) == PatternState.ESTABLISHED
+    assert derive_pattern_state(4, 1) == PatternState.ESTABLISHED
 
 
-async def test_two_completed_events_create_candidate_pattern(
+def test_semantically_similar_patterns_survive_small_signal_differences():
+    left = {
+        "meaning_key": "guarda proprietario porta proprietario prima passeggiata",
+        "context_key": "pre walk",
+        "salient_actions": ["looks at owner", "looks at door"],
+    }
+    right = {
+        "meaning_key": "guarda porta e proprietario prima della passeggiata",
+        "context_key": "pre walk",
+        "salient_actions": ["looks at door"],
+    }
+    unrelated = {
+        "meaning_key": "porta scarpa quando arriva ospite",
+        "context_key": "visitor arrival",
+        "salient_actions": ["carries shoe"],
+    }
+    assert semantic_pattern_similarity(left, right) >= 0.65
+    assert semantic_pattern_similarity(left, unrelated) < 0.65
+
+
+async def test_burst_clips_do_not_count_as_independent_pattern_support(
     client, worker_client, auth_headers, state
 ):
     dog_id = await create_dog(client, auth_headers)
@@ -53,10 +76,7 @@ async def test_two_completed_events_create_candidate_pattern(
         for pattern in state.store.patterns.values()
         if pattern.dog_id == dog_id
     ]
-    assert len(patterns) == 1
-    assert patterns[0].state == PatternState.CANDIDATE
-    assert patterns[0].support_count == 2
-    assert patterns[0].title == "Cerca spesso il gioco"
+    assert patterns == []
 
     score = await client.get(
         f"/v1/dogs/{dog_id}/knowledge-score", headers=auth_headers
@@ -82,7 +102,6 @@ async def test_two_completed_events_create_candidate_pattern(
         },
     )
     assert feedback.status_code == 200, feedback.text
-    assert patterns[0].confirm_count == 1
     refreshed = await client.get(
         f"/v1/dogs/{dog_id}/knowledge-score",
         headers=auth_headers,
@@ -130,7 +149,7 @@ async def test_owner_confirmation_promotes_supported_pattern(
         dog_id=dog_id,
         title="Cerca spesso il gioco",
         state=PatternState.PRELIMINARY,
-        support_count=8,
+        support_count=4,
         confirm_count=0,
         reliability_band="medium",
         first_seen=now_utc(),
