@@ -83,10 +83,6 @@ export default function HomeScreen() {
     setTip(pickHomeTip(dog));
   }, [dog.id, dog.name, dog.birthDate, dog.ageLabel, dog.breedLabel, dog.sex]);
 
-  const greeting = birthdayToday
-    ? `Buon compleanno, ${dog.name}!`
-    : 'Ciao!';
-
   const openAnalyze = () => {
     if (!dog.id || loading) return;
     setAnalyzeOpen(true);
@@ -182,10 +178,11 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <Text style={styles.greeting} accessibilityRole="header">
-            {greeting}
-          </Text>
-          <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
+          {birthdayToday ? (
+            <Text style={styles.greeting} accessibilityRole="header">
+              Buon compleanno, {dog.name}!
+            </Text>
+          ) : null}
 
           <StoriesRail
             stories={stories}
@@ -634,12 +631,7 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     color: colors.primary,
     letterSpacing: -0.6,
-  },
-  tagline: {
-    marginTop: 2,
     marginBottom: spacing.lg,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
   },
   statusBanner: {
     flexDirection: 'row',
