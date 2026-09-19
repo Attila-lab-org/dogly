@@ -21,8 +21,6 @@ from app.domains.personal_dog_context import (
     personal_to_stable_facts,
 )
 from app.domains.repository import InMemoryStore
-from app.knowledge.registry import get_registry
-
 REALTIME_CONTEXT_VERSION = "personal-dog-context/v1"
 
 
@@ -241,7 +239,22 @@ async def load_realtime_context_db(
         evidence=evidence,
         owner_display_name=owner_name,
     )
-    return realtime_context_from_personal(personal)
+    # Lazy import avoids circular dependency with realtime_db.
+    from app.domains import realtime_db
+
+    memory = await realtime_db.load_conversation_memory_db(
+        engine, user_id=user_id, dog_id=dog_id
+    )
+    previous_topic = None
+    previous_turns: list[dict[str, str]] = []
+    if memory:
+        previous_topic = str(memory.get("topic") or "") or None
+        previous_turns = list(memory.get("turns_json") or [])
+    return realtime_context_from_personal(
+        personal,
+        previous_topic=previous_topic,
+        previous_turns=previous_turns,
+    )
 
 
 _AGE_LABEL = {
@@ -266,48 +279,11 @@ _MISSING_LABEL = {
 }
 
 
-_COMPANION_CARD_IDS = (
-    "OBS_TAIL_003",
-    "OBS_BODY_002",
-    "OBS_BODY_004",
-    "AUD_BARK_001",
-    "AUD_GROWL_001",
-    "AUD_WHINE_001",
-    "DIGESTIVE_001",
-    "DIGESTIVE_002",
-    "NUTRITION_001",
-    "PRIOR_BREED_001",
-    "PERSONAL_001",
-)
-
-_COMPANION_LINES = {
-    "OBS_TAIL_003": "Scodinzolare non vuol dire automaticamente che è felice: conta corpo, contesto e quel cane.",
-    "OBS_BODY_002": "Un corpo rigido è un segnale da ascoltare, non una prova di aggressività.",
-    "OBS_BODY_004": "L'inchino di gioco è un invito, ma vale solo se il resto del momento è gioco.",
-    "AUD_BARK_001": "L'abbaio non è una parola. Può essere allerta, richiesta, gioco o disagio.",
-    "AUD_GROWL_001": "Il ringhio non è sempre aggressione: può comparire anche nel gioco o per chiedere spazio.",
-    "AUD_WHINE_001": "Il piagnucolio può essere richiesta, disagio o eccitazione: non è una frase.",
-    "DIGESTIVE_001": "Una foto della cacca dice come sta andando oggi, non qual è la malattia.",
-    "DIGESTIVE_002": "Vomito ripetuto, sangue, feci nere, cane abbattuto o pancia gonfia: si sente il veterinario, non si aspetta.",
-    "NUTRITION_001": "Cibo e quantità si ragionano sul cane vero: età, peso, attività e come digerisce. Non si inventa una dieta.",
-    "PRIOR_BREED_001": "La razza è un accenno debole. Il cane davanti a te conta più dello stereotipo.",
-    "PERSONAL_001": "Un'abitudine del cane nasce solo se lo stesso modo si ripete, non da un episodio solo.",
-}
-
-
 def companion_science_brief() -> list[str]:
-    """Owner-facing science the voice may use to talk about dogs in general."""
-    cards = {card.id: card for card in get_registry().base_knowledge_cards}
-    lines: list[str] = []
-    for card_id in _COMPANION_CARD_IDS:
-        text = _COMPANION_LINES.get(card_id)
-        if text:
-            lines.append(f"- {text}")
-            continue
-        card = cards.get(card_id)
-        if card:
-            lines.append(f"- {card.not_conclude}")
-    return lines
+    """Owner-facing science from the shared Canine Intelligence science core."""
+    from app.knowledge.canine_science import companion_science_lines
+
+    return companion_science_lines()
 
 
 def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:

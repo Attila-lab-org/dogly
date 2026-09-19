@@ -1,8 +1,12 @@
-"""Scientific validation and governance for general-model reasoning claims."""
+"""Scientific validation and governance for general-model reasoning claims.
+
+Validates claim ↔ evidence content, not only that cited IDs exist.
+"""
 
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 from app.contracts.canine_intelligence import (
@@ -31,20 +35,113 @@ _CERTAINTY = re.compile(
     r"\b(certamente|sicuramente|senza dubbio|e' sicuro che|deve essere)\b",
     re.IGNORECASE,
 )
+_TOKEN = re.compile(r"[a-zA-ZÀ-ÿ0-9']{3,}")
+_STOP = frozenset(
+    {
+        "che",
+        "non",
+        "una",
+        "uno",
+        "dei",
+        "del",
+        "della",
+        "delle",
+        "per",
+        "con",
+        "come",
+        "anche",
+        "solo",
+        "piu",
+        "più",
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "cane",
+        "dog",
+    }
+)
+_MIN_SEMANTIC_OVERLAP = 0.12
 
 
 def known_scientific_ids() -> set[str]:
-    ids: set[str] = set()
+    return set(_scientific_records())
+
+
+@lru_cache(maxsize=1)
+def _scientific_records() -> dict[str, str]:
+    """Map registry IDs to searchable text used for semantic support checks."""
+    records: dict[str, str] = {}
     registry = get_registry()
-    ids.update(card.id for card in registry.base_knowledge_cards)
-    ids.update(entry.code for entry in registry.advice_catalog)
+    for card in registry.base_knowledge_cards:
+        records[card.id] = " ".join(
+            [
+                card.id,
+                card.label or "",
+                card.observable or "",
+                card.not_conclude or "",
+                " ".join(card.compatible or []),
+                " ".join(card.modifiers or []),
+                card.evidence or "",
+            ]
+        )
+    for entry in registry.advice_catalog:
+        records[entry.code] = " ".join(
+            [
+                entry.code,
+                entry.category or "",
+                entry.action or "",
+                entry.follow_up or "",
+                " ".join(entry.applies_to_intents or []),
+            ]
+        )
     digestive = get_digestive_knowledge()
-    ids.update(claim.id for claim in digestive.claims)
-    ids.update(source.id for source in digestive.sources)
+    for claim in digestive.claims:
+        records[claim.id] = " ".join(
+            [
+                claim.id,
+                claim.statement or "",
+                claim.forbidden or "",
+                claim.trigger or "",
+                claim.output or "",
+                claim.group or "",
+            ]
+        )
+    for source in digestive.sources:
+        records[source.id] = f"{source.id} {getattr(source, 'citation', '')}"
     v3 = get_intelligence_v3()
-    ids.update(claim.id for claim in v3.claims)
-    ids.update(source.id for source in v3.sources)
-    return ids
+    for claim in v3.claims:
+        records[claim.id] = " ".join(
+            [
+                claim.id,
+                claim.statement or "",
+                claim.forbidden or "",
+                claim.domain or "",
+                " ".join(claim.applies_when or []),
+            ]
+        )
+    for source in v3.sources:
+        records[source.id] = f"{source.id} {getattr(source, 'citation', '')}"
+    return records
+
+
+def _tokens(text: str) -> set[str]:
+    return {
+        token.lower()
+        for token in _TOKEN.findall(text or "")
+        if token.lower() not in _STOP
+    }
+
+
+def semantic_overlap(claim_text: str, evidence_text: str) -> float:
+    left = _tokens(claim_text)
+    right = _tokens(evidence_text)
+    if not left or not right:
+        return 0.0
+    return len(left & right) / len(left)
 
 
 def _rank(value: ClaimStrength) -> int:
@@ -53,6 +150,30 @@ def _rank(value: ClaimStrength) -> int:
 
 def _min_strength(a: ClaimStrength, b: ClaimStrength) -> ClaimStrength:
     return a if _rank(a) <= _rank(b) else b
+
+
+def _personal_evidence_text(
+    personal: PersonalDogContext | None,
+    source_id: str,
+) -> str:
+    if personal is None:
+        return ""
+    chunks: list[str] = []
+    for item in personal.evidence:
+        if item.source_id == source_id or item.evidence_id == source_id:
+            chunks.append(item.summary)
+            chunks.extend(str(value) for value in item.data.values() if value)
+    for fact in personal.personal_facts:
+        if fact.source_id == source_id:
+            chunks.append(str(fact.value))
+    for pattern in personal.eligible_patterns:
+        if (
+            pattern.pattern_id == source_id
+            or f"pattern:{pattern.pattern_id}" == source_id
+        ):
+            chunks.append(pattern.title)
+            chunks.append(pattern.support_summary)
+    return " ".join(chunks)
 
 
 def validate_claim(
@@ -67,6 +188,8 @@ def validate_claim(
     matched: list[str] = []
     status: ClaimValidationStatus = "HYPOTHESIS"
     strength: ClaimStrength = claim.strength
+    records = _scientific_records()
+    known = scientific_ids if scientific_ids is not None else set(records)
 
     if safety_blocked:
         return ClaimValidation(
@@ -76,15 +199,24 @@ def validate_claim(
             owner_facing_strength="HEDGED",
         )
 
-    known = scientific_ids if scientific_ids is not None else known_scientific_ids()
     if context_ids is None:
         context_ids = personal.evidence_ids() if personal is not None else set()
 
+    semantically_supported = False
     for card_id in claim.scientific_card_ids:
-        if card_id in known:
-            matched.append(card_id)
-        else:
+        if card_id not in known:
             reasons.append(f"Unknown scientific id: {card_id}")
+            continue
+        evidence_text = records.get(card_id, "")
+        overlap = semantic_overlap(claim.statement, evidence_text)
+        if overlap >= _MIN_SEMANTIC_OVERLAP:
+            matched.append(card_id)
+            semantically_supported = True
+        else:
+            reasons.append(
+                f"Scientific id {card_id} exists but does not semantically "
+                "support this claim."
+            )
 
     missing_sources = [
         source_id for source_id in claim.source_ids if source_id not in context_ids
@@ -96,6 +228,22 @@ def validate_claim(
         )
         status = "CONTRADICTED"
         strength = "HEDGED"
+
+    personal_supported = False
+    if not missing_sources and claim.source_ids:
+        for source_id in claim.source_ids:
+            evidence_text = _personal_evidence_text(personal, source_id)
+            if not evidence_text:
+                # ID exists in context_ids but we lack text; allow weak support.
+                personal_supported = True
+                continue
+            if semantic_overlap(claim.statement, evidence_text) >= _MIN_SEMANTIC_OVERLAP:
+                personal_supported = True
+            else:
+                reasons.append(
+                    f"Personal source {source_id} is present but does not "
+                    "support the claim content."
+                )
 
     if claim.asserts_diagnosis or _DIAGNOSIS.search(claim.statement):
         reasons.append("Diagnosis language is not allowed without clinical authority.")
@@ -112,11 +260,11 @@ def validate_claim(
             "Temporal association is allowed; causation requires stronger support."
         )
         strength = _min_strength(strength, "HEDGED")
-        if claim.basis in {"CURRENT_OBSERVATION", "OWNER_REPORTED"} and not matched:
+        if claim.basis in {"CURRENT_OBSERVATION", "OWNER_REPORTED"} and not semantically_supported:
             status = "HYPOTHESIS"
 
     if _CERTAINTY.search(claim.statement) and (
-        claim.basis == "GENERAL_MODEL" or not matched
+        claim.basis == "GENERAL_MODEL" or not semantically_supported
     ):
         reasons.append("Certainty without scientific support was downgraded.")
         strength = "HEDGED"
@@ -124,12 +272,18 @@ def validate_claim(
             status = "HYPOTHESIS"
 
     if claim.basis == "SCIENTIFIC_EVIDENCE":
-        if matched and not missing_sources:
+        if semantically_supported and not missing_sources:
             status = "SUPPORTED"
-            reasons.append("Claim cites known scientific registry IDs.")
-        elif not matched:
+            reasons.append("Claim is semantically backed by cited scientific evidence.")
+        elif claim.scientific_card_ids and not matched:
+            status = "CONTRADICTED"
+            strength = "HEDGED"
             reasons.append(
-                "Scientific basis claimed without resolvable registry IDs; "
+                "Cited scientific IDs do not support the claim content."
+            )
+        else:
+            reasons.append(
+                "Scientific basis claimed without resolvable registry support; "
                 "kept as prudent hypothesis."
             )
             status = "HYPOTHESIS"
@@ -138,18 +292,26 @@ def validate_claim(
         if missing_sources:
             status = "CONTRADICTED"
             strength = "HEDGED"
-        elif claim.source_ids:
+        elif claim.source_ids and personal_supported:
             status = "SUPPORTED"
-            reasons.append("Claim is grounded in personal/observational context IDs.")
+            reasons.append(
+                "Claim is grounded in personal/observational evidence content."
+            )
             strength = _min_strength(strength, "MODERATE")
+        elif claim.source_ids and not personal_supported:
+            status = "HYPOTHESIS"
+            strength = "HEDGED"
+            reasons.append(
+                "Personal sources were cited but do not clearly support the claim."
+            )
         else:
             status = "HYPOTHESIS"
             strength = "HEDGED"
             reasons.append("Personal/observational claim without cited source IDs.")
     elif claim.basis == "GENERAL_MODEL":
-        if matched:
+        if semantically_supported:
             status = "SUPPORTED"
-            reasons.append("General reasoning is backed by registry evidence.")
+            reasons.append("General reasoning is backed by relevant registry evidence.")
         else:
             status = "HYPOTHESIS"
             strength = "HEDGED"
@@ -157,9 +319,9 @@ def validate_claim(
                 "Uncovered general hypothesis allowed only as a prudent possibility."
             )
 
-    if status == "SUPPORTED" and strength == "STRONG" and not matched:
+    if status == "SUPPORTED" and strength == "STRONG" and not semantically_supported:
         strength = "MODERATE"
-        reasons.append("Strong wording without scientific cards was moderated.")
+        reasons.append("Strong wording without semantic scientific support was moderated.")
 
     return ClaimValidation(
         claim_id=claim.claim_id,
@@ -205,7 +367,9 @@ def validate_claims(
     if blocked:
         notes.append("One or more claims were blocked by safety governance.")
     if any(item.status == "CONTRADICTED" for item in validations):
-        notes.append("Claims citing unknown personal sources were contradicted.")
+        notes.append(
+            "Claims were contradicted by missing or non-supporting evidence."
+        )
     if any(
         item.status == "HYPOTHESIS" and not item.matched_scientific_ids
         for item in validations

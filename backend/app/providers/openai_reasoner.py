@@ -158,6 +158,11 @@ If intelligence_context is present, treat it as bounded product evidence.
 Mix and unknown have no named-breed prior. Never infer aggression, guilt,
 personality or diagnosis from breed, functional group or weight. Claims are
 constraints, not extra facts to invent.
+When intelligence_context.canine_science is present, treat it as the shared
+general canine science layer (same Core as Realtime). Prefer those constraints
+over free pretrained guesses when they conflict. consumer_headline must state
+the immediate meaning for the owner in one short Italian sentence; put
+supporting detail in evidence and dog_voice, not in the headline.
 """
 
 

@@ -264,7 +264,7 @@ def test_food_change_stays_temporal_association_not_cause():
 
 def test_behavior_and_digestive_remain_specialized_under_shared_canine_intelligence():
     """Shared Canine Intelligence must not collapse specialist consumer contracts."""
-    from app.contracts.realtime import RealtimeDecision
+    from app.contracts.realtime import RealtimeDecision, RealtimeTurnOut
     from app.domains.intelligence_context import canine_intelligence_layers
 
     layers = canine_intelligence_layers()
@@ -272,7 +272,8 @@ def test_behavior_and_digestive_remain_specialized_under_shared_canine_intellige
     assert "scientific_validation" in layers["layers"]
     assert layers["contracts"]["realtime_adapter"] == "RealtimeDogContext"
 
-    fields = set(RealtimeDecision.model_fields)
-    assert "assistant_text" in fields
-    assert "claims" not in fields
-    assert "validations" not in fields
+    # Structured claims live on the internal decision, never on the public turn.
+    assert "claims" in RealtimeDecision.model_fields
+    assert "validations" not in RealtimeDecision.model_fields
+    assert "claims" not in RealtimeTurnOut.model_fields
+    assert "validations" not in RealtimeTurnOut.model_fields

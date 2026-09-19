@@ -82,6 +82,11 @@ export function mapApiEventToResult(
     what_to_watch: event.what_to_watch
       ? consumerCopy(event.what_to_watch)
       : null,
+    personalMemory: (event.personal_memory_used ?? []).map((item) => ({
+      pattern_id: item.pattern_id,
+      state: item.state,
+      support_summary: consumerCopy(item.support_summary),
+    })),
     safety: event.safety ?? null,
     processingOwnerContext: (event.processing_owner_context ?? [])
       .filter((item) => Boolean(item.label))

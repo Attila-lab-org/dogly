@@ -108,7 +108,7 @@ SAFETY_COPY: dict[str, tuple[str, str, str]] = {
 _HEADLINES: dict[IntentCode, str] = {
     IntentCode.PLAY_INTERACTION: "{name} ti sta invitando a giocare",
     IntentCode.ATTENTION_REQUEST: "{name} sta cercando la tua attenzione",
-    IntentCode.OUTSIDE_REQUEST: "{name} ti sta chiedendo di uscire",
+    IntentCode.OUTSIDE_REQUEST: "{name} vuole uscire.",
     IntentCode.ALERT_VIGILANCE: "{name} sta segnalando qualcosa che lo ha messo in allerta",
     IntentCode.DISCOMFORT_AVOIDANCE: "{name} non sembra a suo agio",
     IntentCode.FEAR_INSECURITY: "{name} si sente insicuro e cerca protezione",
@@ -295,7 +295,7 @@ def _baseline(
     if established:
         return (
             BaselineComparison.RECOGNIZED,
-            f"È simile ad altri episodi che hai già confermato per {dog_name}.",
+            f"DOGly riconosce questo come un pattern tipico di {dog_name}.",
         )
     if any(item.state.upper() == "PRELIMINARY" for item in memory):
         return (
@@ -396,3 +396,58 @@ def build_behavior_consumer(
         consumer_evidence=consumer_evidence,
         consumer_alternatives=consumer_alternatives,
     )
+
+
+def govern_behavior_consumer_with_core(
+    consumer: BehaviorConsumerResult,
+    *,
+    scientific_card_ids: list[str] | None = None,
+    personal_source_ids: list[str] | None = None,
+) -> tuple[BehaviorConsumerResult, dict]:
+    """Run the shared claim validator on the owner-facing Behavior reading."""
+    from app.contracts.canine_intelligence import ReasoningClaim
+    from app.knowledge.claim_validation import (
+        govern_assistant_text,
+        validate_claims,
+    )
+
+    statement = (consumer.consumer_headline or consumer.consumer_summary or "").strip()
+    if not statement:
+        return consumer, {"skipped": True, "reason": "empty_consumer_copy"}
+    has_personal = bool(personal_source_ids)
+    # Behavior headlines are meaning statements, not scientific paraphrases.
+    # Cite registry IDs only as optional GENERAL_MODEL support (mismatch → hedge,
+    # never SCIENTIFIC_EVIDENCE contradiction that rewrites a clear reading).
+    basis = "PERSONAL_KNOWLEDGE" if has_personal else "GENERAL_MODEL"
+    claim = ReasoningClaim(
+        claim_id="behavior-headline-1",
+        statement=statement[:280],
+        basis=basis,
+        strength="MODERATE",
+        source_ids=list(personal_source_ids or [])[:12],
+        scientific_card_ids=list(scientific_card_ids or [])[:8],
+        asserts_causation=False,
+        asserts_diagnosis=False,
+    )
+    decision = validate_claims(
+        [claim],
+        context_ids=set(personal_source_ids or []),
+        safety_blocked=consumer.safety is not None,
+    )
+    governed_headline, downgraded = govern_assistant_text(
+        consumer.consumer_headline, decision
+    )
+    updates: dict = {}
+    if governed_headline != consumer.consumer_headline:
+        updates["consumer_headline"] = governed_headline
+    if decision.blocked and consumer.consumer_summary:
+        governed_summary, _ = govern_assistant_text(
+            consumer.consumer_summary, decision
+        )
+        if governed_summary != consumer.consumer_summary:
+            updates["consumer_summary"] = governed_summary
+    if updates:
+        consumer = consumer.model_copy(update=updates)
+    audit = decision.model_dump(mode="json")
+    audit["downgraded"] = bool(decision.downgraded or downgraded)
+    return consumer, audit

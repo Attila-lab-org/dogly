@@ -366,6 +366,27 @@ export function BehaviorResultView({
   const safety = result.safety;
   const evidenceSections = consumerEvidenceSections(result.evidence);
   const hasPrimaryAdvice = Boolean(primaryAdvice);
+  const isRecognized = result.baseline_comparison === 'RECOGNIZED';
+  const isVariation =
+    result.baseline_comparison === 'VARIATION' ||
+    result.baseline_comparison === 'CONTESTED';
+  const patternChips = [
+    ...evidenceSections.personalMemory.map((item) => item.label),
+    ...(result.personalMemory ?? [])
+      .map((item) => item.support_summary)
+      .filter(Boolean),
+  ]
+    .map((label) => ownerCopy(label))
+    .filter((label, index, all) => label && all.indexOf(label) === index)
+    .slice(0, 3);
+  const needsDeepDive = Boolean(
+    safety ||
+      isInsufficient ||
+      isAmbiguous ||
+      isVariation ||
+      result.needs_context ||
+      careNote,
+  );
   const hasDetails = Boolean(
     result.dog_voice ||
       result.sound_note ||
@@ -379,6 +400,7 @@ export function BehaviorResultView({
       isPersonalBaselineNote(result.baseline_note) ||
       careNote,
   );
+  const showSummary = needsDeepDive && Boolean(result.consumer_summary);
 
   return (
     <View>
@@ -426,14 +448,31 @@ export function BehaviorResultView({
         )}
         <Text style={styles.thoughtKicker}>In questo momento</Text>
         <Text style={styles.headline}>{headline}</Text>
-        {result.consumer_summary ? (
-          <Text style={styles.summary}>
-            {ownerCopy(result.consumer_summary)}
+        {isRecognized && result.baseline_note ? (
+          <Text style={styles.patternNote} testID="pattern-recognition-note">
+            {ownerCopy(result.baseline_note)}
           </Text>
         ) : null}
-        {isPersonalBaselineNote(result.baseline_note) &&
-        (result.baseline_comparison === 'VARIATION' ||
-          result.baseline_comparison === 'CONTESTED') ? (
+        {patternChips.length > 0 ? (
+          <View style={styles.patternChipRow} testID="pattern-chips">
+            <View style={styles.patternChip}>
+              <CuteIcon name="pattern" size={14} color={colors.accent} />
+              <Text style={styles.patternChipText}>Pattern {dogName}</Text>
+            </View>
+            {patternChips.map((label) => (
+              <View key={label} style={styles.patternChip}>
+                <CuteIcon name="home" size={14} color={colors.accent} />
+                <Text style={styles.patternChipText}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {showSummary ? (
+          <Text style={styles.summary}>
+            {ownerCopy(result.consumer_summary!)}
+          </Text>
+        ) : null}
+        {isPersonalBaselineNote(result.baseline_note) && isVariation ? (
           <Text style={styles.baselineHeroNote} testID="baseline-hero-note">
             {ownerCopy(result.baseline_note)}
           </Text>
@@ -449,7 +488,7 @@ export function BehaviorResultView({
         ? primaryAdvice
         : null}
 
-      {result.recommended_next_step && !hasPrimaryAdvice && !safety ? (
+      {result.recommended_next_step && !hasPrimaryAdvice && !safety && needsDeepDive ? (
         <View style={styles.nextStepCard} testID="recommended-next-step">
           <Text style={styles.nextStepTitle}>Cosa fare ora</Text>
           <Text style={styles.nextStepText}>
@@ -458,7 +497,7 @@ export function BehaviorResultView({
         </View>
       ) : null}
 
-      {hasDetails ? (
+      {needsDeepDive && hasDetails ? (
         <View style={styles.detailsBlock}>
           <Pressable
             accessibilityRole="button"
@@ -820,6 +859,36 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: spacing.sm,
+  },
+  patternNote: {
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    textAlign: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  patternChipRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  patternChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceMuted,
+  },
+  patternChipText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
   },
   headline: {
     fontSize: typography.size.xxl,

@@ -182,6 +182,11 @@ export interface BehaviorEventResult {
   baseline_comparison?: string | null;
   recommended_next_step?: string | null;
   what_to_watch?: string | null;
+  personalMemory?: Array<{
+    pattern_id: string;
+    state: string;
+    support_summary: string;
+  }>;
   safety?: {
     code: string;
     severity: string;

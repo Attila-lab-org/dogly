@@ -129,7 +129,7 @@ def test_confirmed_pattern_is_recognized():
         dog_context=build_dog_context(_dog()),
     )
     assert result.baseline_comparison is BaselineComparison.RECOGNIZED
-    assert "già confermato" in result.baseline_note
+    assert "pattern tipico" in result.baseline_note
 
 
 def test_preliminary_pattern_never_claims_owner_confirmation():
@@ -204,7 +204,7 @@ def test_insufficient_result_gives_a_concrete_retry_action():
     )
     assert (
         result.consumer_headline
-        == "Non ho abbastanza elementi per capirlo bene"
+        == "Da questo video non si capisce ancora abbastanza"
     )
     assert "altro breve video" in (result.recommended_next_step or "")
 
@@ -243,7 +243,9 @@ def test_composer_does_not_promote_an_ungoverned_partial_reading():
         dog_context=build_dog_context(_dog()),
     )
 
-    assert result.consumer_headline == "Non ho abbastanza elementi per capirlo bene"
+    assert result.consumer_headline == (
+        "Da questo video non si capisce ancora abbastanza"
+    )
     assert "altro breve video" in (result.recommended_next_step or "")
     assert result.consumer_alternatives[0].intent is IntentCode.ALERT_VIGILANCE
 
@@ -385,7 +387,9 @@ def test_legacy_alert_result_is_upgraded_when_read_from_the_api():
         )
     )
 
-    assert result.consumer_headline == "Oreo è in allerta e sta segnalando qualcosa"
+    assert result.consumer_headline == (
+        "Oreo sta segnalando qualcosa che lo ha messo in allerta"
+    )
     assert "ti sta avvisando" in (result.summary or "")
     assert "tre abbai" not in (result.summary or "")
     assert result.advice is not None

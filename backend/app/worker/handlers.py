@@ -56,7 +56,10 @@ from app.domains import (
 from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
 from app.domains.behavior_decision import apply_behavior_decision_policy
-from app.domains.behavior_intelligence import build_behavior_consumer
+from app.domains.behavior_intelligence import (
+    build_behavior_consumer,
+    govern_behavior_consumer_with_core,
+)
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
 from app.domains.context_bucket import resolve_context_bucket
@@ -850,9 +853,9 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             "owner_context_answer": None,
             "deterministic_safety_flags": det_flags,
             "processing_owner_context": processing_owner_context,
+            # Always pass the shared Canine Intelligence payload (science + claims).
+            "intelligence_context": intelligence.reasoner_payload(),
         }
-        if any(intelligence.flags.values()):
-            interpret_kwargs["intelligence_context"] = intelligence.reasoner_payload()
         interpretation, rea_usage = await state.reasoner.interpret(**interpret_kwargs)
         if state.engine is not None:
             await behavior_db.save_interpretation_audit(
@@ -940,7 +943,15 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         dog_context=dog_context,
         advice=advice,
     )
+    consumer, canine_audit = govern_behavior_consumer_with_core(
+        consumer,
+        scientific_card_ids=[card.card_id for card in knowledge_context.cards],
+        personal_source_ids=[
+            item.pattern_id for item in interpretation.personal_memory_used
+        ],
+    )
     interpretation_json["consumer"] = consumer.model_dump(mode="json")
+    interpretation_json["canine_intelligence"] = canine_audit
     interpretation_json["context_bucket"] = (
         capture.context_bucket.value
         if hasattr(capture.context_bucket, "value")
@@ -1126,9 +1137,8 @@ async def refine_behavior_event_context(
         "deterministic_safety_flags": deterministic_flags,
         "operation": "reasoner.refine_context",
         "processing_owner_context": processing_owner_context,
+        "intelligence_context": intelligence.reasoner_payload(),
     }
-    if any(intelligence.flags.values()):
-        refine_kwargs["intelligence_context"] = intelligence.reasoner_payload()
 
     try:
         interpretation, usage = await state.reasoner.interpret(**refine_kwargs)
@@ -1196,6 +1206,13 @@ async def refine_behavior_event_context(
         dog_context=dog_context,
         advice=advice,
     )
+    consumer, canine_audit = govern_behavior_consumer_with_core(
+        consumer,
+        scientific_card_ids=[card.card_id for card in knowledge_context.cards],
+        personal_source_ids=[
+            item.pattern_id for item in interpretation.personal_memory_used
+        ],
+    )
     interpretation_json = interpretation.model_dump(mode="json")
     interpretation_json["knowledge_audit"] = {
         "registry_version": knowledge_context.registry_version,
@@ -1208,6 +1225,7 @@ async def refine_behavior_event_context(
         advice.model_dump(mode="json") if advice is not None else None
     )
     interpretation_json["consumer"] = consumer.model_dump(mode="json")
+    interpretation_json["canine_intelligence"] = canine_audit
     if owner_answer is not None:
         interpretation_json["context_response"] = owner_answer.model_dump(
             mode="json"

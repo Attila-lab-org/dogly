@@ -37,6 +37,8 @@ class DogIntelligenceContext(BaseModel):
         return self.breed.observer_safe_morphology()
 
     def reasoner_payload(self) -> dict[str, Any]:
+        from app.knowledge.canine_science import companion_science_lines
+
         payload: dict[str, Any] = {
             "version": self.version,
             "domain": self.domain,
@@ -56,12 +58,14 @@ class DogIntelligenceContext(BaseModel):
                 else None
             ),
             "claims": [claim.model_dump(mode="json") for claim in self.claims],
+            "canine_science": companion_science_lines(limit=10),
             "rules": [
                 "Pretraining is language, not a scientific source.",
                 "Mix and unknown have no named-breed prior.",
                 "Never infer aggression from breed or mix.",
                 "Sex and owner name are identity facts, not behavioral verdicts.",
                 "Owner facts stay owner-reported.",
+                "Use canine_science as shared general canine constraints, not as dog-specific facts.",
             ],
         }
         if self.digestive:

@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.contracts.canine_intelligence import ReasoningClaim
+
 RealtimeDomain = Literal["BEHAVIOR", "DIGESTIVE", "NUTRITION", "CARE", "GENERAL"]
 RealtimeTerminalState = Literal[
     "ANSWERED",
@@ -76,6 +78,8 @@ class RealtimeDecision(BaseModel):
         "NONE", "CHANGES_MEANING", "CHANGES_ACTION", "CHANGES_SAFETY"
     ] = "NONE"
     behavior_handoff: bool = False
+    # Internal Canine Intelligence claims. Never copied into RealtimeTurnOut.
+    claims: list[ReasoningClaim] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
     def bounded_conversation(self) -> RealtimeDecision:
