@@ -11,7 +11,9 @@ from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
     companion_science_brief,
+    conversation_topic,
     render_voice_brief,
+    resume_welcome_text,
     route_realtime_domains,
 )
 from app.domains.realtime_orchestrator import (
@@ -60,6 +62,17 @@ def test_welcome_is_personal_and_never_technical() -> None:
     assert "modello" not in welcome
 
 
+def test_welcome_offers_to_resume_the_last_conversation() -> None:
+    welcome = resume_welcome_text("attilio", "Oreo", "perché Oreo abbaia la sera")
+    assert welcome == (
+        "Ciao Attilio, l'ultima volta parlavamo di perché Oreo abbaia la sera. "
+        "Vuoi riprendere la vecchia chiacchierata o parliamo di altro?"
+    )
+    assert conversation_topic(["ciao", "perché Oreo abbaia la sera"], dog_name="Oreo") == (
+        "perché Oreo abbaia la sera"
+    )
+
+
 def test_voice_session_speaks_without_waiting_for_tools() -> None:
     config = realtime_session_config(Settings(), instructions="ciao")
     assert "tools" not in config
@@ -88,7 +101,12 @@ def test_voice_brief_is_personal_and_ready_to_speak() -> None:
                     source_type="DIGESTIVE_EVENT",
                     summary="La digestione è stabile e oggi non serve cambiare alimentazione.",
                     data={"headline": "Oreo sta digerendo bene"},
-                )
+                ),
+                RealtimeContextItem(
+                    source_id="food-1",
+                    source_type="FOOD_PRODUCT",
+                    summary="Cibo da confermare: Royal Canin Adult",
+                ),
             ],
         ),
         welcome=welcome,
@@ -101,6 +119,8 @@ def test_voice_brief_is_personal_and_ready_to_speak() -> None:
     assert "Oreo sta digerendo bene" in brief
     assert "Scodinzolare" in brief
     assert "domanda naturale" in brief
+    assert "Alimentazione:" in brief
+    assert "Royal Canin Adult" in brief
     assert "modello" not in brief.lower()
     assert "database" not in brief.lower()
 
@@ -209,3 +229,12 @@ async def test_realtime_api_session_turn_and_close(
         f"/v1/realtime/sessions/{session_id}", headers=auth_headers
     )
     assert close_response.status_code == 204
+
+    again = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "VOICE"},
+    )
+    assert again.status_code == 201
+    assert "Vuoi riprendere la vecchia chiacchierata" in again.json()["welcome_text"]
+    assert "Come sta Oreo oggi?" in again.json()["welcome_text"]

@@ -9,7 +9,115 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.domains.realtime_context import conversation_topic
 from app.domains.repository import InMemoryStore, now_utc
+
+
+async def load_conversation_memory_db(
+    engine: AsyncEngine, *, user_id: str, dog_id: str
+) -> dict[str, Any] | None:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    select topic, turns_json, last_talked_at
+                    from public.realtime_conversation_memories
+                    where user_id=cast(:user_id as uuid)
+                      and dog_id=cast(:dog_id as uuid)
+                    """
+                ),
+                {"user_id": user_id, "dog_id": dog_id},
+            )
+        ).mappings().one_or_none()
+    return dict(row) if row else None
+
+
+async def upsert_conversation_memory_db(
+    engine: AsyncEngine,
+    *,
+    session: dict[str, Any],
+    dog_name: str,
+    turns: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    user_texts = [str(turn.get("user_transcript") or "") for turn in turns]
+    if not any(text.strip() for text in user_texts):
+        return None
+    topic = conversation_topic(user_texts, dog_name=dog_name)
+    history: list[dict[str, str]] = []
+    for turn in turns[-4:]:
+        history.append({"role": "proprietario", "content": turn["user_transcript"]})
+        history.append({"role": "DOGly", "content": turn["assistant_text"]})
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    insert into public.realtime_conversation_memories(
+                      dog_id, user_id, last_session_id, topic, turns_json, last_talked_at
+                    ) values (
+                      cast(:dog_id as uuid), cast(:user_id as uuid),
+                      cast(:session_id as uuid), :topic, cast(:turns as jsonb), now()
+                    )
+                    on conflict (user_id, dog_id) do update set
+                      last_session_id=excluded.last_session_id,
+                      topic=excluded.topic,
+                      turns_json=excluded.turns_json,
+                      last_talked_at=now()
+                    returning topic, turns_json, last_talked_at
+                    """
+                ),
+                {
+                    "dog_id": str(session["dog_id"]),
+                    "user_id": str(session["user_id"]),
+                    "session_id": str(session["id"]),
+                    "topic": topic,
+                    "turns": _json(history),
+                },
+            )
+        ).mappings().one()
+    return dict(row)
+
+
+async def refresh_conversation_memory_db(
+    engine: AsyncEngine, *, session_id: str, user_id: str
+) -> dict[str, Any] | None:
+    async with engine.connect() as conn:
+        session = (
+            await conn.execute(
+                text(
+                    """
+                    select s.id, s.user_id, s.dog_id, d.name as dog_name
+                    from public.realtime_sessions s
+                    join public.dogs d on d.id=s.dog_id
+                    where s.id=cast(:session_id as uuid)
+                      and s.user_id=cast(:user_id as uuid)
+                    """
+                ),
+                {"session_id": session_id, "user_id": user_id},
+            )
+        ).mappings().one_or_none()
+        if session is None:
+            return None
+        turns = (
+            await conn.execute(
+                text(
+                    """
+                    select user_transcript, assistant_text
+                    from public.realtime_turns
+                    where session_id=cast(:session_id as uuid)
+                    order by ordinal
+                    """
+                ),
+                {"session_id": session_id},
+            )
+        ).mappings().all()
+    return await upsert_conversation_memory_db(
+        engine,
+        session=dict(session),
+        dog_name=str(session["dog_name"]),
+        turns=[dict(turn) for turn in turns],
+    )
 
 
 async def create_session_db(
@@ -21,11 +129,87 @@ async def create_session_db(
     model: str,
 ) -> dict[str, Any] | None:
     async with engine.begin() as conn:
+        previous = (
+            await conn.execute(
+                text(
+                    """
+                    select s.id, d.name as dog_name
+                    from public.realtime_sessions s
+                    join public.dogs d on d.id=s.dog_id
+                    where s.user_id=cast(:user_id as uuid)
+                      and s.dog_id=cast(:dog_id as uuid)
+                      and s.status='ACTIVE'
+                    order by s.last_active_at desc
+                    """
+                ),
+                {"user_id": user_id, "dog_id": dog_id},
+            )
+        ).mappings().all()
+        for old in previous:
+            turns = (
+                await conn.execute(
+                    text(
+                        """
+                        select user_transcript, assistant_text
+                        from public.realtime_turns
+                        where session_id=cast(:session_id as uuid)
+                        order by ordinal
+                        """
+                    ),
+                    {"session_id": str(old["id"])},
+                )
+            ).mappings().all()
+            if turns:
+                topic = conversation_topic(
+                    [str(turn["user_transcript"]) for turn in turns],
+                    dog_name=str(old["dog_name"]),
+                )
+                history = []
+                for turn in list(turns)[-4:]:
+                    history.append(
+                        {"role": "proprietario", "content": turn["user_transcript"]}
+                    )
+                    history.append({"role": "DOGly", "content": turn["assistant_text"]})
+                await conn.execute(
+                    text(
+                        """
+                        insert into public.realtime_conversation_memories(
+                          dog_id, user_id, last_session_id, topic, turns_json, last_talked_at
+                        ) values (
+                          cast(:dog_id as uuid), cast(:user_id as uuid),
+                          cast(:session_id as uuid), :topic, cast(:turns as jsonb), now()
+                        )
+                        on conflict (user_id, dog_id) do update set
+                          last_session_id=excluded.last_session_id,
+                          topic=excluded.topic,
+                          turns_json=excluded.turns_json,
+                          last_talked_at=now()
+                        """
+                    ),
+                    {
+                        "dog_id": dog_id,
+                        "user_id": user_id,
+                        "session_id": str(old["id"]),
+                        "topic": topic,
+                        "turns": _json(history),
+                    },
+                )
+            await conn.execute(
+                text(
+                    """
+                    update public.realtime_sessions
+                    set status='ENDED', ended_at=now()
+                    where id=cast(:session_id as uuid)
+                    """
+                ),
+                {"session_id": str(old["id"])},
+            )
         await conn.execute(
             text(
                 """
                 delete from public.realtime_sessions
-                where expires_at <= now() or ended_at < now() - interval '24 hours'
+                where status in ('ENDED', 'EXPIRED')
+                  and coalesce(ended_at, last_active_at) < now() - interval '14 days'
                 """
             )
         )
@@ -57,7 +241,26 @@ async def create_session_db(
                 },
             )
         ).mappings().one_or_none()
-    return dict(row) if row else None
+        memory = (
+            await conn.execute(
+                text(
+                    """
+                    select topic, turns_json
+                    from public.realtime_conversation_memories
+                    where user_id=cast(:user_id as uuid)
+                      and dog_id=cast(:dog_id as uuid)
+                    """
+                ),
+                {"user_id": user_id, "dog_id": dog_id},
+            )
+        ).mappings().one_or_none()
+    if row is None:
+        return None
+    payload = dict(row)
+    if memory:
+        payload["previous_topic"] = memory["topic"]
+        payload["previous_turns"] = memory["turns_json"] or []
+    return payload
 
 
 async def load_session_db(
@@ -314,6 +517,10 @@ async def end_session_db(
             ),
             {"session_id": session_id, "user_id": user_id},
         )
+    if result.rowcount:
+        await refresh_conversation_memory_db(
+            engine, session_id=session_id, user_id=user_id
+        )
     return bool(result.rowcount)
 
 
@@ -343,6 +550,10 @@ def create_session_memory(
         "dog_name": dog.name,
         "display_name": getattr(store.profiles.get(user_id), "display_name", None),
     }
+    previous = store.realtime_conversation_memories.get((user_id, dog_id))
+    if previous:
+        row["previous_topic"] = previous.get("topic")
+        row["previous_turns"] = previous.get("turns_json") or []
     store.realtime_sessions[row["id"]] = row
     store.realtime_turns[row["id"]] = []
     return row

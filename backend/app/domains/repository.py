@@ -107,6 +107,7 @@ class InMemoryStore:
         self.realtime_sessions: dict[str, dict] = {}
         self.realtime_turns: dict[str, list[dict]] = {}
         self.realtime_memory_proposals: dict[str, dict] = {}
+        self.realtime_conversation_memories: dict[tuple[str, str], dict] = {}
         # Index: (user_id, client_request_id) -> capture/fecal id
         self.capture_by_client_request: dict[tuple[str, str], str] = {}
         self.fecal_by_client_request: dict[tuple[str, str], str] = {}

@@ -24,9 +24,11 @@ from app.contracts.realtime import (
 from app.domains import realtime_db
 from app.domains.realtime_context import (
     REALTIME_CONTEXT_VERSION,
+    conversation_topic,
     load_realtime_context_db,
     load_realtime_context_memory,
     render_voice_brief,
+    resume_welcome_text,
     route_realtime_domains,
 )
 from app.domains.realtime_orchestrator import (
@@ -50,14 +52,10 @@ def _is_owned_active_voice_session(
     )
 
 
-def _welcome_text(owner_name: str | None, dog_name: str) -> str:
-    first_name = (owner_name or "").strip().split(" ", 1)[0].capitalize()
-    if first_name:
-        return (
-            f"Ciao {first_name}, sono qui per te e {dog_name}. "
-            "Cosa vuoi capire oggi?"
-        )
-    return f"Ciao, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"
+def _welcome_text(
+    owner_name: str | None, dog_name: str, previous_topic: str | None = None
+) -> str:
+    return resume_welcome_text(owner_name, dog_name, previous_topic)
 
 
 @router.post("/sessions", response_model=RealtimeSessionOut, status_code=201)
@@ -95,7 +93,11 @@ async def create_realtime_session(
         owner_display_name=(
             str(row["display_name"]) if row.get("display_name") else None
         ),
-        welcome_text=_welcome_text(row.get("display_name"), str(row["dog_name"])),
+        welcome_text=_welcome_text(
+            row.get("display_name"),
+            str(row["dog_name"]),
+            row.get("previous_topic"),
+        ),
         status=row["status"],
         modality=row["modality"],
         model=row["model"],
@@ -140,13 +142,28 @@ async def create_voice_client_secret(
                 dog_id=str(session["dog_id"]),
                 domains=["BEHAVIOR", "DIGESTIVE", "NUTRITION", "CARE", "GENERAL"],
             )
+            memory = await realtime_db.load_conversation_memory_db(
+                state.engine,
+                user_id=user_id,
+                dog_id=str(session["dog_id"]),
+            )
         else:
             context = load_realtime_context_memory(
                 state.store,
                 dog_id=str(session["dog_id"]),
                 domains=["GENERAL"],
             )
-        welcome = _welcome_text(context.owner_display_name, context.dog_name)
+            memory = state.store.realtime_conversation_memories.get(
+                (user_id, str(session["dog_id"]))
+            )
+        if memory:
+            context.previous_topic = str(memory.get("topic") or "") or None
+            context.previous_turns = list(memory.get("turns_json") or [])
+        welcome = _welcome_text(
+            context.owner_display_name,
+            context.dog_name,
+            context.previous_topic,
+        )
         secret = await create_realtime_client_secret(
             state.settings,
             user_id=user_id,
@@ -281,6 +298,9 @@ async def create_realtime_turn(
             source_refs=source_refs,
             provider_audit=provider_audit,
         )
+        await realtime_db.refresh_conversation_memory_db(
+            state.engine, session_id=session_id, user_id=user_id
+        )
     else:
         row, proposal = _record_turn_memory(
             state.store,
@@ -376,6 +396,7 @@ async def end_realtime_session(
         if changed:
             session["status"] = "ENDED"
             session["ended_at"] = now_utc()
+            _store_conversation_memory(state.store, session)
     if not changed:
         raise ApiError(ErrorCode.NOT_FOUND, "Conversazione non trovata.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -416,4 +437,24 @@ def _record_turn_memory(
         }
         store.realtime_memory_proposals[proposal["id"]] = proposal
     session["last_active_at"] = now_utc()
+    _store_conversation_memory(store, session)
     return row, proposal
+
+
+def _store_conversation_memory(store: Any, session: dict[str, Any]) -> None:
+    turns = store.realtime_turns.get(session["id"], [])
+    if not turns:
+        return
+    dog = store.dogs.get(session["dog_id"])
+    topic = conversation_topic(
+        [str(turn["user_transcript"]) for turn in turns],
+        dog_name=getattr(dog, "name", "il cane"),
+    )
+    history = []
+    for turn in turns[-4:]:
+        history.append({"role": "proprietario", "content": turn["user_transcript"]})
+        history.append({"role": "DOGly", "content": turn["assistant_text"]})
+    store.realtime_conversation_memories[(session["user_id"], session["dog_id"])] = {
+        "topic": topic,
+        "turns_json": history,
+    }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +34,8 @@ class RealtimeDogContext(BaseModel):
     stable_facts: list[dict[str, Any]] = Field(default_factory=list)
     items: list[RealtimeContextItem] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
+    previous_topic: str | None = None
+    previous_turns: list[dict[str, str]] = Field(default_factory=list)
 
     def source_refs(self) -> list[dict[str, str]]:
         return [
@@ -52,6 +55,36 @@ _BEHAVIOR_WORDS = {
     "guarda", "gira", "dorme", "riposa", "video",
 }
 _CARE_WORDS = {"veterinario", "visita", "vaccino", "farmaco", "terapia", "appuntamento"}
+
+
+_RESUME_GREETING = re.compile(
+    r"^\s*(ciao|salve|buongiorno|buonasera|ehi|hey|ciao dogly)[!.?\s]*$",
+    re.IGNORECASE,
+)
+
+
+def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
+    for line in reversed(user_texts):
+        cleaned = " ".join((line or "").split())
+        if not cleaned or _RESUME_GREETING.fullmatch(cleaned):
+            continue
+        if len(cleaned) > 90:
+            cleaned = cleaned[:87].rsplit(" ", 1)[0] + "…"
+        return cleaned
+    return dog_name
+
+
+def resume_welcome_text(
+    owner_name: str | None, dog_name: str, previous_topic: str | None
+) -> str:
+    first_name = (owner_name or "").strip().split(" ", 1)[0].capitalize()
+    hello = f"Ciao {first_name}" if first_name else "Ciao"
+    if previous_topic:
+        return (
+            f"{hello}, l'ultima volta parlavamo di {previous_topic}. "
+            "Vuoi riprendere la vecchia chiacchierata o parliamo di altro?"
+        )
+    return f"{hello}, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"
 
 
 def route_realtime_domains(user_text: str) -> list[RealtimeDomain]:
@@ -234,34 +267,74 @@ async def load_realtime_context_db(
                 )
 
         if "NUTRITION" in domains or "DIGESTIVE" in domains or "GENERAL" in domains:
-            feeding = (
+            feedings = (
                 await conn.execute(
                     text(
                         """
-                        select fp.id, fp.quantity_per_day, fp.start_at,
+                        select fp.id, fp.quantity_per_day, fp.start_at, fp.end_at,
                                fp.treats_notes, food.id food_id, food.name,
-                               food.brand, food.verified_at
+                               food.brand, food.verified_at, food.feeding_directions
                         from public.feeding_periods fp
                         join public.food_products food on food.id=fp.food_product_id
                         where fp.dog_id=cast(:dog_id as uuid)
-                          and fp.start_at <= now()
-                          and (fp.end_at is null or fp.end_at >= now())
-                          and food.verified_at is not null
-                        order by fp.start_at desc
-                        limit 1
+                        order by fp.end_at is null desc, fp.start_at desc
+                        limit 3
                         """
                     ),
                     {"dog_id": dog_id},
                 )
-            ).mappings().one_or_none()
-            if feeding:
+            ).mappings().all()
+            linked_food_ids = set()
+            for feeding in feedings:
+                linked_food_ids.add(str(feeding["food_id"]))
+                active = feeding["end_at"] is None
+                name = feeding["name"] or feeding["brand"] or "cibo"
                 items.append(
                     RealtimeContextItem(
                         source_id=str(feeding["id"]),
                         source_type="FEEDING_PERIOD",
                         occurred_at=feeding["start_at"],
-                        summary=f"Alimentazione attiva: {feeding['name']}",
+                        summary=(
+                            f"{'Alimentazione attiva' if active else 'Cibo precedente'}: {name}"
+                        ),
                         data=dict(feeding),
+                    )
+                )
+            foods = (
+                await conn.execute(
+                    text(
+                        """
+                        select id, name, brand, verified_at, ingredients_raw,
+                               feeding_directions, created_at
+                        from public.food_products
+                        where dog_id=cast(:dog_id as uuid)
+                           or (dog_id is null and owner_id=cast(:user_id as uuid))
+                        order by verified_at desc nulls last, created_at desc
+                        limit 4
+                        """
+                    ),
+                    {"dog_id": dog_id, "user_id": user_id},
+                )
+            ).mappings().all()
+            for food in foods:
+                if str(food["id"]) in linked_food_ids:
+                    continue
+                name = food["name"] or food["brand"] or "cibo scansionato"
+                verified = food["verified_at"] is not None
+                items.append(
+                    RealtimeContextItem(
+                        source_id=str(food["id"]),
+                        source_type="FOOD_PRODUCT",
+                        occurred_at=food["created_at"],
+                        summary=(
+                            f"{'Cibo' if verified else 'Cibo da confermare'}: {name}"
+                        ),
+                        data={
+                            "name": food["name"],
+                            "brand": food["brand"],
+                            "verified": verified,
+                            "directions": food["feeding_directions"],
+                        },
                     )
                 )
 
@@ -325,7 +398,9 @@ async def load_realtime_context_db(
         if key not in {"id", "name", "display_name"} and value is not None
     }
     missing: list[str] = []
-    if not any(item.source_type == "FEEDING_PERIOD" for item in items):
+    if not any(
+        item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"} for item in items
+    ):
         missing.append("active_feeding")
     if dog.get("weight_kg") is None:
         missing.append("weight")
@@ -360,6 +435,7 @@ _SOURCE_LABEL = {
     "DIGESTIVE_EVENT": "Lettura digestiva",
     "PERSONAL_PATTERN": "Abitudine già consolidata",
     "FEEDING_PERIOD": "Alimentazione",
+    "FOOD_PRODUCT": "Cibo",
     "CARE_EVENT": "Cura",
 }
 _MISSING_LABEL = {
@@ -434,7 +510,9 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
         if statement:
             known.append(f"- {statement}")
     events: list[str] = []
-    for item in context.items[:8]:
+    for item in context.items:
+        if item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"}:
+            continue
         label = _SOURCE_LABEL.get(item.source_type, "Nota")
         headline = item.data.get("headline") if item.data else None
         when = (
@@ -472,9 +550,26 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             f"Profilo: {', '.join(profile) if profile else 'ancora essenziale'}.",
             "Fatti confermati dal proprietario:",
             "\n".join(known) if known else "- nessuno ancora",
+            "Alimentazione:",
+            "\n".join(
+                f"- {item.summary}"
+                for item in context.items
+                if item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"}
+            )
+            or f"- Non hai ancora il cibo di {context.dog_name}. Se te lo dicono, proponilo come ricordo da confermare.",
             "Ultime letture DOGly:",
             "\n".join(events) if events else "- nessuna analisi ancora",
             f"Non hai ancora: {', '.join(missing)}." if missing else "Il profilo essenziale è presente.",
+            (
+                f"ULTIMA CHIACCHIERATA ({context.previous_topic}):\n"
+                + "\n".join(
+                    f"- {turn.get('role')}: {turn.get('content')}"
+                    for turn in context.previous_turns[:8]
+                )
+                + "\nSe vuole riprendere, continua da qui. Se vuole altro, cambia argomento senza insistere."
+            )
+            if context.previous_topic
+            else "Non c'è una chiacchierata precedente da riprendere.",
             "CANINE_SCIENCE:",
             science,
         ]
@@ -488,6 +583,36 @@ def load_realtime_context_memory(
     domains: list[RealtimeDomain],
 ) -> RealtimeDogContext:
     dog = store.dogs[dog_id]
+    items: list[RealtimeContextItem] = []
+    missing = ["confirmed_routine"]
+    for food in store.food_products.values():
+        if food.dog_id != dog_id and food.owner_id != dog.owner_id:
+            continue
+        items.append(
+            RealtimeContextItem(
+                source_id=food.id,
+                source_type="FOOD_PRODUCT",
+                occurred_at=food.created_at,
+                summary=f"Cibo: {food.name or food.brand or 'scansionato'}",
+                data={"name": food.name, "brand": food.brand},
+            )
+        )
+    for period in store.feeding_periods.values():
+        if period.dog_id != dog_id:
+            continue
+        food = store.food_products.get(period.food_product_id)
+        items.append(
+            RealtimeContextItem(
+                source_id=period.id,
+                source_type="FEEDING_PERIOD",
+                occurred_at=period.start_at,
+                summary=f"Alimentazione attiva: {getattr(food, 'name', None) or 'cibo'}",
+                data={"quantity_per_day": period.quantity_per_day},
+            )
+        )
+    if not items:
+        missing.append("active_feeding")
+    memory = store.realtime_conversation_memories.get((dog.owner_id, dog_id), {})
     return RealtimeDogContext(
         dog_id=dog.id,
         dog_name=dog.name,
@@ -498,5 +623,8 @@ def load_realtime_context_memory(
             "size": dog.size,
             "breed_label": dog.breed_label,
         },
-        missing=["active_feeding", "confirmed_routine"],
+        items=items,
+        missing=missing,
+        previous_topic=memory.get("topic"),
+        previous_turns=list(memory.get("turns_json") or []),
     )
