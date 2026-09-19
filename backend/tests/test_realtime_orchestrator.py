@@ -66,7 +66,9 @@ def test_voice_session_speaks_without_waiting_for_tools() -> None:
     vad = config["audio"]["input"]["turn_detection"]
     assert vad["create_response"] is True
     assert vad["interrupt_response"] is True
-    assert vad["eagerness"] == "high"
+    assert vad["eagerness"] == "medium"
+    assert config["audio"]["output"]["voice"] == "cedar"
+    assert config["audio"]["output"]["speed"] == 0.95
 
 
 def test_voice_brief_is_personal_and_ready_to_speak() -> None:
@@ -90,7 +92,8 @@ def test_voice_brief_is_personal_and_ready_to_speak() -> None:
     )
     assert "Oreo" in brief
     assert "Attilio" in brief
-    assert "rispondi SUBITO" in brief
+    assert "voce calma" in brief
+    assert "Non ripetere quel saluto" in brief
     assert "Oreo sta digerendo bene" in brief
     assert "modello" not in brief.lower()
     assert "database" not in brief.lower()

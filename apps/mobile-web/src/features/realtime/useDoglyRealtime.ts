@@ -28,6 +28,16 @@ type RealtimeServerEvent = {
   error?: { message?: string };
 };
 
+const MIC_CONSTRAINTS: MediaStreamConstraints = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+  },
+  video: false,
+};
+
 export function useDoglyRealtime(dogId: string) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -41,12 +51,16 @@ export function useDoglyRealtime(dogId: string) {
   const channelRef = useRef<RTCDataChannel | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const outgoingTrackRef = useRef<MediaStreamTrack | null>(null);
   const sessionRef = useRef<string | null>(null);
   const sessionDataRef = useRef<RealtimeSession | null>(null);
   const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
   const userTranscriptRef = useRef('');
   const assistantRef = useRef('');
   const persistLockRef = useRef(false);
+  const greetingRef = useRef(false);
+  const responseOpenRef = useRef(false);
+  const mutedByUserRef = useRef(false);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -57,7 +71,16 @@ export function useDoglyRealtime(dogId: string) {
     peerRef.current = null;
     streamRef.current = null;
     audioRef.current = null;
+    outgoingTrackRef.current = null;
     persistLockRef.current = false;
+    greetingRef.current = false;
+    responseOpenRef.current = false;
+  }, []);
+
+  const setMicEnabled = useCallback((enabled: boolean) => {
+    const track = outgoingTrackRef.current;
+    if (!track) return;
+    track.enabled = enabled && !mutedByUserRef.current;
   }, []);
 
   const ensureSession = useCallback(async () => {
@@ -95,37 +118,54 @@ export function useDoglyRealtime(dogId: string) {
     }
   }, []);
 
-  const sendVoiceText = useCallback((text: string) => {
+  const cancelOpenResponse = useCallback(() => {
     const channel = channelRef.current;
-    if (!channel || channel.readyState !== 'open') return false;
-    userTranscriptRef.current = text;
-    assistantRef.current = '';
-    setTranscript(text);
-    setAssistantDraft('');
-    channel.send(
-      JSON.stringify({
-        type: 'conversation.item.create',
-        item: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_text', text }],
-        },
-      }),
-    );
-    channel.send(
-      JSON.stringify({
-        type: 'response.create',
-        response: { output_modalities: ['audio'] },
-      }),
-    );
-    setVoiceState('speaking');
-    return true;
+    if (!channel || channel.readyState !== 'open') return;
+    if (responseOpenRef.current) {
+      channel.send(JSON.stringify({ type: 'response.cancel' }));
+      responseOpenRef.current = false;
+    }
   }, []);
+
+  const sendVoiceText = useCallback(
+    (text: string) => {
+      const channel = channelRef.current;
+      if (!channel || channel.readyState !== 'open' || greetingRef.current) {
+        return false;
+      }
+      userTranscriptRef.current = text;
+      assistantRef.current = '';
+      setTranscript(text);
+      setAssistantDraft('');
+      cancelOpenResponse();
+      channel.send(
+        JSON.stringify({
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text }],
+          },
+        }),
+      );
+      channel.send(
+        JSON.stringify({
+          type: 'response.create',
+          response: { output_modalities: ['audio'] },
+        }),
+      );
+      responseOpenRef.current = true;
+      setVoiceState('speaking');
+      return true;
+    },
+    [cancelOpenResponse],
+  );
 
   const handleServerEvent = useCallback(
     (event: RealtimeServerEvent) => {
       switch (event.type) {
         case 'input_audio_buffer.speech_started':
+          if (greetingRef.current) return;
           userTranscriptRef.current = '';
           assistantRef.current = '';
           setTranscript('');
@@ -144,6 +184,9 @@ export function useDoglyRealtime(dogId: string) {
             setTranscript(event.transcript);
           }
           break;
+        case 'response.created':
+          responseOpenRef.current = true;
+          break;
         case 'response.output_audio_transcript.delta':
         case 'response.audio_transcript.delta':
           if (event.delta) {
@@ -160,6 +203,14 @@ export function useDoglyRealtime(dogId: string) {
           }
           break;
         case 'response.done':
+        case 'response.cancelled':
+          responseOpenRef.current = false;
+          if (greetingRef.current) {
+            greetingRef.current = false;
+            setMicEnabled(true);
+            setVoiceState('listening');
+            return;
+          }
           setVoiceState('listening');
           void persistSpokenTurn();
           break;
@@ -169,7 +220,7 @@ export function useDoglyRealtime(dogId: string) {
           break;
       }
     },
-    [persistSpokenTurn],
+    [persistSpokenTurn, setMicEnabled],
   );
 
   const connect = useCallback(async () => {
@@ -184,16 +235,31 @@ export function useDoglyRealtime(dogId: string) {
       peerRef.current = peer;
       const audio = document.createElement('audio');
       audio.autoplay = true;
+      audio.setAttribute('playsinline', 'true');
       audio.setAttribute('aria-hidden', 'true');
       document.body.appendChild(audio);
       audioRef.current = audio;
       peer.ontrack = (event) => {
-        audio.srcObject = event.streams[0];
+        if (event.track.kind !== 'audio') return;
+        const remote = new MediaStream([event.track]);
+        const previous = audio.srcObject;
+        audio.srcObject = remote;
+        if (previous instanceof MediaStream) {
+          previous.getTracks().forEach((track) => {
+            if (track !== event.track) track.stop();
+          });
+        }
+        void audio.play().catch(() => undefined);
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
       streamRef.current = stream;
-      peer.addTrack(stream.getAudioTracks()[0], stream);
+      const outgoing = stream.getAudioTracks()[0];
+      outgoingTrackRef.current = outgoing;
+      outgoing.enabled = false;
+      mutedByUserRef.current = false;
+      setMuted(false);
+      peer.addTrack(outgoing, stream);
 
       const channel = peer.createDataChannel('oai-events');
       channelRef.current = channel;
@@ -201,18 +267,20 @@ export function useDoglyRealtime(dogId: string) {
         handleServerEvent(JSON.parse(message.data) as RealtimeServerEvent);
       });
       channel.addEventListener('open', () => {
+        greetingRef.current = true;
         setVoiceState('speaking');
         channel.send(
           JSON.stringify({
             type: 'response.create',
             response: {
               output_modalities: ['audio'],
-              instructions: `Pronuncia esattamente questa frase e nulla di più: ${JSON.stringify(
+              instructions: `Pronuncia esattamente questa frase, una sola volta, con voce calma e naturale, e poi taci: ${JSON.stringify(
                 prepared.welcome_text,
               )}`,
             },
           }),
         );
+        responseOpenRef.current = true;
       });
       channel.addEventListener('close', () => setVoiceState('idle'));
 
@@ -280,11 +348,10 @@ export function useDoglyRealtime(dogId: string) {
   );
 
   const toggleMute = useCallback(() => {
-    const track = streamRef.current?.getAudioTracks()[0];
-    if (!track) return;
-    track.enabled = !track.enabled;
-    setMuted(!track.enabled);
-  }, []);
+    mutedByUserRef.current = !mutedByUserRef.current;
+    setMicEnabled(!mutedByUserRef.current);
+    setMuted(mutedByUserRef.current);
+  }, [setMicEnabled]);
 
   const decideMemory = useCallback(
     async (action: 'CONFIRM' | 'REJECT') => {

@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
     realtime_reasoning_model: str = "gpt-5.2"
     realtime_voice_model: str = "gpt-realtime-2.1"
-    realtime_voice: str = "marin"
+    realtime_voice: str = "cedar"
 
     # Public list prices in USD per 1M tokens. Keep these environment-overridden
     # whenever selecting a different model: model candidates and their pricing

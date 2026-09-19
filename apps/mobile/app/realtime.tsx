@@ -89,7 +89,11 @@ export default function RealtimeScreen() {
             <Text style={styles.subtitle}>
               {realtime.voiceState === 'idle'
                 ? `Sono qui per te e ${dog.name}. Cosa vuoi capire oggi?`
-                : `Possiamo parlare del comportamento, della digestione o di cosa vale la pena osservare per ${dog.name}.`}
+                : realtime.voiceState === 'speaking'
+                  ? `Ti rispondo di ${dog.name}.`
+                  : realtime.voiceState === 'listening'
+                    ? `Parla pure, ti ascolto.`
+                    : `Possiamo parlare di ${dog.name}.`}
             </Text>
             <View style={styles.orbStage}>
               <Animated.View

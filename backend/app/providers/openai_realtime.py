@@ -25,12 +25,12 @@ def realtime_session_config(settings: Settings, *, instructions: str) -> dict[st
                 },
                 "turn_detection": {
                     "type": "semantic_vad",
-                    "eagerness": "high",
+                    "eagerness": "medium",
                     "create_response": True,
                     "interrupt_response": True,
                 },
             },
-            "output": {"voice": settings.realtime_voice, "speed": 1.05},
+            "output": {"voice": settings.realtime_voice, "speed": 0.95},
         },
         "max_output_tokens": 280,
         "tracing": {

@@ -46,12 +46,16 @@ export function useDoglyRealtime(dogId: string) {
     null,
   );
   const streamRef = useRef<MediaStream | null>(null);
+  const outgoingTrackRef = useRef<{ enabled: boolean } | null>(null);
   const sessionRef = useRef<string | null>(null);
   const sessionDataRef = useRef<RealtimeSession | null>(null);
   const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
   const userTranscriptRef = useRef('');
   const assistantRef = useRef('');
   const persistLockRef = useRef(false);
+  const greetingRef = useRef(false);
+  const responseOpenRef = useRef(false);
+  const mutedByUserRef = useRef(false);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -60,7 +64,16 @@ export function useDoglyRealtime(dogId: string) {
     channelRef.current = null;
     peerRef.current = null;
     streamRef.current = null;
+    outgoingTrackRef.current = null;
     persistLockRef.current = false;
+    greetingRef.current = false;
+    responseOpenRef.current = false;
+  }, []);
+
+  const setMicEnabled = useCallback((enabled: boolean) => {
+    const track = outgoingTrackRef.current;
+    if (!track) return;
+    track.enabled = enabled && !mutedByUserRef.current;
   }, []);
 
   const ensureSession = useCallback(async () => {
@@ -95,37 +108,54 @@ export function useDoglyRealtime(dogId: string) {
     }
   }, []);
 
-  const sendVoiceText = useCallback((text: string) => {
+  const cancelOpenResponse = useCallback(() => {
     const channel = channelRef.current;
-    if (!channel || channel.readyState !== 'open') return false;
-    userTranscriptRef.current = text;
-    assistantRef.current = '';
-    setTranscript(text);
-    setAssistantDraft('');
-    channel.send(
-      JSON.stringify({
-        type: 'conversation.item.create',
-        item: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_text', text }],
-        },
-      }),
-    );
-    channel.send(
-      JSON.stringify({
-        type: 'response.create',
-        response: { output_modalities: ['audio'] },
-      }),
-    );
-    setVoiceState('speaking');
-    return true;
+    if (!channel || channel.readyState !== 'open') return;
+    if (responseOpenRef.current) {
+      channel.send(JSON.stringify({ type: 'response.cancel' }));
+      responseOpenRef.current = false;
+    }
   }, []);
+
+  const sendVoiceText = useCallback(
+    (text: string) => {
+      const channel = channelRef.current;
+      if (!channel || channel.readyState !== 'open' || greetingRef.current) {
+        return false;
+      }
+      userTranscriptRef.current = text;
+      assistantRef.current = '';
+      setTranscript(text);
+      setAssistantDraft('');
+      cancelOpenResponse();
+      channel.send(
+        JSON.stringify({
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text }],
+          },
+        }),
+      );
+      channel.send(
+        JSON.stringify({
+          type: 'response.create',
+          response: { output_modalities: ['audio'] },
+        }),
+      );
+      responseOpenRef.current = true;
+      setVoiceState('speaking');
+      return true;
+    },
+    [cancelOpenResponse],
+  );
 
   const handleEvent = useCallback(
     (event: ServerEvent) => {
       switch (event.type) {
         case 'input_audio_buffer.speech_started':
+          if (greetingRef.current) return;
           userTranscriptRef.current = '';
           assistantRef.current = '';
           setTranscript('');
@@ -144,6 +174,9 @@ export function useDoglyRealtime(dogId: string) {
             setTranscript(event.transcript);
           }
           break;
+        case 'response.created':
+          responseOpenRef.current = true;
+          break;
         case 'response.output_audio_transcript.delta':
         case 'response.audio_transcript.delta':
           if (event.delta) {
@@ -160,6 +193,14 @@ export function useDoglyRealtime(dogId: string) {
           }
           break;
         case 'response.done':
+        case 'response.cancelled':
+          responseOpenRef.current = false;
+          if (greetingRef.current) {
+            greetingRef.current = false;
+            setMicEnabled(true);
+            setVoiceState('listening');
+            return;
+          }
           setVoiceState('listening');
           void persistSpokenTurn();
           break;
@@ -168,7 +209,7 @@ export function useDoglyRealtime(dogId: string) {
           setVoiceState('error');
       }
     },
-    [persistSpokenTurn],
+    [persistSpokenTurn, setMicEnabled],
   );
 
   const connect = useCallback(async () => {
@@ -181,28 +222,40 @@ export function useDoglyRealtime(dogId: string) {
       const peer = new RTCPeerConnection();
       peerRef.current = peer;
       const stream = (await mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
         video: false,
       })) as MediaStream;
       streamRef.current = stream;
-      peer.addTrack(stream.getAudioTracks()[0], stream);
+      const outgoing = stream.getAudioTracks()[0];
+      outgoingTrackRef.current = outgoing;
+      outgoing.enabled = false;
+      mutedByUserRef.current = false;
+      setMuted(false);
+      peer.addTrack(outgoing, stream);
       const channel = peer.createDataChannel('oai-events');
       channelRef.current = channel;
       channel.onmessage = (message: { data: unknown }) =>
         handleEvent(JSON.parse(String(message.data)) as ServerEvent);
       channel.onopen = () => {
+        greetingRef.current = true;
         setVoiceState('speaking');
         channel.send(
           JSON.stringify({
             type: 'response.create',
             response: {
               output_modalities: ['audio'],
-              instructions: `Pronuncia esattamente questa frase e nulla di più: ${JSON.stringify(
+              instructions: `Pronuncia esattamente questa frase, una sola volta, con voce calma e naturale, e poi taci: ${JSON.stringify(
                 prepared.welcome_text,
               )}`,
             },
           }),
         );
+        responseOpenRef.current = true;
       };
       channel.onclose = () => setVoiceState('idle');
       const offer = await peer.createOffer();
@@ -269,11 +322,10 @@ export function useDoglyRealtime(dogId: string) {
   );
 
   const toggleMute = useCallback(() => {
-    const track = streamRef.current?.getAudioTracks()[0];
-    if (!track) return;
-    track.enabled = !track.enabled;
-    setMuted(!track.enabled);
-  }, []);
+    mutedByUserRef.current = !mutedByUserRef.current;
+    setMicEnabled(!mutedByUserRef.current);
+    setMuted(mutedByUserRef.current);
+  }, [setMicEnabled]);
 
   const decideMemory = useCallback(
     async (action: 'CONFIRM' | 'REJECT') => {
