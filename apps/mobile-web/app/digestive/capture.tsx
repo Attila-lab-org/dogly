@@ -20,6 +20,7 @@ import {
   enqueueAndUploadDigestivePhoto,
 } from '@/features/digestive/upload';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
+import { purchasesEnabled } from '@/mocks/entitlements';
 
 type Phase = 'ready' | 'preview' | 'uploading' | 'upload_failed';
 
@@ -74,8 +75,7 @@ export default function DigestiveCaptureScreen() {
       });
       router.replace(`/digestive/processing/${eventId}`);
     } catch (err) {
-      if (isQuotaExhaustedError(err)) {
-        // Quota esaurita (402 QUOTA_EXHAUSTED): paywall, non errore generico.
+      if (isQuotaExhaustedError(err) && purchasesEnabled) {
         router.replace('/paywall');
         return;
       }

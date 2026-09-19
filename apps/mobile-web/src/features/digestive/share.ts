@@ -23,3 +23,21 @@ export async function shareDigestiveWithVet(options: {
     return false;
   }
 }
+
+export async function copyDigestiveVetCard(options: {
+  dogName: string;
+  headline: string;
+  summary: string;
+  actionBody?: string | null;
+}): Promise<boolean> {
+  const card = buildDigestiveVetShareCard(options);
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(card.message);
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}

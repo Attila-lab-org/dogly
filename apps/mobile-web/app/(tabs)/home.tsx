@@ -41,8 +41,8 @@ import {
   type HomeBannerAction,
   type HomeTip,
 } from '@/features/home/tips';
-import { AnalyzeMomentSheet } from '@/features/home/AnalyzeMomentSheet';
 import type { InsightTone, LastInsight } from '@/features/core/types';
+import { purchasesEnabled } from '@/mocks/entitlements';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
@@ -73,7 +73,6 @@ export default function HomeScreen() {
   const genderLabel = sexLabel(dog.sex);
 
   const [tip, setTip] = useState<HomeTip>(() => pickHomeTip(dog));
-  const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const skipTipReset = useRef(true);
   useEffect(() => {
     if (skipTipReset.current) {
@@ -83,37 +82,31 @@ export default function HomeScreen() {
     setTip(pickHomeTip(dog));
   }, [dog.id, dog.name, dog.birthDate, dog.ageLabel, dog.breedLabel, dog.sex]);
 
-  const openAnalyze = () => {
-    if (!dog.id || loading) return;
-    setAnalyzeOpen(true);
-  };
-
   const startVideo = () => {
-    setAnalyzeOpen(false);
+    if (!dog.id || loading) return;
     if (processingEventId) {
       router.push(`/behavior/processing/${processingEventId}`);
       return;
     }
-    if (quotaExhausted) {
+    if (quotaExhausted && purchasesEnabled) {
       router.push('/paywall');
       return;
     }
     router.push('/behavior/capture');
   };
 
-  const startAudio = () => {
-    setAnalyzeOpen(false);
+  const startTalk = () => {
     if (!dog.id) return;
     router.push('/realtime' as never);
   };
 
   const runBannerAction = (action: HomeBannerAction) => {
     if (action === 'analyze') {
-      openAnalyze();
+      startVideo();
       return;
     }
     if (action === 'realtime') {
-      startAudio();
+      startTalk();
       return;
     }
     if (action === 'stories') {
@@ -159,11 +152,7 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  nextCare
-                    ? 'Notifiche, hai un promemoria in agenda'
-                    : 'Notifiche'
-                }
+                accessibilityLabel="Notifiche"
                 onPress={() => router.push('/notifications')}
                 hitSlop={12}
                 style={styles.headerIcon}
@@ -173,7 +162,6 @@ export default function HomeScreen() {
                   size={22}
                   color={colors.primary}
                 />
-                {nextCare ? <View style={styles.badge} /> : null}
               </Pressable>
             </View>
           </View>
@@ -309,8 +297,8 @@ export default function HomeScreen() {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Analizza un momento di ${dog.name}: video o audio`}
-            onPress={openAnalyze}
+            accessibilityLabel={`Capisci questo momento di ${dog.name}`}
+            onPress={startVideo}
             disabled={!dog.id || loading}
             style={({ pressed }) => [
               styles.analyzeBanner,
@@ -321,13 +309,34 @@ export default function HomeScreen() {
               <Ionicons name="videocam" size={20} color={colors.primary} />
             </View>
             <View style={styles.analyzeCopy}>
-              <Text style={styles.analyzeTitle}>Analizza un momento</Text>
-              <Text style={styles.analyzeSubtitle}>Video o audio</Text>
+              <Text style={styles.analyzeTitle}>Capisci questo momento</Text>
+              <Text style={styles.analyzeSubtitle}>Guardo {dog.name} in video</Text>
             </View>
             <View style={styles.analyzeTrail}>
               <Ionicons name="paw" size={18} color={colors.primary} />
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
             </View>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Parla con DOGly di ${dog.name}`}
+            onPress={startTalk}
+            disabled={!dog.id}
+            style={({ pressed }) => [
+              styles.digestiveCta,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.secondaryIcon}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.secondaryCopy}>
+              <Text style={styles.digestiveCtaText}>Parla con DOGly</Text>
+              <Text style={styles.digestiveCtaHint}>
+                Una conversazione sul tuo cane
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.accent} />
           </Pressable>
 
           <View style={styles.sectionHeader}>
@@ -490,7 +499,8 @@ export default function HomeScreen() {
           </Pressable>
 
           {behaviorRemaining === null ||
-          (!quotaExhausted && behaviorRemaining > 2) ? null : quotaExhausted ? (
+          (!quotaExhausted && behaviorRemaining > 2) ? null : quotaExhausted &&
+            purchasesEnabled ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Scopri il piano per continuare le analisi"
@@ -501,7 +511,7 @@ export default function HomeScreen() {
                 piano per continuare.
               </Text>
             </Pressable>
-          ) : (
+          ) : quotaExhausted ? null : (
             <Text style={styles.quota}>
               {behaviorRemaining}{' '}
               {behaviorRemaining === 1
@@ -511,13 +521,6 @@ export default function HomeScreen() {
             </Text>
           )}
         </ScrollView>
-        <AnalyzeMomentSheet
-          visible={analyzeOpen}
-          dogName={dog.name}
-          onClose={() => setAnalyzeOpen(false)}
-          onVideo={startVideo}
-          onAudio={startAudio}
-        />
       </SafeAreaView>
     </View>
   );
@@ -574,7 +577,7 @@ function TonePill({ tone }: { tone: InsightTone }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: colors.background,
   },
   safe: {
     flex: 1,

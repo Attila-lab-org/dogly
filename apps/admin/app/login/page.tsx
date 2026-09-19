@@ -42,7 +42,11 @@ export default function LoginPage() {
           Il tuo cane, finalmente capito.
         </p>
         <p className="small muted" style={{ margin: "0 0 22px", letterSpacing: "0.12em", fontWeight: 600 }}>
-          CONTROL CENTER
+          CONTROL CENTER · DEMO
+        </p>
+        <p className="small" style={{ margin: "0 0 18px", color: "#92400E" }}>
+          Accesso grafico di prototipo: non verifica credenziali e non è un
+          ambiente di produzione.
         </p>
 
         <form

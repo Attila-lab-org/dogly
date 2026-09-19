@@ -184,8 +184,8 @@ export default function DogOnboardingScreen() {
     <ScreenContainer scroll>
       <Text style={styles.title}>Crea il profilo del tuo cane</Text>
       <Text style={styles.subtitle}>
-        Bastano pochi secondi: nome e taglia, il resto possiamo scoprirlo
-        insieme.
+        Bastano pochi secondi: nome, taglia ed età. Il resto possiamo
+        scoprirlo insieme.
       </Text>
 
       {/* Foto opzionale con placeholder zampa */}

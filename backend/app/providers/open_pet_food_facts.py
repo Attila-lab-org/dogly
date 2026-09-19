@@ -122,8 +122,8 @@ def _dog_preference(product: dict[str, Any]) -> int:
     return 2
 
 
-_NOISE_IN_NAME = re.compile(r"#\S+|\bkm\b", re.I)
-_QUANTITY_RE = re.compile(r"([\d]+(?:[.,]\d+)?)\s*(kg|g)\b", re.I)
+_NOISE_IN_NAME = re.compile(r"#\S+|\bkm\b", re.IGNORECASE)
+_QUANTITY_RE = re.compile(r"([\d]+(?:[.,]\d+)?)\s*(kg|g)\b", re.IGNORECASE)
 _DRY_MARKERS = (
     "en:dry-dog-food",
     "en:dry-pet-food",
@@ -190,7 +190,7 @@ def _spoken_quantity(raw: Any) -> str | None:
     text = str(raw).strip()
     match = _QUANTITY_RE.search(text)
     if not match:
-        compact = re.match(r"([\d]+(?:[.,]\d+)?)k\b", text, re.I)
+        compact = re.match(r"([\d]+(?:[.,]\d+)?)k\b", text, re.IGNORECASE)
         if compact:
             return f"{compact.group(1)} kg"
         return text if 0 < len(text) <= 16 else None

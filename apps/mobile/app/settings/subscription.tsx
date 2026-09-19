@@ -4,7 +4,7 @@
  * GET /v1/subscription/status + GET /v1/usage.
  */
 import React from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -131,21 +131,9 @@ export default function SubscriptionScreen() {
           style={styles.action}
         />
       )}
-      <Button
-        title="Ripristina acquisto"
-        variant="outline"
-        icon={<Ionicons name="refresh-outline" size={18} color={colors.accent} />}
-        onPress={() => {
-          Alert.alert(
-            'Ripristino acquisto',
-            'Il ripristino dallo store non è ancora disponibile in questa build. Se hai già un abbonamento, lo sincronizziamo dal tuo account al prossimo accesso.',
-          );
-        }}
-        style={styles.action}
-      />
       <Text style={styles.restoreNote}>
-        Se hai già un abbonamento su questo account store, lo recuperiamo dal
-        tuo profilo.
+        Gli acquisti e il ripristino dallo store arrivano con una prossima
+        versione. Per la beta puoi continuare a usare DOGly.
       </Text>
     </ScreenContainer>
   );

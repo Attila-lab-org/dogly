@@ -200,8 +200,8 @@ export default function DogOnboardingScreen() {
           style={styles.progress}
         />
         <Text style={styles.subtitle}>
-          Bastano pochi secondi: nome e taglia, il resto possiamo scoprirlo
-          insieme.
+          Bastano pochi secondi: nome, taglia ed età. Il resto possiamo
+          scoprirlo insieme.
         </Text>
       </View>
 

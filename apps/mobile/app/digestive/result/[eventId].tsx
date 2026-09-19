@@ -37,6 +37,7 @@ import {
 } from '@/features/digestive/map';
 import {
   DIGESTIVE_VET_SHARE_CTA,
+  copyDigestiveVetCard,
   shareDigestiveWithVet,
 } from '@/features/digestive/share';
 import { isApiConfigured } from '@/features/auth/env';
@@ -54,6 +55,7 @@ export default function DigestiveResultScreen() {
   const { usingMockGate } = useSession();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [vetShareError, setVetShareError] = useState(false);
+  const [vetCopied, setVetCopied] = useState(false);
   const [feedback, setFeedback] = useState<DigestiveFeedbackValue | null>(null);
   const useApi = isApiConfigured() && !usingMockGate && Boolean(eventId);
 
@@ -336,10 +338,27 @@ export default function DigestiveResultScreen() {
             }}
           />
           {vetShareError ? (
-            <Text style={styles.questionError}>
-              Non sono riuscito ad aprire la condivisione. Puoi copiare il
-              testo e inviarlo al veterinario.
-            </Text>
+            <>
+              <Text style={styles.questionError}>
+                Non sono riuscito ad aprire la condivisione. Puoi copiare il
+                testo e inviarlo al veterinario.
+              </Text>
+              <Button
+                title={vetCopied ? 'Riepilogo copiato' : 'Copia riepilogo'}
+                variant="outline"
+                onPress={() => {
+                  void (async () => {
+                    const copied = await copyDigestiveVetCard({
+                      dogName: dog.name,
+                      headline,
+                      summary,
+                      actionBody: action?.body,
+                    });
+                    setVetCopied(copied);
+                  })();
+                }}
+              />
+            </>
           ) : null}
         </Card>
       ) : null}

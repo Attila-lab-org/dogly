@@ -20,10 +20,10 @@ from app.domains.external_food import (
     default_opff_client,
     fetch_candidate,
 )
-from app.providers.base import ProviderRateLimitError
 from app.domains.ids import require_uuid
 from app.domains.models import FoodProductRec
 from app.domains.repository import new_id
+from app.providers.base import ProviderRateLimitError
 from app.providers.open_pet_food_facts import (
     ExternalFoodCandidate,
     OpenPetFoodFactsClient,

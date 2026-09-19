@@ -19,17 +19,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { demoFlags } from '@/mocks/demo';
-import { entitlementMock, paywallOfferingMock } from '@/mocks/entitlements';
+import {
+  entitlementMock,
+  paywallOfferingMock,
+  purchasesEnabled,
+} from '@/mocks/entitlements';
 import type { PaywallPlan } from '@/mocks/entitlements';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { useSession } from '@/features/auth/SessionProvider';
 
 type PlanOption = PaywallPlan['code'];
 
 export default function PaywallScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
   const { plans, benefits, freeChoiceLabel } = paywallOfferingMock;
   const [selected, setSelected] = useState<PlanOption>('PREMIUM_ANNUAL');
   const explainStorePending = () => {
@@ -39,13 +41,12 @@ export default function PaywallScreen() {
     );
   };
 
-  // Stati simulabili via flag demo (src/mocks/demo.ts) finché RevenueCat non
-  // è collegato: "unavailable store" e "grace" (sez. 6 Paywall).
+  // Unavailable only when the store itself is down or a demo flag says so.
+  // A live session without RevenueCat is a beta continue path, not a dead end.
   const [storeUnavailable, setStoreUnavailable] = useState(
-    !usingMockGate ||
-      !paywallOfferingMock.storeAvailable ||
-      demoFlags.paywallStoreUnavailable,
+    !paywallOfferingMock.storeAvailable || demoFlags.paywallStoreUnavailable,
   );
+  const canPurchase = purchasesEnabled;
   const gracePeriod = demoFlags.paywallGracePeriod
     ? true
     : entitlementMock.status === 'grace_period';
@@ -66,15 +67,19 @@ export default function PaywallScreen() {
           </Pressable>
         </View>
         <ErrorState
-          title="Store non disponibile"
-          message="Non riesco a caricare i piani dallo store in questo momento. Nessun addebito è stato fatto: riprova tra poco o ripristina un acquisto esistente."
+          title="Acquisti in arrivo"
+          message="In questa beta gli acquisti non sono ancora aperti. Nessun addebito è stato fatto: puoi continuare a usare DOGly."
           retryLabel="Riprova"
-          onRetry={() => setStoreUnavailable(!usingMockGate)}
+          onRetry={() =>
+            setStoreUnavailable(
+              !paywallOfferingMock.storeAvailable ||
+                demoFlags.paywallStoreUnavailable,
+            )
+          }
         />
         <Button
-          title="Ripristina acquisto"
-          variant="outline"
-          onPress={explainStorePending}
+          title="Continua"
+          onPress={() => router.back()}
           style={styles.restore}
         />
       </ScreenContainer>
@@ -155,16 +160,23 @@ export default function PaywallScreen() {
       })}
 
       <Button
-        title="Acquista"
-        onPress={explainStorePending}
+        title={canPurchase ? 'Acquista' : 'Continua in beta'}
+        onPress={canPurchase ? explainStorePending : () => router.back()}
         style={styles.buy}
       />
-      <Button
-        title="Ripristina acquisto"
-        variant="outline"
-        onPress={explainStorePending}
-        style={styles.restore}
-      />
+      {canPurchase ? (
+        <Button
+          title="Ripristina acquisto"
+          variant="outline"
+          onPress={explainStorePending}
+          style={styles.restore}
+        />
+      ) : (
+        <Text style={styles.legal}>
+          Gli acquisti arrivano a breve. Per ora puoi continuare senza
+          interrompere le analisi.
+        </Text>
+      )}
 
       {/* Il piano FREE resta sempre visibile come scelta (no dark pattern) */}
       <Pressable

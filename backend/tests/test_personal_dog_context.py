@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.contracts.canine_intelligence import CanineEvidenceItem
+from app.contracts.provenance import normalize_provenance
 from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
 from app.domains.personal_dog_context import (
@@ -12,8 +14,6 @@ from app.domains.personal_dog_context import (
     merge_owner_stories_into_context,
     personal_to_stable_facts,
 )
-from app.contracts.canine_intelligence import CanineEvidenceItem
-from app.contracts.provenance import normalize_provenance
 from app.knowledge.models import LifestyleFact
 
 

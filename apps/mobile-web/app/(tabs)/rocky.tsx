@@ -176,8 +176,18 @@ export default function DogProfileTabScreen() {
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Quello che sto imparando</Text>
-            <Ionicons name="heart-outline" size={20} color="#F59E0B" />
+            <Text style={styles.sectionTitle}>
+              Quello che ho imparato su {dog.name}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Vedi tutti i pattern di ${dog.name}`}
+              onPress={() => router.push('/patterns')}
+              hitSlop={8}
+              style={styles.pillButton}
+            >
+              <Text style={styles.pillButtonText}>Vedi tutto</Text>
+            </Pressable>
           </View>
           <View style={styles.card}>
             {learnedPatterns.length === 0 ? (
@@ -468,26 +478,6 @@ export default function DogProfileTabScreen() {
             </Pressable>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Modifica i dettagli di ${dog.name}`}
-            onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
-            style={({ pressed }) => [
-              styles.card,
-              styles.editProfileCard,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.linkRow}>
-              <View style={[styles.linkIcon, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="paw-outline" size={20} color="#0284C7" />
-              </View>
-              <Text style={[styles.linkTitle, styles.linkBody]}>
-                Modifica profilo
-              </Text>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </View>
-          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>

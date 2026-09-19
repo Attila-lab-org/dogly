@@ -2,7 +2,7 @@
  * Paywall (Spec V1 sez. 21 / 21.2): elegante, NESSUN dark pattern.
  * - Mai prima del primo valore (il paywall si apre solo su quota esaurita
  *   o funzione premium);
- * - benefit list chiara; due piani (Mensile/Annuale con badge "Consigliato");
+ * - benefit list chiara; due piani (Mensile/Annuale con badge "Risparmia 25%");
  * - il piano FREE resta sempre visibile come scelta;
  * - nota "Nessun addebito prima della conferma dello store";
  * - NO unlimited: 30+30 analisi/mese dichiarate apertamente.
@@ -16,20 +16,22 @@ import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, ErrorState, ScreenContainer } from '@/components';
-import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
+import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { demoFlags } from '@/mocks/demo';
-import { entitlementMock, paywallOfferingMock } from '@/mocks/entitlements';
+import {
+  entitlementMock,
+  paywallOfferingMock,
+  purchasesEnabled,
+} from '@/mocks/entitlements';
 import type { PaywallPlan } from '@/mocks/entitlements';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { useSession } from '@/features/auth/SessionProvider';
 
 type PlanOption = PaywallPlan['code'];
 
 export default function PaywallScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { usingMockGate } = useSession();
   const { plans, benefits, freeChoiceLabel } = paywallOfferingMock;
   const [selected, setSelected] = useState<PlanOption>('PREMIUM_ANNUAL');
   const explainStorePending = () => {
@@ -39,13 +41,12 @@ export default function PaywallScreen() {
     );
   };
 
-  // Stati simulabili via flag demo (src/mocks/demo.ts) finché RevenueCat non
-  // è collegato: "unavailable store" e "grace" (sez. 6 Paywall).
+  // Unavailable only when the store itself is down or a demo flag says so.
+  // A live session without RevenueCat is a beta continue path, not a dead end.
   const [storeUnavailable, setStoreUnavailable] = useState(
-    !usingMockGate ||
-      !paywallOfferingMock.storeAvailable ||
-      demoFlags.paywallStoreUnavailable,
+    !paywallOfferingMock.storeAvailable || demoFlags.paywallStoreUnavailable,
   );
+  const canPurchase = purchasesEnabled;
   const gracePeriod = demoFlags.paywallGracePeriod
     ? true
     : entitlementMock.status === 'grace_period';
@@ -54,29 +55,31 @@ export default function PaywallScreen() {
   // dedicato con retry e "Ripristina" (sez. 21.1), mai una schermata vuota.
   if (storeUnavailable) {
     return (
-      <ScreenContainer style={styles.safe}>
+      <ScreenContainer>
         <View style={styles.header}>
-          <View style={styles.headerSpacer} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Chiudi"
             onPress={() => router.back()}
             hitSlop={12}
-            style={styles.closeButton}
           >
-            <Ionicons name="close" size={22} color="#1A2B48" />
+            <Ionicons name="close" size={26} color={colors.text} />
           </Pressable>
         </View>
         <ErrorState
-          title="Store non disponibile"
-          message="Non riesco a caricare i piani dallo store in questo momento. Nessun addebito è stato fatto: riprova tra poco o ripristina un acquisto esistente."
+          title="Acquisti in arrivo"
+          message="In questa beta gli acquisti non sono ancora aperti. Nessun addebito è stato fatto: puoi continuare a usare DOGly."
           retryLabel="Riprova"
-          onRetry={() => setStoreUnavailable(!usingMockGate)}
+          onRetry={() =>
+            setStoreUnavailable(
+              !paywallOfferingMock.storeAvailable ||
+                demoFlags.paywallStoreUnavailable,
+            )
+          }
         />
         <Button
-          title="Ripristina acquisto"
-          variant="outline"
-          onPress={explainStorePending}
+          title="Continua"
+          onPress={() => router.back()}
           style={styles.restore}
         />
       </ScreenContainer>
@@ -84,24 +87,23 @@ export default function PaywallScreen() {
   }
 
   return (
-    <ScreenContainer scroll style={styles.safe}>
+    <ScreenContainer scroll>
       <View style={styles.header}>
-        <View style={styles.headerSpacer} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Chiudi"
           onPress={() => router.back()}
           hitSlop={12}
-          style={styles.closeButton}
         >
-          <Ionicons name="close" size={22} color="#1A2B48" />
+          <Ionicons name="close" size={26} color={colors.text} />
         </Pressable>
       </View>
 
       <View style={styles.hero}>
-        <Text style={styles.title}>
-          Capisci {dog.name} ogni giorno senza limiti
-        </Text>
+        <View style={styles.heroIcon}>
+          <Ionicons name="star" size={36} color={colors.primary} />
+        </View>
+        <Text style={styles.title}>Conosci {dog.name} ancora meglio</Text>
         <Text style={styles.subtitle}>
           Sblocca più analisi e tutta la storia di {dog.name}, senza rinunciare
           al piano gratuito.
@@ -111,20 +113,20 @@ export default function PaywallScreen() {
       {/* Grace period (sez. 6/21.1): banner gentile, nessuna urgenza artificiale */}
       {gracePeriod && (
         <View style={styles.graceBanner} accessibilityLiveRegion="polite">
-          <Ionicons name="heart-outline" size={18} color="#2DAAAB" />
+          <Ionicons name="heart-outline" size={18} color={colors.primary} />
           <Text style={styles.graceText}>{entitlementMock.graceMessage}</Text>
         </View>
       )}
 
       {/* Benefit list */}
-      <View style={styles.benefitsCard}>
+      <Card style={styles.benefitsCard}>
         {benefits.map((benefit) => (
           <View key={benefit} style={styles.benefitRow}>
-            <Ionicons name="checkmark-circle" size={20} color="#2DAAAB" />
+            <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
             <Text style={styles.benefitText}>{benefit}</Text>
           </View>
         ))}
-      </View>
+      </Card>
 
       {/* Piani (dal mock entitlements; in produzione: RevenueCat offerings) */}
       {plans.map((plan) => {
@@ -140,11 +142,7 @@ export default function PaywallScreen() {
               <View style={styles.planText}>
                 <View style={styles.planTitleRow}>
                   <Text style={styles.planTitle}>{plan.title}</Text>
-                  {plan.badge ? (
-                    <View style={styles.recommendedBadge}>
-                      <Text style={styles.recommendedBadgeText}>{plan.badge}</Text>
-                    </View>
-                  ) : null}
+                  {plan.badge && <Chip label={plan.badge} tone="success" />}
                 </View>
                 <Text style={styles.planPrice}>
                   {plan.price}{' '}
@@ -154,7 +152,7 @@ export default function PaywallScreen() {
               <Ionicons
                 name={active ? 'radio-button-on' : 'radio-button-off'}
                 size={22}
-                color={active ? '#2DAAAB' : colors.textMuted}
+                color={active ? colors.primary : colors.textMuted}
               />
             </View>
           </Pressable>
@@ -162,16 +160,23 @@ export default function PaywallScreen() {
       })}
 
       <Button
-        title="Acquista"
-        onPress={explainStorePending}
+        title={canPurchase ? 'Acquista' : 'Continua in beta'}
+        onPress={canPurchase ? explainStorePending : () => router.back()}
         style={styles.buy}
       />
-      <Button
-        title="Ripristina acquisto"
-        variant="outline"
-        onPress={explainStorePending}
-        style={styles.restore}
-      />
+      {canPurchase ? (
+        <Button
+          title="Ripristina acquisto"
+          variant="outline"
+          onPress={explainStorePending}
+          style={styles.restore}
+        />
+      ) : (
+        <Text style={styles.legal}>
+          Gli acquisti arrivano a breve. Per ora puoi continuare senza
+          interrompere le analisi.
+        </Text>
+      )}
 
       {/* Il piano FREE resta sempre visibile come scelta (no dark pattern) */}
       <Pressable
@@ -192,68 +197,54 @@ export default function PaywallScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    backgroundColor: '#F8FAFC',
-  },
   graceBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: '#E0F7F6',
-    borderRadius: 16,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   graceText: {
     flex: 1,
     fontSize: typography.size.sm,
-    color: '#1A2B48',
+    color: colors.text,
     lineHeight: typography.size.sm * typography.lineHeight.normal,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
     marginBottom: spacing.sm,
   },
-  headerSpacer: {
-    flex: 1,
+  hero: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
+  heroIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  hero: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
   },
   title: {
     fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
-    color: '#1A2B48',
-    textAlign: 'left',
+    color: colors.text,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: typography.size.sm,
     color: colors.textSecondary,
-    textAlign: 'left',
+    textAlign: 'center',
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     marginTop: spacing.sm,
   },
   benefitsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    padding: spacing.lg,
     marginBottom: spacing.lg,
-    gap: spacing.md,
-    ...shadows.card,
+    gap: spacing.sm,
   },
   benefitRow: {
     flexDirection: 'row',
@@ -263,23 +254,20 @@ const styles = StyleSheet.create({
   benefitText: {
     flex: 1,
     fontSize: typography.size.sm,
-    color: '#1A2B48',
-    lineHeight: typography.size.sm * typography.lineHeight.normal,
+    color: colors.text,
   },
   planCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     padding: spacing.lg,
     marginBottom: spacing.sm,
     borderWidth: 2,
-    borderColor: '#EDF2F7',
-    ...shadows.card,
+    borderColor: colors.border,
   },
   planCardActive: {
-    borderColor: '#2DAAAB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.primary,
   },
   planText: {
     flex: 1,
@@ -288,28 +276,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flexWrap: 'wrap',
   },
   planTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-    color: '#1A2B48',
-  },
-  recommendedBadge: {
-    backgroundColor: '#E0F7F6',
-    borderRadius: radius.full,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  recommendedBadgeText: {
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-    color: '#2DAAAB',
+    color: colors.text,
   },
   planPrice: {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    color: '#1A2B48',
+    color: colors.text,
     marginTop: spacing.xxs,
   },
   planPer: {
@@ -330,7 +306,7 @@ const styles = StyleSheet.create({
   freeChoiceText: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: '#2DAAAB',
+    color: colors.primary,
     textAlign: 'center',
   },
   legal: {

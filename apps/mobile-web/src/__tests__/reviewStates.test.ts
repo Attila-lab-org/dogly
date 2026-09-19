@@ -11,7 +11,11 @@
 import { resolveEntryRoute } from '../features/auth/sessionRouting';
 import { sessionMock } from '../mocks/session';
 import { demoFlags } from '../mocks/demo';
-import { entitlementMock, paywallOfferingMock } from '../mocks/entitlements';
+import {
+  entitlementMock,
+  paywallOfferingMock,
+  purchasesEnabled,
+} from '../mocks/entitlements';
 import { fecalEventsMock } from '../mocks/secondary';
 import { diaryEntriesMock, homeDataMock } from '../mocks/core';
 
@@ -68,6 +72,7 @@ describe('paywall entitlements centralizzati (sez. 4.1 / 21)', () => {
     expect(['active', 'grace_period']).toContain(entitlementMock.status);
     expect(entitlementMock.graceMessage.length).toBeGreaterThan(0);
     expect(typeof paywallOfferingMock.storeAvailable).toBe('boolean');
+    expect(purchasesEnabled).toBe(false);
   });
 });
 

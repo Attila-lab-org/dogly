@@ -27,6 +27,28 @@ async def test_reserve_commit_refund_cycle(state: AppState):
     assert ledger.behavior_reserved == 0 and ledger.behavior_used == 1
 
 
+async def test_production_does_not_block_when_purchases_are_closed(
+    state: AppState, monkeypatch: pytest.MonkeyPatch
+):
+    from app.config import Settings, get_settings
+    from app.domains import billing
+
+    monkeypatch.setattr(
+        billing,
+        "_quota_blocks_when_exhausted",
+        lambda: False,
+    )
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        "app.config.get_settings",
+        lambda: Settings(app_env="production", purchases_enabled=False),
+    )
+    quota = QuotaService(state.store)
+    user = "user-quota-beta"
+    for _ in range(6):
+        await quota.reserve(user, AnalysisDomain.BEHAVIOR)
+
+
 async def test_free_plan_exhaustion(state: AppState):
     quota = QuotaService(state.store)
     user = "user-quota-2"  # FREE default: 3 behavior / month

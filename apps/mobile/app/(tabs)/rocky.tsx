@@ -52,6 +52,7 @@ import {
   listFeedingPeriods,
   listFoods,
 } from '@/features/nutrition/api';
+import { usePersonalPatterns } from '@/features/patterns/api';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -110,6 +111,10 @@ export default function DogProfileTabScreen() {
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
+  const patternsQuery = usePersonalPatterns(dog.id);
+  const learnedPatterns = patternsQuery.patterns
+    .filter((pattern) => pattern.state !== 'ARCHIVED')
+    .slice(0, 3);
   const storiesQuery = useQuery({
     queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
     queryFn: () => fetchOwnerStories(dog.id),
@@ -192,6 +197,40 @@ export default function DogProfileTabScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            Quello che ho imparato su {dog.name}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Vedi tutti i pattern di ${dog.name}`}
+            onPress={() => router.push('/patterns')}
+            hitSlop={8}
+          >
+            <Text style={styles.seeAll}>Vedi tutto</Text>
+          </Pressable>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Abitudini imparate su ${dog.name}`}
+          onPress={() =>
+            learnedPatterns[0]
+              ? router.push(`/patterns/${learnedPatterns[0].id}`)
+              : router.push('/patterns')
+          }
+          style={styles.detailsRow}
+        >
+          <View style={styles.detailsIcon}>
+            <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+          </View>
+          <Text style={styles.detailsTitle} numberOfLines={2}>
+            {learnedPatterns.length
+              ? learnedPatterns.map((pattern) => pattern.title).join(' · ')
+              : `Con ogni momento capisco meglio ${dog.name}.`}
+          </Text>
+          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+        </Pressable>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>I suoi momenti</Text>
           <Pressable
@@ -383,18 +422,6 @@ export default function DogProfileTabScreen() {
           </Pressable>
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Modifica i dettagli di ${dog.name}`}
-          onPress={() => router.push(`/dogs/${dog.id}/edit` as never)}
-          style={styles.detailsRow}
-        >
-          <View style={styles.detailsIcon}>
-            <Ionicons name="paw-outline" size={20} color={colors.primary} />
-          </View>
-          <Text style={styles.detailsTitle}>Modifica profilo</Text>
-          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-        </Pressable>
       </ScrollView>
     </View>
   );

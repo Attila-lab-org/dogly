@@ -36,6 +36,7 @@ import {
   enqueueAndUploadBehaviorClip,
 } from '@/features/behavior/upload';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
+import { purchasesEnabled } from '@/mocks/entitlements';
 import {
   startWebVideoRecording,
   type WebVideoRecording,
@@ -338,8 +339,7 @@ export default function BehaviorCaptureScreen() {
         });
         router.replace(`/behavior/processing/${eventId}`);
       } catch (err) {
-        if (isQuotaExhaustedError(err)) {
-          // Quota esaurita (402 QUOTA_EXHAUSTED): paywall, non errore generico.
+        if (isQuotaExhaustedError(err) && purchasesEnabled) {
           router.replace('/paywall');
           return;
         }
@@ -387,7 +387,7 @@ export default function BehaviorCaptureScreen() {
       });
       router.replace(`/behavior/processing/${eventId}`);
     } catch (err) {
-      if (isQuotaExhaustedError(err)) {
+      if (isQuotaExhaustedError(err) && purchasesEnabled) {
         router.replace('/paywall');
         return;
       }

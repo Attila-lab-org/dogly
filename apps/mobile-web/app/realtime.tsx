@@ -167,7 +167,12 @@ export default function RealtimeScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => router.push('/behavior/capture')}
+                  onPress={() => {
+                    void (async () => {
+                      await realtime.disconnect();
+                      router.replace('/behavior/capture');
+                    })();
+                  }}
                   style={styles.muteButton}
                 >
                   <Ionicons name="videocam" size={17} color={colors.text} />
@@ -195,7 +200,12 @@ export default function RealtimeScreen() {
                 )}
                 {!!realtime.lastTurn?.behavior_handoff_href && (
                   <Pressable
-                    onPress={() => router.push('/behavior/capture')}
+                    onPress={() => {
+                    void (async () => {
+                      await realtime.disconnect();
+                      router.replace('/behavior/capture');
+                    })();
+                  }}
                     style={styles.videoButton}
                   >
                     <Ionicons name="videocam" size={18} color="#FFFFFF" />

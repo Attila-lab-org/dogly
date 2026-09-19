@@ -219,9 +219,9 @@ export default function TopBar() {
       </div>
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
-        <span className="pill pill-green">
-          <span className="dot" style={{ background: "var(--green)" }} />
-          PRODUZIONE
+        <span className="pill" style={{ background: "#FEF3C7", color: "#92400E" }}>
+          <span className="dot" style={{ background: "#D97706" }} />
+          DEMO
         </span>
 
         <button

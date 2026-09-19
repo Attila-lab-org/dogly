@@ -20,6 +20,16 @@ from app.domains.repository import (
 )
 
 
+def _quota_blocks_when_exhausted() -> bool:
+    """Enforce hard limits only when the user can actually upgrade."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    if settings.purchases_enabled:
+        return True
+    return settings.app_env.strip().lower() not in {"staging", "production"}
+
+
 class QuotaExceeded(ApiError):
     def __init__(self, domain: AnalysisDomain) -> None:
         super().__init__(
@@ -70,18 +80,25 @@ class QuotaService:
                 domain=domain.value,
                 reference_id=reference_id,
             )
-            if not payload.get("granted", False) and payload.get("reason") not in (
+            denied = not payload.get("granted", False) and payload.get(
+                "reason"
+            ) not in (
                 "ALREADY_RESERVED",
                 "RESERVED",
-            ):
+            )
+            if denied and _quota_blocks_when_exhausted():
                 raise QuotaExceeded(domain)
             return self._store.ensure_ledger(user_id)
 
         async with self._store.lock:
             ledger = self._store.ensure_ledger(user_id)
             limit_f, used_f, reserved_f = _fields(domain)
-            if getattr(ledger, used_f) + getattr(ledger, reserved_f) >= getattr(ledger, limit_f):
-                raise QuotaExceeded(domain)
+            if getattr(ledger, used_f) + getattr(ledger, reserved_f) >= getattr(
+                ledger, limit_f
+            ):
+                if _quota_blocks_when_exhausted():
+                    raise QuotaExceeded(domain)
+                return ledger
             setattr(ledger, reserved_f, getattr(ledger, reserved_f) + 1)
             return ledger
 

@@ -5,6 +5,12 @@ Fonte di precedenza (Spec V1 sez. 0.1): Spec V1 > Master Blueprint V4 > Product 
 scritte; solo il Product Owner può riaprirle. Questo file registra ADR con data e
 razionale, e le decisioni ancora aperte (O-01…O-09) **senza inventare risoluzioni**.
 
+**Sopravvivenza rispetto a Product Spec V2:** il fallback consumer audio-only
+per l’analisi comportamentale è **superato**. Video interpreta il momento.
+Realtime è una conversazione con DOGly, non una seconda modalità della stessa
+analisi. Profilo → Pattern/Knowledge è memoria imparata da DOGly, distinta da
+“Quello che mi hai raccontato”.
+
 ## ADR
 
 ### ADR-001 — Stack tecnologico LOCKED (Spec V1)

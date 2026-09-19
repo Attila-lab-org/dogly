@@ -1,7 +1,6 @@
-// Read-model mock per la V0 del Control Center.
-// TODO(V1): sostituire questi export con fetch verso gli endpoint dedicati
-// /v1/admin/* (read-model con RBAC server-side — vedi docs/ADMIN_CONTROL_CENTER.md).
-// Le shape in lib/types.ts sono pensate per mappare 1:1 quelle risposte.
+// DEMO ONLY — dati finti per il prototipo del Control Center.
+// Non sono metriche di produzione. Non sostituire questo file con fetch
+// /v1/admin/* finché non esiste auth/RBAC reale.
 
 import type {
   ActivityItem,

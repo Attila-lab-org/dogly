@@ -18,6 +18,7 @@ import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isQuotaExhaustedError } from '@/features/behavior/api';
+import { purchasesEnabled } from '@/mocks/entitlements';
 import {
   discardPendingBehaviorClip,
   enqueueAndUploadBehaviorClip,
@@ -128,7 +129,7 @@ export default function BehaviorUploadingScreen() {
       router.replace(`/behavior/processing/${eventId}`);
     } catch (err) {
       console.error('Behavior upload failed', err);
-      if (isQuotaExhaustedError(err)) {
+      if (isQuotaExhaustedError(err) && purchasesEnabled) {
         if (mountedRef.current) router.replace('/paywall');
         return;
       }

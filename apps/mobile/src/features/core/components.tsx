@@ -269,6 +269,14 @@ export function FeedbackButtons({
                     : colors.textSecondary
                 }
               />
+              <Text
+                style={[
+                  styles.feedbackOptionLabel,
+                  selected && { color: option.selectedBorder },
+                ]}
+              >
+                {option.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -784,13 +792,21 @@ const styles = StyleSheet.create({
   },
   feedbackOption: {
     flex: 1,
-    minHeight: 56,
+    minHeight: 64,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.xs,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceMuted,
+  },
+  feedbackOptionLabel: {
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   feedbackOptionPressed: {
     opacity: 0.85,

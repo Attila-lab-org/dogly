@@ -97,6 +97,9 @@ class Settings(BaseSettings):
 
     # --- Billing ---
     revenuecat_webhook_secret: str = ""
+    # Until RevenueCat is live, production must not hard-block analysis
+    # behind a paywall that cannot complete a purchase.
+    purchases_enabled: bool = False
 
     # --- Async processing / private worker ingress (SPEC_AMENDMENT_V1.1) ---
     job_queue_backend: str = "fake"  # "fake" | "vercel_workflows"

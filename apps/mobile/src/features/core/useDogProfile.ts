@@ -77,6 +77,7 @@ export function useDogProfile(): DogProfileState {
     queryFn: listDogs,
     enabled,
     staleTime: 30_000,
+    placeholderData: (previous) => previous,
   });
 
   const dog = useMemo(() => {
@@ -85,7 +86,9 @@ export function useDogProfile(): DogProfileState {
       (primaryDogId
         ? items.find((d) => d.id === primaryDogId)
         : undefined) ?? items[0];
-    return preferred ? mapApiDogToProfile(preferred) : emptyDog();
+    if (preferred) return mapApiDogToProfile(preferred);
+    if (lastDog.id) return lastDog;
+    return emptyDog();
   }, [query.data, primaryDogId]);
 
   const knowledgeQuery = useQuery({
@@ -97,7 +100,7 @@ export function useDogProfile(): DogProfileState {
 
   const resolvedKnowledgeScore = mapKnowledgeScore(knowledgeQuery.data);
 
-  lastDog = dog;
+  if (dog.id) lastDog = dog;
   lastKnowledgeScore = resolvedKnowledgeScore;
   return { dog, knowledgeScore: resolvedKnowledgeScore };
 }

@@ -139,18 +139,12 @@ export default function NotificationSettingsScreen() {
             <View style={styles.copy}>
               <View style={styles.titleRow}>
                 <Text style={styles.title}>{option.title}</Text>
-                {option.comingSoon ? (
-                  <Chip label="In arrivo" tone="neutral" />
-                ) : null}
               </View>
               <Text style={styles.description}>{option.description}</Text>
-              {option.comingSoon ? (
-                <Text style={styles.comingSoonNote}>
-                  La preferenza viene salvata ora; l’invio arriva con una
-                  prossima versione.
-                </Text>
-              ) : null}
             </View>
+            {option.comingSoon ? (
+              <Chip label="In arrivo" tone="neutral" />
+            ) : (
             <Switch
               value={preferences[option.key]}
               onValueChange={(value) =>
@@ -160,6 +154,7 @@ export default function NotificationSettingsScreen() {
               thumbColor="#FFFFFF"
               accessibilityLabel={option.title}
             />
+            )}
           </View>
         ))}
       </Card>

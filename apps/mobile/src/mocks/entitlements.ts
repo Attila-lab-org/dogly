@@ -30,6 +30,9 @@ export interface PaywallOffering {
   plans: PaywallPlan[];
 }
 
+/** False until RevenueCat can complete a real purchase. */
+export const purchasesEnabled = false;
+
 export const paywallOfferingMock: PaywallOffering = {
   storeAvailable: true,
   benefits: [
