@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
 from app.api.routes.realtime import _is_owned_active_voice_session, _welcome_text
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
@@ -22,6 +21,7 @@ from app.domains.realtime_orchestrator import (
     orchestrate_realtime_turn,
 )
 from app.providers.openai_realtime import realtime_session_config
+
 from tests.conftest import create_dog
 
 
@@ -80,12 +80,12 @@ def test_voice_session_speaks_without_waiting_for_tools() -> None:
     vad = config["audio"]["input"]["turn_detection"]
     assert vad["type"] == "server_vad"
     assert vad["create_response"] is True
-    assert vad["interrupt_response"] is True
+    assert vad["interrupt_response"] is False
     assert vad["silence_duration_ms"] == 600
     assert vad["threshold"] == 0.65
     assert config["audio"]["output"]["voice"] == "coral"
     assert config["audio"]["output"]["speed"] == 1.0
-    assert config["max_output_tokens"] == 180
+    assert config["max_output_tokens"] == 512
 
 
 def test_voice_brief_is_personal_and_ready_to_speak() -> None:

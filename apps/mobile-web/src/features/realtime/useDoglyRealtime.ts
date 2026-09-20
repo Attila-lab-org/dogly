@@ -28,6 +28,8 @@ type RealtimeServerEvent = {
   error?: { message?: string };
 };
 
+type ResponsePhase = 'idle' | 'generating' | 'draining' | 'cooldown';
+
 const MIC_CONSTRAINTS: MediaStreamConstraints = {
   audio: {
     echoCancellation: true,
@@ -62,12 +64,12 @@ export function useDoglyRealtime(dogId: string) {
   const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
   const userTranscriptRef = useRef('');
   const assistantRef = useRef('');
+  const assistantOutputRef = useRef('');
+  const assistantFallbackRef = useRef('');
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const greetingRef = useRef(false);
-  const responseOpenRef = useRef(false);
-  const responseAudioPendingRef = useRef(false);
+  const responsePhaseRef = useRef<ResponsePhase>('idle');
   const responseAudioDrainedRef = useRef(false);
-  const responseFinalizedRef = useRef(false);
   const assistantTranscriptSourceRef = useRef<'output' | 'audio' | null>(null);
   const pendingTextQueueRef = useRef<string[]>([]);
   const responseDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,10 +91,10 @@ export function useDoglyRealtime(dogId: string) {
     remoteTrackRef.current = null;
     persistQueueRef.current = Promise.resolve();
     greetingRef.current = false;
-    responseOpenRef.current = false;
-    responseAudioPendingRef.current = false;
+    responsePhaseRef.current = 'idle';
     responseAudioDrainedRef.current = false;
-    responseFinalizedRef.current = false;
+    assistantOutputRef.current = '';
+    assistantFallbackRef.current = '';
     assistantTranscriptSourceRef.current = null;
     pendingTextQueueRef.current = [];
     if (responseDrainTimerRef.current) clearTimeout(responseDrainTimerRef.current);
@@ -109,11 +111,13 @@ export function useDoglyRealtime(dogId: string) {
 
   const releaseMicAfterOutput = useCallback(() => {
     if (micReleaseTimerRef.current) clearTimeout(micReleaseTimerRef.current);
+    responsePhaseRef.current = 'cooldown';
     setMicEnabled(false);
     setVoiceState('speaking');
     micReleaseTimerRef.current = setTimeout(() => {
       micReleaseTimerRef.current = null;
-      if (!responseOpenRef.current && !responseAudioPendingRef.current) {
+      if (responsePhaseRef.current === 'cooldown') {
+        responsePhaseRef.current = 'idle';
         setMicEnabled(true);
         setVoiceState('listening');
       }
@@ -155,14 +159,6 @@ export function useDoglyRealtime(dogId: string) {
     });
   }, []);
 
-  const cancelOpenResponse = useCallback(() => {
-    const channel = channelRef.current;
-    if (!channel || channel.readyState !== 'open') return;
-    if (responseOpenRef.current) {
-      channel.send(JSON.stringify({ type: 'response.cancel' }));
-    }
-  }, []);
-
   const startTextResponse = useCallback((text: string) => {
     const channel = channelRef.current;
     if (!channel || channel.readyState !== 'open' || greetingRef.current) return false;
@@ -170,12 +166,13 @@ export function useDoglyRealtime(dogId: string) {
       clearTimeout(micReleaseTimerRef.current);
       micReleaseTimerRef.current = null;
     }
-    responseAudioPendingRef.current = true;
+    responsePhaseRef.current = 'generating';
     responseAudioDrainedRef.current = false;
-    responseFinalizedRef.current = false;
     setMicEnabled(false);
     userTranscriptRef.current = text;
     assistantRef.current = '';
+    assistantOutputRef.current = '';
+    assistantFallbackRef.current = '';
     assistantTranscriptSourceRef.current = null;
     setTranscript(text);
     setAssistantDraft('');
@@ -195,7 +192,6 @@ export function useDoglyRealtime(dogId: string) {
         response: { output_modalities: ['audio'] },
       }),
     );
-    responseOpenRef.current = true;
     setVoiceState('speaking');
     return true;
   }, [setMicEnabled]);
@@ -206,29 +202,25 @@ export function useDoglyRealtime(dogId: string) {
       if (!channel || channel.readyState !== 'open' || greetingRef.current) {
         return false;
       }
-      if (responseOpenRef.current || responseAudioPendingRef.current) {
+      if (responsePhaseRef.current !== 'idle') {
         pendingTextQueueRef.current.push(text);
         setTranscript(text);
         setAssistantDraft('');
         setVoiceState('thinking');
-        if (responseOpenRef.current) cancelOpenResponse();
         return true;
       }
       return startTextResponse(text);
     },
-    [cancelOpenResponse, setMicEnabled, startTextResponse],
+    [startTextResponse],
   );
 
   const finalizeResponse = useCallback(() => {
     if (
-      responseOpenRef.current ||
-      !responseAudioPendingRef.current ||
-      responseFinalizedRef.current
+      responsePhaseRef.current !== 'draining'
     ) {
       return;
     }
-    responseFinalizedRef.current = true;
-    responseAudioPendingRef.current = false;
+    responsePhaseRef.current = 'idle';
     responseAudioDrainedRef.current = true;
     if (responseDrainTimerRef.current) {
       clearTimeout(responseDrainTimerRef.current);
@@ -255,13 +247,11 @@ export function useDoglyRealtime(dogId: string) {
           if (greetingRef.current) return;
           // The track is muted while DOGly speaks. Ignore residual VAD events
           // so speaker bleed cannot erase the answer or create a second turn.
-          if (
-            responseOpenRef.current ||
-            responseAudioPendingRef.current ||
-            micReleaseTimerRef.current
-          ) break;
+          if (responsePhaseRef.current !== 'idle' || micReleaseTimerRef.current) break;
           userTranscriptRef.current = '';
           assistantRef.current = '';
+          assistantOutputRef.current = '';
+          assistantFallbackRef.current = '';
           assistantTranscriptSourceRef.current = null;
           setTranscript('');
           setAssistantDraft('');
@@ -280,22 +270,22 @@ export function useDoglyRealtime(dogId: string) {
           }
           break;
         case 'response.created':
-          responseOpenRef.current = true;
-          responseAudioPendingRef.current = true;
+          responsePhaseRef.current = 'generating';
           responseAudioDrainedRef.current = false;
-          responseFinalizedRef.current = false;
           if (micReleaseTimerRef.current) {
             clearTimeout(micReleaseTimerRef.current);
             micReleaseTimerRef.current = null;
           }
           assistantTranscriptSourceRef.current = null;
+          assistantOutputRef.current = '';
+          assistantFallbackRef.current = '';
           setMicEnabled(false);
           break;
         case 'response.output_audio_transcript.delta':
-          if (assistantTranscriptSourceRef.current === 'audio') break;
           assistantTranscriptSourceRef.current = 'output';
           if (event.delta) {
-            assistantRef.current += event.delta;
+            assistantOutputRef.current += event.delta;
+            assistantRef.current = assistantOutputRef.current;
             setAssistantDraft(assistantRef.current);
           }
           setVoiceState('speaking');
@@ -304,16 +294,17 @@ export function useDoglyRealtime(dogId: string) {
           if (assistantTranscriptSourceRef.current === 'output') break;
           assistantTranscriptSourceRef.current = 'audio';
           if (event.delta) {
-            assistantRef.current += event.delta;
+            assistantFallbackRef.current += event.delta;
+            assistantRef.current = assistantFallbackRef.current;
             setAssistantDraft(assistantRef.current);
           }
           setVoiceState('speaking');
           break;
         case 'response.output_audio_transcript.done':
-          if (assistantTranscriptSourceRef.current === 'audio') break;
           assistantTranscriptSourceRef.current = 'output';
           if (event.transcript) {
-            assistantRef.current = event.transcript;
+            assistantOutputRef.current = event.transcript;
+            assistantRef.current = assistantOutputRef.current;
             setAssistantDraft(event.transcript);
           }
           break;
@@ -321,13 +312,14 @@ export function useDoglyRealtime(dogId: string) {
           if (assistantTranscriptSourceRef.current === 'output') break;
           assistantTranscriptSourceRef.current = 'audio';
           if (event.transcript) {
-            assistantRef.current = event.transcript;
+            assistantFallbackRef.current = event.transcript;
+            assistantRef.current = assistantFallbackRef.current;
             setAssistantDraft(event.transcript);
           }
           break;
         case 'response.done':
-          if (!responseOpenRef.current) break;
-          responseOpenRef.current = false;
+          if (responsePhaseRef.current !== 'generating') break;
+          responsePhaseRef.current = 'draining';
           // `response.done` is not the end of WebRTC playback. Wait for the
           // output buffer to drain, with a bounded fallback for older clients.
           if (responseAudioDrainedRef.current) {
@@ -343,14 +335,12 @@ export function useDoglyRealtime(dogId: string) {
           break;
         case 'output_audio_buffer.stopped':
           responseAudioDrainedRef.current = true;
-          if (!responseOpenRef.current) finalizeResponse();
+          if (responsePhaseRef.current === 'draining') finalizeResponse();
           break;
         case 'response.cancelled':
-          if (!responseOpenRef.current && !responseAudioPendingRef.current) break;
-          responseOpenRef.current = false;
-          responseAudioPendingRef.current = false;
+          if (responsePhaseRef.current === 'idle') break;
+          responsePhaseRef.current = 'idle';
           responseAudioDrainedRef.current = true;
-          responseFinalizedRef.current = true;
           if (responseDrainTimerRef.current) {
             clearTimeout(responseDrainTimerRef.current);
             responseDrainTimerRef.current = null;
@@ -368,6 +358,8 @@ export function useDoglyRealtime(dogId: string) {
           }
           userTranscriptRef.current = '';
           assistantRef.current = '';
+          assistantOutputRef.current = '';
+          assistantFallbackRef.current = '';
           assistantTranscriptSourceRef.current = null;
           setAssistantDraft('');
           setMicEnabled(true);
@@ -435,9 +427,8 @@ export function useDoglyRealtime(dogId: string) {
       });
       channel.addEventListener('open', () => {
         greetingRef.current = true;
-        responseAudioPendingRef.current = true;
+        responsePhaseRef.current = 'generating';
         responseAudioDrainedRef.current = false;
-        responseFinalizedRef.current = false;
         setVoiceState('speaking');
         channel.send(
           JSON.stringify({
@@ -450,7 +441,6 @@ export function useDoglyRealtime(dogId: string) {
             },
           }),
         );
-        responseOpenRef.current = true;
       });
       channel.addEventListener('close', () => setVoiceState('idle'));
 
@@ -523,7 +513,7 @@ export function useDoglyRealtime(dogId: string) {
     mutedByUserRef.current = !mutedByUserRef.current;
     if (mutedByUserRef.current) {
       setMicEnabled(false);
-    } else if (!responseOpenRef.current && !responseAudioPendingRef.current) {
+    } else if (responsePhaseRef.current === 'idle') {
       setMicEnabled(true);
     }
     setMuted(mutedByUserRef.current);

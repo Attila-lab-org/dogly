@@ -29,12 +29,17 @@ def realtime_session_config(settings: Settings, *, instructions: str) -> dict[st
                     "prefix_padding_ms": 280,
                     "silence_duration_ms": 600,
                     "create_response": True,
-                    "interrupt_response": True,
+                    # DOGly is half-duplex: the microphone is closed while it
+                    # speaks, so a VAD blip must never cut a sentence short.
+                    "interrupt_response": False,
                 },
             },
             "output": {"voice": settings.realtime_voice, "speed": 1.0},
         },
-        "max_output_tokens": 180,
+        # Keep a generous ceiling so a valid Italian sentence cannot be cut by
+        # the transport. The spoken-style instructions keep normal answers
+        # short; this is a safety ceiling, not a target length.
+        "max_output_tokens": 512,
         "tracing": {
             "workflow_name": "DOGly Realtime",
             "metadata": {"mode": "speech-to-speech"},
