@@ -15,6 +15,9 @@ export type WebPickedImage = {
   bytes: number;
 };
 
+const MAX_DIMENSION = 2000;
+const JPEG_QUALITY = 0.86;
+
 const ALLOWED_MIME: Record<string, WebImageMime> = {
   'image/jpeg': 'image/jpeg',
   'image/jpg': 'image/jpeg',
@@ -29,7 +32,20 @@ export function normalizeImageMime(value: string | undefined): WebImageMime {
 
 async function fileToAllowedImage(file: File): Promise<WebPickedImage> {
   const type = (file.type ?? '').split(';', 1)[0].toLowerCase();
-  if (type in ALLOWED_MIME && file.size > 0) {
+  if (typeof createImageBitmap !== 'function') {
+    return {
+      uri: URL.createObjectURL(file),
+      mimeType: ALLOWED_MIME[type] ?? 'image/jpeg',
+      bytes: Math.max(1, file.size),
+    };
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const largestSide = Math.max(bitmap.width, bitmap.height);
+  // Keep small files byte-for-byte: this avoids unnecessary quality loss while
+  // still guaranteeing that large camera images are bounded before upload.
+  if (type in ALLOWED_MIME && file.size > 0 && largestSide <= MAX_DIMENSION) {
+    bitmap.close();
     return {
       uri: URL.createObjectURL(file),
       mimeType: ALLOWED_MIME[type],
@@ -37,18 +53,10 @@ async function fileToAllowedImage(file: File): Promise<WebPickedImage> {
     };
   }
 
-  if (typeof createImageBitmap !== 'function') {
-    return {
-      uri: URL.createObjectURL(file),
-      mimeType: 'image/jpeg',
-      bytes: Math.max(1, file.size),
-    };
-  }
-
-  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_DIMENSION / largestSide);
   const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
   const context = canvas.getContext('2d');
   if (!context) {
     bitmap.close();
@@ -57,16 +65,17 @@ async function fileToAllowedImage(file: File): Promise<WebPickedImage> {
   context.drawImage(bitmap, 0, 0);
   bitmap.close();
 
+  const outputType = type === 'image/png' ? 'image/png' : 'image/jpeg';
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (next) => (next ? resolve(next) : reject(new Error('Conversione foto fallita.'))),
-      'image/jpeg',
-      0.92,
+      outputType,
+      outputType === 'image/png' ? undefined : JPEG_QUALITY,
     );
   });
   return {
     uri: URL.createObjectURL(blob),
-    mimeType: 'image/jpeg',
+    mimeType: outputType,
     bytes: Math.max(1, blob.size),
   };
 }

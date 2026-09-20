@@ -1,7 +1,25 @@
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as Sharing from 'expo-sharing';
-import { Share, Alert, Platform } from 'react-native';
+import { Share, Alert, Image, Platform } from 'react-native';
 import type { AlbumPhoto, SharePhotoPayload } from './types';
+
+const MAX_IMAGE_DIMENSION = 2000;
+const IMAGE_COMPRESSION = 0.82;
+
+async function prepareNativeImage(uri: string): Promise<string> {
+  const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) =>
+    Image.getSize(uri, (nextWidth, nextHeight) => resolve({ width: nextWidth, height: nextHeight }), reject),
+  );
+  const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+  if (scale === 1) return uri;
+  const result = await manipulateAsync(
+    uri,
+    [{ resize: { width: Math.round(width * scale), height: Math.round(height * scale) } }],
+    { compress: IMAGE_COMPRESSION, format: SaveFormat.JPEG },
+  );
+  return result.uri;
+}
 
 export async function pickAlbumPhoto(): Promise<string | null> {
   // Android usa il Photo Picker di sistema e non richiede accesso generale
@@ -20,13 +38,13 @@ export async function pickAlbumPhoto(): Promise<string | null> {
   try {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.9,
+      quality: IMAGE_COMPRESSION,
       allowsEditing: false,
     });
     if (result.canceled || !result.assets[0]) {
       return null;
     }
-    return result.assets[0].uri;
+    return prepareNativeImage(result.assets[0].uri);
   } catch {
     Alert.alert(
       'Galleria non disponibile',
@@ -48,14 +66,14 @@ export async function takeStoryPhoto(): Promise<string | null> {
   }
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ['images'],
-    quality: 0.85,
+    quality: IMAGE_COMPRESSION,
     allowsEditing: true,
     aspect: [1, 1],
   });
   if (result.canceled || !result.assets[0]) {
     return null;
   }
-  return result.assets[0].uri;
+  return prepareNativeImage(result.assets[0].uri);
 }
 
 export async function pickAvatarPhoto(): Promise<string | null> {

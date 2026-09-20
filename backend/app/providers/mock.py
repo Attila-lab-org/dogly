@@ -232,6 +232,16 @@ class MockStorageProvider:
     async def create_signed_read_url(self, *, bucket: str, path: str, ttl_seconds: int) -> str:
         return f"https://storage.mock.local/{bucket}/read/{path}?ttl={ttl_seconds}"
 
+    async def create_signed_read_urls(
+        self, *, bucket: str, paths: list[str], ttl_seconds: int
+    ) -> dict[str, str]:
+        return {
+            path: await self.create_signed_read_url(
+                bucket=bucket, path=path, ttl_seconds=ttl_seconds
+            )
+            for path in paths
+        }
+
     async def object_exists(self, *, bucket: str, path: str, expected_bytes: int | None = None) -> bool:
         return True  # mock: object validation always succeeds
 

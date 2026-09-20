@@ -141,6 +141,42 @@ class SupabaseStorageProvider:
             return str(signed)
         return f"{self._base}/storage/v1{signed}"
 
+    async def create_signed_read_urls(
+        self, *, bucket: str, paths: list[str], ttl_seconds: int
+    ) -> dict[str, str]:
+        """Create a batch of signed URLs in one Storage request."""
+        if not paths:
+            return {}
+        url = f"{self._base}/storage/v1/object/sign/{bucket}"
+        try:
+            response = await self._client.post(
+                url,
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json={"expiresIn": ttl_seconds, "paths": paths},
+            )
+        except httpx.TransportError as exc:
+            raise TimeoutError("Supabase Storage is temporarily unavailable") from exc
+        if response.status_code in (408, 429) or response.status_code >= 500:
+            raise TimeoutError(f"Supabase Storage upstream {response.status_code}")
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("signedURLs") if isinstance(payload, dict) else payload
+        if not isinstance(rows, list):
+            raise TypeError("Supabase batch signed read response is invalid")
+        result: dict[str, str] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            path = row.get("path")
+            signed = row.get("signedURL") or row.get("signedUrl")
+            if path and signed:
+                result[str(path)] = (
+                    str(signed)
+                    if str(signed).startswith("http")
+                    else f"{self._base}/storage/v1{signed}"
+                )
+        return result
+
     async def aclose(self) -> None:
         if self._owns:
             await self._client.aclose()

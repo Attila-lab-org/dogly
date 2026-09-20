@@ -39,6 +39,25 @@ async def photo_with_url(photo: DogPhotoOut, state: AppState) -> DogPhotoOut:
     return photo.model_copy(update={"photo_url": url})
 
 
+async def photos_with_urls(
+    photos: list[DogPhotoOut], state: AppState
+) -> list[DogPhotoOut]:
+    """Sign gallery photos in one Storage request when the adapter supports it."""
+    batch = getattr(state.storage, "create_signed_read_urls", None)
+    if not callable(batch):
+        return list(await asyncio.gather(*(photo_with_url(photo, state) for photo in photos)))
+    paths = [photo.storage_path for photo in photos]
+    try:
+        urls = await batch(
+            bucket=GALLERY_BUCKET,
+            paths=paths,
+            ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
+        )
+    except Exception:  # noqa: BLE001 -- fallback keeps older adapters working
+        return list(await asyncio.gather(*(photo_with_url(photo, state) for photo in photos)))
+    return [photo.model_copy(update={"photo_url": urls.get(photo.storage_path)}) for photo in photos]
+
+
 async def album_with_cover(
     album: DogAlbumOut, state: AppState, user_id: str
 ) -> DogAlbumOut:
@@ -103,11 +122,7 @@ async def list_dog_photos(
             limit=limit,
             offset=offset,
         )
-    return DogPhotoListResponse(
-        items=list(
-            await asyncio.gather(*(photo_with_url(photo, state) for photo in items))
-        )
-    )
+    return DogPhotoListResponse(items=await photos_with_urls(items, state))
 
 
 @router.post("/dogs/{dog_id}/albums", response_model=DogAlbumOut, status_code=201)
@@ -138,11 +153,7 @@ async def list_photos(album_id: str, state: StateDep, user_id: UserIdDep) -> Dog
         items = await gallery_db.list_photos(state.engine, user_id=user_id, album_id=album_id)
     else:
         items = gallery_domain.list_photos(state.store, user_id=user_id, album_id=album_id)
-    return DogPhotoListResponse(
-        items=list(
-            await asyncio.gather(*(photo_with_url(photo, state) for photo in items))
-        )
-    )
+    return DogPhotoListResponse(items=await photos_with_urls(items, state))
 
 
 @router.post(
