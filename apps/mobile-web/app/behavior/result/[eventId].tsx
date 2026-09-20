@@ -117,17 +117,13 @@ export default function BehaviorResultScreen() {
     );
   }
 
-  const handleFeedback = async (
-    value: FeedbackValue,
-    extras?: { correction_label?: string | null },
-  ) => {
+  const handleFeedback = async (value: FeedbackValue) => {
     setSavingFeedback(true);
     setFeedbackError(null);
     try {
       const saved = await saveBehaviorFeedback(
         result.eventId,
         value,
-        extras,
       );
       setFeedback(saved);
     } catch {
@@ -189,8 +185,8 @@ export default function BehaviorResultScreen() {
           dogName={dog.name}
           feedback={feedback}
           feedbackError={feedbackError}
-          onFeedback={(v, extras) => {
-            if (!savingFeedback) void handleFeedback(v, extras);
+          onFeedback={(v) => {
+            if (!savingFeedback) void handleFeedback(v);
           }}
           careNote={
             !result.baseline_note && analysisContext?.concern === 'off'

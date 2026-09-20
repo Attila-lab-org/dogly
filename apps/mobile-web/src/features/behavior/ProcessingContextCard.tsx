@@ -104,7 +104,7 @@ export function ProcessingContextCard({
   const question = state.locked;
   const helper =
     state.acceptedAnswers.length === 0
-      ? 'Se ho bisogno, ti farò fino a 3 domande mentre analizzo.'
+      ? 'Se mi serve, ti farò una domanda alla volta mentre analizzo.'
       : 'Quello che mi racconti mi aiuta a leggere il contesto.';
   const countCopy = answeredCountCopy(state.acceptedAnswers.length);
 

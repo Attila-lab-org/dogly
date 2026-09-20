@@ -16,6 +16,7 @@ import {
   listDogs,
   mapApiDogToProfile,
   sizeToApi,
+  type ApiDog,
   updateDog,
   type DogCreateBody,
   type DogUpdateBody,
@@ -112,10 +113,13 @@ export function useCreateDogMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: DogCreateBody) => createDog(body),
-    onSuccess: async (dog) => {
+    onSuccess: (dog) => {
       markDogCreated(dog.id);
       if (userId) {
-        await qc.invalidateQueries({ queryKey: dogsQueryKey(userId) });
+        qc.setQueryData<ApiDog[]>(dogsQueryKey(userId), (current = []) =>
+          current.some((item) => item.id === dog.id) ? current : [...current, dog],
+        );
+        void qc.invalidateQueries({ queryKey: dogsQueryKey(userId) });
       }
     },
   });
@@ -146,21 +150,25 @@ export function getDogProfileSnapshot(userId?: string): DogProfileState {
 }
 
 export function profileToCreateBody(
-  profile: Pick<
-    DogProfile,
-    'name' | 'birthDate' | 'sizeLabel' | 'weightKg' | 'sex' | 'breedLabel' | 'isMix'
-  > & { ageLabel?: string },
+  profile: Pick<DogProfile, 'name'> &
+    Partial<
+      Pick<
+        DogProfile,
+        'birthDate' | 'sizeLabel' | 'weightKg' | 'sex' | 'breedLabel' | 'isMix'
+      >
+    > & { ageLabel?: string },
   clientRequestId?: string,
 ): DogCreateBody {
-  return {
+  const body: DogCreateBody = {
     name: profile.name,
-    birth_date: profile.birthDate,
-    age_stage: ageStageToApi(profile.ageLabel),
-    size: sizeToApi(profile.sizeLabel),
-    weight_kg: profile.weightKg,
-    sex: profile.sex,
-    breed_label: profile.breedLabel,
-    is_mix: profile.isMix,
     client_request_id: clientRequestId ?? null,
   };
+  if (profile.birthDate) body.birth_date = profile.birthDate;
+  if (profile.ageLabel) body.age_stage = ageStageToApi(profile.ageLabel);
+  if (profile.sizeLabel) body.size = sizeToApi(profile.sizeLabel);
+  if (profile.weightKg != null) body.weight_kg = profile.weightKg;
+  if (profile.sex) body.sex = profile.sex;
+  if (profile.breedLabel) body.breed_label = profile.breedLabel;
+  if (profile.isMix) body.is_mix = true;
+  return body;
 }

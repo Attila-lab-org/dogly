@@ -1,14 +1,12 @@
 /**
- * Onboarding cane (Spec V1 sez. 7.1.2) — profilo in ≤60 secondi, una schermata.
- * - Nome obbligatorio; età/life stage (anche approssimativa) e taglia;
- * - razza/mix/sconosciuta opzionale; foto opzionale.
- * Stati obbligatori (sez. 6): valid, unknown breed, no photo, approximate age.
- * Validazione con zod (schema condiviso, pronto a essere spostato lato
- * contratti quando il backend espone POST /v1/dogs).
+ * Onboarding cane: primo valore prima dei dettagli.
+ *
+ * Il nome è l'unica informazione necessaria per iniziare. Età, taglia,
+ * razza e abitudini vengono raccolte più avanti, quando aiutano davvero
+ * a leggere un momento del cane.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -18,8 +16,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
-import { Button, ProgressBar, ScreenContainer } from '@/components';
-import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { Button, ScreenContainer } from '@/components';
+import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -30,35 +28,12 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { dogsQueryKey } from '@/features/dogs/api';
 import { persistDogAvatar } from '@/features/dogs/avatar';
 import { pickAvatarPhoto } from '@/features/photos/share';
-import { BreedPicker } from '@/features/dogs/BreedPicker';
-import {
-  breedLabelFromSelection,
-  type BreedSelection,
-} from '@/features/dogs/breeds';
-import {
-  AgePicker,
-  BirthdayPicker,
-} from '@/features/dogs/AgeBirthdayPicker';
-import {
-  ageFromBirthDate,
-  ageLabelFromYears,
-} from '@/features/dogs/profileDates';
-import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
-
-const SIZES = ['Piccola', 'Media', 'Grande'] as const;
 
 const dogSchema = z.object({
-  name: z.string().trim().min(1, 'Il nome è necessario: lo userò in tutta l’app.'),
-  size: z.enum(SIZES),
-  weightKg: z.string().trim().refine(
-    (value) => {
-      if (!value) return true;
-      const weight = Number(value.replace(',', '.'));
-      return Number.isFinite(weight) && weight > 0 && weight <= 999.99;
-    },
-    'Inserisci un peso valido in kg.',
-  ),
-  /** Foto opzionale (sez. 6: "no photo") */
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Scrivi il nome del tuo cane per iniziare.'),
   photoUri: z.string().nullable(),
 });
 
@@ -70,107 +45,65 @@ export default function DogOnboardingScreen() {
   const { usingMockGate, markDogCreated, userId, hasDog, refreshDogs } =
     useSession();
   const createDog = useCreateDogMutation();
-  const [savingPhoto, setSavingPhoto] = useState(false);
-  const [draft, setDraft] = useState<DogDraft>({
-    name: '',
-    size: 'Media',
-    weightKg: '',
-    photoUri: null,
-  });
-  const [ageYears, setAgeYears] = useState<number | null>(null);
-  const [birthDate, setBirthDate] = useState<string | null>(null);
-  const [sex, setSex] = useState<DogSex | null>(null);
-  const [breedSelection, setBreedSelection] = useState<BreedSelection>({
-    kind: 'unselected',
-  });
+  const [draft, setDraft] = useState<DogDraft>({ name: '', photoUri: null });
   const [error, setError] = useState<string | null>(null);
-
-  const stepProgress = useMemo(() => {
-    let filled = 0;
-    if (draft.name.trim()) filled += 1;
-    if (ageYears !== null) filled += 1;
-    if (draft.size) filled += 1;
-    if (breedSelection.kind !== 'unselected') filled += 1;
-    return filled / 4;
-  }, [draft.name, draft.size, ageYears, breedSelection.kind]);
 
   useEffect(() => {
     void refreshDogs();
   }, [refreshDogs]);
 
   useEffect(() => {
-    if (hasDog) {
-      router.replace('/(tabs)/home');
-    }
+    if (hasDog) router.replace('/(tabs)/home');
   }, [hasDog, router]);
 
-  const patch = (partial: Partial<DogDraft>) =>
-    setDraft((d) => ({ ...d, ...partial }));
-
   const submit = async () => {
-    if (ageYears === null) {
-      setError('Seleziona l’età.');
-      return;
-    }
     const parsed = dogSchema.safeParse(draft);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Controlla i campi e riprova.');
+      setError(parsed.error.issues[0]?.message ?? 'Scrivi il nome e riprova.');
       return;
     }
-    setError(null);
-    const breedLabel = breedLabelFromSelection(breedSelection);
-    const sizeLabel =
-      parsed.data.size === 'Piccola'
-        ? 'Taglia piccola'
-        : parsed.data.size === 'Grande'
-          ? 'Taglia grande'
-          : 'Taglia media';
-    const ageLabel = ageLabelFromYears(ageYears);
 
+    setError(null);
     try {
       if (usingMockGate) {
         markDogCreated('dog-rocky');
         router.replace('/(tabs)/home');
         return;
       }
+
       const dog = await createDog.mutateAsync(
         profileToCreateBody(
           {
             name: parsed.data.name,
-            birthDate,
-            sizeLabel,
-            weightKg: parsed.data.weightKg
-              ? Number(parsed.data.weightKg.replace(',', '.'))
-              : null,
-            sex,
-            breedLabel,
-            isMix: breedSelection.kind === 'mixed',
-            ageLabel,
+            birthDate: null,
+            sizeLabel: '',
+            weightKg: null,
+            sex: null,
+            breedLabel: null,
+            isMix: false,
+            ageLabel: '',
           },
           `dog-create-${Date.now()}`,
         ),
       );
       markDogCreated(dog.id);
+
       if (parsed.data.photoUri) {
-        setSavingPhoto(true);
-        try {
-          await persistDogAvatar(dog.id, parsed.data.photoUri);
-          if (userId) {
-            await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
-          }
-        } catch (photoError) {
-          const detail =
-            photoError instanceof Error
-              ? photoError.message
-              : 'Errore sconosciuto';
-          Alert.alert(
-            'Profilo salvato senza foto',
-            `${detail}\nPuoi riprovare da Modifica profilo.`,
-          );
-        } finally {
-          setSavingPhoto(false);
-        }
+        // La foto arricchisce il profilo, ma non deve trattenere il primo
+        // ingresso nell'app. Il salvataggio continua mentre si apre Home.
+        void persistDogAvatar(dog.id, parsed.data.photoUri)
+          .then(() => {
+            if (userId) {
+              void queryClient.invalidateQueries({
+                queryKey: dogsQueryKey(userId),
+              });
+            }
+          })
+          .catch(() => {
+            // La foto resta facoltativa: potrà essere aggiunta dal profilo.
+          });
       }
+
       router.replace('/(tabs)/home');
     } catch (saveError) {
       const detail =
@@ -179,306 +112,212 @@ export default function DogOnboardingScreen() {
           : 'Controlla la connessione e riprova.';
       if (detail.includes('limited number of active dogs')) {
         setError(
-          'Su questo account c’è già un cane. Il piano attuale ne permette uno solo.',
+          'Su questo account c’è già un cane. Puoi gestirlo dal suo profilo.',
         );
         void refreshDogs();
         return;
       }
-      setError(`Non sono riuscito a salvare il profilo. ${detail}`);
+      setError(`Non sono riuscito a creare il profilo. ${detail}`);
     }
   };
 
   return (
     <ScreenContainer scroll style={styles.safe}>
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepLabel}>Passo 1 di 1</Text>
-        <Text style={styles.title}>Crea il profilo del tuo cane</Text>
-        <ProgressBar
-          progress={Math.max(0.15, stepProgress)}
-          tone="accent"
-          height={6}
-          style={styles.progress}
-        />
+      <View style={styles.hero}>
+        <View style={styles.eyebrowRow}>
+          <View style={styles.eyebrowDot} />
+          <Text style={styles.eyebrow}>INIZIAMO DAL VOSTRO MOMENTO</Text>
+        </View>
+        <Text style={styles.title}>Come si chiama il tuo cane?</Text>
         <Text style={styles.subtitle}>
-          Bastano pochi secondi: nome, taglia ed età. Il resto possiamo
-          scoprirlo insieme.
+          Partiamo da una cosa semplice. Il resto lo scopriremo insieme,
+          osservandolo davvero.
         </Text>
       </View>
 
-      {/* Foto opzionale con placeholder zampa */}
       <View style={styles.avatarSection}>
-        <DogAvatar size={104} photoUri={draft.photoUri} />
+        <DogAvatar
+          size={116}
+          photoUri={draft.photoUri}
+          dogName={draft.name || 'il tuo cane'}
+        />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Aggiungi foto del cane"
+          accessibilityLabel="Aggiungi una foto del cane, facoltativa"
           onPress={async () => {
             const uri = await pickAvatarPhoto();
-            if (uri) patch({ photoUri: uri });
+            if (uri) setDraft((current) => ({ ...current, photoUri: uri }));
           }}
-          style={styles.photoBadge}
+          style={styles.photoAction}
         >
-          <Ionicons name="camera" size={16} color="#2DAAAB" />
+          <Ionicons name="camera-outline" size={17} color={colors.primary} />
+          <Text style={styles.photoActionText}>
+            {draft.photoUri ? 'Cambia foto' : 'Aggiungi una foto'}
+          </Text>
+          <Text style={styles.optional}>facoltativa</Text>
         </Pressable>
-        <Text style={styles.photoHint}>Foto (facoltativa)</Text>
       </View>
 
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Nome *</Text>
+      <View style={styles.formCard}>
+        <Text style={styles.label}>Il suo nome</Text>
         <TextInput
           value={draft.name}
-          onChangeText={(name) => patch({ name })}
-          placeholder="Es. Rocky"
+          onChangeText={(name) => {
+            setDraft((current) => ({ ...current, name }));
+            if (error) setError(null);
+          }}
+          placeholder="Per esempio: Oreo"
           placeholderTextColor={colors.textMuted}
           style={styles.input}
           autoCapitalize="words"
+          autoCorrect={false}
+          returnKeyType="done"
+          onSubmitEditing={() => void submit()}
           testID="onboarding-name"
         />
-      </View>
-
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Sesso</Text>
-        <View style={styles.chips}>
-          {SEX_OPTIONS.map((option) => (
-            <OptionChip
-              key={option.value}
-              label={option.label}
-              selected={sex === option.value}
-              onPress={() => setSex(option.value)}
-            />
-          ))}
+        <View style={styles.promiseRow}>
+          <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+          <Text style={styles.promise}>
+            Ti aiuterò a capire cosa sta vivendo, un momento alla volta.
+          </Text>
         </View>
       </View>
 
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Età</Text>
-        <AgePicker
-          value={ageYears}
-          onChange={(years) => {
-            setAgeYears(years);
-            setBirthDate(null);
-          }}
-          testID="onboarding-age"
-        />
-      </View>
-
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Compleanno (facoltativo)</Text>
-        <BirthdayPicker
-          value={birthDate}
-          ageYears={ageYears}
-          onChange={(date) => {
-            setBirthDate(date);
-            if (date) setAgeYears(ageFromBirthDate(date));
-          }}
-          testID="onboarding-birthday"
-        />
-      </View>
-
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Taglia</Text>
-        <View style={styles.chips}>
-          {SIZES.map((size) => (
-            <OptionChip
-              key={size}
-              label={size}
-              selected={draft.size === size}
-              onPress={() => patch({ size })}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Peso (kg, facoltativo)</Text>
-        <TextInput
-          value={draft.weightKg}
-          onChangeText={(weightKg) => patch({ weightKg })}
-          placeholder="Es. 12,5"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          testID="onboarding-weight"
-        />
-      </View>
-
-      <View style={styles.fieldCard}>
-        <Text style={styles.label}>Razza</Text>
-        <BreedPicker
-          value={breedSelection}
-          onChange={setBreedSelection}
-          testID="onboarding-breed"
-        />
-      </View>
-
-      {error && (
+      {error ? (
         <View style={styles.errorBanner} accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={17} color={colors.danger} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
-      )}
+      ) : null}
 
       <Button
-        title="Inizia a capirlo"
-        loading={createDog.isPending || savingPhoto}
+        title={
+          draft.name.trim()
+            ? `Inizia a conoscere ${draft.name.trim()}`
+            : 'Inizia a conoscerlo'
+        }
+        loading={createDog.isPending}
         onPress={() => void submit()}
         style={styles.submit}
         testID="onboarding-submit"
       />
+
       <Text style={styles.footer}>
-        Potrai sempre modificare questi dati dal profilo.
+        Potrai aggiungere età, razza e abitudini quando vorrai. Non devi sapere
+        tutto adesso.
       </Text>
     </ScreenContainer>
   );
 }
 
-function OptionChip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.optionChip, selected && styles.optionChipSelected]}
-    >
-      <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: {
-    backgroundColor: '#F8FAFC',
+  safe: { backgroundColor: colors.background },
+  hero: { paddingTop: spacing.lg, gap: spacing.sm },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  eyebrowDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
   },
-  stepHeader: {
-    marginBottom: spacing.lg,
-  },
-  stepLabel: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: '#2DAAAB',
-    marginBottom: spacing.xs,
+  eyebrow: {
+    color: colors.accentPressed,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 1.1,
   },
   title: {
+    marginTop: spacing.sm,
+    color: colors.text,
     fontSize: typography.size.xxl,
+    lineHeight: typography.size.xxl * 1.12,
     fontWeight: typography.weight.bold,
-    color: '#1A2B48',
-  },
-  progress: {
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-    backgroundColor: '#E0F7F6',
   },
   subtitle: {
-    marginTop: spacing.sm,
-    fontSize: typography.size.md,
     color: colors.textSecondary,
-    lineHeight: typography.size.md * typography.lineHeight.normal,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * typography.lineHeight.relaxed,
   },
   avatarSection: {
     alignItems: 'center',
+    marginTop: spacing.xxl,
     marginBottom: spacing.xl,
+    gap: spacing.sm,
   },
-  photoBadge: {
-    position: 'absolute',
-    top: 76,
-    marginLeft: 80,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+  photoAction: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.xs,
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#EDF2F7',
-    ...shadows.card,
+    borderColor: colors.border,
   },
-  photoHint: {
-    marginTop: spacing.sm,
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-  },
-  fieldCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.card,
-  },
-  label: {
+  photoActionText: {
+    color: colors.primary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: '#1A2B48',
+  },
+  optional: { color: colors.textMuted, fontSize: typography.size.xs },
+  formCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  label: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
     marginBottom: spacing.sm,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
+    minHeight: 54,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: typography.size.md,
-    color: '#1A2B48',
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+    fontSize: typography.size.lg,
   },
-  chips: {
+  promiseRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'flex-start',
     gap: spacing.sm,
+    marginTop: spacing.lg,
   },
-  optionChip: {
-    borderRadius: radius.full,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-  },
-  optionChipSelected: {
-    backgroundColor: '#E0F7F6',
-    borderColor: '#2DAAAB',
-  },
-  optionLabel: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.medium,
+  promise: {
+    flex: 1,
     color: colors.textSecondary,
-  },
-  optionLabelSelected: {
-    color: '#2DAAAB',
-    fontWeight: typography.weight.semibold,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   errorBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.md,
+    marginTop: spacing.md,
     padding: spacing.md,
-    marginTop: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.dangerSoft,
   },
   errorText: {
     flex: 1,
-    fontSize: typography.size.sm,
     color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
-  submit: {
-    marginTop: spacing.xl,
-  },
+  submit: { marginTop: spacing.xl },
   footer: {
     marginTop: spacing.md,
     marginBottom: spacing.xxl,
-    fontSize: typography.size.xs,
     color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
     textAlign: 'center',
   },
 });

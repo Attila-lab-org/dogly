@@ -9,7 +9,6 @@ import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Chip, ProgressBar, SectionHeader } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
-import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
 import type {
   BehaviorEventResult,
   BehaviorIntent,
@@ -183,20 +182,12 @@ export function FeedbackButtons({
   onFeedback,
   error,
   dogName,
-  primaryIntent,
-  alternatives = [],
 }: {
   value: FeedbackValue | null;
-  onFeedback: (
-    value: FeedbackValue,
-    extras?: { correction_label?: BehaviorIntent | null },
-  ) => void;
+  onFeedback: (value: FeedbackValue) => void;
   error?: string | null;
   dogName?: string;
-  primaryIntent?: BehaviorIntent | null;
-  alternatives?: Array<{ intent: BehaviorIntent }>;
 }) {
-  const [correction, setCorrection] = useState<BehaviorIntent | null>(null);
   const options: Array<{
     value: FeedbackValue;
     label: string;
@@ -226,10 +217,6 @@ export function FeedbackButtons({
       selectedBorder: colors.textSecondary,
     },
   ];
-  const correctionOptions = alternatives
-    .map((item) => item.intent)
-    .filter((intent) => intent !== primaryIntent)
-    .slice(0, 3);
 
   return (
     <View style={styles.feedbackCard}>
@@ -281,32 +268,10 @@ export function FeedbackButtons({
           );
         })}
       </View>
-      {value === 'NO' && correctionOptions.length > 0 ? (
-        <View style={styles.feedbackCorrection}>
-          <Text style={styles.feedbackCorrectionTitle}>
-            Quale lettura ti sembra più vicina?
-          </Text>
-          {correctionOptions.map((intent) => (
-            <Pressable
-              key={intent}
-              accessibilityRole="button"
-              accessibilityState={{ selected: correction === intent }}
-              onPress={() => {
-                setCorrection(intent);
-                onFeedback('NO', { correction_label: intent });
-              }}
-              style={({ pressed }) => [
-                styles.feedbackCorrectionOption,
-                correction === intent && styles.feedbackCorrectionOptionSelected,
-                pressed && styles.feedbackOptionPressed,
-              ]}
-            >
-              <Text style={styles.feedbackCorrectionLabel}>
-                {BEHAVIOR_INTENT_LABELS[intent]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {value === 'NO' ? (
+        <Text style={styles.feedbackHint}>
+          Va bene. La tua correzione ci aiuterà a capire meglio {dogName}.
+        </Text>
       ) : null}
     </View>
   );
@@ -347,10 +312,7 @@ export function BehaviorResultView({
   result: BehaviorEventResult;
   dogName: string;
   feedback: FeedbackValue | null;
-  onFeedback: (
-    value: FeedbackValue,
-    extras?: { correction_label?: BehaviorIntent | null },
-  ) => void;
+  onFeedback: (value: FeedbackValue) => void;
   careNote?: string | null;
   /** Stato errore del salvataggio feedback: non mostrare un successo finto. */
   feedbackError?: string | null;
@@ -495,6 +457,13 @@ export function BehaviorResultView({
           </Text>
         </View>
       ) : null}
+
+      <FeedbackButtons
+        value={feedback}
+        onFeedback={onFeedback}
+        error={feedbackError}
+        dogName={dogName}
+      />
 
       {hasDetails ? (
         <View style={styles.detailsBlock}>
@@ -697,14 +666,6 @@ export function BehaviorResultView({
 
       {contextPrompt}
 
-      <FeedbackButtons
-        value={feedback}
-        onFeedback={onFeedback}
-        error={feedbackError}
-        dogName={dogName}
-        primaryIntent={result.primary_intent}
-        alternatives={result.alternatives}
-      />
     </View>
   );
 }
@@ -796,31 +757,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  feedbackCorrection: {
+  feedbackHint: {
     marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  feedbackCorrectionTitle: {
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-  },
-  feedbackCorrectionOption: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  feedbackCorrectionOptionSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
-  },
-  feedbackCorrectionLabel: {
-    fontSize: typography.size.sm,
-    color: colors.text,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   feedbackOption: {
     flex: 1,

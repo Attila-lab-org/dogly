@@ -68,12 +68,12 @@ export function useHomeData(dogId: string): HomeDataState {
       (usageQuery.isLoading ||
         behaviorQuery.isLoading ||
         activityQuery.isLoading),
+    // In preview/mock mode the API is intentionally disabled: non è un
+    // errore da mostrare al proprietario. Mostriamo il banner solo quando
+    // una sessione reale ha davvero fallito il caricamento.
     error:
-      !apiConfigured ||
-      (Boolean(userId) && !isPersistedId(dogId)) ||
-      usageQuery.isError ||
-      behaviorQuery.isError ||
-      activityQuery.isError,
+      realEnabled &&
+      (usageQuery.isError || behaviorQuery.isError || activityQuery.isError),
     refetch: () => {
       void usageQuery.refetch();
       void behaviorQuery.refetch();

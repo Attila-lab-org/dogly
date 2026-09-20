@@ -1,9 +1,8 @@
 /**
- * Dettaglio Knowledge Score — copertura per categoria, formula versionata.
+ * Il profilo personale di DOGly: quanto sta imparando a conoscere questo cane.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
 import { Card, ProgressBar, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -11,13 +10,14 @@ import { knowledgeLevelLabel } from '@/features/core/types';
 import { StackScreenHeader } from '@/features/secondary/components';
 
 export default function KnowledgeDetailScreen() {
-  const { dogId } = useLocalSearchParams<{ dogId: string }>();
   const { dog, knowledgeScore } = useDogProfile();
 
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title={`Quanto conosco ${dog.name}`} />
-      <Text style={styles.meta}>Profilo {dogId} · formula knowledge/v0</Text>
+      <Text style={styles.meta}>
+        Il profilo di {dog.name} cresce con ogni momento che condividete
+      </Text>
 
       <View style={styles.hero}>
         <Text style={styles.score}>
@@ -26,17 +26,17 @@ export default function KnowledgeDetailScreen() {
         <Text style={styles.scoreCaption}>profilo personale</Text>
         <ProgressBar progress={knowledgeScore.score / 100} tone="primary" />
         <Text style={styles.summary}>
-          Ho raccolto abbastanza osservazioni per riconoscere diverse abitudini
-          di {dog.name}. Il punteggio non è una confidenza AI: misura quanto
-          materiale utile abbiamo raccolto nel tempo.
+          Ogni video e ogni tua conferma mi aiutano a riconoscere meglio i suoi
+          segnali. Anche all’inizio posso già aiutarti: col tempo la lettura
+          diventa sempre più personale.
         </Text>
       </View>
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Cosa fa crescere questo profilo</Text>
+        <Text style={styles.cardTitle}>Come imparo a conoscerlo</Text>
         <Text style={styles.cardStatus}>
-          Analisi utilizzabili, contesti diversi e feedback coerenti. Non mostro
-          coperture per categoria finché il server non fornisce quel dettaglio.
+          Momenti diversi, contesti reali e quello che mi confermi quando ti
+          riconosci nella lettura. Non devi creare situazioni apposta.
         </Text>
       </Card>
 

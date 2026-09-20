@@ -129,6 +129,9 @@ export default function WelcomeScreen() {
           </View>
           <Text style={styles.wordmark}>DOGLY</Text>
           <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
+          <Text style={styles.promise}>
+            Mostra un momento del tuo cane. Ti aiuto a capirlo con parole semplici.
+          </Text>
         </View>
 
         <View style={styles.footer}>
@@ -225,6 +228,14 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
     color: '#2DAAAB',
     letterSpacing: 0.4,
+    textAlign: 'center',
+  },
+  promise: {
+    maxWidth: 320,
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     textAlign: 'center',
   },
   footer: {

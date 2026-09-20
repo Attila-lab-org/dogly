@@ -42,7 +42,7 @@ describe('processing context companion UX', () => {
     expect(processingScreen).not.toContain('Sto guardando');
     expect(processingScreen).not.toContain('Analisi in corso');
     expect(card).toContain('Intanto, aiutami a capire meglio');
-    expect(card).toContain('Se ho bisogno, ti farò fino a 3 domande mentre analizzo.');
+    expect(card).toContain('Se mi serve, ti farò una domanda alla volta mentre analizzo.');
     expect(card).toContain('Risposta acquisita');
     expect(card).toContain('PROCESSING_ACK_MS');
     expect(card).toContain('cancelQueries');
@@ -99,8 +99,8 @@ describe('result feedback teaches DOGly without becoming technical', () => {
     expect(feedback).toContain('Sì, è così');
     expect(feedback).toContain('Non proprio');
     expect(feedback).toContain('Non so');
-    expect(feedback).toContain('Quale lettura ti sembra più vicina?');
-    expect(feedback).toContain('correction_label');
+    expect(feedback).toContain('Va bene. La tua correzione ci aiuterà a capire meglio');
+    expect(feedback).not.toContain('Quale lettura ti sembra più vicina?');
     expect(feedback).not.toContain('Ti è stata utile questa lettura?');
     expect(feedback).not.toContain('Salvato');
   });

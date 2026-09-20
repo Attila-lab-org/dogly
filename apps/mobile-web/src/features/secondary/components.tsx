@@ -64,9 +64,9 @@ const headerStyles = StyleSheet.create({
 });
 
 const bandLabel: Record<ConfidenceBand, string> = {
-  LOW: 'Confidenza bassa',
-  MEDIUM: 'Confidenza media',
-  HIGH: 'Confidenza alta',
+  LOW: 'Da approfondire',
+  MEDIUM: 'Abbastanza chiaro',
+  HIGH: 'Chiaro nel tempo',
 };
 
 const bandTone: Record<ConfidenceBand, ChipTone> = {
@@ -91,9 +91,9 @@ export function ConfidenceBandPill({
 
 const stateLabel: Record<PatternState, string> = {
   CANDIDATE: 'In osservazione',
-  PRELIMINARY: 'Preliminare',
-  ESTABLISHED: 'Consolidato',
-  STRONG: 'Molto solido',
+  PRELIMINARY: 'Sta prendendo forma',
+  ESTABLISHED: 'Ricorrente',
+  STRONG: 'Ben riconoscibile',
   CONTESTED: 'Da verificare',
   DORMANT: 'Non visto di recente',
   ARCHIVED: 'Archiviato',

@@ -153,15 +153,11 @@ export default function DiaryEventScreen() {
           })
         : null);
 
-  const handleFeedback = (
-    value: FeedbackValue,
-    extras?: { correction_label?: string | null },
-  ) => {
+  const handleFeedback = (value: FeedbackValue) => {
     if (!behaviorResult) return;
     void saveBehaviorFeedback(
       behaviorResult.eventId,
       value,
-      extras,
     ).then(setFeedback);
   };
 

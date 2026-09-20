@@ -8,6 +8,8 @@
  * - Media cancellato dalla retention: avviso esplicito (stato "deleted media").
  * La riga del Diario passa domain/occurredAt/deleted/title come params così
  * la schermata ha un contesto minimo anche prima della risposta API.
+ *
+ * Layout Screen 2: nav "Dettaglio evento", hero circolare, Perché?, feedback.
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -35,6 +37,8 @@ import {
 } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
 import { selectAdvice } from '@/features/advice/logic';
+
+const NAVY = '#1A2B48';
 
 export default function DiaryEventScreen() {
   const router = useRouter();
@@ -97,7 +101,7 @@ export default function DiaryEventScreen() {
 
   if (useApi && query.isLoading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState title="Caricamento" message="Sto aprendo l'episodio…" />
       </ScreenContainer>
     );
@@ -105,7 +109,7 @@ export default function DiaryEventScreen() {
 
   if (!behaviorResult && domain === 'BEHAVIOR') {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
           title="Episodio non trovato"
           message={
@@ -122,7 +126,7 @@ export default function DiaryEventScreen() {
 
   if (behaviorNotCompleted) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
           title="Analisi non ancora conclusa"
           message="Ti porto allo stato corretto dell’analisi…"
@@ -149,15 +153,11 @@ export default function DiaryEventScreen() {
           })
         : null);
 
-  const handleFeedback = (
-    value: FeedbackValue,
-    extras?: { correction_label?: string | null },
-  ) => {
+  const handleFeedback = (value: FeedbackValue) => {
     if (!behaviorResult) return;
     void saveBehaviorFeedback(
       behaviorResult.eventId,
       value,
-      extras,
     ).then(setFeedback);
   };
 
@@ -166,18 +166,19 @@ export default function DiaryEventScreen() {
   const entryRefId = eventId ?? '';
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer padded={false} style={styles.whiteScreen}>
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Indietro"
           onPress={() => router.back()}
           hitSlop={12}
+          style={styles.topSide}
         >
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={NAVY} />
         </Pressable>
-        <Text style={styles.topTitle}>Episodio</Text>
-        <View style={styles.topSpacer} />
+        <Text style={styles.topTitle}>Dettaglio evento</Text>
+        <View style={styles.topSide} />
       </View>
 
       <ScrollView
@@ -245,24 +246,32 @@ export default function DiaryEventScreen() {
 }
 
 const styles = StyleSheet.create({
+  whiteScreen: {
+    backgroundColor: '#FFFFFF',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    backgroundColor: '#FFFFFF',
+  },
+  topSide: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-  },
-  topSpacer: {
-    width: 26,
+    fontSize: 17,
+    fontWeight: '700',
+    color: NAVY,
   },
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
+    backgroundColor: '#FFFFFF',
   },
   date: {
     fontSize: typography.size.sm,

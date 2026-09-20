@@ -60,6 +60,7 @@ export function useDoglyRealtime(dogId: string) {
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const greetingRef = useRef(false);
   const responseOpenRef = useRef(false);
+  const assistantTranscriptSourceRef = useRef<'output' | 'audio' | null>(null);
   const pendingTextRef = useRef<string | null>(null);
   const mutedByUserRef = useRef(false);
   const connectInFlightRef = useRef(false);
@@ -79,6 +80,7 @@ export function useDoglyRealtime(dogId: string) {
     persistQueueRef.current = Promise.resolve();
     greetingRef.current = false;
     responseOpenRef.current = false;
+    assistantTranscriptSourceRef.current = null;
     pendingTextRef.current = null;
   }, []);
 
@@ -137,6 +139,7 @@ export function useDoglyRealtime(dogId: string) {
     setMicEnabled(false);
     userTranscriptRef.current = text;
     assistantRef.current = '';
+    assistantTranscriptSourceRef.current = null;
     setTranscript(text);
     setAssistantDraft('');
     channel.send(
@@ -185,7 +188,10 @@ export function useDoglyRealtime(dogId: string) {
         case 'input_audio_buffer.speech_started':
           if (greetingRef.current) return;
           userTranscriptRef.current = '';
+          assistantRef.current = '';
+          assistantTranscriptSourceRef.current = null;
           setTranscript('');
+          setAssistantDraft('');
           setVoiceState('listening');
           break;
         case 'conversation.item.input_audio_transcription.delta':
@@ -202,10 +208,21 @@ export function useDoglyRealtime(dogId: string) {
           break;
         case 'response.created':
           responseOpenRef.current = true;
+          assistantTranscriptSourceRef.current = null;
           setMicEnabled(false);
           break;
         case 'response.output_audio_transcript.delta':
+          if (assistantTranscriptSourceRef.current === 'audio') break;
+          assistantTranscriptSourceRef.current = 'output';
+          if (event.delta) {
+            assistantRef.current += event.delta;
+            setAssistantDraft(assistantRef.current);
+          }
+          setVoiceState('speaking');
+          break;
         case 'response.audio_transcript.delta':
+          if (assistantTranscriptSourceRef.current === 'output') break;
+          assistantTranscriptSourceRef.current = 'audio';
           if (event.delta) {
             assistantRef.current += event.delta;
             setAssistantDraft(assistantRef.current);
@@ -213,18 +230,25 @@ export function useDoglyRealtime(dogId: string) {
           setVoiceState('speaking');
           break;
         case 'response.output_audio_transcript.done':
-        case 'response.audio_transcript.done':
+          if (assistantTranscriptSourceRef.current === 'audio') break;
+          assistantTranscriptSourceRef.current = 'output';
           if (event.transcript) {
             assistantRef.current = event.transcript;
             setAssistantDraft(event.transcript);
           }
           break;
-        case 'response.output_audio.done':
-        case 'response.audio.done':
-          setMicEnabled(true);
+        case 'response.audio_transcript.done':
+          if (assistantTranscriptSourceRef.current === 'output') break;
+          assistantTranscriptSourceRef.current = 'audio';
+          if (event.transcript) {
+            assistantRef.current = event.transcript;
+            setAssistantDraft(event.transcript);
+          }
           break;
         case 'response.done':
+          if (!responseOpenRef.current) break;
           responseOpenRef.current = false;
+          setMicEnabled(true);
           if (greetingRef.current) {
             greetingRef.current = false;
             setMicEnabled(true);
@@ -241,6 +265,7 @@ export function useDoglyRealtime(dogId: string) {
           setVoiceState('listening');
           break;
         case 'response.cancelled':
+          if (!responseOpenRef.current) break;
           responseOpenRef.current = false;
           if (greetingRef.current) {
             greetingRef.current = false;
@@ -256,6 +281,7 @@ export function useDoglyRealtime(dogId: string) {
           }
           userTranscriptRef.current = '';
           assistantRef.current = '';
+          assistantTranscriptSourceRef.current = null;
           setAssistantDraft('');
           setVoiceState('listening');
           break;

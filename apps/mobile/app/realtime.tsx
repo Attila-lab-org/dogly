@@ -22,33 +22,35 @@ import { useDoglyRealtime } from '@/features/realtime/useDoglyRealtime';
 export default function RealtimeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const realtime = useDoglyRealtime(dog.id);
   const [text, setText] = useState('');
   const pulse = useRef(new Animated.Value(0)).current;
+  const realtime = useDoglyRealtime(dog.id);
 
   useEffect(() => {
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1300, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1300, useNativeDriver: true }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
       ]),
     );
-    if (['listening', 'speaking'].includes(realtime.voiceState)) animation.start();
+    if (realtime.voiceState === 'listening' || realtime.voiceState === 'speaking') {
+      animation.start();
+    }
     return () => animation.stop();
   }, [pulse, realtime.voiceState]);
 
-  const active = ['connecting', 'listening', 'thinking', 'speaking'].includes(
-    realtime.voiceState,
-  );
-  const ownerName = realtime.session?.owner_display_name?.trim().split(' ')[0];
-  const status = {
-    idle: ownerName ? `Ciao ${ownerName}` : 'Ciao, sono qui',
-    connecting: 'Apro la conversazione…',
-    listening: 'Ti ascolto',
-    thinking: `Parliamo di ${dog.name}`,
-    speaking: 'DOGly',
-    error: `Sono ancora qui per ${dog.name}`,
-  }[realtime.voiceState];
+  const close = async () => {
+    await realtime.disconnect();
+    router.back();
+  };
 
   const send = async () => {
     const value = text.trim();
@@ -57,17 +59,27 @@ export default function RealtimeScreen() {
     await realtime.sendText(value);
   };
 
+  const active =
+    realtime.voiceState === 'listening' ||
+    realtime.voiceState === 'thinking' ||
+    realtime.voiceState === 'speaking' ||
+    realtime.voiceState === 'connecting';
+  const safety = realtime.lastTurn?.terminal_state === 'SAFETY_INTERRUPT';
+  const ownerName = realtime.session?.owner_display_name?.trim().split(' ')[0];
+  const statusLabel = {
+    idle: ownerName ? `Ciao ${ownerName}` : `Ciao, sono qui`,
+    connecting: 'Un attimo, apro la conversazione…',
+    listening: 'Ti ascolto',
+    thinking: `Parliamo di ${dog.name}`,
+    speaking: 'DOGly',
+    error: `Sono ancora qui per ${dog.name}`,
+  }[realtime.voiceState];
+
   return (
-    <LinearGradient colors={['#EFF7FF', '#FFFFFF']} style={styles.root}>
-      <SafeAreaView style={styles.root}>
+    <LinearGradient colors={['#F0F8FF', '#F8FBFF', '#FFFFFF']} style={styles.root}>
+      <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Pressable
-            onPress={async () => {
-              await realtime.disconnect();
-              router.back();
-            }}
-            style={styles.close}
-          >
+          <Pressable accessibilityLabel="Chiudi" onPress={close} style={styles.iconButton}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
           <View style={styles.identity}>
@@ -77,15 +89,18 @@ export default function RealtimeScreen() {
               <Text style={styles.dogName}>{dog.name}</Text>
             </View>
           </View>
-          <View style={styles.close} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <KeyboardAvoidingView
+          style={styles.body}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.root}
         >
-          <ScrollView contentContainerStyle={styles.content}>
-            <Text style={styles.title}>{status}</Text>
+          <ScrollView
+            contentContainerStyle={styles.conversation}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.title}>{statusLabel}</Text>
             <Text style={styles.subtitle}>
               {realtime.voiceState === 'idle'
                 ? `Parliamo di cani, e di ${dog.name}. Cosa vuoi capire oggi?`
@@ -95,38 +110,53 @@ export default function RealtimeScreen() {
                     ? `Parla pure, ti ascolto.`
                     : `Possiamo parlare di ${dog.name}.`}
             </Text>
+
             <View style={styles.orbStage}>
               <Animated.View
                 style={[
-                  styles.halo,
+                  styles.orbHalo,
                   {
                     opacity: pulse.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [0.15, 0.48],
+                      outputRange: [0.18, 0.5],
                     }),
                     transform: [
                       {
                         scale: pulse.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [0.92, 1.16],
+                          outputRange: [0.92, 1.15],
                         }),
                       },
                     ],
                   },
                 ]}
               />
-              <Pressable onPress={active ? realtime.disconnect : realtime.connect}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={active ? 'Termina conversazione' : 'Parla con DOGly'}
+                onPress={active ? realtime.disconnect : realtime.connect}
+                disabled={!realtime.voiceSupported}
+              >
                 <LinearGradient
-                  colors={active ? ['#0066FF', '#31C8D9'] : ['#142E4A', '#0066FF']}
+                  colors={
+                    active
+                      ? ['#0066FF', '#5B8CFF', '#31C8D9']
+                      : ['#11253D', '#0066FF']
+                  }
                   style={styles.orb}
                 >
-                  <Ionicons name={active ? 'radio' : 'mic'} size={38} color="#FFFFFF" />
+                  <Ionicons
+                    name={active ? 'radio' : 'mic'}
+                    color="#FFFFFF"
+                    size={38}
+                  />
                 </LinearGradient>
               </Pressable>
             </View>
+
             {active && (
               <View style={styles.liveActions}>
-                <Pressable onPress={realtime.toggleMute} style={styles.mute}>
+                <Pressable onPress={realtime.toggleMute} style={styles.muteButton}>
                   <Ionicons
                     name={realtime.muted ? 'mic-off' : 'mic'}
                     size={17}
@@ -143,7 +173,7 @@ export default function RealtimeScreen() {
                       router.replace('/behavior/capture');
                     })();
                   }}
-                  style={styles.mute}
+                  style={styles.muteButton}
                 >
                   <Ionicons name="videocam" size={17} color={colors.text} />
                   <Text style={styles.muteText}>Mostra un momento</Text>
@@ -153,67 +183,65 @@ export default function RealtimeScreen() {
 
             {!!realtime.transcript && (
               <View style={styles.ownerBubble}>
-                <Text style={styles.bodyText}>{realtime.transcript}</Text>
+                <Text style={styles.ownerText}>{realtime.transcript}</Text>
               </View>
             )}
+
             {!!(realtime.assistantDraft || realtime.lastTurn?.assistant_text) && (
-              <View
-                style={[
-                  styles.answer,
-                  realtime.lastTurn?.terminal_state === 'SAFETY_INTERRUPT' &&
-                    styles.safety,
-                ]}
-              >
-                <Text style={styles.answerLabel}>
-                  {realtime.lastTurn?.terminal_state === 'SAFETY_INTERRUPT'
-                    ? 'Da fare adesso'
-                    : `Per ${dog.name}`}
+              <View style={[styles.answerCard, safety && styles.safetyCard]}>
+                <Text style={[styles.answerLabel, safety && styles.safetyLabel]}>
+                  {safety ? 'Da fare adesso' : `Per ${dog.name}`}
                 </Text>
                 <Text style={styles.answerText}>
                   {realtime.assistantDraft || realtime.lastTurn?.assistant_text}
                 </Text>
                 {!!realtime.lastTurn?.question && (
-                  <Text style={styles.question}>{realtime.lastTurn.question}</Text>
+                  <Text style={styles.questionText}>{realtime.lastTurn.question}</Text>
                 )}
                 {!!realtime.lastTurn?.behavior_handoff_href && (
                   <Pressable
                     onPress={() => {
-                      void (async () => {
-                        await realtime.disconnect();
-                        router.replace('/behavior/capture');
-                      })();
-                    }}
-                    style={styles.primaryButton}
+                    void (async () => {
+                      await realtime.disconnect();
+                      router.replace('/behavior/capture');
+                    })();
+                  }}
+                    style={styles.videoButton}
                   >
                     <Ionicons name="videocam" size={18} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>Mostrami il momento</Text>
+                    <Text style={styles.videoButtonText}>Mostrami il momento</Text>
                   </Pressable>
                 )}
               </View>
             )}
+
             {!!realtime.lastTurn?.memory_proposal && (
-              <View style={styles.memory}>
-                <Text style={styles.memoryTitle}>Vuoi che lo ricordi?</Text>
-                <Text style={styles.bodyText}>
+              <View style={styles.memoryCard}>
+                <View style={styles.memoryHeading}>
+                  <Ionicons name="sparkles" size={18} color="#0066FF" />
+                  <Text style={styles.memoryTitle}>Vuoi che lo ricordi?</Text>
+                </View>
+                <Text style={styles.memoryText}>
                   {realtime.lastTurn.memory_proposal.statement}
                 </Text>
                 <View style={styles.memoryActions}>
                   <Pressable
                     onPress={() => realtime.decideMemory('CONFIRM')}
-                    style={styles.primarySmall}
+                    style={styles.confirmButton}
                   >
-                    <Text style={styles.primaryButtonText}>Sì, ricordalo</Text>
+                    <Text style={styles.confirmText}>Sì, ricordalo</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => realtime.decideMemory('REJECT')}
-                    style={styles.secondarySmall}
+                    style={styles.rejectButton}
                   >
-                    <Text style={styles.secondaryText}>No</Text>
+                    <Text style={styles.rejectText}>No</Text>
                   </Pressable>
                 </View>
               </View>
             )}
-            {!!realtime.error && <Text style={styles.error}>{realtime.error}</Text>}
+
+            {!!realtime.error && <Text style={styles.errorText}>{realtime.error}</Text>}
           </ScrollView>
 
           <View style={styles.composer}>
@@ -221,16 +249,17 @@ export default function RealtimeScreen() {
               value={text}
               onChangeText={setText}
               onSubmitEditing={send}
-              placeholder={`Scrivi a DOGly di ${dog.name}…`}
-              placeholderTextColor={colors.textSecondary}
               returnKeyType="send"
-              maxLength={4000}
+              placeholder={`Scrivi a DOGly di ${dog.name}…`}
+              placeholderTextColor="#8E9CAE"
               style={styles.input}
+              maxLength={4000}
             />
             <Pressable
+              accessibilityLabel="Invia"
               onPress={send}
-              disabled={!text.trim()}
-              style={[styles.send, !text.trim() && styles.disabled]}
+              disabled={!text.trim() || realtime.voiceState === 'connecting'}
+              style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
             >
               <Ionicons name="arrow-up" size={21} color="#FFFFFF" />
             </Pressable>
@@ -243,6 +272,7 @@ export default function RealtimeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  safe: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,132 +280,157 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
-  close: {
+  iconButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  eyebrow: { color: colors.textSecondary, fontSize: 11, fontWeight: '600' },
-  dogName: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  content: {
+  eyebrow: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
+  dogName: { fontSize: 16, color: colors.text, fontWeight: '800' },
+  headerSpacer: { width: 42 },
+  body: { flex: 1 },
+  conversation: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    paddingBottom: 130,
+    paddingTop: 34,
+    paddingBottom: 140,
   },
-  title: { color: colors.text, fontSize: 28, fontWeight: '800', textAlign: 'center' },
+  title: {
+    color: colors.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
   subtitle: {
     color: colors.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    maxWidth: 470,
+    marginTop: 10,
   },
   orbStage: {
-    width: 180,
-    height: 180,
+    width: 190,
+    height: 190,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 18,
   },
-  halo: {
+  orbHalo: {
     position: 'absolute',
-    width: 148,
-    height: 148,
-    borderRadius: 74,
+    width: 154,
+    height: 154,
+    borderRadius: 77,
     backgroundColor: '#4C9DFF',
   },
   orb: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 116,
+    height: 116,
+    borderRadius: 58,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 10,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    elevation: 9,
   },
   liveActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
-  mute: {
+  muteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 18,
+    backgroundColor: '#FFFFFF',
   },
   muteText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   ownerBubble: {
     alignSelf: 'flex-end',
     maxWidth: '86%',
-    backgroundColor: '#E7F0FF',
     borderRadius: 20,
     borderBottomRightRadius: 6,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-  },
-  answer: {
-    alignSelf: 'stretch',
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: '#E3EDFA',
-    padding: spacing.lg,
+    backgroundColor: '#E7F0FF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     marginTop: spacing.md,
   },
-  safety: { backgroundColor: '#FFF8F8', borderColor: '#F6C7C7' },
+  ownerText: { color: colors.text, fontSize: 15, lineHeight: 21 },
+  answerCard: {
+    alignSelf: 'stretch',
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E3EDFA',
+    shadowColor: '#123B68',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  safetyCard: { borderColor: '#F6C7C7', backgroundColor: '#FFF8F8' },
   answerLabel: {
     color: '#0066FF',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
+    letterSpacing: 0.6,
     marginBottom: 8,
   },
+  safetyLabel: { color: '#C0392B' },
   answerText: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '600' },
-  question: { color: colors.text, fontSize: 16, lineHeight: 23, marginTop: 12 },
-  bodyText: { color: colors.text, fontSize: 15, lineHeight: 21 },
-  primaryButton: {
-    marginTop: spacing.lg,
-    minHeight: 48,
-    borderRadius: radius.md,
+  questionText: { color: colors.text, fontSize: 16, lineHeight: 23, marginTop: 12 },
+  videoButton: {
+    marginTop: 16,
     backgroundColor: '#0066FF',
+    borderRadius: 16,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
   },
-  primaryButtonText: { color: '#FFFFFF', fontWeight: '800' },
-  memory: {
+  videoButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  memoryCard: {
     alignSelf: 'stretch',
     marginTop: spacing.md,
     padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: '#EDF6FF',
   },
-  memoryTitle: { color: colors.text, fontSize: 15, fontWeight: '800', marginBottom: 8 },
+  memoryHeading: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  memoryTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  memoryText: { color: colors.text, fontSize: 15, lineHeight: 21, marginTop: 8 },
   memoryActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  primarySmall: {
-    borderRadius: radius.md,
+  confirmButton: {
     backgroundColor: '#0066FF',
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 11,
   },
-  secondarySmall: {
-    borderRadius: radius.md,
+  confirmText: { color: '#FFFFFF', fontWeight: '800' },
+  rejectButton: {
     backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 11,
   },
-  secondaryText: { color: colors.text, fontWeight: '700' },
-  error: { color: colors.danger, marginTop: spacing.md },
+  rejectText: { color: colors.text, fontWeight: '700' },
+  errorText: { color: '#B73D32', fontSize: 14, marginTop: spacing.md },
   composer: {
     position: 'absolute',
     bottom: 0,
@@ -385,21 +440,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: '#FFFFFF',
+    paddingTop: 12,
+    paddingBottom: 18,
+    backgroundColor: 'rgba(255,255,255,0.96)',
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#E7EDF5',
   },
   input: {
     flex: 1,
     minHeight: 50,
     borderRadius: 25,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 18,
     color: colors.text,
     fontSize: 15,
   },
-  send: {
+  sendButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
@@ -407,5 +463,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#0066FF',
   },
-  disabled: { opacity: 0.35 },
+  sendDisabled: { opacity: 0.35 },
 });

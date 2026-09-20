@@ -1,5 +1,6 @@
 /**
  * Behavior result — GET evento reale + POST feedback.
+ * Layout Screen 2: nav Risultato, hero circolare, Perché?, feedback pills.
  */
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -29,6 +30,8 @@ import { isPersistedId } from '@/lib/persistedId';
 import { useMeProfile } from '@/features/me/api';
 import { sanitizeOwnerCopy } from '@/features/core/copy';
 import { usefulQuestionKicker } from '@/features/core/conversationCopy';
+
+const NAVY = '#1A2B48';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
@@ -82,7 +85,7 @@ export default function BehaviorResultScreen() {
 
   if (useApi && query.isLoading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState title="Caricamento" message="Sto aprendo il risultato…" />
       </ScreenContainer>
     );
@@ -90,7 +93,7 @@ export default function BehaviorResultScreen() {
 
   if (!result) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
           title="Risultato non trovato"
           message="Non riesco ad aprire questa analisi. Controlla il Diario."
@@ -105,7 +108,7 @@ export default function BehaviorResultScreen() {
 
   if (notCompleted) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.whiteScreen}>
         <ErrorState
           title="Analisi in corso"
           message="Ti porto allo stato dell'analisi…"
@@ -114,17 +117,13 @@ export default function BehaviorResultScreen() {
     );
   }
 
-  const handleFeedback = async (
-    value: FeedbackValue,
-    extras?: { correction_label?: string | null },
-  ) => {
+  const handleFeedback = async (value: FeedbackValue) => {
     setSavingFeedback(true);
     setFeedbackError(null);
     try {
       const saved = await saveBehaviorFeedback(
         result.eventId,
         value,
-        extras,
       );
       setFeedback(saved);
     } catch {
@@ -150,18 +149,30 @@ export default function BehaviorResultScreen() {
   };
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer padded={false} style={styles.whiteScreen}>
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Indietro"
           onPress={() => router.back()}
           hitSlop={12}
+          style={styles.topSide}
         >
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={NAVY} />
         </Pressable>
         <Text style={styles.topTitle}>Risultato</Text>
-        <View style={styles.topSpacer} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Condividi"
+          onPress={() =>
+            void shareBehaviorResult(result, dog.name, dog.photoUri)
+          }
+          hitSlop={12}
+          style={styles.topSide}
+          testID="share-result"
+        >
+          <Ionicons name="share-outline" size={22} color={NAVY} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -174,8 +185,8 @@ export default function BehaviorResultScreen() {
           dogName={dog.name}
           feedback={feedback}
           feedbackError={feedbackError}
-          onFeedback={(v, extras) => {
-            if (!savingFeedback) void handleFeedback(v, extras);
+          onFeedback={(v) => {
+            if (!savingFeedback) void handleFeedback(v);
           }}
           careNote={
             !result.baseline_note && analysisContext?.concern === 'off'
@@ -228,45 +239,38 @@ export default function BehaviorResultScreen() {
             advice ? <AdviceCard advice={advice} dogName={dog.name} compact /> : null
           }
         />
-
-        <Button
-          title="Condividi"
-          variant="outline"
-          icon={<Ionicons name="share-outline" size={18} color={colors.accent} />}
-          onPress={() =>
-            void shareBehaviorResult(result, dog.name, dog.photoUri)
-          }
-          style={styles.saveButton}
-          testID="share-result"
-        />
-
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  whiteScreen: {
+    backgroundColor: '#FFFFFF',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    backgroundColor: '#FFFFFF',
+  },
+  topSide: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topTitle: {
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
-  },
-  topSpacer: {
-    width: 26,
+    fontSize: 17,
+    fontWeight: '700',
+    color: NAVY,
   },
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xxxl,
-  },
-  saveButton: {
-    marginTop: spacing.xl,
+    backgroundColor: '#FFFFFF',
   },
   contextCard: {
     marginTop: spacing.md,

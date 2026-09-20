@@ -43,6 +43,7 @@ export const colors = {
 export const gradients = {
   cta: [colors.primary, colors.primaryBright] as const,
   header: [colors.primary, colors.primaryBright] as const,
+  authWash: ['#E0F2FE', '#F8FAFC', '#FFFFFF'] as const,
 } as const;
 
 export const spacing = {
