@@ -364,9 +364,18 @@ export function useDoglyRealtime(dogId: string) {
   );
 
   useEffect(() => {
-    if (dogId) void ensureSession();
-    return () => closeMedia();
-  }, [closeMedia, dogId, ensureSession]);
+    // Do not create a server session just by opening the screen. A session
+    // starts only when the owner connects or sends a text turn.
+    return () => {
+      closeMedia();
+      const activeSession = sessionRef.current;
+      sessionRef.current = null;
+      sessionDataRef.current = null;
+      if (activeSession) {
+        void endRealtimeSession(activeSession).catch(() => undefined);
+      }
+    };
+  }, [closeMedia]);
 
   return {
     voiceSupported: Platform.OS === 'web' && typeof RTCPeerConnection !== 'undefined',
