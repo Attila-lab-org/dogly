@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -362,6 +363,7 @@ async def complete_avatar_upload(
     dog_id: str,
     storage_path: str,
     expected_bytes: int | None = None,
+    schedule_old_avatar_cleanup: Callable[[str], None] | None = None,
 ) -> DogRec:
     from app.domains.dogs import AVATAR_BUCKET, avatar_storage_prefix
 
@@ -381,15 +383,10 @@ async def complete_avatar_upload(
         dog_id=dog_id,
         photo_path=storage_path,
     )
-    if previous_path and previous_path != storage_path:
-        try:
-            await storage.delete_object(
-                bucket=AVATAR_BUCKET,
-                path=previous_path,
-            )
-        except Exception:
-            logger.exception(
-                "Could not delete replaced avatar path for dog_id=%s",
-                dog_id,
-            )
+    if (
+        previous_path
+        and previous_path != storage_path
+        and schedule_old_avatar_cleanup
+    ):
+        schedule_old_avatar_cleanup(previous_path)
     return updated

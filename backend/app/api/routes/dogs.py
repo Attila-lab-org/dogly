@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 
 from app.api.deps import AppState, StateDep, UserIdDep
 from app.contracts.api import (
@@ -23,6 +23,17 @@ from app.domains.dogs import AVATAR_BUCKET
 from app.domains.models import DogRec
 
 router = APIRouter()
+
+
+async def _delete_replaced_avatar(storage, path: str) -> None:
+    try:
+        await storage.delete_object(bucket=dogs_domain.AVATAR_BUCKET, path=path)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "Could not delete replaced avatar path path=%s", path
+        )
 
 
 async def to_out(dog: DogRec, state: AppState) -> DogOut:
@@ -169,7 +180,11 @@ async def complete_avatar(
     payload: DogAvatarCompleteRequest,
     state: StateDep,
     user_id: UserIdDep,
+    background_tasks: BackgroundTasks,
 ) -> DogOut:
+    def schedule_cleanup(path: str) -> None:
+        background_tasks.add_task(_delete_replaced_avatar, state.storage, path)
+
     if state.engine is not None:
         dog = await dogs_db.complete_avatar_upload(
             state.engine,
@@ -178,6 +193,7 @@ async def complete_avatar(
             dog_id=dog_id,
             storage_path=payload.storage_path,
             expected_bytes=payload.bytes,
+            schedule_old_avatar_cleanup=schedule_cleanup,
         )
     else:
         dog = await dogs_domain.complete_avatar_upload(
@@ -187,5 +203,6 @@ async def complete_avatar(
             dog_id=dog_id,
             storage_path=payload.storage_path,
             expected_bytes=payload.bytes,
+            schedule_old_avatar_cleanup=schedule_cleanup,
         )
     return await to_out(dog, state)

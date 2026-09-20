@@ -39,7 +39,7 @@ import {
   ageLabelFromYears,
   ageYearsFromLabel,
 } from '@/features/dogs/profileDates';
-import { dogsQueryKey } from '@/features/dogs/api';
+import { dogsQueryKey, type ApiDog } from '@/features/dogs/api';
 import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
 import { setProfileVisibility as apiSetVisibility } from '@/features/photos/api';
 import { useMeProfile, useUpdateMeProfile } from '@/features/me/api';
@@ -82,6 +82,15 @@ export default function DogEditScreen() {
     dog.profileVisibility,
   );
 
+  const applyAvatarToCache = (photoUrl: string | null) => {
+    if (!userId || !photoUrl) return;
+    queryClient.setQueryData<ApiDog[]>(dogsQueryKey(userId), (current) =>
+      current?.map((item) =>
+        item.id === dogId ? { ...item, photo_url: photoUrl } : item,
+      ),
+    );
+  };
+
   useEffect(() => {
     if (!pendingPhotoUri && !uploadingPhoto) {
       setPhotoUri(dog.photoUri);
@@ -108,8 +117,12 @@ export default function DogEditScreen() {
     try {
       const savedUrl = await persistDogAvatar(dogId, uri);
       if (savedUrl) setPhotoUri(savedUrl);
+      applyAvatarToCache(savedUrl);
       if (userId) {
-        await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
+        void queryClient.invalidateQueries({
+          queryKey: dogsQueryKey(userId),
+          refetchType: 'none',
+        });
       }
       setPendingPhotoUri(null);
       Alert.alert('Foto salvata', 'La foto profilo è stata caricata.');
@@ -133,8 +146,12 @@ export default function DogEditScreen() {
       try {
         const savedUrl = await persistDogAvatar(dogId, photoUri);
         if (savedUrl) setPhotoUri(savedUrl);
+        applyAvatarToCache(savedUrl);
         if (userId) {
-          await queryClient.invalidateQueries({ queryKey: dogsQueryKey(userId) });
+          void queryClient.invalidateQueries({
+            queryKey: dogsQueryKey(userId),
+            refetchType: 'none',
+          });
         }
         setPendingPhotoUri(null);
         photoUploadedOnSave = true;
