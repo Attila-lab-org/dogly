@@ -13,6 +13,7 @@ import {
   rescheduleCareReminders,
   scheduleCareReminder,
 } from './notifications';
+import { getNotificationPreferences } from '../notifications/store';
 
 export interface CreateCareEventInput {
   dogId: string;
@@ -155,16 +156,26 @@ async function hydrateCareEvents(dogId: string, dogName: string): Promise<void> 
     emit();
     // Riconcilia i promemoria locali con la fonte remota.
     await cancelAllCareReminders();
-    await rescheduleCareReminders(
-      events.filter((event) => event.dogId === dogId),
-      dogName,
-    );
+    await syncCareReminders(dogId, dogName);
   } catch {
     hydratedDogs.delete(dogId);
   } finally {
     hydratingDogs.delete(dogId);
     emit();
   }
+}
+
+/** Reconciles local reminders with the global notification preference. */
+export async function syncCareReminders(
+  dogId: string,
+  dogName: string,
+): Promise<void> {
+  await cancelAllCareReminders();
+  if (!getNotificationPreferences().careReminders) return;
+  await rescheduleCareReminders(
+    events.filter((event) => event.dogId === dogId),
+    dogName,
+  );
 }
 
 export function careEventById(eventId: string): CareEvent | undefined {
@@ -197,7 +208,9 @@ export async function addCareEvent(
     timezone: input.timezone ?? 'Europe/Rome',
     location: input.location?.trim() || null,
     notes: input.notes?.trim() || null,
-    reminderEnabled: input.reminderEnabled ?? true,
+    reminderEnabled:
+      (input.reminderEnabled ?? true) &&
+      getNotificationPreferences().careReminders,
     reminderMinutesBefore: input.reminderMinutesBefore ?? 1440,
     status: 'SCHEDULED',
     completedAt: null,

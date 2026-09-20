@@ -15,6 +15,8 @@ import {
   setSmartReminders,
   useCheckIn,
 } from '@/features/checkin/store';
+import { syncCareReminders } from '@/features/care/store';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 
 const OPTIONS: Array<{
@@ -63,6 +65,7 @@ const OPTIONS: Array<{
 export default function NotificationSettingsScreen() {
   const preferences = useNotificationPreferences();
   const { prefs } = useCheckIn();
+  const { dog } = useDogProfile();
 
   useEffect(() => {
     void hydrateNotificationPreferences();
@@ -124,6 +127,9 @@ export default function NotificationSettingsScreen() {
                 onValueChange={(value) => {
                   setNotificationPreference(option.key, value);
                   if (option.key === 'checkIn') setSmartReminders(value);
+                  if (option.key === 'careReminders' && dog.id) {
+                    void syncCareReminders(dog.id, dog.name);
+                  }
                 }}
                 trackColor={{ false: colors.border, true: colors.accentSoft }}
                 thumbColor={
