@@ -37,6 +37,8 @@ export type ProfileVisibilityDto = {
   consent_version: string | null;
 };
 
+const momentsAlbumCache = new Map<string, PhotoAlbum>();
+
 function apiConfigured(): boolean {
   try {
     getApiBaseUrl();
@@ -102,13 +104,23 @@ export async function createAlbum(dogId: string, title: string): Promise<PhotoAl
 export async function getOrCreateMomentsAlbum(
   dogId: string,
 ): Promise<PhotoAlbum> {
+  const cached = momentsAlbumCache.get(dogId);
+  if (cached) return cached;
   const albums = await fetchAlbums(dogId);
   const moments = albums.find(
     (album) => album.title.trim().toLocaleLowerCase() === 'momenti',
   );
-  if (moments) return moments;
-  if (albums[0]) return albums[0];
-  return createAlbum(dogId, 'Momenti');
+  if (moments) {
+    momentsAlbumCache.set(dogId, moments);
+    return moments;
+  }
+  if (albums[0]) {
+    momentsAlbumCache.set(dogId, albums[0]);
+    return albums[0];
+  }
+  const created = await createAlbum(dogId, 'Momenti');
+  momentsAlbumCache.set(dogId, created);
+  return created;
 }
 
 export async function fetchAlbum(albumId: string): Promise<PhotoAlbum> {
