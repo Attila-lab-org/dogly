@@ -32,7 +32,7 @@ Ultimo aggiornamento: 2026-09-06 • Branch: `main`
 | B-3 | Test device / IAP sandbox incompleti | Exit G0 — vedi `docs/DEVICE_TEST_CHECKLIST.md` | A / J |
 | B-4 | ~~Provider AI reali non integrati~~ | **CHIUSO** — factory/worker Gemini + OpenAI | — |
 | B-5 | Test CI supabase da rafforzare | CI E2E | J |
-| B-6 | Camera/OCR nativi incompleti | Capture reale | A / F |
+| B-6 | Validazione camera nativa su device fisico incompleta | Capture reale; OCR label già cablato e sottoposto a conferma manuale | A / F |
 | B-7 | ~~Retention expires_at a init~~ | **CHIUSO** — TTL al terminal + `media_retention_cleanup` | — |
 
 ## Decisioni prodotto V1

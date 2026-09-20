@@ -247,7 +247,7 @@ Le Storie in Home (rail 24h, “La tua”, Rocky) sono **contenuto social/viewer
 
 | Area | Come funziona |
 |------|----------------|
-| Etichetta cibo | Upload + verifica manuale del proprietario. Nessun OCR/LLM in backend. |
+| Etichetta cibo | Foto caricata in Storage privato → estrazione OCR/vision OpenAI → dati mostrati come non verificati → conferma manuale obbligatoria del proprietario. |
 | Consigli | Catalogo chiuso, max 1. Il LLM non può inventarli. |
 | Pattern personali | Solo Personal Engine deterministico. |
 | Copy consumer | Composer Python (`behavior_intelligence.py`, `digestive_intelligence.py`). |
