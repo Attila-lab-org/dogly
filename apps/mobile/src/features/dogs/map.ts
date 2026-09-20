@@ -118,6 +118,9 @@ export function mapApiDogToProfile(dog: ApiDog): DogProfile {
     breedLabel: dog.breed_label,
     isMix: dog.is_mix,
     photoUri: dog.photo_url ?? null,
+    // Visibility is owned by GET /v1/dogs/{id}/visibility and hydrated by the
+    // edit screen. This fallback is only for the profile model before that
+    // dedicated query resolves; it is never used to decide whether to PUT.
     profileVisibility: 'private',
     publicConsentVersion: null,
   };

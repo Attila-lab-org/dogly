@@ -462,6 +462,8 @@ async def update_visibility(
                         )
                         on conflict (dog_id) do update set
                           visibility = 'PRIVATE',
+                          consent_version = null,
+                          consented_at = null,
                           revoked_at = now(),
                           updated_at = now()
                         returning dog_id, visibility, consent_version, consented_at,

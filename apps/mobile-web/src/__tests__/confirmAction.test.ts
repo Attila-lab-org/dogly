@@ -3,7 +3,7 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'web' },
 }));
 
-import { confirmDestructiveAction } from '../lib/confirmAction';
+import { confirmDestructiveAction, confirmPublicProfile } from '../lib/confirmAction';
 
 describe('browser destructive confirmation', () => {
   it('runs the action only after browser confirmation', () => {
@@ -23,4 +23,17 @@ describe('browser destructive confirmation', () => {
     confirmDestructiveAction('Eliminare?', 'Operazione definitiva.', action);
     expect(action).toHaveBeenCalledTimes(1);
   });
+});
+
+it('uses browser confirmation for public profile consent', () => {
+  const confirm = jest.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+  Object.defineProperty(globalThis, 'confirm', {
+    configurable: true,
+    value: confirm,
+  });
+  const action = jest.fn();
+  confirmPublicProfile(action);
+  expect(action).not.toHaveBeenCalled();
+  confirmPublicProfile(action);
+  expect(action).toHaveBeenCalledTimes(1);
 });

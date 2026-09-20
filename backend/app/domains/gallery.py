@@ -266,7 +266,8 @@ def update_visibility(
     else:
         rec.visibility = "PRIVATE"
         rec.revoked_at = now_utc()
-        # Keep consent history fields; revoke is immediate for public surface.
+        rec.consent_version = None
+        rec.consented_at = None
 
     rec.updated_at = now_utc()
     return get_visibility(store, user_id=user_id, dog_id=dog_id)

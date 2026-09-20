@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
@@ -41,7 +41,12 @@ import {
 } from '@/features/dogs/profileDates';
 import { dogsQueryKey, type ApiDog } from '@/features/dogs/api';
 import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
-import { setProfileVisibility as apiSetVisibility } from '@/features/photos/api';
+import {
+  getProfileVisibility,
+  profileVisibilityQueryKey,
+  setProfileVisibility as apiSetVisibility,
+} from '@/features/photos/api';
+import { confirmPublicProfile } from '@/lib/confirmAction';
 import { useMeProfile, useUpdateMeProfile } from '@/features/me/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
@@ -81,6 +86,22 @@ export default function DogEditScreen() {
   const [profileVisibility, setProfileVisibility] = useState(
     dog.profileVisibility,
   );
+  const [savedProfileVisibility, setSavedProfileVisibility] = useState(
+    dog.profileVisibility,
+  );
+  const visibilityQuery = useQuery({
+    queryKey: profileVisibilityQueryKey(dogId),
+    queryFn: () => getProfileVisibility(dogId),
+    enabled: Boolean(dogId),
+  });
+
+  useEffect(() => {
+    const visibility = visibilityQuery.data;
+    if (!visibility) return;
+    const next = visibility.visibility === 'PUBLIC' ? 'public' : 'private';
+    setProfileVisibility(next);
+    setSavedProfileVisibility(next);
+  }, [visibilityQuery.data]);
 
   const applyAvatarToCache = (photoUrl: string | null) => {
     if (!userId || !photoUrl) return;
@@ -212,13 +233,23 @@ export default function DogEditScreen() {
         if (Object.keys(profilePatch).length > 0) {
           await updateMutation.mutateAsync(profilePatch);
         }
-        if (profileVisibility !== dog.profileVisibility) {
+        if (profileVisibility !== savedProfileVisibility) {
           try {
-            await apiSetVisibility(
+            const savedVisibility = await apiSetVisibility(
               dogId,
               profileVisibility === 'public' ? 'PUBLIC' : 'PRIVATE',
               profileVisibility === 'public' ? 'public-profile-v1' : undefined,
             );
+            const confirmed = savedVisibility?.visibility
+              ? savedVisibility.visibility === 'PUBLIC'
+                ? 'public'
+                : 'private'
+              : profileVisibility;
+            setProfileVisibility(confirmed);
+            setSavedProfileVisibility(confirmed);
+            if (savedVisibility) {
+              queryClient.setQueryData(profileVisibilityQueryKey(dogId), savedVisibility);
+            }
           } catch {
             Alert.alert(
               'Visibilità non aggiornata',
@@ -387,17 +418,7 @@ export default function DogEditScreen() {
             accessibilityState={{ selected: profileVisibility === value }}
             onPress={() => {
               if (value === 'public') {
-                Alert.alert(
-                  'Profilo pubblico',
-                  'Verranno mostrati solo campi whitelist (nome, età, taglia, razza). Puoi revocare in qualsiasi momento.',
-                  [
-                    { text: 'Annulla', style: 'cancel' },
-                    {
-                      text: 'Confermo',
-                      onPress: () => setProfileVisibility('public'),
-                    },
-                  ],
-                );
+                confirmPublicProfile(() => setProfileVisibility('public'));
               } else {
                 setProfileVisibility('private');
               }

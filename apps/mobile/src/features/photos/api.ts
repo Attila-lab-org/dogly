@@ -37,6 +37,9 @@ export type ProfileVisibilityDto = {
   consent_version: string | null;
 };
 
+export const profileVisibilityQueryKey = (dogId: string) =>
+  ['dog-profile-visibility', dogId] as const;
+
 const momentsAlbumCache = new Map<string, PhotoAlbum>();
 
 function apiConfigured(): boolean {
@@ -247,4 +250,11 @@ export async function setProfileVisibility(
       },
     },
   );
+}
+
+export async function getProfileVisibility(
+  dogId: string,
+): Promise<ProfileVisibilityDto | null> {
+  if (!apiConfigured()) return null;
+  return apiRequest<ProfileVisibilityDto>(`/v1/dogs/${dogId}/visibility`);
 }

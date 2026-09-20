@@ -28,6 +28,21 @@ async def test_album_photo_and_visibility_flow(
     )
     assert published.status_code == 200
     assert published.json()["visibility"] == "PUBLIC"
+    assert published.json()["consent_version"] == "public-profile-v1"
+
+    revoked = await client.put(
+        f"/v1/dogs/{dog_id}/visibility",
+        json={"visibility": "PRIVATE"},
+        headers=auth_headers,
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["visibility"] == "PRIVATE"
+    assert revoked.json()["consent_version"] is None
+
+    persisted = await client.get(
+        f"/v1/dogs/{dog_id}/visibility", headers=auth_headers
+    )
+    assert persisted.json()["visibility"] == "PRIVATE"
 
     album = await client.post(
         f"/v1/dogs/{dog_id}/albums",
