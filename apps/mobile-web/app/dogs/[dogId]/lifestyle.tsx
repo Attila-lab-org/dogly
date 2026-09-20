@@ -202,9 +202,12 @@ export default function LifestyleScreen() {
           style={styles.voiceLink}
         >
           <View style={styles.voiceIcon}>
-            <Ionicons name="mic" size={18} color="#FFFFFF" />
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FFFFFF" />
           </View>
-          <Text style={styles.voiceLinkText}>Oppure raccontamelo a voce</Text>
+          <View style={styles.voiceCopy}>
+            <Text style={styles.voiceLinkText}>Aggiungi un dettaglio</Text>
+            <Text style={styles.voiceLinkHint}>A voce o scrivendo</Text>
+          </View>
           <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
         </Pressable>
         <ChoiceCard
@@ -406,10 +409,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   voiceLinkText: {
-    flex: 1,
     color: '#1A2B48',
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
+  },
+  voiceCopy: { flex: 1 },
+  voiceLinkHint: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
   },
   title: {
     color: '#1A2B48',

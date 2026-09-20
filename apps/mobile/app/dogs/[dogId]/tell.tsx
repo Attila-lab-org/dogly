@@ -221,7 +221,7 @@ export default function TellDogScreen() {
       <StackScreenHeader
         title={
           phase === 'compose'
-            ? `Parla di ${dog.name}`
+            ? `Racconta qualcosa su ${dog.name}`
             : 'Cosa vuoi che ricordi?'
         }
       />

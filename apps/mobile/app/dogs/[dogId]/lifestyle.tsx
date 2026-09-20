@@ -202,8 +202,11 @@ export default function LifestyleScreen() {
           onPress={() => router.push(`/dogs/${dogId}/tell` as never)}
           style={styles.voiceLink}
         >
-          <Ionicons name="mic-outline" size={20} color={colors.primary} />
-          <Text style={styles.voiceLinkText}>Oppure raccontamelo a voce</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+          <View style={styles.voiceCopy}>
+            <Text style={styles.voiceLinkText}>Aggiungi un dettaglio</Text>
+            <Text style={styles.voiceLinkHint}>A voce o scrivendo</Text>
+          </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
         <ChoiceCard
@@ -375,10 +378,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
   voiceLinkText: {
-    flex: 1,
     color: colors.primary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
+  },
+  voiceCopy: { flex: 1 },
+  voiceLinkHint: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
   },
   title: {
     color: colors.text,
