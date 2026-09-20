@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -82,7 +83,16 @@ export default function DogEditScreen() {
   );
   const [photoUri, setPhotoUri] = useState(dog.photoUri);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+
+  const notify = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      setFeedback(`${title}: ${message}`);
+      return;
+    }
+    Alert.alert(title, message);
+  };
   const [profileVisibility, setProfileVisibility] = useState(
     dog.profileVisibility,
   );
@@ -130,7 +140,7 @@ export default function DogEditScreen() {
     setPhotoUri(uri);
     setPendingPhotoUri(uri);
     if (!dogId) {
-      Alert.alert('Foto non salvata', 'Profilo del cane non disponibile.');
+      notify('Foto non salvata', 'Profilo del cane non disponibile.');
       return;
     }
 
@@ -146,11 +156,11 @@ export default function DogEditScreen() {
         });
       }
       setPendingPhotoUri(null);
-      Alert.alert('Foto salvata', 'La foto profilo è stata caricata.');
+      notify('Foto salvata', 'La foto profilo è stata caricata.');
     } catch (error) {
       const detail =
         error instanceof Error ? error.message : 'Errore sconosciuto';
-      Alert.alert('Foto non salvata', detail);
+      notify('Foto non salvata', detail);
     } finally {
       setUploadingPhoto(false);
     }
@@ -179,25 +189,25 @@ export default function DogEditScreen() {
       } catch (error) {
         const detail =
           error instanceof Error ? error.message : 'Errore sconosciuto';
-        Alert.alert('Foto non salvata', detail);
+        notify('Foto non salvata', detail);
         return;
       } finally {
         setUploadingPhoto(false);
       }
     }
     if (pendingPhotoUri && !photoUploadedOnSave) {
-      Alert.alert(
+      notify(
         'Foto non ancora salvata',
         'Tocca nuovamente la foto e completa il caricamento prima di uscire.',
       );
       return;
     }
     if (!name.trim()) {
-      Alert.alert('Nome richiesto', 'Il nome del cane è obbligatorio.');
+      notify('Nome richiesto', 'Il nome del cane è obbligatorio.');
       return;
     }
     if (ageYears === null) {
-      Alert.alert('Età richiesta', 'Seleziona l’età.');
+      notify('Età richiesta', 'Seleziona l’età.');
       return;
     }
     const breedLabel = breedLabelFromSelection(breedSelection);
@@ -209,7 +219,7 @@ export default function DogEditScreen() {
       parsedWeight !== null &&
       (!Number.isFinite(parsedWeight) || parsedWeight <= 0 || parsedWeight > 999.99)
     ) {
-      Alert.alert('Peso non valido', 'Inserisci un peso valido in kg.');
+      notify('Peso non valido', 'Inserisci un peso valido in kg.');
       return;
     }
 
@@ -251,7 +261,7 @@ export default function DogEditScreen() {
               queryClient.setQueryData(profileVisibilityQueryKey(dogId), savedVisibility);
             }
           } catch {
-            Alert.alert(
+            notify(
               'Visibilità non aggiornata',
               'Il profilo è salvato, ma la visibilità non è stata aggiornata. Controlla la connessione e riprova.',
             );
@@ -261,7 +271,7 @@ export default function DogEditScreen() {
       }
       router.back();
     } catch {
-      Alert.alert(
+      notify(
         'Salvataggio non riuscito',
         'Controlla la connessione e riprova.',
       );
@@ -271,6 +281,7 @@ export default function DogEditScreen() {
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Modifica profilo" />
+      {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
       <Text style={styles.sectionTitle}>Tu</Text>
       <Text style={styles.label}>Nome con cui DOGly ti chiama</Text>
@@ -457,6 +468,7 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: spacing.xxxl,
   },
+  feedback: { color: colors.danger, fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed },
   sectionTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
