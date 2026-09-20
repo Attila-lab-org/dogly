@@ -329,6 +329,7 @@ export function BehaviorResultView({
   photoUri,
   contextPrompt,
   primaryAdvice,
+  adviceRationale,
 }: {
   result: BehaviorEventResult;
   dogName: string;
@@ -343,6 +344,7 @@ export function BehaviorResultView({
   photoUri?: string | null;
   contextPrompt?: React.ReactNode;
   primaryAdvice?: React.ReactNode;
+  adviceRationale?: string | null;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const isInsufficient =
@@ -355,6 +357,7 @@ export function BehaviorResultView({
       .replace(/\b(?:il|un) (?:tuo )?cane\b/gi, dogName);
   const headline = ownerCopy(
     result.consumer_headline ||
+      adviceRationale ||
       result.consumer_summary ||
       `Ecco cosa emerge dal video di ${dogName}`,
   );
@@ -364,18 +367,23 @@ export function BehaviorResultView({
   const isVariation =
     result.baseline_comparison === 'VARIATION' ||
     result.baseline_comparison === 'CONTESTED';
-  // Immediate response: the meaning only. Deep dive only when the reading
-  // is ambiguous, unsafe, contested, or otherwise needs explanation.
-  const needsDeepDive = Boolean(
-    safety ||
-      isInsufficient ||
-      isAmbiguous ||
-      isVariation ||
-      result.needs_context ||
-      careNote,
+  const translation = !isInsufficient && !isAmbiguous && !safety
+    ? result.dog_voice?.trim()
+    : null;
+  const memories = (result.personalMemory ?? []).filter(
+    (memory) => memory.support_summary.trim().length > 0,
+  );
+  const hasConfirmedMemory = memories.some(
+    (memory) => ['ESTABLISHED', 'STRONG'].includes(memory.state.toUpperCase()),
+  );
+  const showPersonalNote = isPersonalBaselineNote(result.baseline_note) && (
+    isVariation || (result.baseline_comparison === 'RECOGNIZED' &&
+      hasConfirmedMemory && !safety && !isInsufficient && !isAmbiguous)
   );
   const hasDetails = Boolean(
-    result.dog_voice ||
+    adviceRationale ||
+      result.consumer_summary ||
+      memories.length ||
       result.sound_note ||
       result.what_to_watch ||
       result.confidence_band ||
@@ -388,8 +396,7 @@ export function BehaviorResultView({
       careNote,
   );
   const celebrate = !safety && !isInsufficient && !isAmbiguous;
-  const showSummary =
-    needsDeepDive && Boolean(result.consumer_summary);
+  const showSummary = isInsufficient && !safety && Boolean(result.consumer_summary);
 
   return (
     <View>
@@ -463,20 +470,25 @@ export function BehaviorResultView({
           <Text style={styles.headline}>{headline}</Text>
           {celebrate ? <Text style={styles.headlineSparkle}> ✨</Text> : null}
         </View>
+        {translation ? (
+          <View style={styles.translationBlock} testID="behavior-dog-voice">
+            <Text style={styles.translationKicker}>In parole umane</Text>
+            <Text style={styles.translationText}>{ownerCopy(translation)}</Text>
+            <Text style={styles.translationHint}>Una possibile lettura del momento</Text>
+          </View>
+        ) : null}
         {showSummary ? (
           <Text style={styles.summary}>
             {ownerCopy(result.consumer_summary!)}
           </Text>
         ) : null}
-        {isPersonalBaselineNote(result.baseline_note) && isVariation ? (
+        {showPersonalNote ? (
           <Text style={styles.baselineHeroNote} testID="baseline-hero-note">
-            {ownerCopy(result.baseline_note)}
+            {ownerCopy(result.baseline_note ?? '')}
           </Text>
         ) : null}
 
       </View>
-
-      {contextPrompt}
 
       {showPrimaryAdvice({
         hasSafety: Boolean(safety),
@@ -485,7 +497,7 @@ export function BehaviorResultView({
         ? primaryAdvice
         : null}
 
-      {result.recommended_next_step && !hasPrimaryAdvice && !safety && needsDeepDive ? (
+      {result.recommended_next_step && !hasPrimaryAdvice && !safety ? (
         <View style={styles.nextStepCard} testID="recommended-next-step">
           <Text style={styles.nextStepTitle}>Cosa fare ora</Text>
           <Text style={styles.nextStepText}>
@@ -494,15 +506,16 @@ export function BehaviorResultView({
         </View>
       ) : null}
 
-      {needsDeepDive && hasDetails ? (
+      {hasDetails ? (
         <View style={styles.detailsBlock}>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: detailsOpen }}
+            testID="behavior-explanation-toggle"
             onPress={() => setDetailsOpen((open) => !open)}
             style={styles.detailsToggle}
           >
-            <Text style={styles.detailsToggleText}>Perché</Text>
+            <Text style={styles.detailsToggleText}>Perché?</Text>
             <Ionicons
               name={detailsOpen ? 'chevron-up' : 'chevron-down'}
               size={20}
@@ -512,15 +525,8 @@ export function BehaviorResultView({
 
           {detailsOpen ? (
             <>
-              {result.dog_voice ? (
-                <View style={styles.translationBlock}>
-                  <Text style={styles.translationKicker}>
-                    In parole semplici
-                  </Text>
-                  <Text style={styles.translationText}>
-                    {ownerCopy(result.dog_voice)}
-                  </Text>
-                </View>
+              {result.consumer_summary && !showSummary && !safety ? (
+                <Text style={styles.summary}>{ownerCopy(result.consumer_summary)}</Text>
               ) : null}
 
               {evidenceSections.observed.length > 0 ? (
@@ -592,8 +598,7 @@ export function BehaviorResultView({
                 </View>
               ) : null}
 
-              {evidenceSections.personalMemory.length > 0 &&
-              !isPersonalBaselineNote(result.baseline_note) ? (
+              {evidenceSections.personalMemory.length > 0 || memories.length > 0 ? (
                 <View
                   style={styles.baselineCard}
                   testID="personal-memory-evidence"
@@ -601,6 +606,16 @@ export function BehaviorResultView({
                   <Text style={styles.baselineKicker}>
                     Rispetto al solito di {dogName}
                   </Text>
+                  {memories.map((memory) => (
+                    <Text key={memory.pattern_id} style={styles.baselineNote}>
+                      {['ESTABLISHED', 'STRONG'].includes(memory.state.toUpperCase())
+                        ? 'Già confermato insieme: '
+                        : memory.state.toUpperCase() === 'CONTESTED'
+                          ? 'Da rivedere insieme: '
+                          : 'Ancora da confermare: '}
+                      {ownerCopy(memory.support_summary)}
+                    </Text>
+                  ))}
                   {evidenceSections.personalMemory.map((item, index) => (
                     <Text
                       key={`${item.label}-${index}`}
@@ -618,7 +633,7 @@ export function BehaviorResultView({
                     Rispetto al solito di {dogName}
                   </Text>
                   <Text style={styles.baselineNote}>
-                    {ownerCopy(result.baseline_note)}
+                    {ownerCopy(result.baseline_note ?? '')}
                   </Text>
                 </View>
               ) : null}
@@ -646,6 +661,13 @@ export function BehaviorResultView({
                   {behaviorPrudenceCopy(result.confidence_band)}
                 </Text>
               </View>
+
+              {adviceRationale && !safety ? (
+                <View style={styles.evidenceSection}>
+                  <Text style={styles.evidenceTitle}>Perché questo consiglio</Text>
+                  <Text style={styles.baselineNote}>{ownerCopy(adviceRationale)}</Text>
+                </View>
+              ) : null}
 
               {result.what_to_watch ? (
                 <Text style={styles.watchLine} testID="what-to-watch">
@@ -682,6 +704,8 @@ export function BehaviorResultView({
           ) : null}
         </View>
       ) : null}
+
+      {contextPrompt}
 
       <FeedbackButtons
         value={feedback}
@@ -997,6 +1021,12 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
     textAlign: 'center',
     textTransform: 'uppercase',
+  },
+  translationHint: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    textAlign: 'center',
   },
   translationText: {
     marginTop: spacing.xs,

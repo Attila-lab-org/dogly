@@ -241,3 +241,17 @@ async def test_realtime_api_session_turn_and_close(
     assert again.status_code == 201
     assert "Vuoi riprendere la vecchia chiacchierata" in again.json()["welcome_text"]
     assert "Come sta Oreo oggi?" in again.json()["welcome_text"]
+
+
+def test_voice_and_orchestrated_turns_share_spoken_delivery_and_memory_boundaries():
+    from app.domains.realtime_orchestrator import _SYSTEM
+    from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
+
+    brief = render_voice_brief(
+        RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={}),
+        welcome="Ciao, sono qui.",
+    )
+    assert DOGLY_SPOKEN_STYLE in _SYSTEM
+    assert DOGLY_SPOKEN_STYLE in brief
+    assert "fingere mai di vedere o sentire" in brief
+    assert "isolato non è un'abitudine" in brief

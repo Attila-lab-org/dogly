@@ -41,13 +41,26 @@ const CATEGORY_ICONS: Record<AdviceCategory, CuteIconName> = {
 export function AdviceCard({
   advice,
   dogName,
+  compact = false,
 }: {
   advice: AdviceItem;
   dogName: string;
+  compact?: boolean;
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
   const actionText = advice.actionText.replace(/Rocky/g, dogName);
   const whyText = advice.whyText.replace(/Rocky/g, dogName);
+
+  // The result screen keeps rationale and follow-up inside its single "Perché?".
+  if (compact) {
+    return (
+      <Card style={styles.card} testID="advice-card">
+        <Text style={styles.title}>Cosa fare ora</Text>
+        <Text style={styles.action}>{actionText}</Text>
+      </Card>
+    );
+  }
+
 
   return (
     <Card style={styles.card} testID="advice-card">

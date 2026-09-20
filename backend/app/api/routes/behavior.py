@@ -181,7 +181,7 @@ def event_out(
     else:
         headline = consumer.get("consumer_headline")
         summary = consumer.get("consumer_summary") or event.summary
-        dog_voice = consumer.get("dog_voice") or interp.get("dog_voice")
+        dog_voice = consumer["dog_voice"] if "dog_voice" in consumer else interp.get("dog_voice")
     advice = event.advice_json or interp.get("advice")
     recommended_next_step = (
         None

@@ -25,6 +25,11 @@ const LEAKS = [
 ];
 
 describe('consumer conversation copy', () => {
+  it('hides legacy internal memory counters without inventing a memory', () => {
+    expect(consumerCopy('support=15 confirm=12')).toBe('');
+    expect(consumerCopy('Invito al gioco support=15 confirm=12')).toBe('Invito al gioco');
+  });
+
   it('never leaves internal codes or observer jargon in owner-facing text', () => {
     for (const leak of LEAKS) {
       const cleaned = consumerCopy(leak);

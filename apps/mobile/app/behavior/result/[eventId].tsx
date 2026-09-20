@@ -169,6 +169,7 @@ export default function BehaviorResultScreen() {
         showsVerticalScrollIndicator={false}
       >
         <BehaviorResultView
+          key={result.eventId}
           result={result}
           dogName={dog.name}
           feedback={feedback}
@@ -222,8 +223,9 @@ export default function BehaviorResultScreen() {
               </Card>
             ) : null
           }
+          adviceRationale={advice?.whyText}
           primaryAdvice={
-            advice ? <AdviceCard advice={advice} dogName={dog.name} /> : null
+            advice ? <AdviceCard advice={advice} dogName={dog.name} compact /> : null
           }
         />
 

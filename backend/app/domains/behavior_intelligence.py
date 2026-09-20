@@ -64,7 +64,7 @@ class BehaviorConsumerResult(BaseModel):
 
     schema_version: str = "behavior_consumer.v2"
     consumer_headline: str
-    dog_voice: str
+    dog_voice: str | None
     consumer_summary: str
     baseline_comparison: BaselineComparison
     baseline_note: str | None = None
@@ -297,7 +297,7 @@ def _baseline(
     if established:
         return (
             BaselineComparison.RECOGNIZED,
-            f"DOGly riconosce questo come un pattern tipico di {dog_name}.",
+            f"Per {dog_name}, questo somiglia a momenti che hai già confermato.",
         )
     if any(item.state.upper() == "PRELIMINARY" for item in memory):
         return (
@@ -321,23 +321,12 @@ def _select_consumer_evidence(
     interpretation: InterpretationContract,
 ) -> list[EvidenceItem]:
     """Owner-facing facts only; scientific audit evidence stays internal."""
-    observed = [
-        item
-        for item in interpretation.evidence
-        if item.source is EvidenceSource.OBSERVATION
-    ]
-    chosen = observed or [
-        item
-        for item in interpretation.evidence
-        if item.source
-        in {
-            EvidenceSource.CONTEXT,
-            EvidenceSource.PERSONAL_PATTERN,
-            EvidenceSource.LIFE_STAGE,
-            EvidenceSource.LIFESTYLE_BASELINE,
-        }
-    ]
-    return chosen[:5]
+    # Keep every owner-facing source: observations must not discard the
+    # context and personal memories that explain why this reading is specific.
+    return [
+        item for item in interpretation.evidence
+        if item.source is not EvidenceSource.SCIENTIFIC_KB
+    ][:5]
 
 
 def _select_consumer_alternatives(
@@ -372,7 +361,9 @@ def build_behavior_consumer(
         if safety is not None or insufficient
         else interpretation.consumer_headline
     )
-    if safety is not None:
+    if insufficient or effective_intent is IntentCode.AMBIGUOUS:
+        dog_voice = None
+    elif safety is not None:
         dog_voice = {
             SAFE_ESCALATION_001: "«Ho bisogno di più spazio, senza essere forzato.»",
             SAFE_DISTRESS_001: "«Qualcosa mi mette in difficoltà: aiutami a fare una pausa.»",

@@ -167,3 +167,32 @@ async def test_reasoner_usage_includes_repair_call():
     assert usage.input_tokens == 170
     assert usage.output_tokens == 50
     assert usage.cost_usd > 0
+
+
+def test_reasoner_cannot_promote_preliminary_memory_to_confirmed():
+    from app.contracts.interpretation import InterpretationContract
+    from app.providers.openai_reasoner import grounding_errors
+
+    raw = _valid_reasoner_output()
+    raw["evidence"] = [
+        {"source": "context", "description": "Contesto del proprietario"}
+        for _ in range(3)
+    ]
+    raw["personal_memory_used"] = [{
+        "pattern_id": "p1", "state": "ESTABLISHED", "support_summary": "Un solo episodio",
+    }]
+    observation = ObservationContract.model_validate({
+        "observer_meta": {"provider": "test", "model": "test", "request_id": "memory"},
+        "capture_quality": {"overall_quality": "good"},
+    })
+    contract = InterpretationContract.model_validate(raw)
+    errors = grounding_errors(
+        contract, observation, eligible_pattern_ids={"p1"},
+        eligible_pattern_states={"p1": "PRELIMINARY"},
+    )
+    assert any(error["loc"] == ["personal_memory_used", 0, "state"] for error in errors)
+    contract.personal_memory_used[0].state = "PRELIMINARY"
+    assert grounding_errors(
+        contract, observation, eligible_pattern_ids={"p1"},
+        eligible_pattern_states={"p1": "PRELIMINARY"},
+    ) == []

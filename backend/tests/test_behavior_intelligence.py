@@ -131,7 +131,7 @@ def test_confirmed_pattern_is_recognized():
         dog_context=build_dog_context(_dog()),
     )
     assert result.baseline_comparison is BaselineComparison.RECOGNIZED
-    assert "pattern tipico" in result.baseline_note
+    assert "già confermato" in result.baseline_note
 
 
 def test_preliminary_pattern_never_claims_owner_confirmation():
@@ -397,3 +397,59 @@ def test_legacy_alert_result_is_upgraded_when_read_from_the_api():
     assert result.advice is not None
     assert result.advice.code == "ADVICE_REWARD_BASED_REDIRECT"
     assert "Controlla con calma" in result.advice.action
+
+
+def test_clear_reading_keeps_voice_without_creating_an_action():
+    result = build_behavior_consumer(
+        _interpretation(), dog_name="Rocky", dog_context=build_dog_context(_dog()),
+    )
+    assert result.dog_voice == "«Mi dedichi un momento?»"
+    assert result.recommended_next_step is None
+
+
+def test_explanation_keeps_context_and_memory_alongside_observations():
+    evidence = [
+        EvidenceItem(source="observation", description="Guarda verso di te."),
+        EvidenceItem(source="context", description="Hai appena preso la palla."),
+        EvidenceItem(source="personal_pattern", description="Invito al gioco già confermato."),
+        EvidenceItem(source="scientific_kb", description="Riferimento interno"),
+    ]
+    result = build_behavior_consumer(
+        _interpretation(evidence=evidence),
+        dog_name="Rocky", dog_context=build_dog_context(_dog()),
+    )
+    assert result.consumer_evidence == evidence[:3]
+
+
+def test_uncertain_voice_is_not_restored_from_raw_interpretation_by_api():
+    for intent in (None, IntentCode.INSUFFICIENT, IntentCode.AMBIGUOUS):
+        interpretation = _interpretation(primary_intent=intent)
+        consumer = build_behavior_consumer(
+            interpretation, dog_name="Rocky", dog_context=build_dog_context(_dog()),
+        )
+        assert consumer.dog_voice is None
+        payload = interpretation.model_dump(mode="json")
+        payload["consumer"] = consumer.model_dump(mode="json")
+        now = datetime.now(UTC)
+        result = event_out(BehaviorEventRec(
+            id="event-1", capture_id="capture-1", dog_id="dog-1", user_id="user-1",
+            status="COMPLETED", primary_intent=intent,
+            confidence_band=ConfidenceBand.LOW, summary=interpretation.consumer_summary,
+            interpretation_json=payload, created_at=now, completed_at=now,
+        ))
+        assert result.dog_voice is None
+
+
+def test_personal_explanation_uses_stored_meaning_not_generated_claims_or_counters():
+    from app.providers.base import EligiblePatternSummary
+    from app.worker.handlers import _ground_personal_memory
+
+    interpretation = _interpretation(personal_memory_used=[PersonalMemoryUsed(
+        pattern_id="p1", state="STRONG", support_summary="Ricordo inventato dal generatore",
+    )])
+    grounded = _ground_personal_memory(interpretation, [EligiblePatternSummary(
+        pattern_id="p1", state="PRELIMINARY", title="Guarda la porta prima della passeggiata",
+        support_summary="support=2 confirm=1",
+    )])
+    assert grounded.personal_memory_used[0].state == "PRELIMINARY"
+    assert grounded.personal_memory_used[0].support_summary == "Guarda la porta prima della passeggiata"

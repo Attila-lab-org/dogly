@@ -31,6 +31,7 @@ const QUALITY_COPY: Record<string, string> = {
 export function consumerCopy(value: string | null | undefined): string {
   return (value ?? '')
     .replace(INTERNAL_CODE, '')
+    .replace(/\b(?:support|confirm)=\d+\b/gi, '')
     .replace(QUALITY_CODE, '')
     .replace(INTERNAL_ENUM, '')
     .replace(/\bquality\s+(?:high|medium|low|insufficient)\b/gi, '')

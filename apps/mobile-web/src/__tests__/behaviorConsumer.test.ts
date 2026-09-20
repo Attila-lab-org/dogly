@@ -1,6 +1,4 @@
 // @ts-nocheck
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { correctionOptions } from '../features/core/correctionOptions';
 import { deriveContextBucketHint } from '../features/behavior/contextBucket';
 import {
@@ -8,11 +6,6 @@ import {
   consumerEvidenceSections,
   showPrimaryAdvice,
 } from '../features/behavior/consumerPresentation';
-
-const resultViewSource = readFileSync(
-  resolve(__dirname, '../features/core/components.tsx'),
-  'utf8',
-);
 
 describe('deriveContextBucketHint', () => {
   it('di notte suggerisce REST, di giorno lascia UNKNOWN al backend', () => {
@@ -77,24 +70,4 @@ describe('risultato comportamento consumer', () => {
     expect(showPrimaryAdvice({ hasSafety: false, hasAdvice: true })).toBe(true);
   });
 
-  it('mostra il risultato immediato e rimanda gli approfondimenti ai dettagli', () => {
-    expect(resultViewSource).toContain('In questo momento');
-    expect(resultViewSource).toContain('needsDeepDive');
-    expect(resultViewSource).not.toContain('pattern-recognition-note');
-    expect(resultViewSource).not.toContain('pattern-chips');
-    expect(resultViewSource).toContain('Perché');
-    expect(resultViewSource).not.toContain(
-      'Quanto è prudente questa lettura',
-    );
-    for (const detail of [
-      'In parole semplici',
-      'Cosa si vede nel video',
-      'behavior-prudence',
-      'what-to-watch',
-    ]) {
-      expect(resultViewSource.indexOf('Perché')).toBeLessThan(
-        resultViewSource.indexOf(detail),
-      );
-    }
-  });
 });

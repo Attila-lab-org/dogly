@@ -778,7 +778,7 @@ def test_personal_memory_is_rehydrated_from_eligible_server_state():
     assert grounded.personal_memory_used[0].state == "PRELIMINARY"
     assert (
         grounded.personal_memory_used[0].support_summary
-        == "support=4 confirm=0"
+        == "Server pattern"
     )
 
 

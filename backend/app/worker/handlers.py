@@ -487,7 +487,9 @@ def _ground_personal_memory(
             PersonalMemoryUsed(
                 pattern_id=source.pattern_id,
                 state=source.state,
-                support_summary=source.support_summary,
+                # The consumer explanation needs the stored meaning, not internal counters.
+                # Counts remain in eligible_memory for reasoning and learning policy.
+                support_summary=source.title,
             )
         )
     return interpretation.model_copy(update={"personal_memory_used": grounded})

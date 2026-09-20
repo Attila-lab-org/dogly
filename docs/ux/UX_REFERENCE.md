@@ -106,13 +106,36 @@ O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
 3. L’analisi eredita il motivo (feed personalizzato, tono premuroso).
 4. Risultato: headline + band + perché (evidence) + feedback tre vie — come Spec/UX_REFERENCE.
 
-## Risultato
+## Risultato — esperienza AI (decisione 2026-09-20)
 
-- Headline probabilistica ("sembra / probabilmente").
-- Pill confidenza a **band** (mai %).
-- Evidence 3–5, alternative 0–2.
+DOGly ragiona in profondità e parla come qualcuno che conosce il cane.
+La stessa gerarchia vale su mobile, web e nel risultato riaperto dal Diario:
+
+1. Interpretazione immediata e probabilistica: «Oreo sembra volerti coinvolgere nel gioco».
+2. Frase breve sotto «In parole umane», accompagnata da «Una possibile lettura del momento».
+   È una parafrasi dell'intero momento, mai una traduzione letterale dell'abbaio.
+   Assente se manca una lettura sufficiente, restano letture incompatibili o serve priorità alla sicurezza.
+3. Una sola azione quando fornita dal consiglio validato; nessun consiglio aggiunto per riempire.
+   Le indicazioni di sicurezza restano sempre visibili e hanno precedenza.
+4. «Perché?» sempre disponibile quando esistono dettagli, chiuso all'apertura anche per letture chiare.
+   Contiene spiegazione, video, audio, contesto del proprietario, ricordi utilizzati,
+   motivazione del consiglio e cosa osservare. La prudenza è espressa in parole, mai percentuali.
+5. Una sola domanda di contesto quando cambia realmente la lettura. Nessun questionario aggiunto.
+
+La personalizzazione cambia la lettura solo quando segnali attuali e ricordi pertinenti
+la sostengono. Episodi preliminari o contestati non diventano abitudini confermate;
+il numero di interazioni o il livello di conoscenza da solo non prova un'abitudine.
+Nella spiegazione si conserva il significato memorizzato, mai contatori interni.
+
+Realtime usa italiano parlato e normalmente 1–2 frasi: risposta utile, eventuale azione,
+poi si ferma. Chiede un video solo se serve a distinguere le letture, senza fingere
+di osservare il cane in diretta. Lo stile è condiviso da voce e conversazione testuale.
+
 - Feedback a tre vie; "Non lo so" senza penalità.
 - Condividi card sanitizzata (niente raw video).
+- I test controllano il contenuto effettivamente reso e il passaggio dei dati dal
+  ragionamento al risultato. La qualità delle risposte generate va verificata anche
+  su nuovi casi reali: i test automatici non misurano da soli la qualità conversazionale.
 
 ## Profilo / Album
 

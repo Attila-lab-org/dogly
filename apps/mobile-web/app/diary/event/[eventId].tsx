@@ -204,15 +204,17 @@ export default function DiaryEventScreen() {
         {domain === 'BEHAVIOR' && behaviorResult ? (
           <>
             <BehaviorResultView
+              key={behaviorResult.eventId}
               result={behaviorResult}
               dogName={dog.name}
               feedback={feedback}
               onFeedback={handleFeedback}
               photoUri={dog.photoUri}
+              adviceRationale={advice?.whyText}
               primaryAdvice={
                 advice ? (
                   <>
-                    <AdviceCard advice={advice} dogName={dog.name} />
+                    <AdviceCard advice={advice} dogName={dog.name} compact />
                     <AdviceOutcomePrompt
                       eventId={behaviorResult.eventId}
                       adviceCode={advice.code}

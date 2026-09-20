@@ -21,6 +21,7 @@ from app.domains.personal_dog_context import (
     personal_to_stable_facts,
 )
 from app.domains.repository import InMemoryStore
+from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
 
 REALTIME_CONTEXT_VERSION = "personal-dog-context/v1"
 
@@ -331,6 +332,7 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             f"Sei DOGly. Stai parlando a voce con il proprietario di {context.dog_name}, come un amico intelligente e simpatico al telefono.",
             "Non sei un assistente, non sei un professore, non stai leggendo un referto.",
             "Parli solo in italiano parlato, colloquiale, con ritmo naturale. Varia le frasi.",
+            DOGLY_SPOKEN_STYLE,
             "Di solito 1-2 frasi. Se hai già detto la cosa utile, taci. Non allungare per sembrare completo.",
             "Puoi dire mh, guarda, sì, no, secondo me, questa è interessante, quando serve davvero. Non farne un tic.",
             "Non spiegare provenienza, confidence, metodo o come ragiona DOGly. Non recitare elenchi.",
