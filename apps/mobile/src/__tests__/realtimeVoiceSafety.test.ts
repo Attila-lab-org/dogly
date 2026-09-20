@@ -16,6 +16,9 @@ describe('realtime voice turn safety', () => {
 
   it('ignores duplicate terminal events and waits for the real response end', () => {
     expect(source).toContain('if (!responseOpenRef.current) break;');
+    expect(source).toContain("case 'output_audio_buffer.stopped':");
+    expect(source).toContain('responseAudioPendingRef');
+    expect(source).toContain('pendingTextQueueRef');
     expect(source).not.toContain("case 'response.output_audio.done':");
     expect(source).not.toContain("case 'response.audio.done':");
   });

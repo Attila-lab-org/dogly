@@ -38,6 +38,11 @@ const MIC_CONSTRAINTS: MediaStreamConstraints = {
   video: false,
 };
 
+// `response.done` means generation ended. With WebRTC the audio buffer can
+// still be draining, so we reopen the microphone only after the drain event.
+const RESPONSE_DRAIN_FALLBACK_MS = 1000;
+const MIC_REENABLE_DELAY_MS = 250;
+
 export function useDoglyRealtime(dogId: string) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -60,8 +65,13 @@ export function useDoglyRealtime(dogId: string) {
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const greetingRef = useRef(false);
   const responseOpenRef = useRef(false);
+  const responseAudioPendingRef = useRef(false);
+  const responseAudioDrainedRef = useRef(false);
+  const responseFinalizedRef = useRef(false);
   const assistantTranscriptSourceRef = useRef<'output' | 'audio' | null>(null);
-  const pendingTextRef = useRef<string | null>(null);
+  const pendingTextQueueRef = useRef<string[]>([]);
+  const responseDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mutedByUserRef = useRef(false);
   const connectInFlightRef = useRef(false);
   const remoteTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -80,8 +90,15 @@ export function useDoglyRealtime(dogId: string) {
     persistQueueRef.current = Promise.resolve();
     greetingRef.current = false;
     responseOpenRef.current = false;
+    responseAudioPendingRef.current = false;
+    responseAudioDrainedRef.current = false;
+    responseFinalizedRef.current = false;
     assistantTranscriptSourceRef.current = null;
-    pendingTextRef.current = null;
+    pendingTextQueueRef.current = [];
+    if (responseDrainTimerRef.current) clearTimeout(responseDrainTimerRef.current);
+    if (micReleaseTimerRef.current) clearTimeout(micReleaseTimerRef.current);
+    responseDrainTimerRef.current = null;
+    micReleaseTimerRef.current = null;
   }, []);
 
   const setMicEnabled = useCallback((enabled: boolean) => {
@@ -89,6 +106,19 @@ export function useDoglyRealtime(dogId: string) {
     if (!track) return;
     track.enabled = enabled && !mutedByUserRef.current;
   }, []);
+
+  const releaseMicAfterOutput = useCallback(() => {
+    if (micReleaseTimerRef.current) clearTimeout(micReleaseTimerRef.current);
+    setMicEnabled(false);
+    setVoiceState('speaking');
+    micReleaseTimerRef.current = setTimeout(() => {
+      micReleaseTimerRef.current = null;
+      if (!responseOpenRef.current && !responseAudioPendingRef.current) {
+        setMicEnabled(true);
+        setVoiceState('listening');
+      }
+    }, MIC_REENABLE_DELAY_MS);
+  }, [setMicEnabled]);
 
   const ensureSession = useCallback(async () => {
     if (sessionRef.current && sessionDataRef.current) return sessionDataRef.current;
@@ -136,6 +166,13 @@ export function useDoglyRealtime(dogId: string) {
   const startTextResponse = useCallback((text: string) => {
     const channel = channelRef.current;
     if (!channel || channel.readyState !== 'open' || greetingRef.current) return false;
+    if (micReleaseTimerRef.current) {
+      clearTimeout(micReleaseTimerRef.current);
+      micReleaseTimerRef.current = null;
+    }
+    responseAudioPendingRef.current = true;
+    responseAudioDrainedRef.current = false;
+    responseFinalizedRef.current = false;
     setMicEnabled(false);
     userTranscriptRef.current = text;
     assistantRef.current = '';
@@ -161,7 +198,7 @@ export function useDoglyRealtime(dogId: string) {
     responseOpenRef.current = true;
     setVoiceState('speaking');
     return true;
-  }, []);
+  }, [setMicEnabled]);
 
   const sendVoiceText = useCallback(
     (text: string) => {
@@ -169,12 +206,12 @@ export function useDoglyRealtime(dogId: string) {
       if (!channel || channel.readyState !== 'open' || greetingRef.current) {
         return false;
       }
-      if (responseOpenRef.current) {
-        pendingTextRef.current = text;
+      if (responseOpenRef.current || responseAudioPendingRef.current) {
+        pendingTextQueueRef.current.push(text);
         setTranscript(text);
         setAssistantDraft('');
         setVoiceState('thinking');
-        cancelOpenResponse();
+        if (responseOpenRef.current) cancelOpenResponse();
         return true;
       }
       return startTextResponse(text);
@@ -182,11 +219,47 @@ export function useDoglyRealtime(dogId: string) {
     [cancelOpenResponse, setMicEnabled, startTextResponse],
   );
 
+  const finalizeResponse = useCallback(() => {
+    if (
+      responseOpenRef.current ||
+      !responseAudioPendingRef.current ||
+      responseFinalizedRef.current
+    ) {
+      return;
+    }
+    responseFinalizedRef.current = true;
+    responseAudioPendingRef.current = false;
+    responseAudioDrainedRef.current = true;
+    if (responseDrainTimerRef.current) {
+      clearTimeout(responseDrainTimerRef.current);
+      responseDrainTimerRef.current = null;
+    }
+    if (greetingRef.current) {
+      greetingRef.current = false;
+      releaseMicAfterOutput();
+      return;
+    }
+    persistSpokenTurn(userTranscriptRef.current, assistantRef.current);
+    const nextText = pendingTextQueueRef.current.shift();
+    if (nextText) {
+      startTextResponse(nextText);
+      return;
+    }
+    releaseMicAfterOutput();
+  }, [persistSpokenTurn, releaseMicAfterOutput, startTextResponse]);
+
   const handleServerEvent = useCallback(
     (event: RealtimeServerEvent) => {
       switch (event.type) {
         case 'input_audio_buffer.speech_started':
           if (greetingRef.current) return;
+          // The track is muted while DOGly speaks. Ignore residual VAD events
+          // so speaker bleed cannot erase the answer or create a second turn.
+          if (
+            responseOpenRef.current ||
+            responseAudioPendingRef.current ||
+            micReleaseTimerRef.current
+          ) break;
           userTranscriptRef.current = '';
           assistantRef.current = '';
           assistantTranscriptSourceRef.current = null;
@@ -208,6 +281,13 @@ export function useDoglyRealtime(dogId: string) {
           break;
         case 'response.created':
           responseOpenRef.current = true;
+          responseAudioPendingRef.current = true;
+          responseAudioDrainedRef.current = false;
+          responseFinalizedRef.current = false;
+          if (micReleaseTimerRef.current) {
+            clearTimeout(micReleaseTimerRef.current);
+            micReleaseTimerRef.current = null;
+          }
           assistantTranscriptSourceRef.current = null;
           setMicEnabled(false);
           break;
@@ -248,33 +328,40 @@ export function useDoglyRealtime(dogId: string) {
         case 'response.done':
           if (!responseOpenRef.current) break;
           responseOpenRef.current = false;
-          setMicEnabled(true);
-          if (greetingRef.current) {
-            greetingRef.current = false;
-            setMicEnabled(true);
-            setVoiceState('listening');
-            return;
+          // `response.done` is not the end of WebRTC playback. Wait for the
+          // output buffer to drain, with a bounded fallback for older clients.
+          if (responseAudioDrainedRef.current) {
+            finalizeResponse();
+          } else {
+            if (responseDrainTimerRef.current) clearTimeout(responseDrainTimerRef.current);
+            responseDrainTimerRef.current = setTimeout(() => {
+              responseDrainTimerRef.current = null;
+              responseAudioDrainedRef.current = true;
+              finalizeResponse();
+            }, RESPONSE_DRAIN_FALLBACK_MS);
           }
-          persistSpokenTurn(userTranscriptRef.current, assistantRef.current);
-          const nextText = pendingTextRef.current;
-          pendingTextRef.current = null;
-          if (nextText) {
-            startTextResponse(nextText);
-            return;
-          }
-          setVoiceState('listening');
+          break;
+        case 'output_audio_buffer.stopped':
+          responseAudioDrainedRef.current = true;
+          if (!responseOpenRef.current) finalizeResponse();
           break;
         case 'response.cancelled':
-          if (!responseOpenRef.current) break;
+          if (!responseOpenRef.current && !responseAudioPendingRef.current) break;
           responseOpenRef.current = false;
+          responseAudioPendingRef.current = false;
+          responseAudioDrainedRef.current = true;
+          responseFinalizedRef.current = true;
+          if (responseDrainTimerRef.current) {
+            clearTimeout(responseDrainTimerRef.current);
+            responseDrainTimerRef.current = null;
+          }
           if (greetingRef.current) {
             greetingRef.current = false;
             setMicEnabled(true);
             setVoiceState('listening');
             return;
           }
-          const queuedText = pendingTextRef.current;
-          pendingTextRef.current = null;
+          const queuedText = pendingTextQueueRef.current.shift();
           if (queuedText) {
             startTextResponse(queuedText);
             return;
@@ -283,6 +370,7 @@ export function useDoglyRealtime(dogId: string) {
           assistantRef.current = '';
           assistantTranscriptSourceRef.current = null;
           setAssistantDraft('');
+          setMicEnabled(true);
           setVoiceState('listening');
           break;
         case 'error':
@@ -291,7 +379,7 @@ export function useDoglyRealtime(dogId: string) {
           break;
       }
     },
-    [persistSpokenTurn, setMicEnabled, startTextResponse],
+    [finalizeResponse, setMicEnabled, startTextResponse],
   );
 
   const connect = useCallback(async () => {
@@ -347,6 +435,9 @@ export function useDoglyRealtime(dogId: string) {
       });
       channel.addEventListener('open', () => {
         greetingRef.current = true;
+        responseAudioPendingRef.current = true;
+        responseAudioDrainedRef.current = false;
+        responseFinalizedRef.current = false;
         setVoiceState('speaking');
         channel.send(
           JSON.stringify({
@@ -430,7 +521,11 @@ export function useDoglyRealtime(dogId: string) {
 
   const toggleMute = useCallback(() => {
     mutedByUserRef.current = !mutedByUserRef.current;
-    setMicEnabled(!mutedByUserRef.current);
+    if (mutedByUserRef.current) {
+      setMicEnabled(false);
+    } else if (!responseOpenRef.current && !responseAudioPendingRef.current) {
+      setMicEnabled(true);
+    }
     setMuted(mutedByUserRef.current);
   }, [setMicEnabled]);
 
