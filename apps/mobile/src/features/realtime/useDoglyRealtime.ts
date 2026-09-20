@@ -55,9 +55,10 @@ export function useDoglyRealtime(dogId: string) {
   const sessionPromiseRef = useRef<Promise<RealtimeSession> | null>(null);
   const userTranscriptRef = useRef('');
   const assistantRef = useRef('');
-  const persistLockRef = useRef(false);
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const greetingRef = useRef(false);
   const responseOpenRef = useRef(false);
+  const pendingTextRef = useRef<string | null>(null);
   const mutedByUserRef = useRef(false);
   const connectInFlightRef = useRef(false);
 
@@ -69,9 +70,10 @@ export function useDoglyRealtime(dogId: string) {
     peerRef.current = null;
     streamRef.current = null;
     outgoingTrackRef.current = null;
-    persistLockRef.current = false;
+    persistQueueRef.current = Promise.resolve();
     greetingRef.current = false;
     responseOpenRef.current = false;
+    pendingTextRef.current = null;
   }, []);
 
   const setMicEnabled = useCallback((enabled: boolean) => {
@@ -96,20 +98,19 @@ export function useDoglyRealtime(dogId: string) {
     }
   }, [dogId]);
 
-  const persistSpokenTurn = useCallback(async () => {
+  const persistSpokenTurn = useCallback((userText: string, assistantText: string) => {
     const sessionId = sessionRef.current;
-    const userText = userTranscriptRef.current.trim();
-    const assistantText = assistantRef.current.trim();
-    if (!sessionId || !userText || !assistantText || persistLockRef.current) return;
-    persistLockRef.current = true;
-    try {
-      const turn = await createRealtimeTurn(sessionId, userText, assistantText);
-      setLastTurn(turn);
-    } catch {
-      // Voice already answered; audit persistence must never block the conversation.
-    } finally {
-      persistLockRef.current = false;
-    }
+    const user = userText.trim();
+    const assistant = assistantText.trim();
+    if (!sessionId || !user || !assistant) return;
+    persistQueueRef.current = persistQueueRef.current.then(async () => {
+      try {
+        const turn = await createRealtimeTurn(sessionId, user, assistant);
+        setLastTurn(turn);
+      } catch {
+        // Voice already answered; audit persistence must never block the conversation.
+      }
+    });
   }, []);
 
   const cancelOpenResponse = useCallback(() => {
@@ -117,8 +118,36 @@ export function useDoglyRealtime(dogId: string) {
     if (!channel || channel.readyState !== 'open') return;
     if (responseOpenRef.current) {
       channel.send(JSON.stringify({ type: 'response.cancel' }));
-      responseOpenRef.current = false;
     }
+  }, []);
+
+  const startTextResponse = useCallback((text: string) => {
+    const channel = channelRef.current;
+    if (!channel || channel.readyState !== 'open' || greetingRef.current) return false;
+    setMicEnabled(false);
+    userTranscriptRef.current = text;
+    assistantRef.current = '';
+    setTranscript(text);
+    setAssistantDraft('');
+    channel.send(
+      JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text }],
+        },
+      }),
+    );
+    channel.send(
+      JSON.stringify({
+        type: 'response.create',
+        response: { output_modalities: ['audio'] },
+      }),
+    );
+    responseOpenRef.current = true;
+    setVoiceState('speaking');
+    return true;
   }, []);
 
   const sendVoiceText = useCallback(
@@ -127,32 +156,17 @@ export function useDoglyRealtime(dogId: string) {
       if (!channel || channel.readyState !== 'open' || greetingRef.current) {
         return false;
       }
-      userTranscriptRef.current = text;
-      assistantRef.current = '';
-      setTranscript(text);
-      setAssistantDraft('');
-      cancelOpenResponse();
-      channel.send(
-        JSON.stringify({
-          type: 'conversation.item.create',
-          item: {
-            type: 'message',
-            role: 'user',
-            content: [{ type: 'input_text', text }],
-          },
-        }),
-      );
-      channel.send(
-        JSON.stringify({
-          type: 'response.create',
-          response: { output_modalities: ['audio'] },
-        }),
-      );
-      responseOpenRef.current = true;
-      setVoiceState('speaking');
-      return true;
+      if (responseOpenRef.current) {
+        pendingTextRef.current = text;
+        setTranscript(text);
+        setAssistantDraft('');
+        setVoiceState('thinking');
+        cancelOpenResponse();
+        return true;
+      }
+      return startTextResponse(text);
     },
-    [cancelOpenResponse],
+    [cancelOpenResponse, setMicEnabled, startTextResponse],
   );
 
   const handleEvent = useCallback(
@@ -178,6 +192,7 @@ export function useDoglyRealtime(dogId: string) {
           break;
         case 'response.created':
           responseOpenRef.current = true;
+          setMicEnabled(false);
           break;
         case 'response.output_audio_transcript.delta':
         case 'response.audio_transcript.delta':
@@ -194,7 +209,27 @@ export function useDoglyRealtime(dogId: string) {
             setAssistantDraft(event.transcript);
           }
           break;
+        case 'response.output_audio.done':
+        case 'response.audio.done':
+          setMicEnabled(true);
+          break;
         case 'response.done':
+          responseOpenRef.current = false;
+          if (greetingRef.current) {
+            greetingRef.current = false;
+            setMicEnabled(true);
+            setVoiceState('listening');
+            return;
+          }
+          persistSpokenTurn(userTranscriptRef.current, assistantRef.current);
+          const nextText = pendingTextRef.current;
+          pendingTextRef.current = null;
+          if (nextText) {
+            startTextResponse(nextText);
+            return;
+          }
+          setVoiceState('listening');
+          break;
         case 'response.cancelled':
           responseOpenRef.current = false;
           if (greetingRef.current) {
@@ -203,15 +238,23 @@ export function useDoglyRealtime(dogId: string) {
             setVoiceState('listening');
             return;
           }
+          const queuedText = pendingTextRef.current;
+          pendingTextRef.current = null;
+          if (queuedText) {
+            startTextResponse(queuedText);
+            return;
+          }
+          userTranscriptRef.current = '';
+          assistantRef.current = '';
+          setAssistantDraft('');
           setVoiceState('listening');
-          void persistSpokenTurn();
           break;
         case 'error':
           setError(event.error?.message ?? 'La voce DOGly si è interrotta.');
           setVoiceState('error');
       }
     },
-    [persistSpokenTurn, setMicEnabled],
+    [persistSpokenTurn, setMicEnabled, startTextResponse],
   );
 
   const connect = useCallback(async () => {
