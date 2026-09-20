@@ -135,6 +135,7 @@ class BehaviorEventRec(BaseModel):
     knowledge_card_ids: list[str] = Field(default_factory=list)
     advice_code: str | None = None
     advice_json: dict[str, Any] | None = None
+    quota_reserved: bool = True
     quota_committed: bool = False
     quota_refunded: bool = False
     attempt_count: int = 0
@@ -207,6 +208,7 @@ class FecalEventRec(BaseModel):
     summary: str | None = None
     retention_state: RetentionState = RetentionState.TEMPORARY
     expires_at: datetime | None = None
+    quota_reserved: bool = True
     quota_committed: bool = False
     quota_refunded: bool = False
     attempt_count: int = 0

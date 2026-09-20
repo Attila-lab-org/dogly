@@ -558,7 +558,7 @@ async def _fail(state: AppState, event: BehaviorEventRec, code: ErrorCode, retry
         transition(event, BehaviorEventStatus.FAILED_TERMINAL)
     else:
         raise InvalidTransition(f"cannot fail terminally from {event.status}")
-    if not event.quota_refunded and not event.quota_committed:
+    if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
         await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
         event.quota_refunded = True
     event.completed_at = now_utc()
@@ -614,7 +614,7 @@ async def fail_stuck_analysis(
         return False
     event.status = "FAILED_TERMINAL"
     event.last_error_code = ErrorCode.PROCESSING_TIMEOUT.value
-    if not event.quota_refunded and not event.quota_committed:
+    if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
         await quota.refund(
             event.user_id,
             AnalysisDomain.DIGESTIVE,
@@ -797,7 +797,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     if quality.overall_quality == "insufficient" or (quality.dog_visible_fraction or 0.0) <= 0.0:
         await _close_processing_collection(state, event, next_status=None)
         transition(event, BehaviorEventStatus.REJECTED_QUALITY)
-        if not event.quota_refunded and not event.quota_committed:
+        if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
             event.quota_refunded = True
         event.completed_at = now_utc()
@@ -998,7 +998,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
     event.advice_json = advice.model_dump(mode="json") if advice is not None else None
     event.completed_at = now_utc()
     event.last_error_code = None
-    if not event.quota_committed and not event.quota_refunded:
+    if event.quota_reserved and not event.quota_committed and not event.quota_refunded:
         await quota.commit(event.user_id, AnalysisDomain.BEHAVIOR, reference_id=event.id)
         event.quota_committed = True
     await _arm_behavior_raw_ttl(state, event)
@@ -1492,7 +1492,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
                 }
             )
         event.status = "FAILED_TERMINAL"
-        if not event.quota_refunded and not event.quota_committed:
+        if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
             await quota.refund(
                 event.user_id,
                 AnalysisDomain.DIGESTIVE,
@@ -1520,7 +1520,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     except BudgetExceededError:
         event.status = "FAILED_TERMINAL"
         event.last_error_code = ErrorCode.AI_BUDGET_EXCEEDED.value
-        if not event.quota_refunded and not event.quota_committed:
+        if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
             await quota.refund(
                 event.user_id,
                 AnalysisDomain.DIGESTIVE,
@@ -1557,7 +1557,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         )
         event.status = "FAILED_TERMINAL"
         event.last_error_code = ErrorCode.PROCESSING_FAILED.value
-        if not event.quota_refunded and not event.quota_committed:
+        if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
             event.quota_refunded = True
         event.completed_at = now_utc()
@@ -1607,7 +1607,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
         event.image_quality = "INSUFFICIENT"
         event.learning_eligible = False
         event.status = "REJECTED_QUALITY"
-        if not event.quota_refunded and not event.quota_committed:
+        if event.quota_reserved and not event.quota_refunded and not event.quota_committed:
             await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
             event.quota_refunded = True
         event.completed_at = now_utc()
@@ -1660,7 +1660,7 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
     event.summary = intelligence.consumer_summary
     event.status = "COMPLETED"
     event.completed_at = now_utc()
-    if not event.quota_committed and not event.quota_refunded:
+    if event.quota_reserved and not event.quota_committed and not event.quota_refunded:
         await quota.commit(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
         event.quota_committed = True
     schedule_digestive_raw_expiry(event, state.settings)

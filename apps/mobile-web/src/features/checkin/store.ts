@@ -88,10 +88,9 @@ export async function hydrateCheckIn(): Promise<void> {
     ...state,
     prefs: mergedPrefs,
     hydrated: true,
-    welcomePending: shouldShowWelcomeCheckIn(
-      lastAnswer?.dayKey ?? null,
-      mergedPrefs.frequency,
-    ),
+    welcomePending:
+      mergedPrefs.smartReminders &&
+      shouldShowWelcomeCheckIn(lastAnswer?.dayKey ?? null, mergedPrefs.frequency),
   };
   emit();
 }
@@ -103,7 +102,11 @@ export function setCheckInFrequency(frequency: CheckInFrequency) {
 }
 
 export function setSmartReminders(smartReminders: boolean) {
-  state = { ...state, prefs: { ...state.prefs, smartReminders } };
+  state = {
+    ...state,
+    prefs: { ...state.prefs, smartReminders },
+    welcomePending: smartReminders ? state.welcomePending : false,
+  };
   emit();
   void saveCheckInPrefs(state.prefs);
 }

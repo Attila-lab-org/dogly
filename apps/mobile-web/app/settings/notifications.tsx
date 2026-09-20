@@ -10,7 +10,11 @@ import {
 } from '@/features/notifications/store';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { FREQUENCY_OPTIONS } from '@/features/checkin/copy';
-import { setCheckInFrequency, useCheckIn } from '@/features/checkin/store';
+import {
+  setCheckInFrequency,
+  setSmartReminders,
+  useCheckIn,
+} from '@/features/checkin/store';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
 
 const OPTIONS: Array<{
@@ -146,10 +150,11 @@ export default function NotificationSettingsScreen() {
               <Chip label="In arrivo" tone="neutral" />
             ) : (
             <Switch
-              value={preferences[option.key]}
-              onValueChange={(value) =>
-                setNotificationPreference(option.key, value)
-              }
+              value={option.key === 'checkIn' ? prefs.smartReminders : preferences[option.key]}
+              onValueChange={(value) => {
+                setNotificationPreference(option.key, value);
+                if (option.key === 'checkIn') setSmartReminders(value);
+              }}
               trackColor={{ false: colors.border, true: colors.teal }}
               thumbColor="#FFFFFF"
               accessibilityLabel={option.title}

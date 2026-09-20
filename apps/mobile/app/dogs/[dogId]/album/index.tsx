@@ -18,7 +18,8 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
 import { confirmDestructiveAction } from '@/lib/confirmAction';
 
-const PAGE_SIZE = 60;
+// Every photo may require a signed URL; keep the initial fetch responsive.
+const PAGE_SIZE = 24;
 
 export default function AlbumIndexScreen() {
   const { dogId } = useLocalSearchParams<{ dogId: string }>();
@@ -48,13 +49,22 @@ export default function AlbumIndexScreen() {
     setAdding(true);
     try {
       const album = await getOrCreateMomentsAlbum(dogId);
-      await uploadAlbumPhoto(album.id, uri);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
-        queryClient.invalidateQueries({
-          queryKey: ['gallery-dog-photos', dogId],
-        }),
-      ]);
+        const uploaded = await uploadAlbumPhoto(album.id, uri);
+        queryClient.setQueryData(
+          ['gallery-dog-photos', dogId, PAGE_SIZE],
+          (current: { pages: AlbumPhoto[][]; pageParams: number[] } | undefined) => {
+            if (!current) return current;
+            const [firstPage = [], ...restPages] = current.pages;
+            return { ...current, pages: [[uploaded, ...firstPage], ...restPages] };
+          },
+        );
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
+          queryClient.invalidateQueries({
+            queryKey: ['gallery-dog-photos', dogId],
+            refetchType: 'none',
+          }),
+        ]);
     } catch {
       Alert.alert(
         'Foto non salvata',

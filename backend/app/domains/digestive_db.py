@@ -23,7 +23,7 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain, FeedbackValue
 from app.domains import dogs_db, weight_db
-from app.domains.billing import QuotaExceeded
+from app.domains.billing import QuotaExceeded, _quota_blocks_when_exhausted
 from app.domains.db import reserve_usage_on_conn
 from app.domains.digestive_intelligence import (
     DIGESTIVE_BASELINE_VERSION,
@@ -157,10 +157,11 @@ async def init_fecal_event(
             domain=AnalysisDomain.DIGESTIVE.value,
             reference_id=event_id,
         )
-        if not reserved.get("granted", False) and reserved.get("reason") not in (
+        quota_reserved = reserved.get("granted", False) or reserved.get("reason") in (
             "ALREADY_RESERVED",
             "RESERVED",
-        ):
+        )
+        if not quota_reserved and _quota_blocks_when_exhausted():
             raise QuotaExceeded(AnalysisDomain.DIGESTIVE)
 
         row = (
@@ -169,10 +170,10 @@ async def init_fecal_event(
                     """
                     insert into public.fecal_events (
                       id, dog_id, user_id, client_request_id, image_path,
-                      bytes, content_type, status, upload_completed
+                      bytes, content_type, status, upload_completed, quota_reserved
                     ) values (
                       :id, :dog_id, :user_id, :client_request_id, :image_path,
-                      :bytes, :content_type, 'UPLOADING', false
+                      :bytes, :content_type, 'UPLOADING', false, :quota_reserved
                     )
                     returning *
                     """
@@ -185,6 +186,7 @@ async def init_fecal_event(
                     "image_path": path,
                     "bytes": payload.bytes,
                     "content_type": payload.content_type,
+                    "quota_reserved": quota_reserved,
                 },
             )
         ).mappings().one()
@@ -493,6 +495,7 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                   confidence_band = :confidence_band,
                   safety_flags = CAST(:safety_flags AS jsonb),
                   summary = :summary,
+                  quota_reserved = :quota_reserved,
                   quota_committed = :quota_committed,
                   quota_refunded = :quota_refunded,
                   attempt_count = :attempt_count,
@@ -522,6 +525,7 @@ async def save_fecal_state(engine: AsyncEngine, event: FecalEventRec) -> None:
                 else event.confidence_band,
                 "safety_flags": json.dumps(event.safety_flags or []),
                 "summary": event.summary,
+                "quota_reserved": event.quota_reserved,
                 "quota_committed": event.quota_committed,
                 "quota_refunded": event.quota_refunded,
                 "attempt_count": event.attempt_count,

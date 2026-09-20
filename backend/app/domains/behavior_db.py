@@ -13,7 +13,7 @@ from app.contracts.api import BehaviorCaptureInitRequest, BehaviorFeedbackReques
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import AnalysisDomain, BehaviorEventStatus, FeedbackValue
 from app.domains import dogs_db
-from app.domains.billing import QuotaExceeded
+from app.domains.billing import QuotaExceeded, _quota_blocks_when_exhausted
 from app.domains.db import reserve_usage_on_conn
 from app.domains.ids import require_uuid
 from app.domains.models import (
@@ -139,10 +139,11 @@ async def init_capture(
             domain=AnalysisDomain.BEHAVIOR.value,
             reference_id=event_id,
         )
-        if not reserved.get("granted", False) and reserved.get("reason") not in (
+        quota_reserved = reserved.get("granted", False) or reserved.get("reason") in (
             "ALREADY_RESERVED",
             "RESERVED",
-        ):
+        )
+        if not quota_reserved and _quota_blocks_when_exhausted():
             raise QuotaExceeded(AnalysisDomain.BEHAVIOR)
 
         await conn.execute(
@@ -176,9 +177,9 @@ async def init_capture(
             text(
                 """
                 insert into public.behavior_events (
-                  id, capture_id, dog_id, user_id, status, context_bucket
+                  id, capture_id, dog_id, user_id, status, context_bucket, quota_reserved
                 ) values (
-                  :id, :capture_id, :dog_id, :user_id, 'UPLOADING', :context_bucket
+                  :id, :capture_id, :dog_id, :user_id, 'UPLOADING', :context_bucket, :quota_reserved
                 )
                 """
             ),
@@ -190,6 +191,7 @@ async def init_capture(
                 "context_bucket": payload.context_bucket.value
                 if hasattr(payload.context_bucket, "value")
                 else payload.context_bucket,
+                "quota_reserved": quota_reserved,
             },
         )
 
@@ -518,6 +520,7 @@ async def save_event_state(engine: AsyncEngine, event: BehaviorEventRec) -> None
                   knowledge_card_ids = cast(:knowledge_card_ids as text[]),
                   advice_code = :advice_code,
                   advice_json = cast(:advice_json as jsonb),
+                  quota_reserved = :quota_reserved,
                   quota_committed = :quota_committed,
                   quota_refunded = :quota_refunded,
                   attempt_count = :attempt_count,
@@ -549,6 +552,7 @@ async def save_event_state(engine: AsyncEngine, event: BehaviorEventRec) -> None
                 "knowledge_card_ids": event.knowledge_card_ids,
                 "advice_code": event.advice_code,
                 "advice_json": json.dumps(event.advice_json) if event.advice_json else None,
+                "quota_reserved": event.quota_reserved,
                 "quota_committed": event.quota_committed,
                 "quota_refunded": event.quota_refunded,
                 "attempt_count": event.attempt_count,

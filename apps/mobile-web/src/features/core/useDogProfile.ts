@@ -33,8 +33,7 @@ type ApiKnowledgeScore = {
   score: number | null;
 };
 
-let lastKnowledgeScore: KnowledgeScore = mapKnowledgeScore(null);
-let lastDog: DogProfile = emptyDog();
+const profileSnapshots = new Map<string, DogProfileState>();
 
 export function mapKnowledgeScore(
   value: ApiKnowledgeScore | null | undefined,
@@ -87,7 +86,6 @@ export function useDogProfile(): DogProfileState {
         ? items.find((d) => d.id === primaryDogId)
         : undefined) ?? items[0];
     if (preferred) return mapApiDogToProfile(preferred);
-    if (lastDog.id) return lastDog;
     return emptyDog();
   }, [query.data, primaryDogId]);
 
@@ -100,8 +98,12 @@ export function useDogProfile(): DogProfileState {
 
   const resolvedKnowledgeScore = mapKnowledgeScore(knowledgeQuery.data);
 
-  if (dog.id) lastDog = dog;
-  lastKnowledgeScore = resolvedKnowledgeScore;
+  if (userId && dog.id) {
+    profileSnapshots.set(userId, {
+      dog: { ...dog },
+      knowledgeScore: { ...resolvedKnowledgeScore },
+    });
+  }
   return { dog, knowledgeScore: resolvedKnowledgeScore };
 }
 
@@ -133,11 +135,14 @@ export function useUpdateDogMutation(dogId: string) {
 }
 
 /** Snapshot sync per settings from the latest real query result. */
-export function getDogProfileSnapshot(): DogProfileState {
-  return {
-    dog: { ...lastDog },
-    knowledgeScore: { ...lastKnowledgeScore },
-  };
+export function getDogProfileSnapshot(userId?: string): DogProfileState {
+  const snapshot = userId ? profileSnapshots.get(userId) : undefined;
+  return snapshot
+    ? {
+        dog: { ...snapshot.dog },
+        knowledgeScore: { ...snapshot.knowledgeScore },
+      }
+    : { dog: emptyDog(), knowledgeScore: mapKnowledgeScore(null) };
 }
 
 export function profileToCreateBody(
