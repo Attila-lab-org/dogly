@@ -5,6 +5,7 @@ import {
   RTCSessionDescription,
   type MediaStream,
 } from 'react-native-webrtc';
+import { setAudioModeAsync } from 'expo-audio';
 import {
   createRealtimeSession,
   createRealtimeTurn,
@@ -58,6 +59,7 @@ export function useDoglyRealtime(dogId: string) {
   const greetingRef = useRef(false);
   const responseOpenRef = useRef(false);
   const mutedByUserRef = useRef(false);
+  const connectInFlightRef = useRef(false);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -213,10 +215,16 @@ export function useDoglyRealtime(dogId: string) {
   );
 
   const connect = useCallback(async () => {
-    if (!dogId || voiceState === 'connecting') return;
+    if (!dogId || voiceState === 'connecting' || connectInFlightRef.current) return;
+    connectInFlightRef.current = true;
     setError(null);
     setVoiceState('connecting');
     try {
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        interruptionMode: 'doNotMix',
+      });
       const prepared = await ensureSession();
       const secret = await getRealtimeClientSecret(prepared.id);
       const peer = new RTCPeerConnection();
@@ -288,6 +296,8 @@ export function useDoglyRealtime(dogId: string) {
         'Non riesco ad aprire il microfono. Puoi continuare scrivendo a DOGly.',
       );
       setVoiceState('error');
+    } finally {
+      connectInFlightRef.current = false;
     }
   }, [closeMedia, dogId, ensureSession, handleEvent, voiceState]);
 

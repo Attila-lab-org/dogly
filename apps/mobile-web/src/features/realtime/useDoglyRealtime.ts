@@ -61,6 +61,8 @@ export function useDoglyRealtime(dogId: string) {
   const greetingRef = useRef(false);
   const responseOpenRef = useRef(false);
   const mutedByUserRef = useRef(false);
+  const connectInFlightRef = useRef(false);
+  const remoteTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -72,6 +74,7 @@ export function useDoglyRealtime(dogId: string) {
     streamRef.current = null;
     audioRef.current = null;
     outgoingTrackRef.current = null;
+    remoteTrackRef.current = null;
     persistLockRef.current = false;
     greetingRef.current = false;
     responseOpenRef.current = false;
@@ -222,7 +225,13 @@ export function useDoglyRealtime(dogId: string) {
   );
 
   const connect = useCallback(async () => {
-    if (Platform.OS !== 'web' || !dogId || voiceState === 'connecting') return;
+    if (
+      Platform.OS !== 'web' ||
+      !dogId ||
+      voiceState === 'connecting' ||
+      connectInFlightRef.current
+    ) return;
+    connectInFlightRef.current = true;
     setError(null);
     setVoiceState('connecting');
     try {
@@ -239,6 +248,8 @@ export function useDoglyRealtime(dogId: string) {
       audioRef.current = audio;
       peer.ontrack = (event) => {
         if (event.track.kind !== 'audio') return;
+        if (remoteTrackRef.current === event.track && audio.srcObject) return;
+        remoteTrackRef.current = event.track;
         const remote = new MediaStream([event.track]);
         const previous = audio.srcObject;
         audio.srcObject = remote;
@@ -309,6 +320,8 @@ export function useDoglyRealtime(dogId: string) {
         'Non riesco ad aprire il microfono. Puoi continuare scrivendo a DOGly.',
       );
       setVoiceState('error');
+    } finally {
+      connectInFlightRef.current = false;
     }
   }, [closeMedia, dogId, ensureSession, handleServerEvent, voiceState]);
 
