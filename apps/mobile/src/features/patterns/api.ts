@@ -13,7 +13,10 @@ type PatternDto = {
   state: PersonalPattern['state'];
   reliability_band: PersonalPattern['reliabilityBand'];
   support_count: number;
+  confirm_count?: number;
+  contradict_count?: number;
   version: number;
+  first_seen?: string | null;
   last_seen: string;
 };
 
@@ -24,10 +27,10 @@ function mapPattern(item: PatternDto): PersonalPattern {
     title: item.title,
     state: item.state,
     supportCount: item.support_count,
-    confirmCount: 0,
-    contradictCount: 0,
+    confirmCount: item.confirm_count ?? 0,
+    contradictCount: item.contradict_count ?? 0,
     reliabilityBand: item.reliability_band,
-    firstSeen: item.last_seen,
+    firstSeen: item.first_seen ?? item.last_seen,
     lastSeen: item.last_seen,
     evidenceNotes: [],
   };

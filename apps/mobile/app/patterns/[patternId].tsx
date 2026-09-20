@@ -151,33 +151,41 @@ export default function PatternDetailScreen() {
 
       {/* Evidenze trasparenti */}
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Perché lo penso</Text>
-        {pattern.evidenceNotes.map((note) => (
-          <View key={note} style={styles.evidenceRow}>
-            <Ionicons
-              name="ellipse"
-              size={6}
-              color={colors.accent}
-              style={styles.bullet}
-            />
-            <Text style={styles.bodyText}>{note}</Text>
-          </View>
-        ))}
+        {pattern.evidenceNotes.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Cosa ho osservato</Text>
+            {pattern.evidenceNotes.map((note) => (
+              <View key={note} style={styles.evidenceRow}>
+                <Ionicons
+                  name="ellipse"
+                  size={6}
+                  color={colors.accent}
+                  style={styles.bullet}
+                />
+                <Text style={styles.bodyText}>{note}</Text>
+              </View>
+            ))}
+          </>
+        ) : null}
         <View style={styles.countsRow}>
           <View style={styles.countItem}>
             <Text style={styles.countValue}>{pattern.supportCount}</Text>
-            <Text style={styles.countLabel}>Volte osservata</Text>
+            <Text style={styles.countLabel}>Momenti osservati</Text>
           </View>
-          <View style={styles.countItem}>
-            <Text style={styles.countValue}>{pattern.confirmCount}</Text>
-            <Text style={styles.countLabel}>Tue conferme</Text>
-          </View>
-          <View style={styles.countItem}>
-            <Text style={[styles.countValue, pattern.contradictCount > 0 && styles.countWarn]}>
-              {pattern.contradictCount}
-            </Text>
-            <Text style={styles.countLabel}>Volte diversa</Text>
-          </View>
+          {pattern.confirmCount > 0 ? (
+            <View style={styles.countItem}>
+              <Text style={styles.countValue}>{pattern.confirmCount}</Text>
+              <Text style={styles.countLabel}>Tue conferme</Text>
+            </View>
+          ) : null}
+          {pattern.contradictCount > 0 ? (
+            <View style={styles.countItem}>
+              <Text style={[styles.countValue, styles.countWarn]}>
+                {pattern.contradictCount}
+              </Text>
+              <Text style={styles.countLabel}>Volte diversa</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.note}>
           Visto per la prima volta il{' '}

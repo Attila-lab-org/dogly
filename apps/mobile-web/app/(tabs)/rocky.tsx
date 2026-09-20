@@ -101,13 +101,9 @@ export default function DogProfileTabScreen() {
   const activeRealFood = foodsQuery.data?.find(
     (food) => food.id === activeRealPeriod?.food_product_id,
   );
-  const activeFoodLabel = (
-    useDemoData
-      ? [activeFood?.brand, activeFood?.name]
-      : [activeRealFood?.brand, activeRealFood?.name]
-  )
-    .filter(Boolean)
-    .join(' ');
+  const activeFoodLabel = formatFoodLabel(
+    useDemoData ? activeFood : activeRealFood,
+  );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
@@ -171,36 +167,62 @@ export default function DogProfileTabScreen() {
               {genderLabel ? <MetaItem icon="male-female-outline" label={genderLabel} /> : null}
               {ageLabel ? <MetaItem icon="calendar-outline" label={ageLabel} /> : null}
               {sizeLabel ? <MetaItem icon="resize-outline" label={sizeLabel} /> : null}
+              {dog.weightKg ? (
+                <MetaItem
+                  icon="scale-outline"
+                  label={`${String(dog.weightKg).replace('.', ',')} kg`}
+                />
+              ) : null}
               {breedLabel ? <MetaItem icon="paw" label={breedLabel} /> : null}
             </View>
           </View>
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              Quello che ho imparato su {dog.name}
+              Cosa sto imparando su {dog.name}
             </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Vedi tutti i pattern di ${dog.name}`}
-              onPress={() => router.push('/patterns')}
-              hitSlop={8}
-              style={styles.pillButton}
-            >
-              <Text style={styles.pillButtonText}>Vedi tutto</Text>
-            </Pressable>
-          </View>
-          <View style={styles.card}>
-            {learnedPatterns.length === 0 ? (
+            {learnedPatterns.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Scopri cosa sto imparando su ${dog.name}`}
+                accessibilityLabel={`Vedi tutte le abitudini di ${dog.name}`}
                 onPress={() => router.push('/patterns')}
+                hitSlop={8}
+                style={styles.pillButton}
+              >
+                <Text style={styles.pillButtonText}>Vedi tutto</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={styles.card}>
+            {patternsQuery.live && patternsQuery.isLoading ? (
+              <Text style={styles.patternEmptyText}>
+                Sto iniziando a conoscere {dog.name}…
+              </Text>
+            ) : patternsQuery.live && patternsQuery.isError ? (
+              <View style={styles.inlineMessage}>
+                <Text style={styles.patternEmptyText}>
+                  Non riesco a caricare ciò che sto imparando.
+                </Text>
+                <Pressable onPress={() => void patternsQuery.refetch()}>
+                  <Text style={styles.noteActionPrimary}>Riprova</Text>
+                </Pressable>
+              </View>
+            ) : learnedPatterns.length === 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Mostra a DOGly un momento di ${dog.name}`}
+                onPress={() => router.push('/behavior/capture')}
                 style={styles.patternEmpty}
               >
-                <Text style={styles.patternEmptyText}>
-                  Con ogni momento condiviso posso comprendere meglio le
-                  abitudini di {dog.name}.
-                </Text>
+                <View style={styles.patternEmptyCopy}>
+                  <Text style={styles.patternEmptyText}>
+                    Con ogni momento condiviso posso capire meglio le sue
+                    abitudini.
+                  </Text>
+                  <Text style={styles.noteActionPrimary}>
+                    Fammi vedere un momento
+                  </Text>
+                </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </Pressable>
             ) : (
@@ -250,7 +272,20 @@ export default function DogProfileTabScreen() {
               <Text style={styles.pillButtonText}>Vedi tutti</Text>
             </Pressable>
           </View>
-          {previewPhotos.length > 0 ? (
+          {photosQuery.isLoading ? (
+            <View style={[styles.card, styles.inlineMessage]}>
+              <Text style={styles.patternEmptyText}>Carico i suoi momenti…</Text>
+            </View>
+          ) : photosQuery.isError ? (
+            <View style={[styles.card, styles.inlineMessage]}>
+              <Text style={styles.patternEmptyText}>
+                Non riesco a caricare i suoi momenti.
+              </Text>
+              <Pressable onPress={() => void photosQuery.refetch()}>
+                <Text style={styles.noteActionPrimary}>Riprova</Text>
+              </Pressable>
+            </View>
+          ) : previewPhotos.length > 0 ? (
             <View style={styles.photoRow}>
               {previewPhotos.map((photo) => (
                 <PhotoThumbnail
@@ -311,7 +346,11 @@ export default function DogProfileTabScreen() {
                     ? 'Stabile'
                     : useDemoData
                       ? 'Da osservare'
-                      : digestiveSummaryLabel(digestiveSummaryQuery.data)}
+                      : digestiveSummaryLabel(
+                          digestiveSummaryQuery.data,
+                          digestiveSummaryQuery.isLoading,
+                          digestiveSummaryQuery.isError,
+                        )}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -382,9 +421,11 @@ export default function DogProfileTabScreen() {
               <View style={styles.linkBody}>
                 <Text style={styles.linkTitle}>Routine e abitudini</Text>
                 <Text style={styles.linkSubtitle}>
-                  {lifestyle.profile
-                    ? 'Le sue abitudini quotidiane'
-                    : 'Aiutami a conoscerlo meglio'}
+                  {lifestyle.error
+                    ? 'Non disponibile'
+                    : lifestyle.profile
+                      ? 'Le sue abitudini quotidiane'
+                      : 'Ancora da raccontare'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -484,9 +525,28 @@ export default function DogProfileTabScreen() {
   );
 }
 
-function digestiveSummaryLabel(summary?: DigestiveSummary): string {
+function formatFoodLabel(
+  food?: { brand?: string | null; name?: string | null } | null,
+): string {
+  const brand = food?.brand?.trim() ?? '';
+  const name = food?.name?.trim() ?? '';
+  if (!brand) return name;
+  if (!name) return brand;
+  if (name.toLocaleLowerCase().startsWith(brand.toLocaleLowerCase())) {
+    return name;
+  }
+  return `${brand} ${name}`;
+}
+
+function digestiveSummaryLabel(
+  summary: DigestiveSummary | undefined,
+  loading = false,
+  error = false,
+): string {
+  if (loading) return 'Sto verificando…';
+  if (error) return 'Non disponibile';
   if (!summary || summary.data_sufficiency === 'insufficient') {
-    return 'Aggiungi osservazione';
+    return 'Ancora da osservare';
   }
   if (summary.safety_flags.length > 0 || summary.recent_trend === 'worsening') {
     return 'Da osservare';
@@ -677,6 +737,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  patternEmptyCopy: {
+    flex: 1,
+    gap: 6,
+  },
   patternEmptyText: {
     flex: 1,
     fontSize: 14,
@@ -687,6 +751,12 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: 12,
+  },
+  inlineMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   pillRow: {
     flexDirection: 'row',

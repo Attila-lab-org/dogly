@@ -222,3 +222,30 @@ async def test_owner_confirmation_promotes_supported_pattern(
     assert response.status_code == 200, response.text
     assert response.json()["state"] == PatternState.ESTABLISHED
     assert state.store.patterns[pattern_id].confirm_count == 1
+
+
+async def test_owner_contestation_is_counted(client, auth_headers, state):
+    dog_id = await create_dog(client, auth_headers)
+    pattern_id = new_id()
+    state.store.patterns[pattern_id] = PersonalPatternRec(
+        id=pattern_id,
+        dog_id=dog_id,
+        title="Cerca spesso il gioco",
+        state=PatternState.PRELIMINARY,
+        support_count=3,
+        confirm_count=0,
+        contradict_count=0,
+        reliability_band="medium",
+        first_seen=now_utc(),
+        last_seen=now_utc(),
+    )
+
+    response = await client.post(
+        f"/v1/patterns/{pattern_id}/review",
+        json={"action": "contest"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert state.store.patterns[pattern_id].state == PatternState.CONTESTED
+    assert state.store.patterns[pattern_id].contradict_count == 1

@@ -101,20 +101,16 @@ export default function DogProfileTabScreen() {
   const activeRealFood = foodsQuery.data?.find(
     (food) => food.id === activeRealPeriod?.food_product_id,
   );
-  const activeFoodLabel = (
-    useDemoData
-      ? [activeFood?.brand, activeFood?.name]
-      : [activeRealFood?.brand, activeRealFood?.name]
-  )
-    .filter(Boolean)
-    .join(' ');
+  const activeFoodLabel = formatFoodLabel(
+    useDemoData ? activeFood : activeRealFood,
+  );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
   const lifestyle = useLifestyle(dog.id);
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
-    .slice(0, 3);
+    .slice(0, 2);
   const storiesQuery = useQuery({
     queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
     queryFn: () => fetchOwnerStories(dog.id),
@@ -199,37 +195,74 @@ export default function DogProfileTabScreen() {
       >
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            Quello che ho imparato su {dog.name}
+            Cosa sto imparando su {dog.name}
           </Text>
+          {learnedPatterns.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Vedi tutte le abitudini di ${dog.name}`}
+              onPress={() => router.push('/patterns')}
+              hitSlop={8}
+            >
+              <Text style={styles.seeAll}>Vedi tutto</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {patternsQuery.live && patternsQuery.isLoading ? (
+          <View style={styles.detailsRow}>
+            <Text style={styles.detailsSubtitle}>
+              Sto iniziando a conoscere {dog.name}…
+            </Text>
+          </View>
+        ) : patternsQuery.live && patternsQuery.isError ? (
+          <View style={styles.detailsRow}>
+            <Text style={styles.detailsSubtitle}>
+              Non riesco a caricare ciò che sto imparando.
+            </Text>
+            <Pressable onPress={() => void patternsQuery.refetch()}>
+              <Text style={styles.seeAll}>Riprova</Text>
+            </Pressable>
+          </View>
+        ) : learnedPatterns.length ? (
+          <View style={styles.detailsRow}>
+            <View style={styles.detailsIcon}>
+              <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.detailsText}>
+              {learnedPatterns.map((pattern) => (
+                <Pressable
+                  key={pattern.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={pattern.title}
+                  onPress={() => router.push(`/patterns/${pattern.id}`)}
+                >
+                  <Text style={styles.detailsTitle} numberOfLines={2}>
+                    {pattern.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+          </View>
+        ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Vedi tutti i pattern di ${dog.name}`}
-            onPress={() => router.push('/patterns')}
-            hitSlop={8}
+            accessibilityLabel={`Mostra a DOGly un momento di ${dog.name}`}
+            onPress={() => router.push('/behavior/capture')}
+            style={styles.detailsRow}
           >
-            <Text style={styles.seeAll}>Vedi tutto</Text>
+            <View style={styles.detailsIcon}>
+              <Ionicons name="videocam-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.detailsText}>
+              <Text style={styles.detailsTitle}>Fammi vedere un momento</Text>
+              <Text style={styles.detailsSubtitle}>
+                Così inizio a conoscerlo meglio
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
           </Pressable>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Abitudini imparate su ${dog.name}`}
-          onPress={() =>
-            learnedPatterns[0]
-              ? router.push(`/patterns/${learnedPatterns[0].id}`)
-              : router.push('/patterns')
-          }
-          style={styles.detailsRow}
-        >
-          <View style={styles.detailsIcon}>
-            <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
-          </View>
-          <Text style={styles.detailsTitle} numberOfLines={2}>
-            {learnedPatterns.length
-              ? learnedPatterns.map((pattern) => pattern.title).join(' · ')
-              : `Con ogni momento capisco meglio ${dog.name}.`}
-          </Text>
-          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-        </Pressable>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>I suoi momenti</Text>
@@ -242,7 +275,20 @@ export default function DogProfileTabScreen() {
             <Text style={styles.seeAll}>Vedi tutti</Text>
           </Pressable>
         </View>
-        {previewPhotos.length > 0 ? (
+        {photosQuery.isLoading ? (
+          <View style={styles.emptyMoments}>
+            <Text style={styles.emptyMomentsSubtitle}>Carico i suoi momenti…</Text>
+          </View>
+        ) : photosQuery.isError ? (
+          <View style={styles.emptyMoments}>
+            <Text style={styles.emptyMomentsSubtitle}>
+              Non riesco a caricare i suoi momenti.
+            </Text>
+            <Pressable onPress={() => void photosQuery.refetch()}>
+              <Text style={styles.seeAll}>Riprova</Text>
+            </Pressable>
+          </View>
+        ) : previewPhotos.length > 0 ? (
             <View style={styles.photoRow}>
               {previewPhotos.map((photo) => (
                 <PhotoThumbnail
@@ -289,7 +335,11 @@ export default function DogProfileTabScreen() {
                 ? 'Stabile'
                 : useDemoData
                   ? 'Da osservare'
-                  : digestiveSummaryLabel(digestiveSummaryQuery.data)
+                  : digestiveSummaryLabel(
+                      digestiveSummaryQuery.data,
+                      digestiveSummaryQuery.isLoading,
+                      digestiveSummaryQuery.isError,
+                    )
             }
             onPress={() => router.push('/digestive/capture')}
           />
@@ -331,9 +381,11 @@ export default function DogProfileTabScreen() {
           <View style={styles.detailsText}>
             <Text style={styles.detailsTitle}>Routine e abitudini</Text>
             <Text style={styles.detailsSubtitle}>
-              {lifestyle.profile
-                ? 'Le sue abitudini quotidiane'
-                : 'Aiutami a conoscerlo meglio'}
+              {lifestyle.error
+                ? 'Non disponibile'
+                : lifestyle.profile
+                  ? 'Le sue abitudini quotidiane'
+                  : 'Ancora da raccontare'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
@@ -427,9 +479,28 @@ export default function DogProfileTabScreen() {
   );
 }
 
-function digestiveSummaryLabel(summary?: DigestiveSummary): string {
+function formatFoodLabel(
+  food?: { brand?: string | null; name?: string | null } | null,
+): string {
+  const brand = food?.brand?.trim() ?? '';
+  const name = food?.name?.trim() ?? '';
+  if (!brand) return name;
+  if (!name) return brand;
+  if (name.toLocaleLowerCase().startsWith(brand.toLocaleLowerCase())) {
+    return name;
+  }
+  return `${brand} ${name}`;
+}
+
+function digestiveSummaryLabel(
+  summary: DigestiveSummary | undefined,
+  loading = false,
+  error = false,
+): string {
+  if (loading) return 'Sto verificando…';
+  if (error) return 'Non disponibile';
   if (!summary || summary.data_sufficiency === 'insufficient') {
-    return 'Aggiungi osservazione';
+    return 'Ancora da osservare';
   }
   if (summary.safety_flags.length > 0 || summary.recent_trend === 'worsening') {
     return 'Da osservare';

@@ -33,7 +33,10 @@ def _out(p) -> PatternOut:
         state=p.state,
         reliability_band=p.reliability_band,
         support_count=p.support_count,
+        confirm_count=p.confirm_count,
+        contradict_count=p.contradict_count,
         version=p.version,
+        first_seen=p.first_seen,
         last_seen=p.last_seen,
     )
 
@@ -69,6 +72,7 @@ async def review_pattern(
     get_owned_dog(state.store, user_id=user_id, dog_id=pattern.dog_id)
     if payload.action == "contest":
         pattern.state = PatternState.CONTESTED
+        pattern.contradict_count += 1
     elif payload.action == "archive":
         pattern.state = PatternState.ARCHIVED
     elif payload.action == "confirm":

@@ -645,7 +645,10 @@ class PatternOut(BaseModel):
     state: PatternState
     reliability_band: str
     support_count: int
+    confirm_count: int = 0
+    contradict_count: int = 0
     version: int
+    first_seen: datetime | None = None
     last_seen: datetime | None = None
 
 
