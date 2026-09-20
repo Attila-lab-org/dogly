@@ -140,6 +140,10 @@ async function hydrateCareEvents(dogId: string, dogName: string): Promise<void> 
   hydratingDogs.add(dogId);
   emit();
   if (!(await getAccessToken())) {
+    // Auth may still be booting when the profile first mounts. Allow the
+    // next authenticated render to retry hydration instead of pinning this
+    // dog as already loaded forever.
+    hydratedDogs.delete(dogId);
     hydratingDogs.delete(dogId);
     emit();
     return;

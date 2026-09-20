@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -24,6 +23,7 @@ import {
   type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
 import { queryKeys } from '@/lib/queryClient';
+import { confirmDestructiveAction } from '@/lib/confirmAction';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 
 export default function DogMemoriesScreen() {
@@ -37,6 +37,7 @@ export default function DogMemoriesScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<OwnerFact[]>([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const query = useQuery({
@@ -70,8 +71,17 @@ export default function DogMemoriesScreen() {
     setSaving(true);
     setError(null);
     try {
-      await updateOwnerStory(dogId, editingId, draft);
-      await query.refetch();
+      const updated = await updateOwnerStory(dogId, editingId, draft);
+      queryClient.setQueryData<OwnerStoryObservation[]>(
+        queryKeys.ownerStories(userId ?? 'anon', dogId),
+        (current) => (current ?? []).map((story) =>
+          story.id === updated.id ? updated : story,
+        ),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.ownerStories(userId ?? 'anon', dogId),
+        refetchType: 'none',
+      });
       setEditingId(null);
       setOpenId(null);
     } catch {
@@ -81,31 +91,34 @@ export default function DogMemoriesScreen() {
     }
   };
   const remove = (storyId: string) => {
-    Alert.alert(
+    if (deleting) return;
+    confirmDestructiveAction(
       'Eliminare questo ricordo?',
       `Non verrà più usato per conoscere ${dog.name}.`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: () => {
-            void deleteOwnerStory(dogId, storyId)
-              .then(async () => {
-                await query.refetch();
-                if (userId) {
-                  await queryClient.invalidateQueries({
-                    queryKey: queryKeys.knowledgeScore(userId, dogId),
-                  });
-                }
-                setOpenId(null);
-              })
-              .catch(() =>
-                setError('Non sono riuscito a eliminare il ricordo.'),
-              );
-          },
-        },
-      ],
+      () => {
+        setDeleting(true);
+        setError(null);
+        void deleteOwnerStory(dogId, storyId)
+          .then(() => {
+            queryClient.setQueryData<OwnerStoryObservation[]>(
+              queryKeys.ownerStories(userId ?? 'anon', dogId),
+              (current) => (current ?? []).filter((story) => story.id !== storyId),
+            );
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.ownerStories(userId ?? 'anon', dogId),
+              refetchType: 'none',
+            });
+            if (userId) {
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.knowledgeScore(userId, dogId),
+                refetchType: 'none',
+              });
+            }
+            setOpenId(null);
+          })
+          .catch(() => setError('Non sono riuscito a eliminare il ricordo.'))
+          .finally(() => setDeleting(false));
+      },
     );
   };
 
@@ -135,7 +148,14 @@ export default function DogMemoriesScreen() {
       <Text style={styles.count}>
         {count} {count === 1 ? 'ricordo' : 'ricordi'}
       </Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorRow}>
+          <Text style={styles.error}>{error}</Text>
+          <Pressable onPress={() => void query.refetch()} accessibilityRole="button">
+            <Text style={styles.retryAction}>Riprova</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <FlatList
         data={stories}
         keyExtractor={(story) => story.id}
@@ -146,9 +166,9 @@ export default function DogMemoriesScreen() {
           <View style={styles.empty}>
             <Ionicons name="heart-outline" size={28} color={colors.accent} />
             <Text style={styles.emptyTitle}>
-              {query.isLoading ? 'Carico i ricordi…' : 'Nessun ricordo trovato'}
+              {query.isLoading ? 'Carico i ricordi…' : query.isError ? 'Non riesco a caricare i ricordi' : search.trim() ? 'Nessun ricordo corrisponde' : 'Ancora nessun ricordo'}
             </Text>
-            {!query.isLoading ? (
+            {!query.isLoading && !query.isError ? (
               <Text style={styles.emptyText}>
                 Prova un’altra ricerca oppure raccontami qualcosa di {dog.name}.
               </Text>
@@ -346,5 +366,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     textAlign: 'center',
   },
-  error: { color: colors.danger, fontSize: typography.size.sm },
+  errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  error: { flex: 1, color: colors.danger, fontSize: typography.size.sm },
+  retryAction: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
 });

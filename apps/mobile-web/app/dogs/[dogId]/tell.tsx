@@ -36,6 +36,7 @@ import {
   prepareOwnerStory,
   prepareOwnerStoryAudio,
   type OwnerFact,
+  type OwnerStoryObservation,
 } from '@/features/ownerStory/api';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { queryKeys } from '@/lib/queryClient';
@@ -84,7 +85,7 @@ export default function TellDogScreen() {
 
   useEffect(() => {
     if (phase !== 'saved') return;
-    const timer = setTimeout(() => router.replace('/(tabs)/home'), 1400);
+    const timer = setTimeout(() => router.back(), 1400);
     return () => clearTimeout(timer);
   }, [phase, router]);
 
@@ -197,19 +198,23 @@ export default function TellDogScreen() {
     setError(null);
     try {
       if (!useMock) {
-        await confirmOwnerStory(dogId, draftId, validFacts);
-        await Promise.all([
-          userId
-            ? queryClient.invalidateQueries({
-                queryKey: queryKeys.ownerStories(userId, dogId),
-              })
-            : Promise.resolve(),
-          userId
-            ? queryClient.invalidateQueries({
-                queryKey: queryKeys.knowledgeScore(userId, dogId),
-              })
-            : Promise.resolve(),
-        ]);
+        const confirmed = await confirmOwnerStory(dogId, draftId, validFacts);
+        if (userId) {
+          queryClient.setQueryData<OwnerStoryObservation[]>(
+            queryKeys.ownerStories(userId, dogId),
+            (current) => [
+              {
+                id: confirmed.observation_id,
+                dog_id: dogId,
+                facts: validFacts,
+                confirmed_at: new Date().toISOString(),
+              },
+              ...(current ?? []).filter((story) => story.id !== confirmed.observation_id),
+            ],
+          );
+          void queryClient.invalidateQueries({ queryKey: queryKeys.ownerStories(userId, dogId) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeScore(userId, dogId) });
+        }
       }
       setPhase('saved');
     } catch {

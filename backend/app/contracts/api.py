@@ -643,7 +643,9 @@ class PatternOut(BaseModel):
     dog_id: str
     title: str
     state: PatternState
-    reliability_band: str
+    # Internal records use lowercase bands, while this public contract mirrors
+    # the shared consumer enum and always serializes LOW/MEDIUM/HIGH.
+    reliability_band: ConfidenceBand
     support_count: int
     confirm_count: int = 0
     contradict_count: int = 0

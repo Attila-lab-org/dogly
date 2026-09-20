@@ -330,7 +330,7 @@ export default function DogProfileTabScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Digestione"
-              onPress={() => router.push('/digestive/capture')}
+              onPress={() => router.push('/digestive' as never)}
               style={({ pressed }) => [
                 styles.patternRow,
                 pressed && styles.pressed,
@@ -551,7 +551,8 @@ function digestiveSummaryLabel(
   if (summary.safety_flags.length > 0 || summary.recent_trend === 'worsening') {
     return 'Da osservare';
   }
-  if (summary.recent_trend === 'improving') return 'In miglioramento';
+  if (summary.recent_trend === 'improving' || summary.recent_trend === 'firmer') return summary.recent_trend === 'firmer' ? 'Più formata' : 'In miglioramento';
+  if (summary.recent_trend === 'softer') return 'Più morbida';
   if (summary.recent_trend === 'stable' || (summary.variability ?? 99) <= 1) {
     return 'Stabile';
   }

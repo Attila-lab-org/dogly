@@ -24,6 +24,7 @@ import {
   PatternStateChip,
   StackScreenHeader,
 } from '@/features/secondary/components';
+import type { PersonalPattern } from '@/features/secondary/types';
 
 type ReviewAction = 'CONFIRM' | 'CONTEST' | 'ARCHIVE';
 type ReviewOutcome = 'recorded' | 'demo';
@@ -50,13 +51,33 @@ function patternIcon(title: string): IconName {
   return 'bulb-outline';
 }
 
+function patternDateNote(pattern: PersonalPattern): string {
+  const format = (value: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('it-IT');
+  };
+  const first = format(pattern.firstSeen);
+  const last = format(pattern.lastSeen);
+  if (first && last) {
+    return `Visto per la prima volta il ${first} · ultima osservazione il ${last}`;
+  }
+  if (last) return `Ultima osservazione il ${last}`;
+  if (first) return `Visto per la prima volta il ${first}`;
+  return 'Date delle osservazioni non disponibili';
+}
+
 export default function PatternDetailScreen() {
   const { patternId } = useLocalSearchParams<{ patternId: string }>();
   const router = useRouter();
   const { dog } = useDogProfile();
   const patternsQuery = usePersonalPatterns(dog.id);
   const { live } = patternsQuery;
-  const pattern = patternsQuery.patterns.find((p) => p.id === patternId);
+  const queriedPattern = patternsQuery.patterns.find((p) => p.id === patternId);
+  const [archivedPattern, setArchivedPattern] = useState<PersonalPattern | null>(
+    null,
+  );
+  const pattern = queriedPattern ?? archivedPattern;
   const [reviewed, setReviewed] = useState<ReviewAction | null>(null);
   const [outcome, setOutcome] = useState<ReviewOutcome | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -119,6 +140,12 @@ export default function PatternDetailScreen() {
             ? 'contest'
             : 'archive';
       await reviewPattern(pattern.id, apiAction);
+      if (action === 'ARCHIVE') {
+        // The list endpoint intentionally hides archived patterns. Keep the
+        // just-reviewed snapshot so this screen can still show the success
+        // message after the refetch removes it from the query result.
+        setArchivedPattern({ ...pattern, state: 'ARCHIVED' });
+      }
       await patternsQuery.refetch();
       setReviewed(action);
       setOutcome('recorded');
@@ -202,12 +229,7 @@ export default function PatternDetailScreen() {
             </View>
           ) : null}
         </View>
-        <Text style={styles.note}>
-          Visto per la prima volta il{' '}
-          {new Date(pattern.firstSeen).toLocaleDateString('it-IT')} · ultima
-          osservazione il{' '}
-          {new Date(pattern.lastSeen).toLocaleDateString('it-IT')}
-        </Text>
+        <Text style={styles.note}>{patternDateNote(pattern)}</Text>
       </View>
 
       {reviewed && outcome ? (
@@ -249,7 +271,7 @@ export default function PatternDetailScreen() {
           ) : null}
           <View style={styles.actions}>
             <Button
-              title="Corretto"
+              title="Sì, è proprio così"
               variant="secondary"
               loading={submitting}
               disabled={submitting}
@@ -257,7 +279,7 @@ export default function PatternDetailScreen() {
               onPress={() => void submitReview('CONFIRM')}
             />
             <Button
-              title="Contesta"
+              title="Non sempre"
               variant="danger"
               loading={submitting}
               disabled={submitting}
@@ -267,7 +289,7 @@ export default function PatternDetailScreen() {
               onPress={() => void submitReview('CONTEST')}
             />
             <Button
-              title="Archivia"
+              title="Nascondi"
               variant="outline"
               loading={submitting}
               disabled={submitting}

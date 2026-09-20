@@ -11,14 +11,23 @@ type PatternDto = {
   dog_id: string;
   title: string;
   state: PersonalPattern['state'];
-  reliability_band: PersonalPattern['reliabilityBand'];
+  reliability_band?: string | null;
   support_count: number;
   confirm_count?: number;
   contradict_count?: number;
   version: number;
   first_seen?: string | null;
-  last_seen: string;
+  last_seen?: string | null;
 };
+
+function normalizeReliabilityBand(
+  value: string | null | undefined,
+): PersonalPattern['reliabilityBand'] {
+  const normalized = value?.toUpperCase();
+  return normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW'
+    ? normalized
+    : 'LOW';
+}
 
 function mapPattern(item: PatternDto): PersonalPattern {
   return {
@@ -29,9 +38,9 @@ function mapPattern(item: PatternDto): PersonalPattern {
     supportCount: item.support_count,
     confirmCount: item.confirm_count ?? 0,
     contradictCount: item.contradict_count ?? 0,
-    reliabilityBand: item.reliability_band,
-    firstSeen: item.first_seen ?? item.last_seen,
-    lastSeen: item.last_seen,
+    reliabilityBand: normalizeReliabilityBand(item.reliability_band),
+    firstSeen: item.first_seen ?? item.last_seen ?? null,
+    lastSeen: item.last_seen ?? null,
     evidenceNotes: [],
   };
 }

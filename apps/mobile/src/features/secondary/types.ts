@@ -19,8 +19,8 @@ export interface PersonalPattern {
   /** Evidenze in contraddizione */
   contradictCount: number;
   reliabilityBand: ConfidenceBand;
-  firstSeen: string;
-  lastSeen: string;
+  firstSeen: string | null;
+  lastSeen: string | null;
   /** Spiegazione trasparente delle evidenze (sez. 6.1 / 17.3) */
   evidenceNotes: string[];
 }

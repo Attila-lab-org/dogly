@@ -140,6 +140,7 @@ async function hydrateCareEvents(dogId: string, dogName: string): Promise<void> 
   hydratingDogs.add(dogId);
   emit();
   if (!(await getAccessToken())) {
+    hydratedDogs.delete(dogId);
     hydratingDogs.delete(dogId);
     emit();
     return;

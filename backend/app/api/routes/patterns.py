@@ -16,11 +16,10 @@ from app.contracts.api import (
     PatternReviewResponse,
 )
 from app.contracts.errors import ApiError, ErrorCode
-from app.contracts.taxonomy import ELIGIBLE_PATTERN_STATES, PatternState
+from app.contracts.taxonomy import ELIGIBLE_PATTERN_STATES, ConfidenceBand, PatternState
 from app.domains import dogs_db, patterns_db
 from app.domains.dogs import get_owned_dog
-from app.domains.personal_engine import derive_pattern_state
-from app.domains.repository import now_utc
+from app.domains.personal_engine import derive_pattern_state, reliability_for
 
 router = APIRouter()
 
@@ -31,7 +30,7 @@ def _out(p) -> PatternOut:
         dog_id=p.dog_id,
         title=p.title,
         state=p.state,
-        reliability_band=p.reliability_band,
+        reliability_band=ConfidenceBand(str(p.reliability_band).upper()),
         support_count=p.support_count,
         confirm_count=p.confirm_count,
         contradict_count=p.contradict_count,
@@ -71,8 +70,9 @@ async def review_pattern(
         raise ApiError(ErrorCode.NOT_FOUND, "Pattern not found")
     get_owned_dog(state.store, user_id=user_id, dog_id=pattern.dog_id)
     if payload.action == "contest":
+        # A review disputes the conclusion; it is not an observed episode.
+        # contradict_count remains derived from event feedback by the engine.
         pattern.state = PatternState.CONTESTED
-        pattern.contradict_count += 1
     elif payload.action == "archive":
         pattern.state = PatternState.ARCHIVED
     elif payload.action == "confirm":
@@ -85,5 +85,5 @@ async def review_pattern(
     elif payload.action == "correct_context":
         # Context correction is stored as metadata; no state change.
         pattern.version += 1
-    pattern.last_seen = now_utc()
+    pattern.reliability_band = reliability_for(pattern.state)
     return PatternReviewResponse(pattern_id=pattern.id, state=pattern.state)

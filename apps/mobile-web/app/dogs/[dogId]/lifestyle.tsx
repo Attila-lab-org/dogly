@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -10,7 +10,6 @@ import {
 } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import {
-  saveLifestyleProfile,
   useLifestyle,
   type LifestylePatch,
 } from '@/features/lifestyle/api';
@@ -29,14 +28,24 @@ export default function LifestyleScreen() {
   const { dog } = useDogProfile();
   const lifestyle = useLifestyle(dogId);
   const [draft, setDraft] = useState<LifestylePatch>({});
+  const [draftInitialized, setDraftInitialized] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
-    if (!lifestyle.profile) return;
-    setShowIntro(false);
+    setDraft({});
+    setDraftInitialized(false);
+    setDraftDirty(false);
+    setShowIntro(true);
+    setError(null);
+  }, [dogId]);
+
+  useEffect(() => {
+    if (!lifestyle.profile || draftInitialized) return;
+    setShowIntro(!lifestyle.hasLifestyleAnswers);
     setDraft({
       activity: lifestyle.profile.activity,
       sleep: lifestyle.profile.sleep,
@@ -44,14 +53,18 @@ export default function LifestyleScreen() {
       social: lifestyle.profile.social,
       enrichment: lifestyle.profile.enrichment,
     });
-  }, [lifestyle.profile]);
+    setDraftInitialized(true);
+  }, [draftInitialized, lifestyle.hasLifestyleAnswers, lifestyle.profile]);
 
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
-      await saveLifestyleProfile(dogId, draft, lifestyle.mockGate);
-      await lifestyle.refetch();
+      if (!draftDirty && !lifestyle.hasLifestyleAnswers) {
+        router.back();
+        return;
+      }
+      await lifestyle.save(draft);
       router.back();
     } catch {
       setError('Non sono riuscito a salvare. Riprova tra poco.');
@@ -63,12 +76,27 @@ export default function LifestyleScreen() {
   if (lifestyle.loading) {
     return (
       <ScreenContainer>
-        <ErrorState title="Un momento" message="Sto aprendo le sue abitudini…" />
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.loadingText}>Sto aprendo le sue abitudini…</Text>
+        </View>
       </ScreenContainer>
     );
   }
 
-  if (showIntro && !lifestyle.profile) {
+  if (lifestyle.error && !lifestyle.profile) {
+    return (
+      <ScreenContainer>
+        <ErrorState
+          title="Non riesco ad aprire la routine"
+          message="Controlla la connessione e riprova. Le risposte già salvate restano al sicuro."
+          onRetry={() => void lifestyle.refetch()}
+        />
+      </ScreenContainer>
+    );
+  }
+
+  if (showIntro && !lifestyle.hasLifestyleAnswers) {
     return (
       <ScreenContainer contentStyle={styles.introPage}>
         <DogIllustration mood="welcome" size={210} />
@@ -118,7 +146,10 @@ export default function LifestyleScreen() {
           title="Com’è di solito la sua giornata?"
           value={draft.activity}
           options={LIFESTYLE_ACTIVITY_LABELS}
-          onChange={(activity) => setDraft((current) => ({ ...current, activity }))}
+          onChange={(activity) => {
+            setDraftDirty(true);
+            setDraft((current) => ({ ...current, activity }));
+          }}
         />
         <ChoiceCard
           sectionKey="sleep"
@@ -130,7 +161,10 @@ export default function LifestyleScreen() {
           title="Come dorme di solito?"
           value={draft.sleep}
           options={LIFESTYLE_SLEEP_LABELS}
-          onChange={(sleep) => setDraft((current) => ({ ...current, sleep }))}
+          onChange={(sleep) => {
+            setDraftDirty(true);
+            setDraft((current) => ({ ...current, sleep }));
+          }}
         />
         <ChoiceCard
           sectionKey="alone"
@@ -142,9 +176,10 @@ export default function LifestyleScreen() {
           title="Quanto tempo resta da solo?"
           value={draft.timeAlone}
           options={LIFESTYLE_TIME_ALONE_LABELS}
-          onChange={(timeAlone) =>
-            setDraft((current) => ({ ...current, timeAlone }))
-          }
+          onChange={(timeAlone) => {
+            setDraftDirty(true);
+            setDraft((current) => ({ ...current, timeAlone }));
+          }}
         />
 
         {lifestyle.profile?.feedingLabel ? (
@@ -182,7 +217,10 @@ export default function LifestyleScreen() {
           title="Con chi ama stare?"
           value={draft.social}
           options={LIFESTYLE_SOCIAL_LABELS}
-          onChange={(social) => setDraft((current) => ({ ...current, social }))}
+          onChange={(social) => {
+            setDraftDirty(true);
+            setDraft((current) => ({ ...current, social }));
+          }}
         />
         <ChoiceCard
           sectionKey="enrichment"
@@ -196,9 +234,10 @@ export default function LifestyleScreen() {
           title="Cosa lo coinvolge di più?"
           value={draft.enrichment}
           options={LIFESTYLE_ENRICHMENT_LABELS}
-          onChange={(enrichment) =>
-            setDraft((current) => ({ ...current, enrichment }))
-          }
+          onChange={(enrichment) => {
+            setDraftDirty(true);
+            setDraft((current) => ({ ...current, enrichment }));
+          }}
         />
 
         {error || lifestyle.error ? (
@@ -207,7 +246,7 @@ export default function LifestyleScreen() {
           </Text>
         ) : null}
         <Button
-          title="Continua"
+          title={draftDirty || lifestyle.hasLifestyleAnswers ? 'Salva routine' : 'Salta per ora'}
           variant="secondary"
           loading={saving}
           onPress={() => void save()}
@@ -308,6 +347,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
   },
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  loadingText: { color: colors.textSecondary, fontSize: typography.size.sm },
   topBar: {
     minHeight: 56,
     paddingHorizontal: spacing.lg,

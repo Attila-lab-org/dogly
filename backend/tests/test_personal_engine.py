@@ -11,6 +11,7 @@ from app.domains.personal_engine import (
     semantic_pattern_similarity,
 )
 from app.domains.repository import new_id, now_utc
+
 from tests.conftest import create_dog
 
 
@@ -222,9 +223,10 @@ async def test_owner_confirmation_promotes_supported_pattern(
     assert response.status_code == 200, response.text
     assert response.json()["state"] == PatternState.ESTABLISHED
     assert state.store.patterns[pattern_id].confirm_count == 1
+    assert state.store.patterns[pattern_id].reliability_band == "high"
 
 
-async def test_owner_contestation_is_counted(client, auth_headers, state):
+async def test_owner_contestation_does_not_manufacture_observations(client, auth_headers, state):
     dog_id = await create_dog(client, auth_headers)
     pattern_id = new_id()
     state.store.patterns[pattern_id] = PersonalPatternRec(
@@ -234,10 +236,10 @@ async def test_owner_contestation_is_counted(client, auth_headers, state):
         state=PatternState.PRELIMINARY,
         support_count=3,
         confirm_count=0,
-        contradict_count=0,
+        contradict_count=2,
         reliability_band="medium",
-        first_seen=now_utc(),
-        last_seen=now_utc(),
+        first_seen=datetime(2026, 8, 1, tzinfo=UTC),
+        last_seen=datetime(2026, 8, 4, tzinfo=UTC),
     )
 
     response = await client.post(
@@ -248,4 +250,45 @@ async def test_owner_contestation_is_counted(client, auth_headers, state):
 
     assert response.status_code == 200, response.text
     assert state.store.patterns[pattern_id].state == PatternState.CONTESTED
-    assert state.store.patterns[pattern_id].contradict_count == 1
+    assert state.store.patterns[pattern_id].contradict_count == 2
+    assert state.store.patterns[pattern_id].support_count == 3
+    assert state.store.patterns[pattern_id].last_seen == datetime(2026, 8, 4, tzinfo=UTC)
+    assert state.store.patterns[pattern_id].reliability_band == "low"
+
+    # Retrying the same owner review must not manufacture a second
+    # contradiction or inflate the pattern's evidence count.
+    repeated = await client.post(
+        f"/v1/patterns/{pattern_id}/review",
+        json={"action": "contest"},
+        headers=auth_headers,
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert state.store.patterns[pattern_id].contradict_count == 2
+
+
+async def test_pattern_list_normalizes_public_band_and_preserves_nullable_dates(
+    client, auth_headers, state
+):
+    dog_id = await create_dog(client, auth_headers)
+    pattern_id = new_id()
+    state.store.patterns[pattern_id] = PersonalPatternRec(
+        id=pattern_id,
+        dog_id=dog_id,
+        title="Cerca spesso il gioco",
+        state=PatternState.PRELIMINARY,
+        support_count=3,
+        reliability_band="medium",
+        first_seen=None,
+        last_seen=None,
+    )
+
+    response = await client.get(
+        f"/v1/dogs/{dog_id}/patterns",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    item = response.json()["items"][0]
+    assert item["reliability_band"] == "MEDIUM"
+    assert item["first_seen"] is None
+    assert item["last_seen"] is None

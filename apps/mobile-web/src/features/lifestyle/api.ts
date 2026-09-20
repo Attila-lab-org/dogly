@@ -21,6 +21,8 @@ import type {
   LifestyleActivity,
   LifestyleTimeAlone,
 } from './types';
+import { lifestyleAnsweredCount } from './types';
+import { useQueryClient } from '@tanstack/react-query';
 
 export type LifestylePatch = Partial<
   Pick<
@@ -105,7 +107,10 @@ export type LifestyleState = {
   mockGate: boolean;
   loading: boolean;
   error: boolean;
-  refetch: () => void;
+  /** True when the owner has answered at least one routine question. */
+  hasLifestyleAnswers: boolean;
+  refetch: () => Promise<unknown>;
+  save: (patch: LifestylePatch) => Promise<LifestyleProfile>;
 };
 
 /**
@@ -115,6 +120,7 @@ export type LifestyleState = {
 export function useLifestyle(dogId: string): LifestyleState {
   const { userId } = useSession();
   const mockGate = useLifestyleMockGate();
+  const queryClient = useQueryClient();
   useLifestyleLocal(); // reattività sullo store di sessione
 
   const query = useQuery({
@@ -125,19 +131,29 @@ export function useLifestyle(dogId: string): LifestyleState {
   });
 
   if (mockGate) {
+    const profile = getLifestyleProfileLocal(dogId);
     return {
-      profile: getLifestyleProfileLocal(dogId),
+      profile,
       mockGate,
       loading: false,
       error: false,
-      refetch: () => {},
+      hasLifestyleAnswers: profile !== null && lifestyleAnsweredCount(profile) > 0,
+      refetch: async () => undefined,
+      save: async (patch) => saveLifestyleProfileLocal(dogId, patch),
     };
   }
+  const profile = query.data ?? null;
   return {
-    profile: query.data ?? null,
+    profile,
     mockGate,
     loading: query.isLoading,
     error: query.isError,
-    refetch: () => void query.refetch(),
+    hasLifestyleAnswers: profile !== null && lifestyleAnsweredCount(profile) > 0,
+    refetch: () => query.refetch(),
+    save: async (patch) => {
+      const saved = await saveLifestyleProfile(dogId, patch, false);
+      queryClient.setQueryData(['lifestyle', userId ?? 'anon', dogId], saved);
+      return saved;
+    },
   };
 }

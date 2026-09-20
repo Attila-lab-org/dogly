@@ -13,7 +13,7 @@ from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import ELIGIBLE_PATTERN_STATES, PatternState
 from app.domains import dogs_db
 from app.domains.models import PersonalPatternRec
-from app.domains.personal_engine import derive_pattern_state
+from app.domains.personal_engine import derive_pattern_state, reliability_for
 from app.providers.base import EligiblePatternSummary
 
 
@@ -73,6 +73,7 @@ async def review_pattern(
                     from public.personal_patterns p
                     join public.dogs d on d.id = p.dog_id
                     where p.id = :pattern_id and d.owner_id = :user_id
+                    for update of p
                     """
                 ),
                 {"pattern_id": pattern_id, "user_id": user_id},
@@ -85,12 +86,10 @@ async def review_pattern(
             next_state = PatternState.CONTESTED.value
             version_increment = 0
             confirm_increment = 0
-            contradict_increment = 1
         elif payload.action == "archive":
             next_state = PatternState.ARCHIVED.value
             version_increment = 0
             confirm_increment = 0
-            contradict_increment = 0
         elif payload.action == "confirm":
             promoted = derive_pattern_state(
                 int(row["support_count"]),
@@ -101,12 +100,10 @@ async def review_pattern(
             )
             version_increment = 0
             confirm_increment = 1
-            contradict_increment = 0
         else:
             next_state = str(row["state"])
             version_increment = 1
             confirm_increment = 0
-            contradict_increment = 0
 
         updated = (
             await conn.execute(
@@ -116,8 +113,7 @@ async def review_pattern(
                     set state = :state,
                         version = version + :version_increment,
                         confirm_count = confirm_count + :confirm_increment,
-                        contradict_count = contradict_count + :contradict_increment,
-                        last_seen = now(),
+                        reliability_band = :reliability,
                         updated_at = now()
                     where id = :pattern_id
                     returning id, dog_id, title, state, support_count, confirm_count,
@@ -130,7 +126,7 @@ async def review_pattern(
                     "state": next_state,
                     "version_increment": version_increment,
                     "confirm_increment": confirm_increment,
-                    "contradict_increment": contradict_increment,
+                    "reliability": reliability_for(PatternState(next_state)).upper(),
                 },
             )
         ).mappings().one()

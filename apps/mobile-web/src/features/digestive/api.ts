@@ -54,7 +54,7 @@ export type DigestiveSummary = {
   rolling_score: number | null;
   variability: number | null;
   data_sufficiency: 'insufficient' | 'low' | 'sufficient';
-  recent_trend: 'improving' | 'worsening' | 'stable' | null;
+  recent_trend: 'improving' | 'worsening' | 'firmer' | 'softer' | 'stable' | null;
   safety_flags: ApiDigestiveEvent['safety_flags'];
 };
 

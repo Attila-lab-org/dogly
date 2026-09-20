@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -21,6 +20,7 @@ import {
   fetchAlbumPhotos,
   updateAlbumPhotoCaption,
 } from '@/features/photos/api';
+import type { AlbumPhoto } from '@/features/photos/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { confirmDestructiveAction } from '@/lib/confirmAction';
 
@@ -42,17 +42,30 @@ export default function PhotoViewerScreen() {
   const [savingCaption, setSavingCaption] = useState(false);
   const [captionSaved, setCaptionSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [imageRatio, setImageRatio] = useState(1);
 
   useEffect(() => {
     if (base) setCaption(base.caption ?? '');
-  }, [base]);
+  }, [base?.id]);
 
   if (photosQuery.isLoading) {
     return (
       <ScreenContainer>
         <StackScreenHeader title="Foto" />
         <ActivityIndicator color={colors.primary} />
+      </ScreenContainer>
+    );
+  }
+
+  if (photosQuery.isError) {
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Foto" />
+        <EmptyState title="Non riesco a caricare questa foto" message="Controlla la connessione e riprova." />
+        <Pressable onPress={() => void photosQuery.refetch()} style={styles.retryButton} accessibilityRole="button">
+          <Text style={styles.retryText}>Riprova</Text>
+        </Pressable>
       </ScreenContainer>
     );
   }
@@ -72,19 +85,17 @@ export default function PhotoViewerScreen() {
     if (!captionChanged || savingCaption) return;
     setSavingCaption(true);
     setCaptionSaved(false);
+    setActionError(null);
     try {
-      await updateAlbumPhotoCaption(base.id, caption);
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ['gallery-photos', albumId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['gallery-dog-photos', base.dogId],
-        }),
-      ]);
+      const updated = await updateAlbumPhotoCaption(base.id, caption);
+      queryClient.setQueryData<AlbumPhoto[]>(['gallery-photos', albumId], (current) =>
+        (current ?? []).map((photo) => photo.id === updated.id ? updated : photo),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['gallery-photos', albumId], refetchType: 'none' });
+      void queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', base.dogId], refetchType: 'none' });
       setCaptionSaved(true);
     } catch {
-      Alert.alert('Testo non salvato', 'Riprova tra poco.');
+      setActionError('Il testo non è stato salvato. Riprova.');
     } finally {
       setSavingCaption(false);
     }
@@ -92,24 +103,20 @@ export default function PhotoViewerScreen() {
 
   const removePhoto = () => {
     setDeleting(true);
+    setActionError(null);
     void deleteAlbumPhoto(base.id)
-      .then(async () => {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: ['gallery-photos', albumId],
-          }),
-          queryClient.invalidateQueries({
-            queryKey: ['gallery-albums', base.dogId],
-          }),
-          queryClient.invalidateQueries({
-            queryKey: ['gallery-dog-photos', base.dogId],
-          }),
-        ]);
+      .then(() => {
+        queryClient.setQueryData<AlbumPhoto[]>(['gallery-photos', albumId], (current) =>
+          (current ?? []).filter((photo) => photo.id !== base.id),
+        );
+        void queryClient.invalidateQueries({ queryKey: ['gallery-photos', albumId], refetchType: 'none' });
+        void queryClient.invalidateQueries({ queryKey: ['gallery-albums', base.dogId], refetchType: 'none' });
+        void queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', base.dogId], refetchType: 'none' });
         router.back();
       })
       .catch(() => {
         setDeleting(false);
-        Alert.alert('Foto non eliminata', 'Riprova tra poco.');
+        setActionError('La foto non è stata eliminata. Riprova.');
       });
   };
 
@@ -135,6 +142,7 @@ export default function PhotoViewerScreen() {
       </View>
 
       <View style={styles.captionSection}>
+        {actionError ? <Text style={styles.actionError}>{actionError}</Text> : null}
         <View style={styles.captionHeader}>
           <Text style={styles.fieldLabel}>Una frase per questo momento</Text>
           {captionChanged ? (
@@ -289,4 +297,7 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: typography.weight.semibold,
   },
+  actionError: { color: colors.danger, fontSize: typography.size.sm, marginBottom: spacing.sm },
+  retryButton: { alignSelf: 'center', marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  retryText: { color: colors.primary, fontWeight: typography.weight.semibold },
 });
