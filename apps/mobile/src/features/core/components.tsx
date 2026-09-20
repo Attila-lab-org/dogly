@@ -370,7 +370,6 @@ export function BehaviorResultView({
       .replace(/\b(?:il|un) (?:tuo )?cane\b/gi, dogName);
   const headline = ownerCopy(
     result.consumer_headline ||
-      adviceRationale ||
       result.consumer_summary ||
       `Ecco cosa emerge dal video di ${dogName}`,
   );
@@ -385,6 +384,12 @@ export function BehaviorResultView({
     : null;
   const memories = (result.personalMemory ?? []).filter(
     (memory) => memory.support_summary.trim().length > 0,
+  );
+  const memorySupport = new Set(
+    memories.map((memory) => memory.support_summary.trim().toLocaleLowerCase()),
+  );
+  const uniqueMemoryEvidence = evidenceSections.personalMemory.filter(
+    (item) => !memorySupport.has(item.label.trim().toLocaleLowerCase()),
   );
   const hasConfirmedMemory = memories.some(
     (memory) => ['ESTABLISHED', 'STRONG'].includes(memory.state.toUpperCase()),
@@ -583,7 +588,7 @@ export function BehaviorResultView({
                 </View>
               ) : null}
 
-              {evidenceSections.personalMemory.length > 0 || memories.length > 0 ? (
+              {uniqueMemoryEvidence.length > 0 || memories.length > 0 ? (
                 <View
                   style={styles.baselineCard}
                   testID="personal-memory-evidence"
@@ -601,7 +606,7 @@ export function BehaviorResultView({
                       {ownerCopy(memory.support_summary)}
                     </Text>
                   ))}
-                  {evidenceSections.personalMemory.map((item, index) => (
+                  {uniqueMemoryEvidence.map((item, index) => (
                     <Text
                       key={`${item.label}-${index}`}
                       style={styles.baselineNote}

@@ -57,6 +57,11 @@ export function AdviceCard({
       <Card style={styles.card} testID="advice-card">
         <Text style={styles.title}>Cosa fare ora</Text>
         <Text style={styles.action}>{actionText}</Text>
+        {advice.followUp ? (
+          <Text style={styles.followUp} testID="advice-follow-up">
+            Da osservare: {advice.followUp.replace(/Rocky/g, dogName)}
+          </Text>
+        ) : null}
       </Card>
     );
   }
