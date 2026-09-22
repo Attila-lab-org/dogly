@@ -25,6 +25,12 @@ type RealtimeServerEvent = {
   arguments?: string;
   delta?: string;
   transcript?: string;
+  response?: {
+    id?: string;
+    status?: 'in_progress' | 'completed' | 'cancelled' | 'failed' | 'incomplete';
+    incomplete_details?: { reason?: string } | null;
+  };
+  response_id?: string;
   error?: { message?: string };
 };
 
@@ -42,7 +48,8 @@ const MIC_CONSTRAINTS: MediaStreamConstraints = {
 
 // `response.done` means generation ended. With WebRTC the audio buffer can
 // still be draining, so we reopen the microphone only after the drain event.
-const RESPONSE_DRAIN_FALLBACK_MS = 1000;
+// The watchdog is recovery-only: it must never race a normal spoken answer.
+const RESPONSE_DRAIN_FALLBACK_MS = 30000;
 const MIC_REENABLE_DELAY_MS = 250;
 
 export function useDoglyRealtime(dogId: string) {
@@ -69,6 +76,7 @@ export function useDoglyRealtime(dogId: string) {
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const greetingRef = useRef(false);
   const responsePhaseRef = useRef<ResponsePhase>('idle');
+  const activeResponseIdRef = useRef<string | null>(null);
   const responseAudioDrainedRef = useRef(false);
   const assistantTranscriptSourceRef = useRef<'output' | 'audio' | null>(null);
   const pendingTextQueueRef = useRef<string[]>([]);
@@ -92,6 +100,7 @@ export function useDoglyRealtime(dogId: string) {
     persistQueueRef.current = Promise.resolve();
     greetingRef.current = false;
     responsePhaseRef.current = 'idle';
+    activeResponseIdRef.current = null;
     responseAudioDrainedRef.current = false;
     assistantOutputRef.current = '';
     assistantFallbackRef.current = '';
@@ -167,6 +176,7 @@ export function useDoglyRealtime(dogId: string) {
       micReleaseTimerRef.current = null;
     }
     responsePhaseRef.current = 'generating';
+    activeResponseIdRef.current = null;
     responseAudioDrainedRef.current = false;
     setMicEnabled(false);
     userTranscriptRef.current = text;
@@ -221,6 +231,7 @@ export function useDoglyRealtime(dogId: string) {
       return;
     }
     responsePhaseRef.current = 'idle';
+    activeResponseIdRef.current = null;
     responseAudioDrainedRef.current = true;
     if (responseDrainTimerRef.current) {
       clearTimeout(responseDrainTimerRef.current);
@@ -242,6 +253,14 @@ export function useDoglyRealtime(dogId: string) {
 
   const handleServerEvent = useCallback(
     (event: RealtimeServerEvent) => {
+      const eventResponseId = event.response_id ?? event.response?.id;
+      if (
+        eventResponseId &&
+        activeResponseIdRef.current &&
+        eventResponseId !== activeResponseIdRef.current
+      ) {
+        return;
+      }
       switch (event.type) {
         case 'input_audio_buffer.speech_started':
           if (greetingRef.current) return;
@@ -270,6 +289,7 @@ export function useDoglyRealtime(dogId: string) {
           }
           break;
         case 'response.created':
+          activeResponseIdRef.current = event.response?.id ?? null;
           responsePhaseRef.current = 'generating';
           responseAudioDrainedRef.current = false;
           if (micReleaseTimerRef.current) {
@@ -319,6 +339,13 @@ export function useDoglyRealtime(dogId: string) {
           break;
         case 'response.done':
           if (responsePhaseRef.current !== 'generating') break;
+          if (
+            event.response?.status === 'failed' ||
+            event.response?.status === 'cancelled'
+          ) {
+            setError('La voce DOGly si è interrotta. Riprova tra poco.');
+            responseAudioDrainedRef.current = true;
+          }
           responsePhaseRef.current = 'draining';
           // `response.done` is not the end of WebRTC playback. Wait for the
           // output buffer to drain, with a bounded fallback for older clients.
@@ -340,6 +367,7 @@ export function useDoglyRealtime(dogId: string) {
         case 'response.cancelled':
           if (responsePhaseRef.current === 'idle') break;
           responsePhaseRef.current = 'idle';
+          activeResponseIdRef.current = null;
           responseAudioDrainedRef.current = true;
           if (responseDrainTimerRef.current) {
             clearTimeout(responseDrainTimerRef.current);

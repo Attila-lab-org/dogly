@@ -18,6 +18,9 @@ describe('realtime voice turn safety', () => {
     expect(source).toContain("type ResponsePhase = 'idle' | 'generating' | 'draining' | 'cooldown'");
     expect(source).toContain("responsePhaseRef.current !== 'generating'");
     expect(source).toContain("case 'output_audio_buffer.stopped':");
+    expect(source).toContain('RESPONSE_DRAIN_FALLBACK_MS = 30000');
+    expect(source).toContain('activeResponseIdRef');
+    expect(source).toContain("event.response?.status === 'cancelled'");
     expect(source).toContain('pendingTextQueueRef');
     expect(source).not.toContain("type: 'response.cancel'");
     expect(source).not.toContain("case 'response.output_audio.done':");

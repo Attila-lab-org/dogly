@@ -85,7 +85,8 @@ def test_voice_session_speaks_without_waiting_for_tools() -> None:
     assert vad["threshold"] == 0.65
     assert config["audio"]["output"]["voice"] == "coral"
     assert config["audio"]["output"]["speed"] == 1.0
-    assert config["max_output_tokens"] == 512
+    assert config["reasoning"] == {"effort": "low"}
+    assert config["max_output_tokens"] == "inf"
 
 
 def test_voice_brief_is_personal_and_ready_to_speak() -> None:

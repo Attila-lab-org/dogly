@@ -36,10 +36,13 @@ def realtime_session_config(settings: Settings, *, instructions: str) -> dict[st
             },
             "output": {"voice": settings.realtime_voice, "speed": 1.0},
         },
-        # Keep a generous ceiling so a valid Italian sentence cannot be cut by
-        # the transport. The spoken-style instructions keep normal answers
-        # short; this is a safety ceiling, not a target length.
-        "max_output_tokens": 512,
+        # GPT-Realtime-2.1 is a reasoning model: max_output_tokens also limits
+        # its hidden reasoning tokens. 512 can therefore end a spoken answer
+        # mid-word even when the visible sentence is short. Keep reasoning
+        # deliberately light for voice and leave a generous response budget;
+        # the spoken prompt is the length control.
+        "reasoning": {"effort": "low"},
+        "max_output_tokens": "inf",
         "tracing": {
             "workflow_name": "DOGly Realtime",
             "metadata": {"mode": "speech-to-speech"},
