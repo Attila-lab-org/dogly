@@ -35,7 +35,7 @@ export default function CameraTabScreen() {
         dogId: dog.id,
         dogName: dog.name,
         photoUri: uri,
-        caption: caption.trim() || `Storia di ${dog.name}`,
+        caption: caption.trim() || `Momento di ${dog.name}`,
       });
       setPreviewUri(null);
       setCaption('');
@@ -46,7 +46,7 @@ export default function CameraTabScreen() {
       );
     } catch {
       setError(
-        'Non sono riuscito a pubblicare la storia. La foto resta qui: puoi riprovare.',
+        'Non sono riuscito a pubblicare la momento. La foto resta qui: puoi riprovare.',
       );
       Alert.alert(
         'Momento non salvato',
@@ -87,7 +87,7 @@ export default function CameraTabScreen() {
     <ScreenContainer scroll contentStyle={styles.screen}>
       <View style={styles.header}>
         <Ionicons name="camera" size={28} color={colors.primary} />
-        <Text style={styles.title}>Nuova storia</Text>
+        <Text style={styles.title}>Nuovo momento</Text>
         <Text style={styles.subtitle}>
           Scatta o scegli una foto di {dog.name}. Sarà visibile nella tua storia
           nei suoi momenti privati.
@@ -98,7 +98,7 @@ export default function CameraTabScreen() {
         <View style={styles.previewBlock}>
           <Image source={{ uri: previewUri }} style={styles.preview} />
           <TextInput
-            accessibilityLabel="Didascalia della storia"
+            accessibilityLabel="Didascalia del momento"
             value={caption}
             onChangeText={setCaption}
             placeholder={`Scrivi qualcosa su ${dog.name}…`}

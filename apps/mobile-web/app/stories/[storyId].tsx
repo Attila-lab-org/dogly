@@ -1,5 +1,5 @@
 /**
- * Viewer storia a schermo intero: tap a sinistra/destra per scorrere.
+ * Viewer momento a schermo intero: tap a sinistra/destra per scorrere.
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -41,7 +41,7 @@ export default function StoryViewerScreen() {
     return (
       <View style={styles.root}>
         <SafeAreaView style={styles.empty}>
-          <Text style={styles.emptyText}>Storia non disponibile</Text>
+          <Text style={styles.emptyText}>Momento non disponibile</Text>
           <Pressable onPress={() => router.back()}>
             <Text style={styles.closeLabel}>Chiudi</Text>
           </Pressable>
@@ -73,7 +73,7 @@ export default function StoryViewerScreen() {
         <View style={styles.tapZones}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Storia precedente"
+            accessibilityLabel="Momento precedente"
             disabled={index === 0}
             onPress={goPrevious}
             style={styles.tapZone}
@@ -81,7 +81,7 @@ export default function StoryViewerScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
-              index === stories.length - 1 ? 'Chiudi storie' : 'Storia successiva'
+              index === stories.length - 1 ? 'Chiudi momenti' : 'Momento successivo'
             }
             onPress={goNext}
             style={styles.tapZone}
@@ -108,11 +108,11 @@ export default function StoryViewerScreen() {
             <View style={styles.topActions}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Elimina storia"
+                accessibilityLabel="Elimina momento"
                 disabled={deleting}
                 onPress={() =>
                   confirmDestructiveAction(
-                    'Eliminare questa storia?',
+                    'Eliminare questo momento?',
                     'Verrà rimossa subito e definitivamente.',
                     () => {
                       const next = stories[index + 1] ?? stories[index - 1];
@@ -128,7 +128,7 @@ export default function StoryViewerScreen() {
                         .catch(() => {
                           setDeleting(false);
                           Alert.alert(
-                            'Storia non eliminata',
+                            'Momento non eliminato',
                             'Riprova tra poco.',
                           );
                         });
