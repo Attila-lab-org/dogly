@@ -41,15 +41,15 @@ export default function CameraTabScreen() {
       setCaption('');
       router.replace('/(tabs)/home');
       Alert.alert(
-        'Storia aggiunta',
-        'È stata salvata e resterà nella Home per 24 ore.',
+        'Momento salvato',
+        'È stata salvata nei momenti di ${dog.name}.',
       );
     } catch {
       setError(
         'Non sono riuscito a pubblicare la storia. La foto resta qui: puoi riprovare.',
       );
       Alert.alert(
-        'Storia non salvata',
+        'Momento non salvato',
         'Controlla la connessione e riprova. La foto non è stata pubblicata.',
       );
     } finally {
@@ -90,7 +90,7 @@ export default function CameraTabScreen() {
         <Text style={styles.title}>Nuova storia</Text>
         <Text style={styles.subtitle}>
           Scatta o scegli una foto di {dog.name}. Sarà visibile nella tua storia
-          per 24 ore.
+          nei suoi momenti privati.
         </Text>
       </View>
 
@@ -107,7 +107,7 @@ export default function CameraTabScreen() {
             style={styles.caption}
           />
           <Button
-            title={busy === 'publishing' ? 'Pubblicazione…' : 'Pubblica la storia'}
+            title={busy === 'publishing' ? 'Pubblicazione…' : 'Salva il momento'}
             onPress={() => void saveStory(previewUri)}
             loading={busy === 'publishing'}
             disabled={

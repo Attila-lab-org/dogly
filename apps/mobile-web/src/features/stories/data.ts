@@ -1,6 +1,6 @@
 /**
  * Storie reali: foto persistite nell'album dedicato "Storie", pubblicate per
- * 24 ore nella rail.
+ * nella rail privata dei momenti salvati.
  */
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '../../lib/queryClient';
@@ -15,7 +15,7 @@ import {
 } from '../photos/api';
 import type { AlbumPhoto, PhotoAlbum } from '../photos/types';
 
-const STORY_TTL_MS = 24 * 60 * 60 * 1000;
+
 const STORIES_ALBUM_TITLE = 'Storie';
 
 export interface DogStory {
@@ -75,11 +75,8 @@ async function fetchRealStories(
   );
   if (!album) return [];
 
-  const cutoff = Date.now() - STORY_TTL_MS;
   const photos = await fetchAlbumPhotos(album.id);
-  return photos
-    .filter((photo) => Date.parse(photo.uploadedAt ?? photo.takenAt) > cutoff)
-    .map((photo) => storyFromPhoto(photo, dogName));
+  return photos.map((photo) => storyFromPhoto(photo, dogName));
 }
 
 export function useStories(dogId: string, dogName: string): DogStory[] {
@@ -107,7 +104,7 @@ export async function publishStory(input: {
   const album = await storyAlbum(input.dogId);
   const photo = await uploadAlbumPhoto(album.id, input.photoUri, {
     caption: input.caption,
-    visibility: 'PUBLISHED',
+    visibility: 'PRIVATE',
   });
   const story = storyFromPhoto(photo, input.dogName);
   await queryClient.invalidateQueries({ queryKey: ['stories', input.dogId] });

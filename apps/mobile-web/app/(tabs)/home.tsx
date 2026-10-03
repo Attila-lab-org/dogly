@@ -177,8 +177,8 @@ export default function HomeScreen() {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Parla con DOGly di ${dog.name}`}
-            onPress={() => router.push('/realtime' as never)}
+            accessibilityLabel={`Chiedi a DOGly di ${dog.name}`}
+            onPress={() => router.push('/ask' as never)}
             disabled={!dog.id}
             style={({ pressed }) => [styles.talkCard, pressed && styles.pressed]}
           >
@@ -186,8 +186,8 @@ export default function HomeScreen() {
               <Ionicons name="chatbubble-ellipses-outline" size={21} color={colors.accent} />
             </View>
             <View style={styles.talkCopy}>
-              <Text style={styles.talkTitle}>Vuoi parlarne?</Text>
-              <Text style={styles.talkSubtitle}>Chiedimi qualcosa di {dog.name}.</Text>
+              <Text style={styles.talkTitle}>Hai una domanda?</Text>
+              <Text style={styles.talkSubtitle}>Scrivimi cosa vuoi capire di {dog.name}.</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.accent} />
           </Pressable>

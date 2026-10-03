@@ -55,10 +55,14 @@ export function createRealtimeTurn(
   sessionId: string,
   text: string,
   assistantText?: string,
+  options?: { behaviorEventId?: string },
 ) {
   return api.post<RealtimeTurn>(`/v1/realtime/sessions/${sessionId}/turns`, {
     text,
     ...(assistantText ? { assistant_text: assistantText } : {}),
+    ...(options?.behaviorEventId
+      ? { behavior_event_id: options.behaviorEventId }
+      : {}),
   });
 }
 

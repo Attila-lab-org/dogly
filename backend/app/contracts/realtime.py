@@ -39,6 +39,8 @@ class RealtimeSessionOut(BaseModel):
 
 class RealtimeTurnCreate(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
+    behavior_event_id: str | None = Field(default=None, max_length=80)
+    # Used by the existing live bridge; the new text-first client never sends it.
     assistant_text: str | None = Field(default=None, max_length=900)
 
 

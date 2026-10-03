@@ -21,12 +21,13 @@ from app.contracts.realtime import (
     RealtimeTurnCreate,
     RealtimeTurnOut,
 )
-from app.domains import realtime_db
+from app.domains import behavior, behavior_db, realtime_db
 from app.domains.realtime_context import (
     REALTIME_CONTEXT_VERSION,
     conversation_topic,
     load_realtime_context_db,
     load_realtime_context_memory,
+    focus_behavior_event,
     render_voice_brief,
     resume_welcome_text,
     route_realtime_domains,
@@ -67,7 +68,13 @@ async def create_realtime_session(
         None, Depends(rate_limit("realtime_session", limit=10, window_seconds=60))
     ],
 ) -> RealtimeSessionOut:
-    model = state.settings.realtime_voice_model
+    # Keep written conversations independent from the live audio model. This
+    # avoids routing the reliable text-first experience through voice settings.
+    model = (
+        state.settings.realtime_reasoning_model
+        if body.modality == "TEXT"
+        else state.settings.realtime_voice_model
+    )
     if state.engine is not None:
         row = await realtime_db.create_session_db(
             state.engine,
@@ -169,6 +176,8 @@ async def create_voice_client_secret(
             user_id=user_id,
             instructions=render_voice_brief(context, welcome=welcome),
         )
+    except ApiError:
+        raise
     except LookupError as exc:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.") from exc
     except httpx.HTTPError as exc:
@@ -245,6 +254,15 @@ async def create_realtime_turn(
                 dog_id=str(session["dog_id"]),
                 domains=domains,
             )
+            if body.behavior_event_id:
+                focus_behavior_event(
+                    context,
+                    await behavior_db.get_event(
+                        state.engine,
+                        user_id=user_id,
+                        event_id=body.behavior_event_id,
+                    ),
+                )
             history = await realtime_db.load_history_db(
                 state.engine, session_id=session_id, user_id=user_id
             )
@@ -263,6 +281,15 @@ async def create_realtime_turn(
             context = load_realtime_context_memory(
                 state.store, dog_id=str(session["dog_id"]), domains=domains
             )
+            if body.behavior_event_id:
+                focus_behavior_event(
+                    context,
+                    behavior.get_event(
+                        state.store,
+                        user_id=user_id,
+                        event_id=body.behavior_event_id,
+                    ),
+                )
             history = []
             for turn in state.store.realtime_turns.get(session_id, [])[-3:]:
                 history.extend(
@@ -278,6 +305,8 @@ async def create_realtime_turn(
                 context=context,
                 history=history,
             )
+    except ApiError:
+        raise
     except LookupError as exc:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.") from exc
     except Exception as exc:

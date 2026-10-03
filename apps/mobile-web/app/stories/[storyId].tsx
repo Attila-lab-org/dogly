@@ -31,7 +31,7 @@ export default function StoryViewerScreen() {
     0,
     stories.findIndex((s) => s.id === storyId),
   );
-  const story = stories.find((item) => item.id === storyId) ?? stories[index];
+  const story = stories.find((item) => item.id === storyId);
 
   useEffect(() => {
     if (story) markStorySeen(story.id);
