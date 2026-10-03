@@ -117,7 +117,10 @@ export type LifestyleState = {
  * Profilo lifestyle reattivo: mock gate → store di sessione; API →
  * react-query sulla GET futura (errore onesto, profile null).
  */
-export function useLifestyle(dogId: string): LifestyleState {
+export function useLifestyle(
+  dogId: string,
+  options: { enabled?: boolean } = {},
+): LifestyleState {
   const { userId } = useSession();
   const mockGate = useLifestyleMockGate();
   const queryClient = useQueryClient();
@@ -126,7 +129,7 @@ export function useLifestyle(dogId: string): LifestyleState {
   const query = useQuery({
     queryKey: ['lifestyle', userId ?? 'anon', dogId],
     queryFn: () => getLifestyleProfile(dogId, false),
-    enabled: !mockGate && isPersistedId(dogId),
+    enabled: options.enabled !== false && !mockGate && isPersistedId(dogId),
     retry: false,
   });
 

@@ -118,7 +118,7 @@ export default function SettingsScreen() {
           style={styles.signOut}
         />
       ) : null}
-      <Text style={styles.version}>Dogly · V1 beta</Text>
+      <Text style={styles.version}>DOGly</Text>
     </ScreenContainer>
   );
 }

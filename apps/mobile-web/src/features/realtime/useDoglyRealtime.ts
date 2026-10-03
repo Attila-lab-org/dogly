@@ -36,6 +36,16 @@ type RealtimeServerEvent = {
 
 type ResponsePhase = 'idle' | 'generating' | 'draining' | 'cooldown';
 
+function parseRealtimeEvent(data: unknown): RealtimeServerEvent | null {
+  if (typeof data !== 'string') return null;
+  try {
+    const parsed = JSON.parse(data) as RealtimeServerEvent;
+    return parsed && typeof parsed.type === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 const MIC_CONSTRAINTS: MediaStreamConstraints = {
   audio: {
     echoCancellation: true,
@@ -49,7 +59,7 @@ const MIC_CONSTRAINTS: MediaStreamConstraints = {
 // `response.done` means generation ended. With WebRTC the audio buffer can
 // still be draining, so we reopen the microphone only after the drain event.
 // The watchdog is recovery-only: it must never race a normal spoken answer.
-const RESPONSE_DRAIN_FALLBACK_MS = 30000;
+const RESPONSE_DRAIN_FALLBACK_MS = 12000;
 const MIC_REENABLE_DELAY_MS = 250;
 
 export function useDoglyRealtime(dogId: string) {
@@ -131,6 +141,19 @@ export function useDoglyRealtime(dogId: string) {
         setVoiceState('listening');
       }
     }, MIC_REENABLE_DELAY_MS);
+  }, [setMicEnabled]);
+
+  const recoverFromProtocolError = useCallback(() => {
+    if (responseDrainTimerRef.current) {
+      clearTimeout(responseDrainTimerRef.current);
+      responseDrainTimerRef.current = null;
+    }
+    responsePhaseRef.current = 'idle';
+    activeResponseIdRef.current = null;
+    responseAudioDrainedRef.current = true;
+    setMicEnabled(true);
+    setError('La voce DOGly ha ricevuto una risposta imprevista. Riprova.');
+    setVoiceState('error');
   }, [setMicEnabled]);
 
   const ensureSession = useCallback(async () => {
@@ -394,6 +417,14 @@ export function useDoglyRealtime(dogId: string) {
           setVoiceState('listening');
           break;
         case 'error':
+          responsePhaseRef.current = 'idle';
+          activeResponseIdRef.current = null;
+          responseAudioDrainedRef.current = true;
+          if (responseDrainTimerRef.current) {
+            clearTimeout(responseDrainTimerRef.current);
+            responseDrainTimerRef.current = null;
+          }
+          setMicEnabled(true);
           setError(event.error?.message ?? 'La voce DOGly si è interrotta.');
           setVoiceState('error');
           break;
@@ -451,7 +482,12 @@ export function useDoglyRealtime(dogId: string) {
       const channel = peer.createDataChannel('oai-events');
       channelRef.current = channel;
       channel.addEventListener('message', (message) => {
-        handleServerEvent(JSON.parse(message.data) as RealtimeServerEvent);
+        const event = parseRealtimeEvent(message.data);
+        if (!event) {
+          recoverFromProtocolError();
+          return;
+        }
+        handleServerEvent(event);
       });
       channel.addEventListener('open', () => {
         greetingRef.current = true;
@@ -470,7 +506,11 @@ export function useDoglyRealtime(dogId: string) {
           }),
         );
       });
-      channel.addEventListener('close', () => setVoiceState('idle'));
+      channel.addEventListener('close', () => {
+        responsePhaseRef.current = 'idle';
+        setMicEnabled(true);
+        setVoiceState('idle');
+      });
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
@@ -502,7 +542,15 @@ export function useDoglyRealtime(dogId: string) {
     } finally {
       connectInFlightRef.current = false;
     }
-  }, [closeMedia, dogId, ensureSession, handleServerEvent, voiceState]);
+  }, [
+    closeMedia,
+    dogId,
+    ensureSession,
+    handleServerEvent,
+    recoverFromProtocolError,
+    setMicEnabled,
+    voiceState,
+  ]);
 
   const disconnect = useCallback(async () => {
     closeMedia();

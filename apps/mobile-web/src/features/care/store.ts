@@ -99,12 +99,17 @@ function snapshot() {
  * locali (il corpo della notifica lo contiene): passarlo qui evita di
  * doverlo recuperare a posteriori su rollback/idratazione.
  */
-export function useCareEvents(dogId: string, dogName: string): CareEvent[] {
+export function useCareEvents(
+  dogId: string,
+  dogName: string,
+  options: { enabled?: boolean } = {},
+): CareEvent[] {
   const allEvents = useSyncExternalStore(subscribe, snapshot, snapshot);
   useEffect(() => {
+    if (options.enabled === false) return;
     if (!isPersistedId(dogId)) return;
     void hydrateCareEvents(dogId, dogName);
-  }, [dogId, dogName]);
+  }, [dogId, dogName, options.enabled]);
   return useMemo(
     () =>
       allEvents

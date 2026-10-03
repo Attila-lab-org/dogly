@@ -1,8 +1,8 @@
 /**
- * Profilo cane (Screen 3 mockup): spazio personale, visivo e orientato alle azioni.
- * Nessuna sezione "Quanto conosco {nome}".
+ * Profilo cane: spazio personale, visivo e orientato alle azioni.
+ * Le spiegazioni tecniche restano fuori da questa schermata.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -59,7 +59,8 @@ export default function DogProfileTabScreen() {
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
   const useDemoData = usingMockGate;
-  useCareEvents(dog.id, dog.name);
+  const [showMoreSections, setShowMoreSections] = useState(false);
+  useCareEvents(dog.id, dog.name, { enabled: showMoreSections });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor((contentWidth - 40 - 16) / 3);
@@ -83,17 +84,17 @@ export default function DogProfileTabScreen() {
   const digestiveSummaryQuery = useQuery({
     queryKey: ['digestive-summary', dog.id],
     queryFn: () => getDigestiveSummary(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
   });
   const foodsQuery = useQuery({
     queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
     queryFn: () => listFoods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
   });
   const feedingPeriodsQuery = useQuery({
     queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
     queryFn: () => listFeedingPeriods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
   });
   const activeRealPeriod = feedingPeriodsQuery.data?.find(
     (period) => period.end_at == null,
@@ -106,7 +107,7 @@ export default function DogProfileTabScreen() {
   );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id);
+  const lifestyle = useLifestyle(dog.id, { enabled: showMoreSections });
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
@@ -322,6 +323,36 @@ export default function DogProfileTabScreen() {
             </Pressable>
           )}
 
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showMoreSections }}
+            onPress={() => setShowMoreSections((visible) => !visible)}
+            style={({ pressed }) => [
+              styles.moreToggle,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.linkRow}>
+              <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="ellipsis-horizontal" size={20} color="#0D9488" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>
+                  {showMoreSections ? 'Nascondi dettagli' : 'Vedi anche benessere e routine'}
+                </Text>
+                <Text style={styles.linkSubtitle}>
+                  Digestione, alimentazione, agenda e abitudini
+                </Text>
+              </View>
+              <Ionicons
+                name={showMoreSections ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color="#94A3B8"
+              />
+            </View>
+          </Pressable>
+
+          {showMoreSections ? <>
           {/* Nutrizione / digestione */}
           <Text style={[styles.secondaryTitle, styles.sectionTitleSpaced]}>
             Benessere
@@ -431,6 +462,7 @@ export default function DogProfileTabScreen() {
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </View>
           </Pressable>
+          </> : null}
 
           {/* Anteprima compatta: la raccolta completa vive in una pagina dedicata. */}
           <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
@@ -712,6 +744,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 2,
+  },
+  moreToggle: {
+    marginTop: 24,
+    marginBottom: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    padding: 18,
   },
   patternRow: {
     flexDirection: 'row',

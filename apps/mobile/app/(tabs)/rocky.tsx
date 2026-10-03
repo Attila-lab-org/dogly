@@ -2,7 +2,7 @@
  * Profilo cane: spazio personale, visivo e orientato alle azioni.
  * Le spiegazioni tecniche e le policy restano fuori da questa schermata.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -61,8 +61,9 @@ export default function DogProfileTabScreen() {
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
   const useDemoData = usingMockGate;
+  const [showMoreSections, setShowMoreSections] = useState(false);
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
-  useCareEvents(dog.id, dog.name);
+  useCareEvents(dog.id, dog.name, { enabled: showMoreSections });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor(
@@ -83,17 +84,17 @@ export default function DogProfileTabScreen() {
   const digestiveSummaryQuery = useQuery({
     queryKey: ['digestive-summary', dog.id],
     queryFn: () => getDigestiveSummary(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
   });
   const foodsQuery = useQuery({
     queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
     queryFn: () => listFoods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
   });
   const feedingPeriodsQuery = useQuery({
     queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
     queryFn: () => listFeedingPeriods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
+    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
   });
   const activeRealPeriod = feedingPeriodsQuery.data?.find(
     (period) => period.end_at == null,
@@ -106,7 +107,7 @@ export default function DogProfileTabScreen() {
   );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id);
+  const lifestyle = useLifestyle(dog.id, { enabled: showMoreSections });
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
@@ -321,6 +322,35 @@ export default function DogProfileTabScreen() {
           </Pressable>
         )}
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showMoreSections }}
+          onPress={() => setShowMoreSections((visible) => !visible)}
+          style={({ pressed }) => [
+            styles.detailsRow,
+            styles.moreToggle,
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.accent} />
+          </View>
+          <View style={styles.detailsText}>
+            <Text style={styles.detailsTitle}>
+              {showMoreSections ? 'Nascondi dettagli' : 'Vedi anche benessere e routine'}
+            </Text>
+            <Text style={styles.detailsSubtitle}>
+              Digestione, alimentazione, agenda e abitudini
+            </Text>
+          </View>
+          <Ionicons
+            name={showMoreSections ? 'chevron-up' : 'chevron-down'}
+            size={19}
+            color={colors.textMuted}
+          />
+        </Pressable>
+
+        {showMoreSections ? <>
         <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
           Benessere
         </Text>
@@ -390,6 +420,7 @@ export default function DogProfileTabScreen() {
           </View>
           <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
         </Pressable>
+        </> : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Quello che ricordo</Text>
@@ -835,6 +866,9 @@ const styles = StyleSheet.create({
   },
   lifestyleRow: {
     marginBottom: spacing.md,
+  },
+  moreToggle: {
+    marginBottom: spacing.xxl,
   },
   notesEmpty: {
     marginBottom: spacing.lg,
