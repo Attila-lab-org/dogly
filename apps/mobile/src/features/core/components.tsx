@@ -4,8 +4,8 @@
  * comportamentale (riusata da /behavior/result e /diary/event) e feedback
  * con 👍/👎. Stile vincolante: docs/ux/UX_REFERENCE.md + mockup ufficiali.
  */
-import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Chip, ProgressBar, SectionHeader } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
@@ -325,6 +325,20 @@ export function BehaviorResultView({
   onDiscuss?: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const discussOpacity = useRef(new Animated.Value(0)).current;
+  const discussOffset = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (!active || !onDiscuss) return;
+      if (reduced) { discussOpacity.setValue(1); discussOffset.setValue(0); return; }
+      Animated.parallel([
+        Animated.timing(discussOpacity, { toValue: 1, duration: 360, useNativeDriver: true }),
+        Animated.timing(discussOffset, { toValue: 0, duration: 360, useNativeDriver: true }),
+      ]).start();
+    });
+    return () => { active = false; };
+  }, [discussOffset, discussOpacity, onDiscuss]);
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
   const isAmbiguous = result.primary_intent === 'AMBIGUOUS';
@@ -462,7 +476,7 @@ export function BehaviorResultView({
       ) : null}
 
       {onDiscuss && !safety ? (
-        <View style={styles.discussCard}>
+        <Animated.View style={[styles.discussCard, { opacity: discussOpacity, transform: [{ translateY: discussOffset }] }]}>
           <View style={styles.discussIcon}><Ionicons name="sparkles" size={19} color="#FFFFFF" /></View>
           <View style={styles.discussCopy}>
             <Text style={styles.discussTitle}>Vuoi capirlo meglio?</Text>
@@ -472,7 +486,7 @@ export function BehaviorResultView({
             <Text style={styles.discussButtonText}>Parliamone</Text>
             <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
           </Pressable>
-        </View>
+        </Animated.View>
       ) : null}
 
       <FeedbackButtons
