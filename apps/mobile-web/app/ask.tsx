@@ -4,10 +4,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { useSession } from '@/features/auth/SessionProvider';
 import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type MemoryProposal, type RealtimeSession, type RealtimeTurn } from '@/features/realtime/api';
+import { queryKeys } from '@/lib/queryClient';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean };
 const starters = ['Perché oggi si comporta così?', 'Come posso aiutarlo a stare più tranquillo?', 'Cosa dovrei osservare nei prossimi giorni?'];
@@ -15,6 +18,8 @@ const starters = ['Perché oggi si comporta così?', 'Come posso aiutarlo a star
 export default function AskScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const { userId } = useSession();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -64,6 +69,16 @@ export default function AskScreen() {
     setMemoryBusy(proposal.id);
     try {
       await decideRealtimeMemory(proposal.id, action);
+      if (action === 'CONFIRM' && userId) {
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.ownerStories(userId, dog.id),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.knowledgeScore(userId, dog.id),
+          }),
+        ]);
+      }
       setMessages((current) => current.map((item) => item.turn?.memory_proposal?.id === proposal.id ? { ...item, turn: item.turn ? { ...item.turn, memory_proposal: null } : undefined } : item));
     } catch { setError('Non ho salvato questa informazione. Riprova.'); }
     finally { setMemoryBusy(null); }
