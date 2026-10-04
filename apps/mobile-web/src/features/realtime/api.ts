@@ -7,7 +7,7 @@ export type RealtimeSession = {
   owner_display_name: string | null;
   welcome_text: string;
   status: 'ACTIVE' | 'ENDED' | 'EXPIRED';
-  modality: 'VOICE' | 'TEXT';
+  modality: 'TEXT';
   model: string;
   started_at: string;
   expires_at: string;

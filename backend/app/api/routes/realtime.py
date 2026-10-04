@@ -5,13 +5,11 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any
 
-import httpx
 from fastapi import APIRouter, Depends, Response, status
 
 from app.api.deps import StateDep, UserIdDep, rate_limit
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.realtime import (
-    RealtimeClientSecretOut,
     RealtimeDecision,
     RealtimeMemoryDecision,
     RealtimeMemoryDecisionOut,
@@ -28,7 +26,6 @@ from app.domains.realtime_context import (
     load_realtime_context_db,
     load_realtime_context_memory,
     focus_behavior_event,
-    render_voice_brief,
     resume_welcome_text,
     route_realtime_domains,
 )
@@ -37,7 +34,6 @@ from app.domains.realtime_orchestrator import (
     orchestrate_realtime_turn,
 )
 from app.domains.repository import now_utc
-from app.providers.openai_realtime import create_realtime_client_secret
 
 router = APIRouter(prefix="/realtime")
 
@@ -126,91 +122,6 @@ async def create_realtime_session(
         model=row["model"],
         started_at=row["started_at"],
         expires_at=row["expires_at"],
-    )
-
-
-@router.post(
-    "/sessions/{session_id}/client-secret",
-    response_model=RealtimeClientSecretOut,
-)
-async def create_voice_client_secret(
-    session_id: str,
-    state: StateDep,
-    user_id: UserIdDep,
-    _: Annotated[
-        None, Depends(rate_limit("realtime_secret", limit=6, window_seconds=60))
-    ],
-) -> RealtimeClientSecretOut:
-    if state.engine is not None:
-        session = await realtime_db.load_session_db(
-            state.engine, session_id=session_id, user_id=user_id
-        )
-    else:
-        session = state.store.realtime_sessions.get(session_id)
-    if session is None or not _is_owned_active_voice_session(session, user_id):
-        raise ApiError(ErrorCode.NOT_FOUND, "Conversazione vocale non trovata.")
-    if (
-        not state.settings.realtime_enabled
-        or state.settings.realtime_kill_switch
-        or not state.settings.openai_api_key
-    ):
-        raise ApiError(
-            ErrorCode.INVALID_STATE, "La conversazione vocale non è ancora disponibile."
-        )
-    try:
-        if state.engine is not None:
-            context = await load_realtime_context_db(
-                state.engine,
-                user_id=user_id,
-                dog_id=str(session["dog_id"]),
-                domains=["BEHAVIOR", "DIGESTIVE", "NUTRITION", "CARE", "GENERAL"],
-            )
-            memory = await realtime_db.load_conversation_memory_db(
-                state.engine,
-                user_id=user_id,
-                dog_id=str(session["dog_id"]),
-            )
-        else:
-            context = load_realtime_context_memory(
-                state.store,
-                dog_id=str(session["dog_id"]),
-                domains=["GENERAL"],
-            )
-            memory = state.store.realtime_conversation_memories.get(
-                (user_id, str(session["dog_id"]))
-            )
-        if memory:
-            context.previous_topic = str(memory.get("topic") or "") or None
-            context.previous_turns = list(memory.get("turns_json") or [])
-        welcome = _welcome_text(
-            context.owner_display_name,
-            context.dog_name,
-            context.previous_topic,
-        )
-        secret = await create_realtime_client_secret(
-            state.settings,
-            user_id=user_id,
-            instructions=render_voice_brief(context, welcome=welcome),
-        )
-    except ApiError:
-        raise
-    except LookupError as exc:
-        raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.") from exc
-    except httpx.HTTPError as exc:
-        raise ApiError(
-            ErrorCode.PROCESSING_FAILED,
-            "La voce DOGly non è disponibile in questo momento.",
-            retryable=True,
-        ) from exc
-    return RealtimeClientSecretOut(
-        value=secret["value"],
-        expires_at=secret["expires_at"],
-        model=state.settings.realtime_voice_model,
-        session_config={
-            "voice": state.settings.realtime_voice,
-            "turn_detection": "server_vad",
-            "mode": "speech_to_speech",
-        },
     )
 
 
