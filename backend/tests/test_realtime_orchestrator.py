@@ -3,7 +3,11 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from app.api.routes.realtime import _is_owned_active_voice_session, _welcome_text
+from app.api.routes.realtime import (
+    _is_owned_active_voice_session,
+    _resume_history,
+    _welcome_text,
+)
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
 from app.domains.realtime_context import (
@@ -68,6 +72,22 @@ def test_welcome_offers_to_resume_the_last_conversation() -> None:
         "Ciao Attilio, l'ultima volta parlavamo di perché Oreo abbaia la sera. "
         "Vuoi riprendere la vecchia chiacchierata o parliamo di altro?"
     )
+
+
+def test_new_text_session_resumes_previous_conversation_turns() -> None:
+    history = _resume_history(
+        [
+            {"role": "proprietario", "content": "Oreo abbaia quando resta solo."},
+            {"role": "DOGly", "content": "Proviamo a capire cosa succede prima."},
+        ],
+        [{"role": "user", "content": "E oggi lo ha rifatto."}],
+    )
+
+    assert history == [
+        {"role": "user", "content": "Oreo abbaia quando resta solo."},
+        {"role": "assistant", "content": "Proviamo a capire cosa succede prima."},
+        {"role": "user", "content": "E oggi lo ha rifatto."},
+    ]
     assert conversation_topic(["ciao", "perché Oreo abbaia la sera"], dog_name="Oreo") == (
         "perché Oreo abbaia la sera"
     )

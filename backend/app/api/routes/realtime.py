@@ -59,6 +59,22 @@ def _welcome_text(
     return resume_welcome_text(owner_name, dog_name, previous_topic)
 
 
+def _resume_history(
+    previous: list[dict[str, Any]] | None,
+    current: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Carry the last conversation into a new text session in model format."""
+    resumed: list[dict[str, str]] = []
+    for item in previous or []:
+        role = str(item.get("role") or "")
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        normalized = "user" if role in {"proprietario", "user"} else "assistant"
+        resumed.append({"role": normalized, "content": content})
+    return (resumed + current)[-8:]
+
+
 @router.post("/sessions", response_model=RealtimeSessionOut, status_code=201)
 async def create_realtime_session(
     body: RealtimeSessionCreate,
@@ -266,6 +282,14 @@ async def create_realtime_turn(
             history = await realtime_db.load_history_db(
                 state.engine, session_id=session_id, user_id=user_id
             )
+            previous_memory = await realtime_db.load_conversation_memory_db(
+                state.engine,
+                user_id=user_id,
+                dog_id=str(session["dog_id"]),
+            )
+            history = _resume_history(
+                (previous_memory or {}).get("turns_json"), history
+            )
             decision, provider_audit = await orchestrate_realtime_turn(
                 settings=state.settings,
                 user_text=body.text,
@@ -298,6 +322,12 @@ async def create_realtime_turn(
                         {"role": "assistant", "content": turn["assistant_text"]},
                     ]
                 )
+            previous_memory = state.store.realtime_conversation_memories.get(
+                (user_id, str(session["dog_id"]))
+            )
+            history = _resume_history(
+                (previous_memory or {}).get("turns_json"), history
+            )
             decision, provider_audit = await orchestrate_realtime_turn(
                 settings=state.settings,
                 user_text=body.text,
