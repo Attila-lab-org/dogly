@@ -283,11 +283,6 @@ export default function DiaryScreen() {
   const completedEntries = entries.filter(
     (entry) => entry.status == null || entry.status === 'COMPLETED',
   );
-  const recentBehaviorCount = completedEntries.filter(
-    (entry) => entry.domain === 'BEHAVIOR',
-  ).length;
-  const recentDigestiveCount = completedEntries.length - recentBehaviorCount;
-  const latestMeaningfulEntry = completedEntries[0];
   const showMemorySummary =
     filter === 'ALL' &&
     search.trim().length === 0 &&
@@ -311,24 +306,7 @@ export default function DiaryScreen() {
                   I momenti recenti di {dog.name}
                 </Text>
                 <Text style={styles.memorySummaryText}>
-                  {recentBehaviorCount > 0
-                    ? `${recentBehaviorCount} ${
-                        recentBehaviorCount === 1 ? 'lettura' : 'letture'
-                      } del comportamento`
-                    : ''}
-                  {recentBehaviorCount > 0 && recentDigestiveCount > 0
-                    ? ' · '
-                    : ''}
-                  {recentDigestiveCount > 0
-                    ? `${recentDigestiveCount} ${
-                        recentDigestiveCount === 1
-                          ? 'osservazione digestiva'
-                          : 'osservazioni digestive'
-                      }`
-                    : ''}
-                </Text>
-                <Text style={styles.memorySummaryLatest} numberOfLines={2}>
-                  L’ultimo momento: {latestMeaningfulEntry?.title}
+                  Qui ritrovi i momenti che ti aiutano a capirlo meglio nel tempo.
                 </Text>
               </View>
             </View>

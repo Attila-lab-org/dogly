@@ -6,7 +6,7 @@ import { useSession } from '../../src/features/auth/SessionProvider';
 import { useDogProfile } from '../../src/features/core/useDogProfile';
 
 /**
- * Tab V5.1: Home / Diario / Profilo.
+ * Tab V5.2: Home / Diario / Oreo / Intorno a me.
  * La Fotocamera Storie resta una route nascosta aperta dalla StoriesRail.
  * Protetto: senza sessione → welcome.
  */
@@ -74,6 +74,19 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'paw' : 'paw-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="around"
+        options={{
+          title: 'Intorno a me',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'location' : 'location-outline'}
               size={size}
               color={color as string}
             />

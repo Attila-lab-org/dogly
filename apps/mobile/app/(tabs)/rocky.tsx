@@ -399,27 +399,6 @@ export default function DogProfileTabScreen() {
           />
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Routine e abitudini di ${dog.name}`}
-          onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
-          style={[styles.detailsRow, styles.lifestyleRow]}
-        >
-          <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
-            <Ionicons name="sparkles-outline" size={20} color={colors.accent} />
-          </View>
-          <View style={styles.detailsText}>
-            <Text style={styles.detailsTitle}>Routine e abitudini</Text>
-            <Text style={styles.detailsSubtitle}>
-              {lifestyle.error
-                ? 'Non disponibile'
-                : lifestyle.profile
-                  ? 'Le sue abitudini quotidiane'
-                  : 'Ancora da raccontare'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-        </Pressable>
         </> : null}
 
         <View style={styles.sectionHeader}>

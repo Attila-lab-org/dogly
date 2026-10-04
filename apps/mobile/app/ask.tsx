@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +13,17 @@ import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type M
 import { queryKeys } from '@/lib/queryClient';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean };
-const starters = ['Perché oggi si comporta così?', 'Come posso aiutarlo a stare più tranquillo?', 'Cosa dovrei osservare nei prossimi giorni?'];
+const starterPool = [
+  'Perché oggi si comporta così?',
+  'Come posso aiutarlo a stare più tranquillo?',
+  'Cosa dovrei osservare nei prossimi giorni?',
+  'Che cosa sta cercando di comunicarmi?',
+  'Come capisco se per lui è una situazione nuova?',
+  'Qual è il modo migliore per accompagnarlo?',
+  'Cosa posso fare oggi per aiutarlo?',
+  'Come posso leggere meglio questo comportamento?',
+  'Quando conviene chiedere un aiuto in più?',
+];
 
 export default function AskScreen() {
   const router = useRouter();
@@ -29,6 +39,11 @@ export default function AskScreen() {
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
+  const starters = useMemo(() => {
+    const day = Math.floor(Date.now() / 86400000);
+    const offset = (day + dog.id.length) % starterPool.length;
+    return [0, 1, 2].map((index) => starterPool[(offset + index) % starterPool.length]);
+  }, [dog.id]);
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
 
@@ -101,7 +116,7 @@ export default function AskScreen() {
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
               {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.text); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push('/help' as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
-              {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>Posso ricordare questa cosa?</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>Sì, ricordala</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
+              {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
           {!starting && messages.length === 1 ? <View style={styles.starters}><Text style={styles.starterLabel}>Puoi iniziare da qui</Text>{starters.map((starter) => <Pressable key={starter} onPress={() => void send(starter)} style={styles.starter}><Text style={styles.starterText}>{starter}</Text><Ionicons name="arrow-up" size={16} color={colors.primary} /></Pressable>)}</View> : null}
