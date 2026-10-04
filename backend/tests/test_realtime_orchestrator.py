@@ -74,6 +74,12 @@ def test_welcome_offers_to_resume_the_last_conversation() -> None:
     )
 
 
+def test_conversation_topic_ignores_rotating_starter_questions() -> None:
+    assert conversation_topic(
+        ["Qual è il modo migliore per accompagnarlo?"], dog_name="Oreo"
+    ) == "Oreo"
+
+
 def test_new_text_session_resumes_previous_conversation_turns() -> None:
     history = _resume_history(
         [

@@ -108,7 +108,7 @@ export default function AskScreen() {
       </View>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
-          <View style={styles.intro}><View style={styles.sparkle}><Ionicons name="sparkles" size={19} color={colors.primary} /></View><Text style={styles.introTitle}>Capire un momento alla volta</Text><Text style={styles.introText}>Scrivimi cosa hai notato. Ti rispondo in modo semplice, usando quello che so di {dog.name}.</Text></View>
+          {messages.length === 1 ? <View style={styles.intro}><View style={styles.sparkle}><Ionicons name="sparkles" size={19} color={colors.primary} /></View><Text style={styles.introTitle}>Capire un momento alla volta</Text><Text style={styles.introText}>Scrivimi cosa hai notato. Ti rispondo in modo semplice, usando quello che so di {dog.name}.</Text></View> : null}
           {starting ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.muted}>Preparo la conversazione…</Text></View> : null}
           {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => void start()}><Text style={styles.retry}>Riprova</Text></Pressable></View> : null}
           {messages.map((message) => <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>

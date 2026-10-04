@@ -92,11 +92,25 @@ _RESUME_GREETING = re.compile(
     re.IGNORECASE,
 )
 
+_GENERIC_STARTER_QUESTIONS = {
+    "perché oggi si comporta così?",
+    "come posso aiutarlo a stare più tranquillo?",
+    "cosa dovrei osservare nei prossimi giorni?",
+    "che cosa sta cercando di comunicarmi?",
+    "come capisco se per lui è una situazione nuova?",
+    "qual è il modo migliore per accompagnarlo?",
+    "cosa posso fare oggi per aiutarlo?",
+    "come posso leggere meglio questo comportamento?",
+    "quando conviene chiedere un aiuto in più?",
+}
+
 
 def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
     for line in reversed(user_texts):
         cleaned = " ".join((line or "").split())
         if not cleaned or _RESUME_GREETING.fullmatch(cleaned):
+            continue
+        if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
             continue
         if len(cleaned) > 90:
             cleaned = cleaned[:87].rsplit(" ", 1)[0] + "…"
