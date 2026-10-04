@@ -394,8 +394,9 @@ async def decide_realtime_memory(
                     "id": observation_id,
                     "dog_id": proposal["dog_id"],
                     "user_id": user_id,
-                    "facts_json": [
+                    "facts": [
                         {
+                            "id": str(uuid.uuid4()),
                             "category": proposal["category"],
                             "statement": proposal["statement"],
                             "provenance": "OWNER_REPORTED",
@@ -403,6 +404,7 @@ async def decide_realtime_memory(
                         }
                     ],
                     "status": "CONFIRMED",
+                    "confirmed_at": now_utc(),
                 }
     if result is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Proposta non trovata o già gestita.")

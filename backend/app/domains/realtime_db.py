@@ -475,6 +475,7 @@ async def decide_memory_db(
             return None
         if target_status == "CONFIRMED":
             fact = {
+                "id": str(uuid.uuid4()),
                 "category": proposal["category"],
                 "statement": proposal["statement"],
                 "provenance": "OWNER_REPORTED",

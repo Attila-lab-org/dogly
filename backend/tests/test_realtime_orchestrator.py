@@ -271,6 +271,48 @@ async def test_realtime_api_session_turn_and_close(
     assert "Come sta Oreo oggi?" in again.json()["welcome_text"]
 
 
+@pytest.mark.asyncio
+async def test_confirmed_chat_memory_is_visible_in_owner_stories(
+    client, auth_headers: dict[str, str], state
+) -> None:
+    from app.api.routes.realtime import _record_turn_memory
+
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    user_id = state.store.dogs[dog_id].owner_id
+    session = {
+        "id": "session-memory-test",
+        "dog_id": dog_id,
+        "user_id": user_id,
+        "status": "ACTIVE",
+    }
+    _record_turn_memory(
+        state.store,
+        session=session,
+        user_text="Oreo ama dormire sul divano.",
+        decision={
+            "assistant_text": "Lo tengo presente.",
+            "memory_candidate": "Oreo ama dormire sul divano.",
+            "memory_category": "PREFERENCE",
+        },
+    )
+    proposal_id = next(iter(state.store.realtime_memory_proposals))
+
+    decision = await client.post(
+        f"/v1/realtime/memory-proposals/{proposal_id}/decision",
+        headers=auth_headers,
+        json={"action": "CONFIRM"},
+    )
+    assert decision.status_code == 200
+
+    stories = await client.get(
+        f"/v1/dogs/{dog_id}/owner-stories", headers=auth_headers
+    )
+    assert stories.status_code == 200
+    assert stories.json()["items"][0]["facts"][0]["statement"] == (
+        "Oreo ama dormire sul divano."
+    )
+
+
 def test_voice_and_orchestrated_turns_share_spoken_delivery_and_memory_boundaries():
     from app.domains.realtime_orchestrator import _SYSTEM
     from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
