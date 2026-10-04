@@ -105,6 +105,10 @@ non è un'abitudine. Se per capire il comportamento attuale serve davvero vederl
 chiedi un breve video e imposta behavior_handoff; non fingere di vederlo in diretta.
 
 Puoi fare una sola domanda solo se cambia davvero significato, azione o sicurezza.
+Quando fai una domanda, restituisci anche 2-4 question_options brevi e concrete,
+che il proprietario possa toccare per rispondere senza dover formulare tutto da solo.
+Le opzioni devono rispondere esattamente alla domanda; se non fai una domanda,
+question_options deve essere vuoto.
 Puoi proporre un solo memory_candidate quando il proprietario ha detto chiaramente
 un fatto stabile: non salvarlo e non dedurlo. Se c'è un segnale urgente, dai subito
 l'indicazione di sicurezza necessaria; non diagnosticare né prescrivere.
@@ -153,6 +157,11 @@ def _provider_decision(
     if not isinstance(answer, str) or not answer.strip() or _TECHNICAL_COPY.search(answer):
         return None
     question = raw.get("question") if isinstance(raw.get("question"), str) else None
+    question_options = [
+        str(option).strip()
+        for option in raw.get("question_options", [])
+        if isinstance(option, str) and option.strip()
+    ][:4]
     information_gain = raw.get("question_information_gain")
     allowed_gain = {
         "CHANGES_MEANING",
@@ -162,6 +171,9 @@ def _provider_decision(
     if question and information_gain not in allowed_gain:
         question = None
         information_gain = "NONE"
+        question_options = []
+    elif question and not question_options:
+        question_options = ["È successo oggi", "Succede spesso", "È una cosa nuova"]
     terminal = raw.get("terminal_state")
     if terminal not in {
         "ANSWERED",
@@ -184,6 +196,7 @@ def _provider_decision(
         return RealtimeDecision(
             assistant_text=answer.strip(),
             question=question,
+            question_options=question_options,
             terminal_state=terminal,
             domains=[
                 value
@@ -282,6 +295,7 @@ def _fallback_decision(
             "Posso aiutarti senza indovinare se mi racconti cosa è successo oggi."
         ),
         question=f"Qual è il cambiamento concreto che hai notato in {name}?",
+        question_options=["È successo oggi", "Succede spesso", "È una cosa nuova"],
         question_information_gain="CHANGES_MEANING",
         domains=domains,
     )

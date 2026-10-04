@@ -381,6 +381,7 @@ async def create_realtime_turn(
         session_id=session_id,
         assistant_text=decision.assistant_text,
         question=decision.question,
+        question_options=decision.question_options,
         terminal_state=decision.terminal_state,
         domains=decision.domains,
         safety_flags=decision.safety_flags,

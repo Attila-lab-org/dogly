@@ -24,6 +24,7 @@ export type RealtimeTurn = {
   session_id: string;
   assistant_text: string;
   question: string | null;
+  question_options: string[];
   terminal_state:
     | 'ANSWERED'
     | 'ABSTAINED'

@@ -55,6 +55,7 @@ class RealtimeTurnOut(BaseModel):
     session_id: str
     assistant_text: str
     question: str | None = None
+    question_options: list[str] = Field(default_factory=list, max_length=4)
     terminal_state: RealtimeTerminalState
     domains: list[RealtimeDomain] = Field(default_factory=list)
     safety_flags: list[str] = Field(default_factory=list)
@@ -68,6 +69,7 @@ class RealtimeDecision(BaseModel):
 
     assistant_text: str = Field(min_length=1, max_length=900)
     question: str | None = Field(default=None, max_length=240)
+    question_options: list[str] = Field(default_factory=list, max_length=4)
     terminal_state: RealtimeTerminalState = "ANSWERED"
     domains: list[RealtimeDomain] = Field(default_factory=list, max_length=3)
     safety_flags: list[str] = Field(default_factory=list, max_length=4)
@@ -89,6 +91,9 @@ class RealtimeDecision(BaseModel):
             raise ValueError("A question must be able to change the decision")
         if not self.question:
             self.question_information_gain = "NONE"
+            self.question_options = []
+        elif any(not option.strip() or len(option) > 80 for option in self.question_options):
+            raise ValueError("Question options must be short and non-empty")
         if self.memory_candidate and not self.memory_category:
             raise ValueError("Memory candidate requires a category")
         if self.behavior_handoff:
