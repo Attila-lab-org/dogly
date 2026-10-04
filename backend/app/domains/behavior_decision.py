@@ -513,7 +513,7 @@ _PROMOTION_COPY: dict[IntentCode, tuple[str, str, str]] = {
         "«Possiamo andare verso la porta?»",
     ),
     IntentCode.DISCOMFORT_AVOIDANCE: (
-        "{name} non sembra a suo agio",
+        "{name} non è a suo agio",
         (
             "Ci sono segnali di tensione o di possibile disagio fisico. "
             "Non è una diagnosi: per ora la cosa più utile è osservarlo "
@@ -737,7 +737,7 @@ def _sync_ambiguous_result(
         )
         dog_voice = "«Qualcosa non mi torna: guardami con attenzione.»"
     elif interaction_pair:
-        headline = f"{dog_name} sembra cercare un momento con te"
+        headline = f"{dog_name} cerca un momento con te"
         summary = (
             f"{dog_name} si avvicina con il corpo sciolto e poi riparte. "
             "Può essere un invito al gioco oppure un modo per coinvolgerti."

@@ -25,7 +25,7 @@ from app.knowledge.claim_validation import (
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
 
-REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v1"
+REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v2"
 
 _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
@@ -88,10 +88,14 @@ def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
 # controls turn-taking; the model should supply one human answer.
 _SYSTEM = CANINE_REASONING_CORE + """
 Sei DOGly in una conversazione vera con il proprietario di un cane. Rispondi in
-italiano naturale, come qualcuno che ascolta davvero: massimo 45 parole e al
+italiano naturale, amichevole e sicuro, come qualcuno che ascolta davvero: massimo 45 parole e al
 massimo 2 frasi, prima il punto utile, poi un'azione solo se serve. Chiudi sempre
 le frasi in modo completo, senza lasciare parole o periodi a metà. Niente titoli, report, elenchi,
 ripetizioni, gergo tecnico o spiegazioni sul sistema. Non ripetere la domanda.
+
+Quando i dati sostengono una lettura, usa una frase diretta e concreta ("Oreo è
+tranquillo", "Oreo ti sta cercando"). Usa "sembra", "potrebbe" o "forse" solo
+quando due spiegazioni restano davvero vicine o manca un dato decisivo.
 
 Usa PERSONAL_DOG_CONTEXT e la cronologia quando la domanda riguarda quel cane;
 usa CANINE_SCIENCE per domande generali. Distingui sempre ciò che è osservato,
@@ -203,6 +207,31 @@ def _provider_decision(
         return None
 
 
+def _direct_context_summary(value: str) -> str:
+    """Keep deterministic chat fallbacks as direct as provider responses."""
+    text = " ".join(str(value or "").split())
+    if not text:
+        return text
+    text = re.sub(r"^Probabilmente\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"sembra voler giocare", "ti sta invitando a giocare", text, flags=re.IGNORECASE
+    )
+    text = re.sub(
+        r"sembra rilassato", "è tranquillo e rilassato", text, flags=re.IGNORECASE
+    )
+    text = re.sub(r"potrebbe voler uscire", "vuole uscire", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"potrebbe cercare il gioco", "ti invita a giocare", text, flags=re.IGNORECASE
+    )
+    text = re.sub(
+        r"potrebbe cercare il tuo coinvolgimento",
+        "ti chiede attenzione",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"sembra molto attento", "è molto attento", text, flags=re.IGNORECASE)
+
+
 def _fallback_decision(
     *,
     text: str,
@@ -222,8 +251,19 @@ def _fallback_decision(
         None,
     )
     if latest:
+        latest_text = str(
+            (latest.data or {}).get("headline")
+            or latest.summary
+            or "Ho una lettura da approfondire"
+        )
+        friendly = _direct_context_summary(latest_text)
+        assistant_text = (
+            friendly
+            if re.match(rf"^{re.escape(name)}\b", friendly, flags=re.IGNORECASE)
+            else f"Per {name}: {friendly}"
+        )
         return RealtimeDecision(
-            assistant_text=f"Per {name}, l'ultima analisi disponibile indica: {latest.summary}",
+            assistant_text=assistant_text,
             domains=domains,
             used_source_ids=[latest.source_id],
         )

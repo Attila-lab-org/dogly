@@ -68,7 +68,7 @@ const resultPlay: BehaviorEventResult = {
   primary_intent: 'PLAY_INTERACTION',
   confidence_band: 'HIGH',
   consumer_summary:
-    'Rocky sembra voler giocare: postura di gioco e movimento verso di te. Probabilmente ti sta invitando a partecipare.',
+    'Rocky ti invita a giocare: postura di gioco e movimento verso di te. Ti sta coinvolgendo nel momento.',
   evidence: [
     { source: 'OBSERVATION', label: 'Postura di gioco' },
     { source: 'OBSERVATION', label: 'Coda rilassata' },
@@ -88,7 +88,7 @@ const resultPlay: BehaviorEventResult = {
   completed_at: '2026-09-04T18:12:21Z',
 };
 
-/** "Ultima analisi" della Home (mockup-home: "sembra rilassato", 09:30). */
+/** "Ultima analisi" della Home (lettura diretta, 09:30). */
 const resultRelax: BehaviorEventResult = {
   eventId: 'evt-relax',
   dogId: DOG_ID,
@@ -96,7 +96,7 @@ const resultRelax: BehaviorEventResult = {
   primary_intent: 'RELAX_REST',
   confidence_band: 'MEDIUM',
   consumer_summary:
-    'Rocky sembra rilassato: corpo disteso e respiro regolare. Probabilmente si sta godendo un momento di calma.',
+    'Rocky è tranquillo e rilassato: corpo disteso e respiro regolare. Si sta godendo un momento di calma.',
   evidence: [
     { source: 'OBSERVATION', label: 'Corpo disteso' },
     { source: 'OBSERVATION', label: 'Respiro regolare' },
@@ -247,7 +247,7 @@ export const homeDataMock: HomeData = {
   usage: usageMock,
   lastInsight: {
     eventId: resultRelax.eventId,
-    label: 'sembra rilassato',
+    label: 'è tranquillo e rilassato',
     timestampLabel: 'Oggi, 09:30',
     tone: 'positive',
   },
@@ -264,7 +264,7 @@ export const diaryEntriesMock: DiaryEntry[] = [
   {
     id: 'diary-play',
     domain: 'BEHAVIOR',
-    title: 'Rocky sembra voler giocare',
+    title: 'Rocky ti invita a giocare',
     subtitle: 'Si avvicina e cerca interazione',
     occurredAt: '2026-09-04T18:12:00Z',
     mediaDeleted: false,

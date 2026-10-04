@@ -170,7 +170,7 @@ def test_escalation_flag_commands_distance_not_a_code():
     assert "SAFE_" not in result.safety.action
     assert "distanza" in result.safety.action.lower()
     assert result.recommended_next_step == result.safety.action
-    assert "chiedere più spazio" in result.consumer_headline
+    assert "sta chiedendo più spazio" in result.consumer_headline
 
 
 def test_advice_follow_up_becomes_what_to_watch():

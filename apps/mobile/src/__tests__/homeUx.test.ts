@@ -109,7 +109,7 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     expect(derived.isNewUser).toBe(false);
     expect(derived.processingEventId).toBe('evt-proc');
     expect(derived.lastInsight?.eventId).toBe('evt-done');
-    expect(derived.lastInsight?.label).toBe('Sembra rilassato');
+    expect(derived.lastInsight?.label).toBe('È tranquillo e rilassato');
     expect(derived.lastInsight?.tone).toBe('positive');
     expect(derived.recentInsights.map((item) => item.eventId)).toEqual([
       'evt-done',
@@ -154,10 +154,10 @@ describe('deriveHomeState (sez. 6 Home)', () => {
 });
 
 describe('probabilisticInsightLabel', () => {
-  it('traduce il codice tassonomico e garantisce wording prudente', () => {
-    expect(probabilisticInsightLabel('RELAX_REST')).toMatch(/^Sembra /);
+  it('traduce il codice tassonomico con un tono diretto', () => {
+    expect(probabilisticInsightLabel('RELAX_REST')).toBe('È tranquillo e rilassato');
     expect(probabilisticInsightLabel('Probabilmente vuole uscire')).toBe(
-      'Probabilmente vuole uscire',
+      'Vuole uscire',
     );
   });
 });

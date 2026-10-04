@@ -25,7 +25,6 @@ jest.mock('../components', () => {
     ProgressBar: () => null,
   };
 });
-
 import { BehaviorResultView } from '../features/core/components';
 
 const base = {
@@ -47,10 +46,10 @@ afterEach(() => jest.restoreAllMocks());
 
 it('shows meaning and the hypothetical translation immediately, with the explanation closed', () => {
   const html = render();
-  expect(html).toContain(base.consumer_headline);
+  expect(html).toContain('Oreo ti sta coinvolgendo nel gioco.');
   expect(html).toContain('In parole umane');
   expect(html).toContain(base.dog_voice);
-  expect(html).toContain('Una possibile lettura del momento');
+  expect(html).toContain('La lettura di DOGly');
   expect(html).toContain('Perché?');
   expect(html).toContain('aria-expanded="false"');
   expect(html).not.toContain(base.consumer_summary);

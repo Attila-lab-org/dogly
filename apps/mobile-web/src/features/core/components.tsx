@@ -19,6 +19,7 @@ import type {
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 import {
   CONFIDENCE_BAND_LABELS,
+  directResultHeadline,
   sanitizeOwnerCopy,
 } from './copy';
 import { isPersonalBaselineNote } from './conversationCopy';
@@ -330,7 +331,7 @@ export function BehaviorResultView({
       .replace(/\bdel (?:tuo )?cane\b/gi, `di ${dogName}`)
       .replace(/\bal (?:tuo )?cane\b/gi, `a ${dogName}`)
       .replace(/\b(?:il|un) (?:tuo )?cane\b/gi, dogName);
-  const headline = ownerCopy(
+  const headline = directResultHeadline(
     result.consumer_headline ||
       result.consumer_summary ||
       `Ecco cosa emerge dal video di ${dogName}`,
@@ -427,7 +428,7 @@ export function BehaviorResultView({
           <View style={styles.translationBlock} testID="behavior-dog-voice">
             <Text style={styles.translationKicker}>In parole umane</Text>
             <Text style={styles.translationText}>{ownerCopy(translation)}</Text>
-            <Text style={styles.translationHint}>Una possibile lettura del momento</Text>
+            <Text style={styles.translationHint}>La lettura di DOGly</Text>
           </View>
         ) : null}
         {showSummary ? (

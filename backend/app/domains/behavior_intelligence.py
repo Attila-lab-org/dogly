@@ -88,7 +88,7 @@ SAFETY_COPY: dict[str, tuple[str, str, str]] = {
         "Aumenta la distanza e non forzare il contatto.",
     ),
     SAFE_DISTRESS_001: (
-        "Sembra in difficoltà",
+        "È in difficoltà",
         (
             "Ci sono più segnali compatibili con disagio. Non è una diagnosi: "
             "in questo momento serve spazio, non pressione."
@@ -96,7 +96,7 @@ SAFETY_COPY: dict[str, tuple[str, str, str]] = {
         "Fai un passo indietro e lascialo allontanarsi se vuole.",
     ),
     SAFE_PAIN_001: (
-        "Possibile disagio fisico",
+        "Disagio fisico da controllare",
         (
             "Il contesto che hai condiviso include un possibile disagio. "
             "Dogly non diagnostica dolore: se è nuovo, intenso o persistente, parlane col veterinario."
@@ -110,7 +110,7 @@ _HEADLINES: dict[IntentCode, str] = {
     IntentCode.ATTENTION_REQUEST: "{name} sta cercando la tua attenzione",
     IntentCode.OUTSIDE_REQUEST: "{name} vuole uscire.",
     IntentCode.ALERT_VIGILANCE: "{name} sta segnalando qualcosa che lo ha messo in allerta",
-    IntentCode.DISCOMFORT_AVOIDANCE: "{name} non sembra a suo agio",
+    IntentCode.DISCOMFORT_AVOIDANCE: "{name} non è a suo agio",
     IntentCode.FEAR_INSECURITY: "{name} si sente insicuro e cerca protezione",
     IntentCode.HIGH_AROUSAL: "{name} è troppo carico: aiutalo a rallentare",
     IntentCode.FRUSTRATION: "{name} è frustrato perché non ottiene ciò che vuole",
@@ -226,7 +226,7 @@ def _pick_safety(flags: list[SafetyFlag]) -> BehaviorSafetyCopy | None:
 
 def _headline(dog_name: str, intent: IntentCode | None, safety: BehaviorSafetyCopy | None) -> str:
     if safety is not None and safety.code == SAFE_ESCALATION_001:
-        return f"{dog_name} sembra chiedere più spazio"
+        return f"{dog_name} sta chiedendo più spazio"
     if intent is None or intent is IntentCode.INSUFFICIENT:
         return _HEADLINES[IntentCode.INSUFFICIENT]
     template = _HEADLINES.get(intent, "{name} — sto ancora leggendo i segnali")

@@ -2,8 +2,8 @@
  * Copy condiviso dei domini core (F1), in italiano (lingua UI, piano).
  * Regole vincolanti:
  * - confidenza SOLO a band LOW/MEDIUM/HIGH, mai percentuali (O-07, sez. 6.1);
- * - wording risultati sempre probabilistico ("sembra / probabilmente /
- *   possibile", sez. 6.1);
+ * - wording dei risultati diretto e umano; la prudenza resta solo quando
+ *   cambia davvero la lettura o la sicurezza;
  * - stati pipeline con copy rassicurante e zero gergo tecnico (sez. 6, 7.2).
  */
 import type {
@@ -22,9 +22,7 @@ export const CONFIDENCE_BAND_LABELS: Record<ConfidenceBand, string> = {
 };
 
 /**
- * Headline del risultato (mockup-result: "Rocky sembra voler giocare").
- * Le label di tassonomia (sez. 16.2) iniziano già con wording probabilistico;
- * qui vengono ricalibrate con il nome del cane e iniziale minuscola.
+ * Headline del risultato: una frase chiara, poi l'incertezza solo se serve.
  */
 export function intentHeadline(
   dogName: string,
@@ -52,9 +50,33 @@ const DOG_VOICE_LINES: Record<BehaviorIntent, string> = {
   INSUFFICIENT: '«Non voglio inventare: fammi vedere meglio.»',
 };
 
-/** Human-readable mediation, explicitly framed as a possible translation. */
+/** Human-readable mediation: the quotation is already framed by the UI. */
 export function dogVoiceLine(intent: BehaviorIntent | null): string {
   return DOG_VOICE_LINES[intent ?? 'INSUFFICIENT'];
+}
+
+/**
+ * Gives older stored headlines the same direct tone as new analyses.
+ * This is deliberately small: it never rewrites the explanation or safety
+ * copy, where uncertainty can be meaningful.
+ */
+export function directResultHeadline(value: string | null | undefined): string {
+  const text = sanitizeOwnerCopy(value ?? '');
+  if (!text) return text;
+  return text
+    .replace(/^([\S]+)\s+sembra\s+volerti\s+coinvolgere\b/i, '$1 ti sta coinvolgendo')
+    .replace(/^(\S+)\s+sembra\s+volerti\s+/i, '$1 ti sta invitando a ')
+    .replace(/^(\S+)\s+sembra\s+voler\s+/i, '$1 ti sta invitando a ')
+    .replace(/^(\S+)\s+sembra\s+rilassato\b/i, '$1 è tranquillo e rilassato')
+    .replace(/^(\S+)\s+sembra\s+a suo agio\b/i, '$1 è a suo agio')
+    .replace(/^Sembra\s+rilassato\b/i, 'È tranquillo e rilassato')
+    .replace(/^Sembra un\b/i, 'Qui vedo un')
+    .replace(/^Sembra una\b/i, 'Qui vedo una')
+    .replace(/^Sembra degli\b/i, 'Qui vedo dei')
+    .replace(/^Sembra\b/i, 'Qui vedo')
+    .replace(/^Probabilmente\s+/i, '')
+    .replace(/^Possibile richiesta di\b/i, 'Richiesta di')
+    .replace(/^([a-zà-ù])/, (letter) => letter.toLocaleUpperCase('it-IT'));
 }
 
 /** Ripulisce anche i risultati storici creati prima del copy consumer. */

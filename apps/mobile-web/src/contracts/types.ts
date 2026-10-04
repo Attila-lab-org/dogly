@@ -32,17 +32,17 @@ export const BEHAVIOR_INTENTS = [
 
 export type BehaviorIntent = (typeof BEHAVIOR_INTENTS)[number];
 
-/** Significato consumer in italiano (sez. 16.2, wording probabilistico). */
+/** Significato consumer in italiano, diretto quando i segnali lo consentono. */
 export const BEHAVIOR_INTENT_LABELS: Record<BehaviorIntent, string> = {
-  PLAY_INTERACTION: 'Sembra voler giocare',
+  PLAY_INTERACTION: 'Ti invita a giocare',
   ATTENTION_REQUEST: 'Sta cercando la tua attenzione',
-  OUTSIDE_REQUEST: 'Possibile richiesta di uscire',
+  OUTSIDE_REQUEST: 'Ti sta chiedendo di uscire',
   ALERT_VIGILANCE: 'È molto attento a qualcosa',
-  DISCOMFORT_AVOIDANCE: 'Sembra a disagio e potrebbe voler più spazio',
-  FEAR_INSECURITY: 'Segnali compatibili con paura o forte insicurezza',
+  DISCOMFORT_AVOIDANCE: 'È a disagio e chiede più spazio',
+  FEAR_INSECURITY: 'Si sente insicuro e cerca protezione',
   HIGH_AROUSAL: 'È molto attivato o eccitato',
-  FRUSTRATION: 'Potrebbe essere frustrato',
-  RELAX_REST: 'Sembra rilassato',
+  FRUSTRATION: 'È frustrato perché non ottiene ciò che vuole',
+  RELAX_REST: 'È tranquillo e rilassato',
   RESOURCE_TENSION: "C'è tensione intorno a questa risorsa",
   AMBIGUOUS: 'Due o più ipotesi vicine',
   INSUFFICIENT: 'Non ci sono abbastanza segnali',
@@ -143,7 +143,7 @@ export interface AlternativeHypothesis {
  * Contratto risultato comportamentale mostrato al consumer (sez. 6.1).
  * - primary_intent: codice tassonomia chiusa o null se insufficiente
  * - confidence_band: band LOW/MEDIUM/HIGH, MAI percentuale
- * - consumer_summary: breve, prudente ("sembra / probabilmente / possibile")
+ * - consumer_summary: breve e umano; prudenza solo quando cambia la lettura
  * - evidence: 3–5 bullet legati all'evento corrente
  * - alternatives: 0–2 ipotesi plausibili
  * - feedback: feedback owner a tre vie, se già registrato

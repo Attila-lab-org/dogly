@@ -1,6 +1,7 @@
 """InterpretationContract V0 (Spec V1 sez. 16.3) with closed intent taxonomy
 (sez. 16.2). Reasoner must support abstention and alternatives; confidence is
-band-only (no numeric %, O-07); consumer wording is probabilistic (sez. 16.1).
+band-only (no numeric %, O-07); consumer wording is direct and human, with
+uncertainty only when it changes the reading or safety (sez. 16.1).
 """
 
 from __future__ import annotations
@@ -108,7 +109,8 @@ class InterpretationContract(BaseModel):
     # Closed taxonomy code, or null if insufficient (sez. 16.3).
     primary_intent: IntentCode | None = None
     confidence_band: ConfidenceBand
-    # Short, cautious, localizable consumer string ("sembra / probabilmente / possibile").
+    # Short, warm consumer string. Use direct language when evidence supports
+    # one reading; reserve hedges for material ambiguity or safety.
     consumer_summary: str
     # Clip-specific consumer copy. Safety copy can still override the headline.
     consumer_headline: str = Field(min_length=3, max_length=100)

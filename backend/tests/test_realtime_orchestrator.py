@@ -173,6 +173,33 @@ async def test_disabled_realtime_uses_grounded_latest_analysis() -> None:
 
 
 @pytest.mark.asyncio
+async def test_disabled_realtime_makes_legacy_headline_direct() -> None:
+    settings = Settings(realtime_enabled=False)
+    context = RealtimeDogContext(
+        dog_id="dog-1",
+        dog_name="Oreo",
+        identity={},
+        items=[
+            RealtimeContextItem(
+                source_id="behavior-1",
+                source_type="BEHAVIOR_EVENT",
+                summary="Oreo sembra rilassato: corpo disteso.",
+                data={"headline": "Oreo sembra rilassato"},
+            )
+        ],
+    )
+    decision, _ = await orchestrate_realtime_turn(
+        settings=settings,
+        user_text="Come sta Oreo?",
+        domains=["BEHAVIOR"],
+        context=context,
+        history=[],
+    )
+    assert decision.assistant_text == "Oreo è tranquillo e rilassato"
+    assert "sembra" not in decision.assistant_text.lower()
+
+
+@pytest.mark.asyncio
 async def test_behavior_without_evidence_hands_off_to_video() -> None:
     settings = Settings(realtime_enabled=False)
     context = RealtimeDogContext(

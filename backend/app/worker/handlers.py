@@ -1762,7 +1762,7 @@ async def process_behavior_result_notification(
     sent = await send_push(
         tokens,
         title=f"Il risultato di {dog_name} è pronto",
-        body=f"Ho finito di osservare {dog_name}: apri per scoprire cosa potrebbe stare comunicando.",
+        body=f"Ho finito di osservare {dog_name}: apri per scoprire cosa sta comunicando.",
         data={"href": f"/behavior/result/{event.id}", "event_id": event.id},
     )
     return {"event_id": event.id, "status": "sent", "devices": sent}

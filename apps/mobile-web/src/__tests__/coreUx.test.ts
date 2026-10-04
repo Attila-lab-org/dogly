@@ -3,7 +3,7 @@
  * - macchina di cattura (sez. 6/13): ready → recording → too short /
  *   hard cap 20 s / permission denied;
  * - invarianti del result contract (sez. 6.1) sui mock: band mai %,
- *   wording probabilistico, 3–5 evidence, alternative 0–2;
+ *   wording diretto quando la lettura è chiara, 3–5 evidence, alternative 0–2;
  * - timeline Diario: riferimenti coerenti e ordinamento.
  */
 import {
@@ -106,7 +106,6 @@ describe('captureMachine (sez. 13)', () => {
     expect(formatCaptureTimer(20)).toBe('0:20');
   });
 });
-
 describe('Knowledge Score', () => {
   it('espone livelli qualitativi invece di percentuali', () => {
     expect(knowledgeLevelLabel(0)).toBe('Iniziale');
@@ -138,10 +137,9 @@ describe('result contract sui mock (sez. 6.1)', () => {
     }
   });
 
-  it('wording dei summary sempre probabilistico (sembra/probabilmente/possibile)', () => {
-    for (const r of completed) {
-      expect(r.consumer_summary).toMatch(/sembra|probabilmente|possibile|potrebbe/i);
-    }
+  it('usa un tono diretto quando la lettura è chiara', () => {
+    expect(behaviorResultsMock['evt-play'].consumer_summary).toMatch(/ti invita a giocare/i);
+    expect(behaviorResultsMock['evt-relax'].consumer_summary).toMatch(/è tranquillo e rilassato/i);
   });
 
   it('INSUFFICIENT è un risultato completato valido con primary_intent null', () => {
@@ -152,7 +150,7 @@ describe('result contract sui mock (sez. 6.1)', () => {
 
   it('headline ricalibrata sul cane, iniziale minuscola, mai % ', () => {
     expect(intentHeadline('Rocky', 'PLAY_INTERACTION')).toBe(
-      'Rocky sembra voler giocare',
+      'Rocky ti invita a giocare',
     );
     expect(intentHeadline('Rocky', null)).toBe(
       'Non ho abbastanza elementi per capirlo bene',
@@ -174,7 +172,7 @@ describe('result contract sui mock (sez. 6.1)', () => {
 describe('mock Home e Diario', () => {
   it('mantiene il Knowledge Score nel dominio profilo e l’ultima analisi Home', () => {
     expect(homeDataMock.knowledgeScore.score).toBe(38);
-    expect(homeDataMock.lastInsight?.label).toBe('sembra rilassato');
+    expect(homeDataMock.lastInsight?.label).toBe('è tranquillo e rilassato');
     expect(homeDataMock.usage.behaviorUsed).toBeLessThanOrEqual(
       homeDataMock.usage.behaviorLimit,
     );

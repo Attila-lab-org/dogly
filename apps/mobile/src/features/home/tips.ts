@@ -152,7 +152,7 @@ const TEMPLATES: TipTemplate[] = [
     id: 'news-hypothesis',
     kind: 'news',
     title: 'Non diamo etichette a {name}.',
-    body: 'Diciamo cosa sembra. Tu confermi, e insieme diventiamo più sicuri.',
+    body: 'Ti diciamo la lettura più chiara. Tu ci confermi se ti ritrovi, e DOGly impara da voi.',
     ctaLabel: 'Vedi le letture',
     action: 'diary',
   },

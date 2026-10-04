@@ -11,7 +11,7 @@
  */
 import type { BehaviorEventStatus } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
-import { sanitizeOwnerCopy } from '../core/copy';
+import { directResultHeadline, sanitizeOwnerCopy } from '../core/copy';
 import type {
   DiaryDomain,
   DiaryEntry,
@@ -206,23 +206,19 @@ function toLastInsight(item: ApiDiaryItem, now: Date): LastInsight {
   };
 }
 
-/** Garantisce che il titolo consumer della Home resti un'ipotesi, non un fatto. */
+/** Porta anche i titoli storici della Home nello stesso tono diretto dei risultati. */
 export function probabilisticInsightLabel(title: string): string {
   const normalized = title.trim();
-  if (/^(sembra|probabilmente|possibile)\b/i.test(normalized)) {
-    return normalized;
-  }
   const taxonomyLabel =
     BEHAVIOR_INTENT_LABELS[
       normalized.toUpperCase() as keyof typeof BEHAVIOR_INTENT_LABELS
     ] ?? normalized;
   if (!taxonomyLabel || taxonomyLabel === 'Analisi comportamento') {
-    return 'Sembra un comportamento da approfondire';
+    return 'C’è un comportamento da approfondire';
   }
-  if (/^(sembra|potrebbe|forse|oggi|non ci)\b/i.test(taxonomyLabel)) {
-    return taxonomyLabel;
-  }
-  return `Sembra ${taxonomyLabel.charAt(0).toLowerCase()}${taxonomyLabel.slice(1)}`;
+  return directResultHeadline(
+    taxonomyLabel.charAt(0).toUpperCase() + taxonomyLabel.slice(1),
+  );
 }
 
 /** "Oggi, 09:30" / "Ieri, 18:12" / data completa — puro per i test. */
