@@ -295,6 +295,22 @@ export default function DigestiveResultScreen() {
         ) : null}
       </View>
 
+      {event.overallState !== 'VET_CONTACT' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Parla con DOGly"
+          onPress={() => router.push({ pathname: '/ask', params: { eventId: event.eventId, source: 'digestive' } } as never)}
+          style={({ pressed }) => [styles.discussCard, pressed && styles.discussPressed]}
+        >
+          <View style={styles.discussIcon}><Ionicons name="sparkles" size={19} color="#FFFFFF" /></View>
+          <View style={styles.discussCopy}>
+            <Text style={styles.discussTitle}>Vuoi capirlo meglio?</Text>
+            <Text style={styles.discussText}>Approfondisci questo risultato o chiedimi qualsiasi cosa su {dog.name}.</Text>
+          </View>
+          <View style={styles.discussButton}><Text style={styles.discussButtonText}>Parliamone</Text><Ionicons name="arrow-forward" size={16} color="#FFFFFF" /></View>
+        </Pressable>
+      ) : null}
+
       {event.overallState === 'VET_CONTACT' ? (
         <View style={styles.vetContactCard}>
           <View style={styles.safetyHeading}>
@@ -532,6 +548,14 @@ const styles = StyleSheet.create({
   resultHeroAttention: {
     backgroundColor: colors.dangerSoft,
   },
+  discussCard: { marginTop: spacing.lg, padding: spacing.lg, borderRadius: 24, backgroundColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 5 },
+  discussPressed: { opacity: 0.9 },
+  discussIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  discussCopy: { marginTop: spacing.sm },
+  discussTitle: { color: '#FFFFFF', fontSize: typography.size.lg, fontWeight: typography.weight.bold },
+  discussText: { marginTop: spacing.xs, color: 'rgba(255,255,255,0.88)', fontSize: typography.size.sm, lineHeight: 20 },
+  discussButton: { marginTop: spacing.md, minHeight: 44, borderRadius: 9999, backgroundColor: colors.primaryBright, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  discussButtonText: { color: '#FFFFFF', fontSize: typography.size.md, fontWeight: typography.weight.bold },
   statusPill: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,

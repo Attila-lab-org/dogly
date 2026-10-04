@@ -309,6 +309,7 @@ export function BehaviorResultView({
   contextPrompt,
   primaryAdvice,
   adviceRationale,
+  onDiscuss,
 }: {
   result: BehaviorEventResult;
   dogName: string;
@@ -321,6 +322,7 @@ export function BehaviorResultView({
   contextPrompt?: React.ReactNode;
   primaryAdvice?: React.ReactNode;
   adviceRationale?: string | null;
+  onDiscuss?: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const isInsufficient =
@@ -456,6 +458,20 @@ export function BehaviorResultView({
           <Text style={styles.nextStepText}>
             {ownerCopy(result.recommended_next_step)}
           </Text>
+        </View>
+      ) : null}
+
+      {onDiscuss && !safety ? (
+        <View style={styles.discussCard}>
+          <View style={styles.discussIcon}><Ionicons name="sparkles" size={19} color="#FFFFFF" /></View>
+          <View style={styles.discussCopy}>
+            <Text style={styles.discussTitle}>Vuoi capirlo meglio?</Text>
+            <Text style={styles.discussText}>Approfondisci questo momento o chiedimi qualsiasi cosa su {dogName}.</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Parla con DOGly" onPress={onDiscuss} style={({ pressed }) => [styles.discussButton, pressed && styles.discussPressed]}>
+            <Text style={styles.discussButtonText}>Parliamone</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+          </Pressable>
         </View>
       ) : null}
 
@@ -937,6 +953,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
+  discussCard: {
+    marginTop: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  discussIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  discussCopy: { marginTop: spacing.sm },
+  discussTitle: { color: '#FFFFFF', fontSize: typography.size.lg, fontWeight: typography.weight.bold },
+  discussText: { marginTop: spacing.xs, color: 'rgba(255,255,255,0.88)', fontSize: typography.size.sm, lineHeight: 20 },
+  discussButton: { marginTop: spacing.md, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.full, backgroundColor: colors.primaryBright, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  discussButtonText: { color: '#FFFFFF', fontSize: typography.size.md, fontWeight: typography.weight.bold },
+  discussPressed: { opacity: 0.88 },
   detailsBlock: {
     marginTop: spacing.lg,
   },

@@ -194,6 +194,7 @@ export default function BehaviorResultScreen() {
               : null
           }
           photoUri={dog.photoUri}
+          onDiscuss={() => router.push({ pathname: '/ask', params: { eventId: result.eventId, source: 'behavior' } } as never)}
           contextPrompt={
             result.needs_context &&
             result.context_question &&
