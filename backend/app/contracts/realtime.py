@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -21,7 +21,7 @@ RealtimeTerminalState = Literal[
 
 class RealtimeSessionCreate(BaseModel):
     dog_id: str
-    modality: Literal["VOICE", "TEXT"] = "VOICE"
+    modality: Literal["TEXT"] = "TEXT"
 
 
 class RealtimeSessionOut(BaseModel):
@@ -31,7 +31,7 @@ class RealtimeSessionOut(BaseModel):
     owner_display_name: str | None = None
     welcome_text: str
     status: Literal["ACTIVE", "ENDED", "EXPIRED"]
-    modality: Literal["VOICE", "TEXT"]
+    modality: Literal["TEXT"]
     model: str
     started_at: datetime
     expires_at: datetime
@@ -39,8 +39,9 @@ class RealtimeSessionOut(BaseModel):
 
 class RealtimeTurnCreate(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
-    behavior_event_id: str | None = Field(default=None, max_length=80)
-    # Used by the existing live bridge; the new text-first client never sends it.
+    event_id: str | None = Field(default=None, max_length=80)
+    context_source: Literal["behavior", "digestive"] | None = None
+    # Internal test/migration bridge only; the product never exposes live voice.
     assistant_text: str | None = Field(default=None, max_length=900)
 
 
@@ -110,8 +111,3 @@ class RealtimeMemoryDecisionOut(BaseModel):
     status: Literal["CONFIRMED", "REJECTED"]
 
 
-class RealtimeClientSecretOut(BaseModel):
-    value: str
-    expires_at: int
-    model: str
-    session_config: dict[str, Any]

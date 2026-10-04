@@ -4556,64 +4556,6 @@
         }
       }
     },
-    "/v1/realtime/sessions/{session_id}/client-secret": {
-      "post": {
-        "tags": [
-          "realtime"
-        ],
-        "summary": "Create Voice Client Secret",
-        "operationId": "create_voice_client_secret_v1_realtime_sessions__session_id__client_secret_post",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Session Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RealtimeClientSecretOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/realtime/sessions/{session_id}/turns": {
       "post": {
         "tags": [
@@ -9686,16 +9628,37 @@
             "$ref": "#/components/schemas/PatternState"
           },
           "reliability_band": {
-            "type": "string",
-            "title": "Reliability Band"
+            "$ref": "#/components/schemas/ConfidenceBand"
           },
           "support_count": {
             "type": "integer",
             "title": "Support Count"
           },
+          "confirm_count": {
+            "type": "integer",
+            "title": "Confirm Count",
+            "default": 0
+          },
+          "contradict_count": {
+            "type": "integer",
+            "title": "Contradict Count",
+            "default": 0
+          },
           "version": {
             "type": "integer",
             "title": "Version"
+          },
+          "first_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen"
           },
           "last_seen": {
             "anyOf": [
@@ -10185,35 +10148,6 @@
         "type": "object",
         "title": "PushTokenResponse"
       },
-      "RealtimeClientSecretOut": {
-        "properties": {
-          "value": {
-            "type": "string",
-            "title": "Value"
-          },
-          "expires_at": {
-            "type": "integer",
-            "title": "Expires At"
-          },
-          "model": {
-            "type": "string",
-            "title": "Model"
-          },
-          "session_config": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Session Config"
-          }
-        },
-        "type": "object",
-        "required": [
-          "value",
-          "expires_at",
-          "model",
-          "session_config"
-        ],
-        "title": "RealtimeClientSecretOut"
-      },
       "RealtimeMemoryDecision": {
         "properties": {
           "action": {
@@ -10291,12 +10225,9 @@
           },
           "modality": {
             "type": "string",
-            "enum": [
-              "VOICE",
-              "TEXT"
-            ],
+            "const": "TEXT",
             "title": "Modality",
-            "default": "VOICE"
+            "default": "TEXT"
           }
         },
         "type": "object",
@@ -10345,10 +10276,7 @@
           },
           "modality": {
             "type": "string",
-            "enum": [
-              "VOICE",
-              "TEXT"
-            ],
+            "const": "TEXT",
             "title": "Modality"
           },
           "model": {
@@ -10387,6 +10315,33 @@
             "maxLength": 4000,
             "minLength": 1,
             "title": "Text"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "context_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "behavior",
+                  "digestive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Source"
           },
           "assistant_text": {
             "anyOf": [
@@ -10431,6 +10386,14 @@
               }
             ],
             "title": "Question"
+          },
+          "question_options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Question Options"
           },
           "terminal_state": {
             "type": "string",

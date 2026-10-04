@@ -38,17 +38,10 @@ export type RealtimeTurn = {
   created_at: string;
 };
 
-export type RealtimeClientSecret = {
-  value: string;
-  expires_at: number;
-  model: string;
-  session_config: { voice: string; turn_detection: string };
-};
-
-export function createRealtimeSession(dogId: string, modality: 'VOICE' | 'TEXT') {
+export function createRealtimeSession(dogId: string) {
   return api.post<RealtimeSession>('/v1/realtime/sessions', {
     dog_id: dogId,
-    modality,
+    modality: 'TEXT',
   });
 }
 
@@ -56,22 +49,14 @@ export function createRealtimeTurn(
   sessionId: string,
   text: string,
   assistantText?: string,
-  options?: { behaviorEventId?: string },
+  options?: { eventId?: string; source?: 'behavior' | 'digestive' },
 ) {
   return api.post<RealtimeTurn>(`/v1/realtime/sessions/${sessionId}/turns`, {
     text,
     ...(assistantText ? { assistant_text: assistantText } : {}),
-    ...(options?.behaviorEventId
-      ? { behavior_event_id: options.behaviorEventId }
-      : {}),
+    ...(options?.eventId ? { event_id: options.eventId } : {}),
+    ...(options?.source ? { context_source: options.source } : {}),
   });
-}
-
-export function getRealtimeClientSecret(sessionId: string) {
-  return api.post<RealtimeClientSecret>(
-    `/v1/realtime/sessions/${sessionId}/client-secret`,
-    {},
-  );
 }
 
 export function decideRealtimeMemory(

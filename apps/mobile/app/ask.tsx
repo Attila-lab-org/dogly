@@ -47,6 +47,7 @@ export default function AskScreen() {
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
+  const [focusedEventId, setFocusedEventId] = useState<string | undefined>(eventId);
   const dictationRef = useRef<{ stop: () => void } | null>(null);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
   const starters = useMemo(() => {
@@ -63,7 +64,7 @@ export default function AskScreen() {
     if (!dog.id) return;
     setStarting(true); setError(null);
     try {
-      const next = await createRealtimeSession(dog.id, 'TEXT');
+      const next = await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
       setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
@@ -81,7 +82,13 @@ export default function AskScreen() {
     setMessages((current) => [...current, { id: localId, role: 'user', text }]);
     setSending(true);
     try {
-      const turn = await createRealtimeTurn(session.id, text, undefined, eventId ? { behaviorEventId: eventId } : undefined);
+      const turn = await createRealtimeTurn(
+        session.id,
+        text,
+        undefined,
+        focusedEventId ? { eventId: focusedEventId, source: behaviorSource ? 'behavior' : digestiveSource ? 'digestive' : undefined } : undefined,
+      );
+      if (focusedEventId) setFocusedEventId(undefined);
       if (!mounted.current) return;
       setMessages((current) => [...current, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
     } catch {
@@ -89,7 +96,7 @@ export default function AskScreen() {
       setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a rispondere. Puoi riprovare senza perdere la domanda?', failed: true }]);
       setError('La risposta non è arrivata.');
     } finally { if (mounted.current) setSending(false); }
-  }, [eventId, sending, session]);
+  }, [behaviorSource, digestiveSource, focusedEventId, sending, session]);
 
   const toggleDictation = () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;

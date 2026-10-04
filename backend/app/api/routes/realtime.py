@@ -41,11 +41,12 @@ router = APIRouter(prefix="/realtime")
 def _is_owned_active_voice_session(
     session: dict[str, Any] | None, user_id: str
 ) -> bool:
+    """Legacy predicate kept for stored-session migrations; no voice route uses it."""
     return bool(
         session
-        and str(session["user_id"]) == user_id
-        and session["status"] == "ACTIVE"
-        and session["modality"] == "VOICE"
+        and str(session.get("user_id")) == user_id
+        and session.get("status") == "ACTIVE"
+        and session.get("modality") == "VOICE"
     )
 
 
@@ -82,11 +83,7 @@ async def create_realtime_session(
 ) -> RealtimeSessionOut:
     # Keep written conversations independent from the live audio model. This
     # avoids routing the reliable text-first experience through voice settings.
-    model = (
-        state.settings.realtime_reasoning_model
-        if body.modality == "TEXT"
-        else state.settings.realtime_voice_model
-    )
+    model = state.settings.realtime_reasoning_model
     if state.engine is not None:
         row = await realtime_db.create_session_db(
             state.engine,
@@ -159,21 +156,10 @@ async def create_realtime_turn(
     source_refs: list[dict[str, str]] = []
     try:
         if body.assistant_text:
-            safety = deterministic_safety_interrupt(body.text)
-            spoken = body.assistant_text.strip()
-            wants_video = (
-                "BEHAVIOR" in domains
-                and any(token in spoken.lower() for token in ("video", "filma", "momento"))
+            decision = deterministic_safety_interrupt(body.text) or RealtimeDecision(
+                assistant_text=body.assistant_text.strip(), domains=domains
             )
-            decision = safety or RealtimeDecision(
-                assistant_text=spoken,
-                domains=domains,
-                behavior_handoff=wants_video,
-            )
-            provider_audit = {
-                "provider": "voice_live",
-                "version": "speech-to-speech/v1",
-            }
+            provider_audit = {"provider": "text_bridge", "version": "text/v1"}
         elif state.engine is not None:
             context = await load_realtime_context_db(
                 state.engine,
@@ -181,13 +167,13 @@ async def create_realtime_turn(
                 dog_id=str(session["dog_id"]),
                 domains=domains,
             )
-            if body.behavior_event_id:
+            if body.event_id and body.context_source == "behavior":
                 focus_behavior_event(
                     context,
                     await behavior_db.get_event(
                         state.engine,
                         user_id=user_id,
-                        event_id=body.behavior_event_id,
+                        event_id=body.event_id,
                     ),
                 )
             history = await realtime_db.load_history_db(
@@ -198,8 +184,10 @@ async def create_realtime_turn(
                 user_id=user_id,
                 dog_id=str(session["dog_id"]),
             )
-            history = _resume_history(
-                (previous_memory or {}).get("turns_json"), history
+            history = (
+                history
+                if body.event_id
+                else _resume_history((previous_memory or {}).get("turns_json"), history)
             )
             decision, provider_audit = await orchestrate_realtime_turn(
                 settings=state.settings,
@@ -216,13 +204,13 @@ async def create_realtime_turn(
             context = load_realtime_context_memory(
                 state.store, dog_id=str(session["dog_id"]), domains=domains
             )
-            if body.behavior_event_id:
+            if body.event_id and body.context_source == "behavior":
                 focus_behavior_event(
                     context,
                     behavior.get_event(
                         state.store,
                         user_id=user_id,
-                        event_id=body.behavior_event_id,
+                        event_id=body.event_id,
                     ),
                 )
             history = []
@@ -236,8 +224,10 @@ async def create_realtime_turn(
             previous_memory = state.store.realtime_conversation_memories.get(
                 (user_id, str(session["dog_id"]))
             )
-            history = _resume_history(
-                (previous_memory or {}).get("turns_json"), history
+            history = (
+                history
+                if body.event_id
+                else _resume_history((previous_memory or {}).get("turns_json"), history)
             )
             decision, provider_audit = await orchestrate_realtime_turn(
                 settings=state.settings,

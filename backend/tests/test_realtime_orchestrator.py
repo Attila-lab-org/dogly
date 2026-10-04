@@ -24,7 +24,6 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
-from app.providers.openai_realtime import realtime_session_config
 
 from tests.conftest import create_dog
 
@@ -97,22 +96,6 @@ def test_new_text_session_resumes_previous_conversation_turns() -> None:
     assert conversation_topic(["ciao", "perché Oreo abbaia la sera"], dog_name="Oreo") == (
         "perché Oreo abbaia la sera"
     )
-
-
-def test_voice_session_speaks_without_waiting_for_tools() -> None:
-    config = realtime_session_config(Settings(), instructions="ciao")
-    assert "tools" not in config
-    assert "tool_choice" not in config
-    vad = config["audio"]["input"]["turn_detection"]
-    assert vad["type"] == "server_vad"
-    assert vad["create_response"] is True
-    assert vad["interrupt_response"] is False
-    assert vad["silence_duration_ms"] == 600
-    assert vad["threshold"] == 0.65
-    assert config["audio"]["output"]["voice"] == "coral"
-    assert config["audio"]["output"]["speed"] == 1.0
-    assert config["reasoning"] == {"effort": "low"}
-    assert config["max_output_tokens"] == "inf"
 
 
 def test_voice_brief_is_personal_and_ready_to_speak() -> None:
@@ -292,9 +275,8 @@ async def test_realtime_api_session_turn_and_close(
         headers=auth_headers,
         json={"dog_id": dog_id, "modality": "VOICE"},
     )
-    assert again.status_code == 201
-    assert "Vuoi riprendere la vecchia chiacchierata" in again.json()["welcome_text"]
-    assert "Come sta Oreo oggi?" in again.json()["welcome_text"]
+    # Live voice is intentionally retired; the conversation endpoint is text-only.
+    assert again.status_code == 422
 
 
 @pytest.mark.asyncio
