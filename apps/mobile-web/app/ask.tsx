@@ -44,6 +44,7 @@ export default function AskScreen() {
     const offset = (day + dog.id.length) % starterPool.length;
     return [0, 1, 2].map((index) => starterPool[(offset + index) % starterPool.length]);
   }, [dog.id]);
+  const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
 
@@ -116,7 +117,7 @@ export default function AskScreen() {
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
               {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.text); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push('/help' as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
-              {message.role === 'assistant' && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
+              {message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
