@@ -42,7 +42,7 @@ class RealtimeTurnCreate(BaseModel):
     event_id: str | None = Field(default=None, max_length=80)
     context_source: Literal["behavior", "digestive"] | None = None
     # Internal test/migration bridge only; the product never exposes live voice.
-    assistant_text: str | None = Field(default=None, max_length=900)
+    assistant_text: str | None = Field(default=None, max_length=1400)
 
 
 class RealtimeMemoryProposal(BaseModel):
@@ -68,7 +68,7 @@ class RealtimeTurnOut(BaseModel):
 class RealtimeDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    assistant_text: str = Field(min_length=1, max_length=900)
+    assistant_text: str = Field(min_length=1, max_length=1400)
     question: str | None = Field(default=None, max_length=240)
     question_options: list[str] = Field(default_factory=list, max_length=4)
     terminal_state: RealtimeTerminalState = "ANSWERED"
