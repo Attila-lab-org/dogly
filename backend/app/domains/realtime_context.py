@@ -125,8 +125,8 @@ def resume_welcome_text(
     hello = f"Ciao {first_name}" if first_name else "Ciao"
     if previous_topic:
         return (
-            f"{hello}, l'ultima volta parlavamo di {previous_topic}. "
-            "Vuoi riprendere la vecchia chiacchierata o parliamo di altro?"
+            f"{hello}. Ricordo che parlavamo di {previous_topic}. "
+            "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
         )
     return f"{hello}, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"
 

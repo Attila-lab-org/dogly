@@ -16,15 +16,15 @@ import { getDigestiveEvent } from '@/features/digestive/api';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean };
 const starterPool = [
-  'Perché oggi si comporta così?',
-  'Come posso aiutarlo a stare più tranquillo?',
-  'Cosa dovrei osservare nei prossimi giorni?',
-  'Che cosa sta cercando di comunicarmi?',
-  'Come capisco se per lui è una situazione nuova?',
-  'Qual è il modo migliore per accompagnarlo?',
-  'Cosa posso fare oggi per aiutarlo?',
-  'Come posso leggere meglio questo comportamento?',
-  'Quando conviene chiedere un aiuto in più?',
+  'Mi aiuti a capire cosa sta vivendo?',
+  'Come posso aiutarlo oggi?',
+  'Che cosa dovrei osservare meglio?',
+  'Come capisco di cosa ha bisogno?',
+  'Ti racconto una cosa successa oggi',
+  'Come posso accompagnarlo nel modo giusto?',
+  'C’è qualcosa che mi dovrebbe preoccupare?',
+  'Come posso conoscerlo meglio?',
+  'Da dove cominciamo?',
 ];
 
 export default function AskScreen() {
@@ -142,7 +142,7 @@ export default function AskScreen() {
       </View>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
-          {messages.length === 1 ? <View style={styles.intro}><View style={styles.sparkle}><Ionicons name="sparkles" size={19} color={colors.primary} /></View><Text style={styles.introTitle}>{eventId ? 'Partiamo da questo momento' : 'Capire un momento alla volta'}</Text><Text style={styles.introText}>{eventId ? (contextHeadline ? `${contextHeadline}. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ${dog.name}.` : 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.') : 'Scrivimi cosa hai notato. Ti rispondo in modo semplice, usando quello che so di ' + dog.name + '.'}</Text></View> : null}
+          {messages.length === 1 ? <View style={styles.intro}><View style={styles.sparkle}><Ionicons name="sparkles" size={19} color={colors.primary} /></View><Text style={styles.introTitle}>{eventId ? 'Partiamo da questo momento' : `Parliamo di ${dog.name}`}</Text><Text style={styles.introText}>{eventId ? (contextHeadline ? `${contextHeadline}. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ${dog.name}.` : 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.') : `Raccontami cosa sta succedendo con ${dog.name}. Ti aiuto a capire cosa può significare e cosa puoi fare.`}</Text></View> : null}
           {starting ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.muted}>Preparo la conversazione…</Text></View> : null}
           {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => void start()}><Text style={styles.retry}>Riprova</Text></Pressable></View> : null}
           {messages.map((message) => <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>

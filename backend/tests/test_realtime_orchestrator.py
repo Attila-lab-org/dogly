@@ -68,8 +68,8 @@ def test_welcome_is_personal_and_never_technical() -> None:
 def test_welcome_offers_to_resume_the_last_conversation() -> None:
     welcome = resume_welcome_text("attilio", "Oreo", "perché Oreo abbaia la sera")
     assert welcome == (
-        "Ciao Attilio, l'ultima volta parlavamo di perché Oreo abbaia la sera. "
-        "Vuoi riprendere la vecchia chiacchierata o parliamo di altro?"
+        "Ciao Attilio. Ricordo che parlavamo di perché Oreo abbaia la sera. "
+        "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
     )
 
 
