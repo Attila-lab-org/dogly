@@ -1,6 +1,6 @@
 import React from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
@@ -8,6 +8,8 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 
 export default function HelpScreen() {
   const router = useRouter();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const cameFromChat = returnTo === 'ask' || (Array.isArray(returnTo) && returnTo[0] === 'ask');
   const { dog } = useDogProfile();
   const openVets = () => {
     const query = encodeURIComponent('veterinario vicino a me');
@@ -17,7 +19,7 @@ export default function HelpScreen() {
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="Torna indietro" onPress={() => router.back()} style={styles.back}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable><View><Text style={styles.eyebrow}>ASSISTENZA</Text><Text style={styles.title}>Ti aiutiamo a fare il passo giusto</Text></View></View>
       <View style={styles.intro}><Ionicons name="heart-outline" size={26} color={colors.primary} /><Text style={styles.introTitle}>DOGly ti aiuta a capire {dog.name}</Text><Text style={styles.introText}>Per sintomi, urgenze o dubbi clinici serve sempre un veterinario reale. Qui trovi il percorso più adatto, senza confusione.</Text></View>
-      <Pressable accessibilityRole="button" onPress={() => router.push('/ask' as never)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}><View style={styles.icon}><Ionicons name="chatbubble-ellipses-outline" size={23} color={colors.primary} /></View><View style={styles.copy}><Text style={styles.cardTitle}>Chiedi a DOGly</Text><Text style={styles.cardText}>Per comportamenti, routine e situazioni che vuoi leggere meglio.</Text></View><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => cameFromChat ? router.back() : router.push('/ask' as never)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}><View style={styles.icon}><Ionicons name="chatbubble-ellipses-outline" size={23} color={colors.primary} /></View><View style={styles.copy}><Text style={styles.cardTitle}>Chiedi a DOGly</Text><Text style={styles.cardText}>Per comportamenti, routine e situazioni che vuoi leggere meglio.</Text></View><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>
       <Pressable accessibilityRole="button" onPress={openVets} style={({ pressed }) => [styles.card, pressed && styles.pressed]}><View style={[styles.icon, styles.iconWarm]}><Ionicons name="location-outline" size={23} color="#B45309" /></View><View style={styles.copy}><Text style={styles.cardTitle}>Trova un veterinario</Text><Text style={styles.cardText}>Apri una ricerca vicino a te e scegli una struttura che puoi contattare.</Text></View><Ionicons name="open-outline" size={18} color={colors.textMuted} /></Pressable>
       <View style={styles.emergency}><View style={styles.emergencyHeader}><Ionicons name="warning-outline" size={22} color={colors.danger} /><Text style={styles.emergencyTitle}>Se è un’emergenza</Text></View><Text style={styles.emergencyText}>Difficoltà a respirare, collasso, convulsioni, sanguinamento importante o dolore intenso richiedono assistenza veterinaria immediata.</Text><Pressable accessibilityRole="button" onPress={openVets} style={styles.emergencyButton}><Text style={styles.emergencyButtonText}>Cerca assistenza adesso</Text><Ionicons name="arrow-forward" size={17} color="#FFFFFF" /></Pressable></View>
       <Text style={styles.note}>DOGly non fa diagnosi e non sostituisce una visita. Se sei in dubbio, chiama la clinica e descrivi cosa sta succedendo.</Text>
