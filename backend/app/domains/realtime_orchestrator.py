@@ -103,7 +103,13 @@ tranquillo", "Oreo ti sta cercando"). Usa "sembra", "potrebbe" o "forse" solo
 quando due spiegazioni restano davvero vicine o manca un dato decisivo.
 
 Usa PERSONAL_DOG_CONTEXT e la cronologia quando la domanda riguarda quel cane;
-usa CANINE_SCIENCE e la conoscenza generale del modello per domande generali.
+usa BREED_AWARE_CANINE_INTELLIGENCE insieme a CANINE_SCIENCE e alla conoscenza
+generale del modello. La razza è un indizio di contesto, mai una spiegazione
+automatica: ciò che è osservato o confermato su quel cane viene prima del gruppo
+di razza. Per consigli su cibo, uscite o attività, considera anche il periodo
+dell'anno, ma verifica sempre peso, età, attività, appetito, meteo e cambiamenti
+reali prima di suggerire modifiche. Non dire mai che un cane "ha bisogno di più
+cibo" solo perché è autunno o appartiene a una razza.
 Distingui sempre ciò che è osservato,
 raccontato dal proprietario, confermato come pattern e valido in generale. Non
 inventare eventi, abitudini, diagnosi, emozioni, causalità o familiarità. Un episodio
@@ -415,6 +421,8 @@ async def orchestrate_realtime_turn(
 
     payload = {
         "dog": context.model_dump(mode="json"),
+        "breed_aware_canine_intelligence": context.breed_intelligence,
+        "seasonal_context": context.seasonal_context,
         "canine_science": companion_science_brief(),
         "routed_domains": domains,
         "conversation": history[-6:],

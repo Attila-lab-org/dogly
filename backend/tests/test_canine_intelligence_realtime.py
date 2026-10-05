@@ -2,15 +2,47 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from app.config import Settings
+from app.domains.dog_context import build_dog_context
+from app.domains.models import DogRec
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
+    _breed_intelligence_payload,
     render_voice_brief,
 )
 from app.domains.realtime_orchestrator import orchestrate_realtime_turn
+
+
+def test_free_chat_receives_breed_prior_but_mixes_do_not_get_one() -> None:
+    settings = Settings(breed_intelligence_v1=True)
+    named = DogRec(
+        id="dog-1",
+        owner_id="owner-1",
+        name="Oreo",
+        breed_label="Border Collie",
+        created_at=datetime.now(UTC),
+    )
+    named_payload = _breed_intelligence_payload(
+        named,
+        build_dog_context(named),
+        ["BEHAVIOR"],
+        settings=settings,
+    )
+    assert named_payload["BEHAVIOR"]["functional_group"] == "HERDING"
+
+    mixed = named.model_copy(update={"breed_label": "Meticcio", "is_mix": True})
+    mixed_payload = _breed_intelligence_payload(
+        mixed,
+        build_dog_context(mixed),
+        ["BEHAVIOR"],
+        settings=settings,
+    )
+    assert mixed_payload["BEHAVIOR"]["functional_group"] is None
 
 
 def _welcome(owner: str, dog: str) -> str:

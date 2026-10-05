@@ -10,8 +10,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.config import Settings
 from app.contracts.realtime import RealtimeDomain
 from app.domains.dog_context import build_dog_context
+from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import DogRec
 from app.domains.personal_dog_context import (
     build_personal_dog_context,
@@ -45,6 +47,9 @@ class RealtimeDogContext(BaseModel):
     missing: list[str] = Field(default_factory=list)
     previous_topic: str | None = None
     previous_turns: list[dict[str, str]] = Field(default_factory=list)
+    # Model-facing only: never render this taxonomy in the customer UI.
+    breed_intelligence: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    seasonal_context: dict[str, Any] = Field(default_factory=dict)
 
     def source_refs(self) -> list[dict[str, str]]:
         return [
@@ -160,6 +165,8 @@ def realtime_context_from_personal(
     *,
     previous_topic: str | None = None,
     previous_turns: list[dict[str, str]] | None = None,
+    breed_intelligence: dict[str, dict[str, Any]] | None = None,
+    seasonal_context: dict[str, Any] | None = None,
 ) -> RealtimeDogContext:
     """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
     items = [
@@ -182,7 +189,60 @@ def realtime_context_from_personal(
         missing=list(personal.missing),
         previous_topic=previous_topic,
         previous_turns=list(previous_turns or []),
+        breed_intelligence=dict(breed_intelligence or {}),
+        seasonal_context=dict(seasonal_context or {}),
     )
+
+
+def _breed_intelligence_payload(
+    dog: DogRec,
+    dog_context,
+    domains: list[RealtimeDomain],
+    *,
+    settings: Settings | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Reuse the governed breed layer in free chat as well as analysis jobs."""
+    requested = set(domains)
+    mapped: list[tuple[str, str]] = []
+    if "BEHAVIOR" in requested or not requested:
+        mapped.append(("BEHAVIOR", "behavior"))
+    if "DIGESTIVE" in requested:
+        mapped.append(("DIGESTIVE", "digestive"))
+    if "NUTRITION" in requested:
+        mapped.append(("NUTRITION", "nutrition"))
+    if "CARE" in requested and not mapped:
+        mapped.append(("BEHAVIOR", "behavior"))
+    if "GENERAL" in requested and not mapped:
+        mapped.append(("BEHAVIOR", "behavior"))
+    return {
+        label: build_dog_intelligence_context(
+            dog,
+            dog_context,
+            domain=domain,  # type: ignore[arg-type]
+            settings=settings,
+        ).reasoner_payload()
+        for label, domain in mapped
+    }
+
+
+def _seasonal_context() -> dict[str, Any]:
+    """Give the model a calendar cue without turning season into a diagnosis."""
+    now = datetime.now(UTC)
+    season = (
+        "inverno" if now.month in {12, 1, 2}
+        else "primavera" if now.month in {3, 4, 5}
+        else "estate" if now.month in {6, 7, 8}
+        else "autunno"
+    )
+    return {
+        "month": now.month,
+        "season": season,
+        "guidance": (
+            "Considera stagione e meteo come contesto: non dedurre automaticamente "
+            "piu cibo, meno uscite o piu attivita. Verifica sempre eta, peso, "
+            "attivita reale, appetito e cambiamenti osservati in questo cane."
+        ),
+    }
 
 
 async def load_realtime_context_db(
@@ -277,6 +337,7 @@ async def load_realtime_context_db(
     dog_context = build_dog_context(
         dog_rec, lifestyle_dump, owner_display_name=owner_name
     )
+    breed_intelligence = _breed_intelligence_payload(dog_rec, dog_context, domains)
     personal = build_personal_dog_context(
         dog=dog_rec,
         dog_context=dog_context,
@@ -300,6 +361,8 @@ async def load_realtime_context_db(
         personal,
         previous_topic=previous_topic,
         previous_turns=previous_turns,
+        breed_intelligence=breed_intelligence,
+        seasonal_context=_seasonal_context(),
     )
 
 
@@ -461,6 +524,7 @@ def load_realtime_context_memory(
     dog_context = build_dog_context(
         dog, lifestyle_dump, owner_display_name=owner_name
     )
+    breed_intelligence = _breed_intelligence_payload(dog, dog_context, domains)
     personal = build_personal_dog_context(
         dog=dog,
         dog_context=dog_context,
@@ -474,4 +538,6 @@ def load_realtime_context_memory(
         personal,
         previous_topic=memory.get("topic"),
         previous_turns=list(memory.get("turns_json") or []),
+        breed_intelligence=breed_intelligence,
+        seasonal_context=_seasonal_context(),
     )
