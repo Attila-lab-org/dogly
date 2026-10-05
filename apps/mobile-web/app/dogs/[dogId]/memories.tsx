@@ -131,7 +131,7 @@ export default function DogMemoriesScreen() {
       <Button
         title="Aggiungi un ricordo"
         icon={<Ionicons name="add" size={20} color={colors.textOnPrimary} />}
-        onPress={() => router.push(`/dogs/${dogId}/tell` as never)}
+        onPress={() => router.push('/ask' as never)}
       />
       {count > 5 ? (
         <View style={styles.searchBox}>

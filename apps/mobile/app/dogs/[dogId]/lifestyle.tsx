@@ -199,7 +199,7 @@ export default function LifestyleScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push(`/dogs/${dogId}/tell` as never)}
+          onPress={() => router.push('/ask' as never)}
           style={styles.voiceLink}
         >
           <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />

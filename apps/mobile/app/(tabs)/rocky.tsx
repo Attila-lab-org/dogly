@@ -405,8 +405,8 @@ export default function DogProfileTabScreen() {
           <Text style={styles.sectionTitle}>Quello che ricordo</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Racconta qualcosa di ${dog.name}`}
-            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+            accessibilityLabel={`Parla con DOGly su ${dog.name}`}
+            onPress={() => router.push('/ask' as never)}
             hitSlop={8}
           >
             <Text style={styles.seeAll}>Aggiungi</Text>
@@ -431,7 +431,7 @@ export default function DogProfileTabScreen() {
         (storiesQuery.data?.length ?? 0) === 0 ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push(`/dogs/${dog.id}/tell` as never)}
+            onPress={() => router.push('/ask' as never)}
             style={({ pressed }) => [
               styles.detailsRow,
               pressed && styles.pressed,

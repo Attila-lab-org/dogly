@@ -198,7 +198,7 @@ export default function LifestyleScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push(`/dogs/${dogId}/tell` as never)}
+          onPress={() => router.push('/ask' as never)}
           style={styles.voiceLink}
         >
           <View style={styles.voiceIcon}>
