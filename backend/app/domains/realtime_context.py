@@ -102,20 +102,29 @@ _GENERIC_STARTER_QUESTIONS = {
     "cosa posso fare oggi per aiutarlo?",
     "come posso leggere meglio questo comportamento?",
     "quando conviene chiedere un aiuto in più?",
+    "ti racconto una cosa successa oggi",
+    "ti racconto cosa è successo oggi",
 }
 
 
 def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
+    meaningful: list[str] = []
     for line in reversed(user_texts):
         cleaned = " ".join((line or "").split())
         if not cleaned or _RESUME_GREETING.fullmatch(cleaned):
             continue
         if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
             continue
-        if len(cleaned) > 90:
-            cleaned = cleaned[:87].rsplit(" ", 1)[0] + "…"
-        return cleaned
-    return dog_name
+        meaningful.append(cleaned)
+        if len(meaningful) == 2:
+            break
+    if not meaningful:
+        return dog_name
+    meaningful.reverse()
+    topic = " Poi: ".join(meaningful)
+    if len(topic) > 140:
+        topic = topic[:137].rsplit(" ", 1)[0] + "…"
+    return topic
 
 
 def resume_welcome_text(
@@ -125,7 +134,7 @@ def resume_welcome_text(
     hello = f"Ciao {first_name}" if first_name else "Ciao"
     if previous_topic:
         return (
-            f"{hello}. Ricordo che parlavamo di {previous_topic}. "
+            f"{hello}. Riprendiamo il discorso su Oreo da dove eravamo rimasti. "
             "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
         )
     return f"{hello}, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"
@@ -368,7 +377,7 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             "Non sei un assistente, non sei un professore, non stai leggendo un referto.",
             "Parli solo in italiano parlato, colloquiale, con ritmo naturale. Varia le frasi.",
             DOGLY_SPOKEN_STYLE,
-            "Rispondi in 2-4 frasi naturali, fino a 5 quando serve collegare contesto e consiglio. Chiudi sempre ogni frase con una conclusione completa: non lasciare parole o frasi a metà. Se hai già detto la cosa utile, taci.",
+            "Rispondi in 2-4 frasi naturali, fino a 5 quando serve collegare contesto e consiglio. Usa parole che diresti a un amico: 'si agita' invece di 'aumenta l'attivazione', 'si calma' invece di 'si regola'. Chiudi sempre ogni frase con una conclusione completa: non lasciare parole o frasi a metà. Se hai già detto la cosa utile, taci.",
             "Puoi dire mh, guarda, sì, no, secondo me, questa è interessante, quando serve davvero. Non farne un tic.",
             "Non spiegare provenienza, confidence, metodo o come ragiona DOGly. Non recitare elenchi.",
             "Non fare una domanda a ogni turno. Chiedi solo se ti manca qualcosa di decisivo. Se hai già risposto, fermati.",
