@@ -114,3 +114,5 @@ Jest `118 passed` in 20 suite.
   scadenza draft, consenso ricerca e hardening degli upload raw/retention.
 - Verifica corrente: backend `182 passed`, Ruff verde; mobile TypeScript
   verde, Jest `143 passed` in 23 suite; OpenAPI esportato con 47 path.
+- Chat libera: il contesto di razza e stagione resta interno al ragionamento e non
+  viene mostrato come classificazione tecnica al proprietario.
