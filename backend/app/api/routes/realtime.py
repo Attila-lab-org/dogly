@@ -23,9 +23,9 @@ from app.domains import behavior, behavior_db, realtime_db
 from app.domains.realtime_context import (
     REALTIME_CONTEXT_VERSION,
     conversation_topic,
+    focus_behavior_event,
     load_realtime_context_db,
     load_realtime_context_memory,
-    focus_behavior_event,
     resume_welcome_text,
     route_realtime_domains,
 )

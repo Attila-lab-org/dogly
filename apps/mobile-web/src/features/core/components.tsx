@@ -325,20 +325,23 @@ export function BehaviorResultView({
   onDiscuss?: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = React.useState(false);
-  const discussOpacity = useRef(new Animated.Value(0)).current;
-  const discussOffset = useRef(new Animated.Value(10)).current;
+  const animatedDiscuss = Boolean(Animated?.Value && Animated?.View);
+  const discussOpacity = useRef<any>(animatedDiscuss ? new Animated.Value(0) : 1).current;
+  const discussOffset = useRef<any>(animatedDiscuss ? new Animated.Value(10) : 0).current;
+  const DiscussContainer = animatedDiscuss ? Animated.View : View;
   useEffect(() => {
     let active = true;
     void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
       if (!active || !onDiscuss) return;
       if (reduced) { discussOpacity.setValue(1); discussOffset.setValue(0); return; }
+      if (!animatedDiscuss) return;
       Animated.parallel([
         Animated.timing(discussOpacity, { toValue: 1, duration: 360, useNativeDriver: true }),
         Animated.timing(discussOffset, { toValue: 0, duration: 360, useNativeDriver: true }),
       ]).start();
     });
     return () => { active = false; };
-  }, [discussOffset, discussOpacity, onDiscuss]);
+  }, [animatedDiscuss, discussOffset, discussOpacity, onDiscuss]);
   const isInsufficient =
     result.primary_intent === null || result.primary_intent === 'INSUFFICIENT';
   const isAmbiguous = result.primary_intent === 'AMBIGUOUS';
@@ -476,7 +479,7 @@ export function BehaviorResultView({
       ) : null}
 
       {onDiscuss && !safety ? (
-        <Animated.View style={[styles.discussCard, { opacity: discussOpacity, transform: [{ translateY: discussOffset }] }]}>
+        <DiscussContainer style={[styles.discussCard, { opacity: discussOpacity, transform: [{ translateY: discussOffset }] }]}>
           <View style={styles.discussIcon}><Ionicons name="sparkles" size={19} color="#FFFFFF" /></View>
           <View style={styles.discussCopy}>
             <Text style={styles.discussTitle}>Vuoi capirlo meglio?</Text>
@@ -486,7 +489,7 @@ export function BehaviorResultView({
             <Text style={styles.discussButtonText}>Parliamone</Text>
             <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
           </Pressable>
-        </Animated.View>
+        </DiscussContainer>
       ) : null}
 
       <FeedbackButtons
@@ -1140,3 +1143,4 @@ const styles = StyleSheet.create({
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
 });
+
