@@ -14,7 +14,7 @@ import { queryKeys } from '@/lib/queryClient';
 import { getBehaviorEvent } from '@/features/behavior/api';
 import { getDigestiveEvent } from '@/features/digestive/api';
 
-type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryText?: string };
 const starterPool = [
   'Mi aiuti a capire cosa sta vivendo?',
   'Come posso aiutarlo oggi?',
@@ -73,17 +73,21 @@ export default function AskScreen() {
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
+  const startedKey = useRef<string | null>(null);
 
   useEffect(() => () => { mounted.current = false; }, []);
   const start = useCallback(async () => {
     if (!dog.id) return;
+    const key = `${dog.id}:${eventId ?? 'free'}`;
+    if (startedKey.current === key) return;
+    startedKey.current = key;
     setStarting(true); setError(null);
     try {
       const next = await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
       setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
-    } catch { if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.'); }
+    } catch { startedKey.current = null; if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.'); }
     finally { if (mounted.current) setStarting(false); }
   }, [dog.id, eventId]);
   useEffect(() => { void start(); }, [start]);
@@ -108,7 +112,7 @@ export default function AskScreen() {
       setMessages((current) => [...current, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
     } catch {
       if (!mounted.current) return;
-      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a rispondere. Puoi riprovare senza perdere la domanda?', failed: true }]);
+      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a rispondere. Puoi riprovare senza perdere la domanda?', failed: true, retryText: text }]);
       setError('La risposta non è arrivata.');
     } finally { if (mounted.current) setSending(false); }
   }, [behaviorSource, digestiveSource, focusedEventId, sending, session]);
@@ -163,7 +167,7 @@ export default function AskScreen() {
           {messages.map((message) => <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
             <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
-              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.text); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
+              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.retryText ?? ''); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {!sending && message.id === latestAssistantId && latestAssistant?.turn && !message.turn?.question_options?.length ? <View style={styles.followUps}><Text style={styles.followUpLabel}>Se vuoi, possiamo continuare da qui</Text>{followUpPrompts(message.turn).map((prompt) => <Pressable key={prompt} accessibilityRole="button" onPress={() => void send(prompt)} style={({ pressed }) => [styles.followUp, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{prompt}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}

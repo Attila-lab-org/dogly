@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-
 from app.config import Settings
 from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
@@ -89,8 +88,8 @@ async def test_food_change_soft_stool_uses_cross_domain_governance() -> None:
     )
     assert "DIGESTIVE" in decision.domains
     assert "NUTRITION" in decision.domains
-    assert "associazione temporale" in decision.assistant_text.lower()
-    assert "causal" in decision.assistant_text.lower()
+    assert "non dimostra che sia quella la causa" in decision.assistant_text.lower()
+    assert decision.claims[0].asserts_causation is False
     assert "canine_intelligence" in audit
     assert audit["canine_intelligence"]["validations"]
 

@@ -19,11 +19,12 @@ from app.contracts.realtime import (
     RealtimeTurnCreate,
     RealtimeTurnOut,
 )
-from app.domains import behavior, behavior_db, realtime_db
+from app.domains import behavior, behavior_db, digestive, digestive_db, realtime_db
 from app.domains.realtime_context import (
     REALTIME_CONTEXT_VERSION,
     conversation_topic,
     focus_behavior_event,
+    focus_digestive_event,
     load_realtime_context_db,
     load_realtime_context_memory,
     resume_welcome_text,
@@ -176,6 +177,13 @@ async def create_realtime_turn(
                         event_id=body.event_id,
                     ),
                 )
+            elif body.event_id and body.context_source == "digestive":
+                focus_digestive_event(
+                    context,
+                    await digestive_db.get_fecal_event(
+                        state.engine, user_id=user_id, event_id=body.event_id
+                    ),
+                )
             history = await realtime_db.load_history_db(
                 state.engine, session_id=session_id, user_id=user_id
             )
@@ -211,6 +219,13 @@ async def create_realtime_turn(
                         state.store,
                         user_id=user_id,
                         event_id=body.event_id,
+                    ),
+                )
+            elif body.event_id and body.context_source == "digestive":
+                focus_digestive_event(
+                    context,
+                    digestive.get_fecal_event(
+                        state.store, user_id=user_id, event_id=body.event_id
                     ),
                 )
             history = []

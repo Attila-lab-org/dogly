@@ -367,7 +367,8 @@ def _apply_claim_governance(
     ):
         updates["assistant_text"] = (
             text_for_rule.rstrip()
-            + " Attenzione: e' un'associazione temporale, non una causalita'."
+            + " Il fatto che sia iniziato insieme al cambio di cibo è un indizio, "
+            "ma da solo non dimostra che sia quella la causa."
         )
         notes = list(audit_decision.notes) + [
             "Explicit temporal-association rule applied for nutrition+digestive turn."

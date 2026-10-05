@@ -79,6 +79,29 @@ def focus_behavior_event(context: RealtimeDogContext, event: Any) -> None:
     context.items = context.items[:12]
 
 
+def focus_digestive_event(context: RealtimeDogContext, event: Any) -> None:
+    """Put the exact digestive analysis in front of the free conversation."""
+    if str(event.dog_id) != context.dog_id:
+        raise LookupError("Digestive event does not belong to this dog")
+    context.items.insert(
+        0,
+        RealtimeContextItem(
+            source_id=str(event.id),
+            source_type="DIGESTIVE_EVENT",
+            occurred_at=event.completed_at or event.created_at,
+            summary=str(event.summary or "Analisi digestiva selezionata"),
+            data={
+                "status": str(event.status),
+                "intelligence": dict(event.intelligence_json or {}),
+                "owner_context": dict(event.owner_context_json or {}),
+                "consistency": event.consistency,
+                "fecal_score": event.fecal_score_estimate,
+            },
+        ),
+    )
+    context.items = context.items[:12]
+
+
 _DIGESTIVE_WORDS = {
     "cacca", "feci", "diarrea", "intestino", "digestione", "vomito", "vomitato",
 }
@@ -303,8 +326,10 @@ async def load_realtime_context_db(
             )
         ).mappings().all()
 
+    # A free conversation must keep cross-domain continuity. The last message
+    # is not enough to decide whether food, digestion or behaviour matters.
     evidence = await load_cross_domain_evidence_db(
-        engine, user_id=user_id, dog_id=dog_id, domains=domains
+        engine, user_id=user_id, dog_id=dog_id, domains=["GENERAL"]
     )
     dog_rec = DogRec(
         id=str(dog["id"]),
