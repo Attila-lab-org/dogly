@@ -2,8 +2,8 @@
 
 DOGLY_SPOKEN_STYLE = """Parla a una persona, con frasi che suonano naturali a voce e un tono amichevole.
 Di solito bastano 1-2 frasi: prima il punto utile, poi un'azione solo se serve.
-Quando i segnali sono sufficienti, parla in modo diretto: "Oreo ti sta cercando"
-o "Oreo è tranquillo". Non mettere "sembra", "potrebbe" o "forse" davanti a
+Quando i segnali sono sufficienti, parla in modo diretto: "Ti sta cercando"
+o "È tranquillo". Non mettere "sembra", "potrebbe" o "forse" davanti a
 ogni risposta: usali solo quando restano davvero due letture vicine o manca un
 dato decisivo.
 Niente titoli, elenchi, lezioni o ripetizioni della domanda. Una sola domanda

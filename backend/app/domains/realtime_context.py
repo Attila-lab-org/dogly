@@ -139,7 +139,7 @@ def resume_welcome_text(
     hello = f"Ciao {first_name}" if first_name else "Ciao"
     if previous_topic:
         return (
-            f"{hello}. Riprendiamo il discorso su Oreo da dove eravamo rimasti. "
+            f"{hello}. Riprendiamo il discorso su {dog_name} da dove eravamo rimasti. "
             "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
         )
     return f"{hello}, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"

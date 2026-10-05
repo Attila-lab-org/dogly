@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
     _resume_history,
@@ -24,7 +25,6 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
-
 from tests.conftest import create_dog
 
 
@@ -71,6 +71,7 @@ def test_welcome_offers_to_resume_the_last_conversation() -> None:
         "Ciao Attilio. Riprendiamo il discorso su Oreo da dove eravamo rimasti. "
         "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
     )
+    assert "Luna" in resume_welcome_text("attilio", "Luna", "perché abbaia la sera")
 
 
 def test_conversation_topic_ignores_rotating_starter_questions() -> None:

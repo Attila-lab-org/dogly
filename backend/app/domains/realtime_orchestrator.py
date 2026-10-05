@@ -98,8 +98,8 @@ Parla come una persona che conosce i cani, non come un manuale: evita parole com
 Scegli una lettura principale in linguaggio quotidiano (per esempio "curioso ma un po' agitato")
 e spiega cosa osservare. Non presentare due ipotesi con una barra se puoi dirle in modo naturale.
 
-Quando i dati sostengono una lettura, usa una frase diretta e concreta ("Oreo è
-tranquillo", "Oreo ti sta cercando"). Usa "sembra", "potrebbe" o "forse" solo
+Quando i dati sostengono una lettura, usa una frase diretta e concreta ("È
+tranquillo", "Ti sta cercando"). Usa "sembra", "potrebbe" o "forse" solo
 quando due spiegazioni restano davvero vicine o manca un dato decisivo.
 
 Usa PERSONAL_DOG_CONTEXT e la cronologia quando la domanda riguarda quel cane;
@@ -110,6 +110,10 @@ di razza. Per consigli su cibo, uscite o attività, considera anche il periodo
 dell'anno, ma verifica sempre peso, età, attività, appetito, meteo e cambiamenti
 reali prima di suggerire modifiche. Non dire mai che un cane "ha bisogno di più
 cibo" solo perché è autunno o appartiene a una razza.
+Prima di formulare la risposta, usa nell'ordine: identità del cane, fatti personali
+confermati, cambiamenti recenti, analisi pertinenti e solo dopo conoscenza generale.
+Se uno di questi dati è pertinente, collegalo naturalmente alla risposta; non
+elencare il profilo e non inventare dettagli quando un campo manca.
 Distingui sempre ciò che è osservato,
 raccontato dal proprietario, confermato come pattern e valido in generale. Non
 inventare eventi, abitudini, diagnosi, emozioni, causalità o familiarità. Un episodio
@@ -421,6 +425,16 @@ async def orchestrate_realtime_turn(
 
     payload = {
         "dog": context.model_dump(mode="json"),
+        "personal_context_priority": {
+            "identity": context.identity,
+            "confirmed_facts": context.stable_facts,
+            "relevant_evidence": [item.model_dump(mode="json") for item in context.items],
+            "missing": context.missing,
+            "instruction": (
+                "Questi sono i dati personali di questo cane. Usali prima della "
+                "conoscenza generale quando sono pertinenti."
+            ),
+        },
         "breed_aware_canine_intelligence": context.breed_intelligence,
         "seasonal_context": context.seasonal_context,
         "canine_science": companion_science_brief(),

@@ -588,7 +588,7 @@ def update_feeding_period(
 
 
 def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dict:
-    """Baseline + recent trend: compare Rocky to Rocky (sez. 19.2)."""
+    """Baseline + recent trend: compare this dog with its own history."""
     get_owned_dog(store, user_id=user_id, dog_id=dog_id)
     events = sorted(
         (

@@ -34,7 +34,7 @@ SAFETY_CANDIDATE_FIELDS = (
 )
 
 
-def evaluate_observation(observation: dict[str, Any], *, dog_name: str = "Oreo") -> dict[str, Any]:
+def evaluate_observation(observation: dict[str, Any], *, dog_name: str = "il cane") -> dict[str, Any]:
     prepared = prepare_digestive_observation(observation)
     intelligence = build_digestive_intelligence(
         prepared,
