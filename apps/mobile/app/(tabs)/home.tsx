@@ -155,25 +155,28 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Mostra a DOGly un momento di ${dog.name}`}
-            onPress={startVideo}
-            disabled={!dog.id || loading}
-            style={({ pressed }) => [styles.primaryCard, pressed && styles.pressed]}
-          >
-            <View style={styles.primaryIcon}>
-              <Ionicons name="videocam" size={25} color={colors.textOnPrimary} />
+          <View style={styles.startPanel}>
+            <View style={styles.startArt}>
+              <Ionicons name="paw" size={30} color={colors.primary} />
+              <View style={styles.startCameraBubble}>
+                <Ionicons name="videocam" size={17} color={colors.textOnPrimary} />
+              </View>
             </View>
-            <View style={styles.primaryCopy}>
-              <Text style={styles.primaryKicker}>IL MODO PIÙ VELOCE PER CAPIRLO</Text>
-              <Text style={styles.primaryTitle}>Fammi vedere un momento</Text>
-              <Text style={styles.primarySubtitle}>
-                Un breve video. Ti restituisco cosa potrebbe significare e cosa puoi fare.
-              </Text>
+            <View style={styles.startCopy}>
+              <Text style={styles.startKicker}>INIZIA DA QUI</Text>
+              <Text style={styles.startTitle}>Fammi vedere cosa sta vivendo</Text>
+              <Text style={styles.startSubtitle}>Un momento basta per capirlo meglio.</Text>
             </View>
-            <Ionicons name="arrow-forward-circle" size={28} color={colors.textOnPrimary} />
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Mostra a DOGly un momento di ${dog.name}`}
+              onPress={startVideo}
+              disabled={!dog.id || loading}
+              style={({ pressed }) => [styles.startButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="videocam" size={20} color={colors.textOnPrimary} />
+            </Pressable>
+          </View>
 
           <Pressable
             accessibilityRole="button"
@@ -351,6 +354,14 @@ const styles = StyleSheet.create({
   processingCopy: { flex: 1, gap: 2 },
   processingTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
   processingText: { color: colors.textSecondary, fontSize: typography.size.xs },
+  startPanel: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  startArt: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.primarySoft, position: 'relative' },
+  startCameraBubble: { position: 'absolute', right: -5, bottom: -5, width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.surface },
+  startCopy: { flex: 1, gap: 2 },
+  startKicker: { color: colors.accentPressed, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.8 },
+  startTitle: { color: colors.text, fontSize: typography.size.md, lineHeight: typography.size.md * 1.2, fontWeight: typography.weight.bold },
+  startSubtitle: { color: colors.textSecondary, fontSize: typography.size.xs },
+  startButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.primary },
   primaryCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primary, minHeight: 142 },
   primaryIcon: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: 'rgba(255,255,255,0.18)' },
   primaryCopy: { flex: 1, gap: spacing.xs },
