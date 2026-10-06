@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -75,6 +76,7 @@ export default function FoodVerifyScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const quantityFocus = focus === 'quantity';
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const foodQuery = useQuery({
     queryKey: ['nutrition-food', foodId],
@@ -288,9 +290,26 @@ export default function FoodVerifyScreen() {
       </Text>
 
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Prodotto</Text>
+        <Text style={styles.sectionTitle}>È questo l’alimento?</Text>
         <EditableField label="Nome prodotto" value={name} onChangeText={setName} needsReview={!name.trim() || needsReview('name')} />
         <EditableField label="Marca" value={brand} onChangeText={setBrand} needsReview={!brand.trim() || needsReview('brand')} />
+      </Card>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: detailsOpen }}
+        onPress={() => setDetailsOpen((open) => !open)}
+        style={styles.detailsToggle}
+      >
+        <View style={styles.detailsToggleCopy}>
+          <Text style={styles.detailsToggleTitle}>Altri dati dell’etichetta</Text>
+          <Text style={styles.detailsToggleText}>Aprili solo se vuoi correggere la lettura</Text>
+        </View>
+        <Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
+      </Pressable>
+
+      {detailsOpen ? <>
+        <Card style={styles.card}>
         <EditableField
           label="Ingredienti (testo dell'etichetta)"
           value={ingredients}
@@ -298,7 +317,7 @@ export default function FoodVerifyScreen() {
           needsReview={needsReview('ingredients')}
           multiline
         />
-      </Card>
+        </Card>
 
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Analisi garantita</Text>
@@ -349,7 +368,8 @@ export default function FoodVerifyScreen() {
           onChangeText={setQuantityPerDay}
           needsReview={quantityFocus && !quantityPerDay.trim()}
         />
-      </Card>
+        </Card>
+      </> : null}
 
       <Text style={styles.note}>
         Le percentuali sono i valori minimi/massimi dichiarati in etichetta,
@@ -386,6 +406,20 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.lg,
   },
+  detailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  detailsToggleCopy: { flex: 1, gap: 2 },
+  detailsToggleTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
+  detailsToggleText: { color: colors.textSecondary, fontSize: typography.size.xs },
   sectionTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,

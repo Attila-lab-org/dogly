@@ -75,7 +75,7 @@ export default function NewFoodScreen() {
 
   const search = async (raw: string) => {
     const cleaned = raw.trim();
-    if (cleaned.length < 2 || !dog.id || working) return;
+    if (cleaned.length < 1 || !dog.id || working) return;
     setWorking(true);
     setMessage(null);
     try {
@@ -93,6 +93,15 @@ export default function NewFoodScreen() {
       setWorking(false);
     }
   };
+
+  useEffect(() => {
+    if (step !== 'identify' || query.trim().length < 1 || !dog.id) {
+      setHits([]);
+      return;
+    }
+    const timer = setTimeout(() => void search(query), 350);
+    return () => clearTimeout(timer);
+  }, [dog.id, query, step]);
 
   useEffect(() => {
     if (!photoFoodId || photoStarted.current || photoFoodQuery.isLoading) return;
@@ -274,11 +283,6 @@ export default function NewFoodScreen() {
               returnKeyType="search"
               onSubmitEditing={() => void search(query)}
               style={[styles.input, styles.searchInput]}
-            />
-            <Button
-              title="Vai"
-              disabled={query.trim().length < 2 || working}
-              onPress={() => void search(query)}
             />
           </View>
 

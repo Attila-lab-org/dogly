@@ -7,7 +7,7 @@ safety/rule layer (sez. 19.3).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.config import Settings
@@ -588,12 +588,13 @@ def update_feeding_period(
         return period
     # Feeding history is immutable. A correction starts a new effective period
     # instead of rewriting what was true before the correction.
-    period.end_at = datetime.now(UTC)
+    period.end_at = max(datetime.now(UTC), period.start_at + timedelta(microseconds=1))
+    effective_start = period.end_at
     rec = FeedingPeriodRec(
         id=new_id(),
         dog_id=period.dog_id,
         food_product_id=period.food_product_id,
-        start_at=period.end_at,
+        start_at=effective_start,
         quantity_per_day=updates.get("quantity_per_day", period.quantity_per_day),
         treats_notes=updates.get("treats_notes", period.treats_notes),
         transition_notes=updates.get("transition_notes", period.transition_notes),

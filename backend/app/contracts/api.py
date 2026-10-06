@@ -985,7 +985,7 @@ class ExternalFoodLookupRequest(BaseModel):
 
 class ExternalFoodSearchRequest(BaseModel):
     dog_id: str
-    query: str = Field(min_length=2, max_length=80)
+    query: str = Field(min_length=1, max_length=80)
     client_request_id: str = Field(min_length=8, max_length=128)
 
 
