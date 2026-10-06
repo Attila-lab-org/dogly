@@ -89,10 +89,6 @@ _DECLINE_MEDIA = re.compile(
 _MEDIA_INVITATION = re.compile(
     r"\b(?:foto|video|fotografia)\b", re.IGNORECASE,
 )
-_AFFECTION_ACK = re.compile(
-    r"\b(si sente|si capisce|conta|famiglia|legame|importante per te|cuore)\b",
-    re.IGNORECASE,
-)
 
 
 def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
@@ -160,7 +156,7 @@ non è un'abitudine. Se per capire il comportamento attuale serve davvero vederl
 chiedi un breve video e imposta behavior_handoff; non fingere di vederlo in diretta.
 
 Puoi fare una sola domanda solo se cambia davvero significato, azione o sicurezza.
-Quando fai una domanda, restituisci anche 2-4 question_options brevi e concrete,
+Quando fai una domanda, restituisci anche 2-3 question_options brevi e concrete,
 che il proprietario possa toccare per rispondere senza dover formulare tutto da solo.
 Le opzioni devono rispondere esattamente alla domanda; se non fai una domanda,
 question_options deve essere vuoto.
@@ -168,7 +164,8 @@ Quando il proprietario risponde a una tua domanda, considera quella risposta com
 un nuovo dato: non riscriverla, non riassumere di nuovo la scena e non ripartire
 dall'inizio. Riconoscila in poche parole e fai avanzare la lettura con il prossimo
 passo utile o con una sola domanda concreta. La conversazione deve sembrare continua,
-non una sequenza di schede indipendenti.
+non una sequenza di schede indipendenti. Se hai già dato una lettura sufficiente,
+non inventare una nuova domanda solo per tenere aperta la chat.
 Puoi proporre un solo memory_candidate quando il proprietario ha detto chiaramente
 un fatto stabile: non salvarlo e non dedurlo. Se c'è un segnale urgente, dai subito
 l'indicazione di sicurezza necessaria; non diagnosticare né prescrivere.
@@ -190,7 +187,11 @@ Prima scegli response_mode dal significato dell'ULTIMO messaggio e dalla convers
 AFFECTION per legame, orgoglio o gioia; CONCERN per una preoccupazione attuale;
 GRIEF per perdita o mancanza; ANALYSIS per una richiesta di interpretazione;
 CLOSURE quando saluta, ringrazia o vuole fermarsi; CONVERSATION negli altri casi.
-OWNER_TURN_SIGNALS sono indizi lessicali fallibili, non classificazioni obbligatorie.
+response_mode è un metadato interno per scegliere prudenza e continuità, non un
+copione e non una frase da ripetere. OWNER_TURN_SIGNALS sono indizi lessicali
+fallibili, non classificazioni obbligatorie. Non usare sempre la stessa formula
+per l'affetto: varia il riconoscimento in base alle parole, al momento e alla
+storia appena raccontata.
 "Lo amo ma oggi sta male" richiede CONCERN, non un invito a celebrare. Non classificare
 "bellissimo il parco" come amore per il cane. Una negazione o un esempio non è un fatto.
 Prima rispondi a ciò che sta vivendo la persona, poi interpreta solo se è richiesto,
@@ -213,11 +214,12 @@ da attribuire al proprietario. L'invito umano compare in assistant_text, il CTA 
 
 suggested_prompts sono al massimo 2 brevi inviti opzionali a proseguire. Usali solo
 quando aiutano davvero il proprietario e non quando hai già dato una risposta
-completa. Devono essere messaggi scritti dal punto di vista del PROPRIETARIO, concreti e collegati
-all'ultimo messaggio (per esempio "Come capisco quando vuole ancora coccole?" o
-"Cosa guardo oggi?"). Non scrivere domande di DOGly al proprietario, suggerimenti generici o
-identici alla risposta. Se hai già un media_invite, evita di duplicare la stessa
-azione nei suggested_prompts.
+completa; puoi lasciarli vuoti. Devono essere messaggi scritti dal punto di vista
+del PROPRIETARIO, concreti e collegati all'ultimo messaggio (per esempio "Come
+capisco quando vuole ancora coccole?" o "Cosa guardo oggi?"). Non scrivere
+domande di DOGly al proprietario, suggerimenti generici, allarmistici o identici
+alla risposta. Se hai già un media_invite, evita di duplicare la stessa azione nei
+suggested_prompts.
 
 La risposta deve suonare parlata e deve lasciare al proprietario la sensazione di aver
 ricevuto un aiuto, non un compito. Non trattare un abbaio come una parola; una frase
@@ -268,7 +270,7 @@ def _provider_decision(
         str(option).strip()
         for option in (raw.get("question_options") if isinstance(raw.get("question_options"), list) else [])
         if isinstance(option, str) and option.strip()
-    ][:4]
+    ][:3]
     suggested_prompts = [
         str(prompt).strip()
         for prompt in (raw.get("suggested_prompts") if isinstance(raw.get("suggested_prompts"), list) else [])
@@ -477,7 +479,7 @@ def _apply_conversation_policy(
         data["response_mode"] = "AFFECTION"
         if (
             _TECHNICAL_COPY.search(decision.assistant_text)
-            or not _AFFECTION_ACK.search(decision.assistant_text)
+            or len(decision.assistant_text.split()) < 8
             or _repeats_previous_answer(
                 decision.assistant_text, _last_assistant_text(history)
             )

@@ -106,6 +106,21 @@ def test_repeated_affection_answer_is_replaced_by_a_warm_next_step() -> None:
     assert decision.suggested_prompts == []
 
 
+def test_natural_affection_answer_is_not_replaced_by_a_fixed_phrase() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    original = "Si vede che tra voi c'è qualcosa di speciale, e questo momento parla da solo."
+    decision = _apply_conversation_policy(
+        RealtimeDecision(assistant_text=original),
+        context=context,
+        user_text="Oreo è la mia vita",
+        history=[],
+        domains=["GENERAL"],
+    )
+
+    assert decision.assistant_text == original
+    assert decision.media_invite == "PHOTO"
+
+
 def test_affection_signal_does_not_override_a_concrete_concern() -> None:
     context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
     decision = _apply_conversation_policy(
@@ -152,17 +167,15 @@ def test_voice_session_accepts_database_uuid_owner() -> None:
 
 def test_welcome_is_personal_and_never_technical() -> None:
     welcome = _welcome_text("attilio", "Oreo")
-    assert welcome == (
-        "Ciao Attilio, sono qui per te e Oreo. Cosa vuoi capire oggi?"
-    )
+    assert welcome == "Ciao Attilio. Sono qui con te e Oreo. Raccontami cosa vuoi guardare oggi."
     assert "modello" not in welcome
 
 
 def test_welcome_offers_to_resume_the_last_conversation() -> None:
     welcome = resume_welcome_text("attilio", "Oreo", "perché Oreo abbaia la sera")
     assert welcome == (
-        "Ciao Attilio. Riprendiamo il discorso su Oreo da dove eravamo rimasti. "
-        "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
+        "Ciao Attilio. Ho ancora presente l'ultima cosa che stavamo guardando: “perché Oreo abbaia la sera”. "
+        "Vuoi riprenderla oppure mi racconti com'è Oreo oggi?"
     )
     assert "Luna" in resume_welcome_text("attilio", "Luna", "perché abbaia la sera")
 
@@ -170,6 +183,9 @@ def test_welcome_offers_to_resume_the_last_conversation() -> None:
 def test_conversation_topic_ignores_rotating_starter_questions() -> None:
     assert conversation_topic(
         ["Qual è il modo migliore per accompagnarlo?"], dog_name="Oreo"
+    ) == "Oreo"
+    assert conversation_topic(
+        ["Ti racconto cos'è successo oggi", "Riprendiamo da lì"], dog_name="Oreo"
     ) == "Oreo"
 
 
@@ -352,7 +368,7 @@ async def test_realtime_api_session_turn_and_close(
     )
     assert session_response.status_code == 201
     assert session_response.json()["welcome_text"] == (
-        "Ciao, sono qui per te e Oreo. Cosa vuoi capire oggi?"
+        "Ciao. Sono qui con te e Oreo. Raccontami cosa vuoi guardare oggi."
     )
     session_id = session_response.json()["id"]
 

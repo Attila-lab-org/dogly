@@ -30,6 +30,9 @@ class RealtimeSessionOut(BaseModel):
     dog_id: str
     dog_name: str
     owner_display_name: str | None = None
+    # The client uses this only to offer an explicit resume choice. The
+    # previous conversation is never silently presented as a new question.
+    previous_topic: str | None = None
     welcome_text: str
     status: Literal["ACTIVE", "ENDED", "EXPIRED"]
     modality: Literal["TEXT"]
@@ -61,7 +64,7 @@ class RealtimeTurnOut(BaseModel):
     session_id: str
     assistant_text: str
     question: str | None = None
-    question_options: list[str] = Field(default_factory=list, max_length=4)
+    question_options: list[str] = Field(default_factory=list, max_length=3)
     suggested_prompts: list[str] = Field(default_factory=list, max_length=3)
     terminal_state: RealtimeTerminalState
     domains: list[RealtimeDomain] = Field(default_factory=list)
@@ -83,7 +86,7 @@ class RealtimeDecision(BaseModel):
         "CONVERSATION", "AFFECTION", "CONCERN", "GRIEF", "ANALYSIS", "CLOSURE"
     ] = "CONVERSATION"
     question: str | None = Field(default=None, max_length=240)
-    question_options: list[str] = Field(default_factory=list, max_length=4)
+    question_options: list[str] = Field(default_factory=list, max_length=3)
     # Optional continuation chips. These are different from question_options:
     # they keep the conversation moving without pretending DOGly needs another
     # fact before it can answer.

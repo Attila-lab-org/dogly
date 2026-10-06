@@ -132,6 +132,12 @@ _GENERIC_STARTER_QUESTIONS = {
     "quando conviene chiedere un aiuto in più?",
     "ti racconto una cosa successa oggi",
     "ti racconto cosa è successo oggi",
+    "ti racconto cos'è successo oggi",
+    "c’è un comportamento che voglio capire",
+    "c'e un comportamento che voglio capire",
+    "riprendiamo da lì",
+    "riprendiamo da li",
+    "parliamo di oggi",
 }
 
 
@@ -161,11 +167,14 @@ def resume_welcome_text(
     first_name = (owner_name or "").strip().split(" ", 1)[0].capitalize()
     hello = f"Ciao {first_name}" if first_name else "Ciao"
     if previous_topic:
+        topic = " ".join(previous_topic.split())
+        if len(topic) > 105:
+            topic = topic[:102].rsplit(" ", 1)[0] + "…"
         return (
-            f"{hello}. Riprendiamo il discorso su {dog_name} da dove eravamo rimasti. "
-            "Vuoi ripartire da lì o raccontarmi cosa sta succedendo adesso?"
+            f"{hello}. Ho ancora presente l'ultima cosa che stavamo guardando: “{topic}”. "
+            f"Vuoi riprenderla oppure mi racconti com'è {dog_name} oggi?"
         )
-    return f"{hello}, sono qui per te e {dog_name}. Cosa vuoi capire oggi?"
+    return f"{hello}. Sono qui con te e {dog_name}. Raccontami cosa vuoi guardare oggi."
 
 
 def route_realtime_domains(user_text: str) -> list[RealtimeDomain]:

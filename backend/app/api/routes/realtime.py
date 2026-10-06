@@ -125,6 +125,7 @@ async def create_realtime_session(
         owner_display_name=(
             str(row["display_name"]) if row.get("display_name") else None
         ),
+        previous_topic=(str(row["previous_topic"]) if row.get("previous_topic") else None),
         welcome_text=_welcome_text(
             row.get("display_name"),
             str(row["dog_name"]),

@@ -4,30 +4,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type MemoryProposal, type RealtimeSession, type RealtimeTurn } from '@/features/realtime/api';
 import { queryKeys } from '@/lib/queryClient';
-import { getBehaviorEvent } from '@/features/behavior/api';
-import { getDigestiveEvent } from '@/features/digestive/api';
 import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
 import { takeConversationPhoto } from '@/features/photos/share';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
-const starterPool = [
-  'Mi aiuti a capire cosa sta vivendo?',
-  'Come posso aiutarlo oggi?',
-  'Che cosa dovrei osservare meglio?',
-  'Come capisco di cosa ha bisogno?',
-  'Ti racconto una cosa successa oggi',
-  'Come posso accompagnarlo nel modo giusto?',
-  'C’è qualcosa che mi dovrebbe preoccupare?',
-  'Come posso conoscerlo meglio?',
-  'Da dove cominciamo?',
-];
 
 function followUpPrompts(turn?: RealtimeTurn): string[] {
   if (!turn || turn.terminal_state === 'SAFETY_INTERRUPT' || turn.media_invite) return [];
@@ -44,9 +31,6 @@ export default function AskScreen() {
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const behaviorSource = source === 'behavior';
   const digestiveSource = source === 'digestive';
-  const behaviorContext = useQuery({ queryKey: ['chat-context-behavior', eventId], queryFn: () => getBehaviorEvent(eventId!), enabled: Boolean(eventId && behaviorSource), staleTime: 300000 });
-  const digestiveContext = useQuery({ queryKey: ['chat-context-digestive', eventId], queryFn: () => getDigestiveEvent(eventId!), enabled: Boolean(eventId && digestiveSource), staleTime: 300000 });
-  const contextHeadline = behaviorContext.data?.consumer_headline || behaviorContext.data?.summary || digestiveContext.data?.consumer_headline || digestiveContext.data?.consumer_summary || null;
   const [session, setSession] = useState<RealtimeSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -58,11 +42,15 @@ export default function AskScreen() {
   const [focusedEventId, setFocusedEventId] = useState<string | undefined>(eventId);
   const dictationRef = useRef<{ stop: () => void } | null>(null);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
-  const starters = useMemo(() => {
-    const day = Math.floor(Date.now() / 86400000);
-    const offset = (day + dog.id.length) % starterPool.length;
-    return [0, 1, 2].map((index) => starterPool[(offset + index) % starterPool.length]);
-  }, [dog.id]);
+  const openingOptions = useMemo(() => {
+    if (eventId) {
+      return behaviorSource
+        ? ['Come capisco meglio questo momento?', 'Ti racconto cosa è successo dopo']
+        : ['Cosa osservo nelle prossime ore?', 'Ti racconto cosa è successo dopo'];
+    }
+    if (session?.previous_topic) return ['Riprendiamo da lì', 'Parliamo di oggi'];
+    return ["Ti racconto cos'è successo oggi", 'C’è un comportamento che voglio capire'];
+  }, [behaviorSource, dog.name, eventId, session?.previous_topic]);
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const usedFollowUps = new Set(
@@ -195,7 +183,6 @@ export default function AskScreen() {
       </View>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
-          {messages.length === 1 ? <View style={styles.intro}><View style={styles.sparkle}><Ionicons name="sparkles" size={19} color={colors.primary} /></View><Text style={styles.introTitle}>{eventId ? 'Partiamo da questo momento' : `Parliamo di ${dog.name}`}</Text><Text style={styles.introText}>{eventId ? (contextHeadline ? `${contextHeadline}. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ${dog.name}.` : 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.') : `Raccontami cosa sta succedendo con ${dog.name}. Ti aiuto a capire cosa può significare e cosa puoi fare.`}</Text></View> : null}
           {starting ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.muted}>Preparo la conversazione…</Text></View> : null}
           {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => void start()}><Text style={styles.retry}>Riprova</Text></Pressable></View> : null}
           {messages.map((message) => <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
@@ -211,7 +198,7 @@ export default function AskScreen() {
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
-          {!starting && messages.length === 1 ? <View style={styles.starters}><Text style={styles.starterLabel}>{eventId ? 'Partiamo da questo momento' : 'Possiamo partire da qui'}</Text>{(eventId ? (behaviorSource ? ['Come capisco meglio questo momento?', 'Come posso accompagnarlo?', 'Ti racconto cosa è successo dopo'] : ['Cosa osservo nelle prossime ore?', 'Come lo collego alla sua routine?', 'Ti racconto cosa è successo dopo']) : starters).map((starter) => <Pressable key={starter} onPress={() => void send(starter)} style={styles.starter}><Text style={styles.starterText}>{starter}</Text><Ionicons name="arrow-up" size={16} color={colors.primary} /></Pressable>)}</View> : null}
+          {!starting && messages.length === 1 ? <View style={styles.starters}><Text style={styles.starterLabel}>{session?.previous_topic && !eventId ? 'Da dove vuoi partire?' : 'Se ti aiuta, puoi partire da qui'}</Text>{openingOptions.map((starter) => <Pressable key={starter} onPress={() => void send(starter)} style={styles.starter}><Text style={styles.starterText}>{starter}</Text><Ionicons name="arrow-up" size={16} color={colors.primary} /></Pressable>)}</View> : null}
           {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>{mediaPhase === 'uploading' ? 'Preparo la foto…' : mediaPhase === 'analyzing' ? 'Guardo questo momento…' : 'DOGly sta pensando…'}</Text></View> : null}
         </ScrollView>
         <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi una domanda su ' + dog.name} placeholder={'Cosa vuoi capire di ' + dog.name + '?'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} />{Platform.OS === 'web' ? <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta una domanda'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Invia domanda" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>

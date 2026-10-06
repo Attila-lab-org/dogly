@@ -5,6 +5,7 @@ export type RealtimeSession = {
   dog_id: string;
   dog_name: string;
   owner_display_name: string | null;
+  previous_topic: string | null;
   welcome_text: string;
   status: 'ACTIVE' | 'ENDED' | 'EXPIRED';
   modality: 'TEXT';
