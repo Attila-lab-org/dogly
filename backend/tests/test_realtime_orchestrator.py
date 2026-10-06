@@ -66,7 +66,7 @@ def test_provider_decision_keeps_contextual_media_invite() -> None:
 
 def test_provider_decision_keeps_backend_owned_continuation_prompts() -> None:
     decision = _provider_decision(
-        '{"assistant_text":"È un momento tenero.","domains":["BEHAVIOR"],'
+        '{"assistant_text":"È un momento tenero, fatto di coccole.","domains":["BEHAVIOR"],'
         '"suggested_prompts":["Come capisco quando vuole ancora coccole?",'
         '"Lui vuole sempre questo"],"question_information_gain":"NONE"}',
         domains=["BEHAVIOR"],
@@ -74,6 +74,18 @@ def test_provider_decision_keeps_backend_owned_continuation_prompts() -> None:
 
     assert decision is not None
     assert decision.suggested_prompts == ["Come capisco quando vuole ancora coccole?"]
+
+
+def test_generic_suggested_prompts_are_removed_instead_of_shown_as_a_menu() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"Oggi Oreo ha dormito quasi sempre.","domains":["BEHAVIOR"],'
+        '"suggested_prompts":["Come posso conoscerlo meglio?",'
+        '"Cosa osservo quando dorme così?"],"question_information_gain":"NONE"}',
+        domains=["BEHAVIOR"],
+    )
+
+    assert decision is not None
+    assert decision.suggested_prompts == ["Cosa osservo quando dorme così?"]
 
 
 def test_repeated_affection_answer_is_replaced_by_a_warm_next_step() -> None:

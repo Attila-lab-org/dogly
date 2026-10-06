@@ -89,6 +89,18 @@ _DECLINE_MEDIA = re.compile(
 _MEDIA_INVITATION = re.compile(
     r"\b(?:foto|video|fotografia)\b", re.IGNORECASE,
 )
+_GENERIC_SUGGESTED_PROMPT = re.compile(
+    r"\b(?:cosa vuoi capire|parliamo di oggi|come posso (?:conoscerlo|conoscerla)"
+    r" meglio|come posso accompagnarlo(?: nel modo giusto)?|"
+    r"cosa posso fare|c['’]è qualcosa che .* dovrebbe preoccupar)\b",
+    re.IGNORECASE,
+)
+_SUGGESTED_PROMPT_STOPWORDS = {
+    "anche", "alla", "allo", "come", "cosa", "dalla", "delle", "dello",
+    "dopo", "essere", "fare", "giorno", "oggi", "perché", "perche", "posso",
+    "può", "puo", "quale", "quando", "questo", "questa", "sullo", "tutto",
+    "vuoi", "vuole", "ancora", "modo", "meglio", "solo", "sono",
+}
 
 
 def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
@@ -219,12 +231,14 @@ da attribuire al proprietario. L'invito umano compare in assistant_text, il CTA 
 
 suggested_prompts sono al massimo 2 brevi inviti opzionali a proseguire. Usali solo
 quando aiutano davvero il proprietario e non quando hai già dato una risposta
-completa; puoi lasciarli vuoti. Devono essere messaggi scritti dal punto di vista
-del PROPRIETARIO, concreti e collegati all'ultimo messaggio (per esempio "Come
-capisco quando vuole ancora coccole?" o "Cosa guardo oggi?"). Non scrivere
-domande di DOGly al proprietario, suggerimenti generici, allarmistici o identici
-alla risposta. Se hai già un media_invite, evita di duplicare la stessa azione nei
-suggested_prompts.
+completa; puoi lasciarli vuoti. Devono essere messaggi che il PROPRIETARIO potrebbe
+inviare davvero, scritti in prima persona e legati a un dettaglio concreto appena
+emerso (per esempio "Come capisco quando vuole ancora coccole?" dopo aver parlato
+di coccole). Non scrivere domande di DOGly al proprietario, menu generici come
+"Come posso conoscerlo meglio?" o "C'è qualcosa che mi dovrebbe preoccupare?",
+suggerimenti allarmistici o identici alla risposta. Se non trovi una continuazione
+chiaramente pertinente, lascia suggested_prompts vuoto. Se hai già un media_invite,
+evita di duplicare la stessa azione nei suggested_prompts.
 
 La risposta deve suonare parlata e deve lasciare al proprietario la sensazione di aver
 ricevuto un aiuto, non un compito. Non trattare un abbaio come una parola; una frase
@@ -425,7 +439,8 @@ def _repeats_previous_answer(candidate: str, previous: str | None) -> bool:
 
 
 def _valid_suggested_prompts(
-    prompts: list[str], *, assistant_text: str, media_invite: str | None
+    prompts: list[str], *, assistant_text: str, media_invite: str | None,
+    context_text: str | None = None,
 ) -> list[str]:
     # Relevance belongs to the reasoner; do not invent substitute chips.
     if media_invite:
@@ -437,15 +452,35 @@ def _valid_suggested_prompts(
         key = prompt.casefold()
         if not prompt or len(prompt) > 90 or key in seen or key in assistant_text.casefold():
             continue
+        if _GENERIC_SUGGESTED_PROMPT.search(prompt):
+            continue
         if re.search(
             r"\b(lui|lei|il cane|oreo)\s+(deve|vuole|può|potrebbe|ha|è)\b",
             prompt,
             re.IGNORECASE,
         ):
             continue
+        source_terms = _meaningful_terms(f"{assistant_text} {context_text or ''}")
+        prompt_terms = _meaningful_terms(prompt)
+        if source_terms and prompt_terms and not any(
+            any(
+                source.startswith(term[:4]) or term.startswith(source[:4])
+                for source in source_terms
+            )
+            for term in prompt_terms
+        ):
+            continue
         seen.add(key)
         result.append(prompt)
     return result[:2]
+
+
+def _meaningful_terms(value: str) -> set[str]:
+    return {
+        term
+        for term in re.findall(r"[a-zàèéìòù]{4,}", value.casefold())
+        if term not in _SUGGESTED_PROMPT_STOPWORDS
+    }
 
 
 def _recent_media_invite(history: list[dict[str, str]]) -> bool:
@@ -544,7 +579,7 @@ def _apply_conversation_policy(
     data["suggested_prompts"] = [
         prompt for prompt in _valid_suggested_prompts(
             data["suggested_prompts"], assistant_text=decision.assistant_text,
-            media_invite=data["media_invite"],
+            media_invite=data["media_invite"], context_text=user_text,
         ) if prompt.casefold() not in used
     ]
     return RealtimeDecision.model_validate(data)
