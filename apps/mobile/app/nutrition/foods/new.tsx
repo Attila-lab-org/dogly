@@ -519,6 +519,7 @@ function CandidateCard({
         {item.brand ? <Text style={styles.productBrand}>{item.brand}</Text> : null}
         <Text style={styles.productName}>{item.name}</Text>
         {item.variant ? <Text style={styles.productMeta}>{item.variant}</Text> : null}
+        {onPress ? <Text style={styles.productAction}>Tocca per verificare questo alimento</Text> : null}
       </View>
       {onPress ? (
         <Ionicons name="chevron-forward" size={20} color={colors.iconMuted} />
@@ -609,6 +610,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
+    minHeight: 98,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -619,14 +621,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
   },
   productImage: {
-    width: 58,
-    height: 58,
-    borderRadius: radius.sm,
+    width: 82,
+    height: 82,
+    borderRadius: radius.md,
     backgroundColor: colors.surfaceMuted,
   },
   productImageFallback: {
-    width: 58,
-    height: 58,
+    width: 82,
+    height: 82,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.sm,
@@ -655,6 +657,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     marginTop: 3,
   },
+  productAction: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold, marginTop: spacing.xs },
   manualFields: { gap: spacing.sm },
   fieldLabel: {
     color: colors.text,
