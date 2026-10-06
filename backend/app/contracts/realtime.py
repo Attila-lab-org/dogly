@@ -134,6 +134,11 @@ class RealtimeDecision(BaseModel):
         elif self.behavior_handoff:
             self.terminal_state = "BEHAVIOR_VIDEO_HANDOFF"
             self.media_invite = "VIDEO"
+        if self.question and self.media_invite:
+            # A turn should ask for one thing at a time. A necessary question
+            # takes priority over an optional media action.
+            self.media_invite = None
+            self.media_prompt = None
         if self.question or self.media_invite or self.memory_candidate:
             self.suggested_prompts = []
         return self

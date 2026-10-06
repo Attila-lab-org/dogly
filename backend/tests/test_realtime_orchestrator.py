@@ -121,6 +121,70 @@ def test_natural_affection_answer_is_not_replaced_by_a_fixed_phrase() -> None:
     assert decision.media_invite == "PHOTO"
 
 
+def test_answer_to_previous_question_does_not_trigger_another_question() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    decision = _apply_conversation_policy(
+        RealtimeDecision(
+            assistant_text="Perfetto, questo mi aiuta a capire la distanza.",
+            question="Quando succede, abbaia subito?",
+            question_options=["Sì", "No"],
+            question_information_gain="CHANGES_ACTION",
+            suggested_prompts=["Cosa guardo dopo?"],
+        ),
+        context=context,
+        user_text="Di solito tra 5 e 10 metri.",
+        history=[
+            {
+                "role": "assistant",
+                "content": "A che distanza di solito scatta per primo?",
+            }
+        ],
+        domains=["BEHAVIOR"],
+    )
+
+    assert decision.question is None
+    assert decision.question_options == []
+    assert decision.suggested_prompts == []
+
+
+def test_safety_question_can_follow_an_answer_when_really_needed() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    decision = _apply_conversation_policy(
+        RealtimeDecision(
+            assistant_text="Per capire quanto è urgente mi serve un ultimo dato.",
+            question="Ha ingerito qualcosa di potenzialmente tossico?",
+            question_options=["Sì", "No", "Non lo so"],
+            question_information_gain="CHANGES_SAFETY",
+        ),
+        context=context,
+        user_text="È successo poco fa.",
+        history=[
+            {
+                "role": "assistant",
+                "content": "Da quanto tempo lo noti?",
+            }
+        ],
+        domains=["CARE"],
+    )
+
+    assert decision.question is not None
+    assert decision.question_options == ["Sì", "No", "Non lo so"]
+
+
+def test_question_takes_priority_over_optional_media_cta() -> None:
+    decision = RealtimeDecision(
+        assistant_text="Mi serve un dato prima di consigliarti il passo giusto.",
+        question="Ha ingerito qualcosa?",
+        question_options=["Sì", "No", "Non lo so"],
+        question_information_gain="CHANGES_SAFETY",
+        media_invite="PHOTO",
+        media_prompt="Fammi vedere cosa ha mangiato",
+    )
+
+    assert decision.media_invite is None
+    assert decision.media_prompt is None
+
+
 def test_affection_signal_does_not_override_a_concrete_concern() -> None:
     context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
     decision = _apply_conversation_policy(

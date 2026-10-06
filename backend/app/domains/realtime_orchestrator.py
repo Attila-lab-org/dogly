@@ -165,7 +165,9 @@ un nuovo dato: non riscriverla, non riassumere di nuovo la scena e non ripartire
 dall'inizio. Riconoscila in poche parole e fai avanzare la lettura con il prossimo
 passo utile o con una sola domanda concreta. La conversazione deve sembrare continua,
 non una sequenza di schede indipendenti. Se hai già dato una lettura sufficiente,
-non inventare una nuova domanda solo per tenere aperta la chat.
+non inventare una nuova domanda solo per tenere aperta la chat. Se il proprietario
+ha appena risposto a una tua domanda, non farne un'altra nello stesso filo salvo
+che serva a una distinzione di sicurezza realmente necessaria.
 Puoi proporre un solo memory_candidate quando il proprietario ha detto chiaramente
 un fatto stabile: non salvarlo e non dedurlo. Se c'è un segnale urgente, dai subito
 l'indicazione di sicurezza necessaria; non diagnosticare né prescrivere.
@@ -398,6 +400,19 @@ def _last_assistant_text(history: list[dict[str, str]]) -> str | None:
     ), None)
 
 
+def _last_assistant_asked_question(history: list[dict[str, str]]) -> bool:
+    """Detect a question awaiting an owner's answer without parsing intent."""
+    text = _last_assistant_text(history)
+    return bool(text and "?" in text)
+
+
+def _owner_is_answering_previous_question(
+    user_text: str, history: list[dict[str, str]]
+) -> bool:
+    """A concrete reply should normally close the information-gathering step."""
+    return _last_assistant_asked_question(history) and "?" not in user_text
+
+
 def _repeats_previous_answer(candidate: str, previous: str | None) -> bool:
     if not previous or min(len(candidate.split()), len(previous.split())) < 12:
         return False
@@ -475,6 +490,20 @@ def _apply_conversation_policy(
         _DECLINE_MEDIA.search(item.get("content", ""))
         for item in history[-4:] if item.get("role") == "user"
     )
+    answered_previous_question = _owner_is_answering_previous_question(user_text, history)
+    if (
+        answered_previous_question
+        and decision.question
+        and decision.question_information_gain != "CHANGES_SAFETY"
+    ):
+        # The model already has the requested datum. Let it interpret and
+        # conclude instead of turning every answer into another questionnaire.
+        data.update(
+            question=None,
+            question_options=[],
+            question_information_gain="NONE",
+            suggested_prompts=[],
+        )
     if affection:
         data["response_mode"] = "AFFECTION"
         if (
