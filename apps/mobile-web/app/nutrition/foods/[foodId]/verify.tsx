@@ -105,7 +105,7 @@ export default function FoodVerifyScreen() {
   const [savedMode, setSavedMode] = useState<'quantity' | 'activated' | null>(
     null,
   );
-  const [saving, setSaving] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {

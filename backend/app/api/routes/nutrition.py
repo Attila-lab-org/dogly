@@ -124,6 +124,13 @@ async def get_food(
         )
     return await _food_out_with_label(product, state)
 
+@router.delete("/nutrition/foods/{food_id}", status_code=204)
+async def delete_food(food_id: str, state: StateDep, user_id: UserIdDep) -> None:
+    if state.engine is not None:
+        await digestive_db.delete_food_product(state.engine, user_id=user_id, food_id=food_id)
+    else:
+        digestive_domain.delete_food_product(state.store, user_id=user_id, food_id=food_id)
+
 
 @router.get("/nutrition/feeding-periods", response_model=list[FeedingPeriodOut])
 async def list_feeding_periods(

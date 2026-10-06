@@ -668,6 +668,12 @@ def get_food_product(
         raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
     return product
 
+def delete_food_product(store: InMemoryStore, *, user_id: str, food_id: str) -> None:
+    product = get_food_product(store, user_id=user_id, food_id=food_id)
+    if any(p.food_product_id == food_id for p in store.feeding_periods.values()):
+        raise ApiError(ErrorCode.INVALID_STATE, "Non puoi rimuovere un alimento già usato nello storico.")
+    store.food_products.pop(product.id, None)
+
 
 def list_feeding_periods(
     store: InMemoryStore, *, user_id: str, dog_id: str
