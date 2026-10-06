@@ -152,6 +152,10 @@ class Settings(BaseSettings):
             missing.append("SUPABASE_SERVICE_ROLE_KEY")
         if not self.worker_internal_token:
             missing.append("WORKER_INTERNAL_TOKEN")
+        if not self.cron_secret:
+            missing.append("CRON_SECRET")
+        if self.purchases_enabled and not self.revenuecat_webhook_secret:
+            missing.append("REVENUECAT_WEBHOOK_SECRET")
         if self.job_queue_backend != "vercel_workflows":
             missing.append("JOB_QUEUE_BACKEND=vercel_workflows")
         if self.storage_provider == "mock":

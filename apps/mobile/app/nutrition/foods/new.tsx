@@ -88,7 +88,7 @@ export default function NewFoodScreen() {
     return scheduleCatalogSearch(
         () => searchFoodsByName({ dogId: dog.id, query: cleaned }),
         (result) => {
-          setHits(result.items.slice(0, 5));
+          setHits(result.items);
           setExactBarcode(null);
           if (!result.items.length) {
             setMessage(`Nessun risultato nel catalogo per “${cleaned}”. Prova con la marca completa oppure fotografa la confezione.`);

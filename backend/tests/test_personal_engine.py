@@ -11,7 +11,6 @@ from app.domains.personal_engine import (
     semantic_pattern_similarity,
 )
 from app.domains.repository import new_id, now_utc
-
 from tests.conftest import create_dog
 
 

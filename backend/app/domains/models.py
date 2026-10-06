@@ -261,6 +261,7 @@ class FoodProductRec(BaseModel):
     owner_id: str
     dog_id: str
     image_path: str | None = None
+    catalog_image_url: str | None = None
     client_request_id: str
     brand: str | None = None
     name: str | None = None

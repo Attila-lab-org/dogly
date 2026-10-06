@@ -1,10 +1,10 @@
 """Nutrition label extraction, owner verification, and feeding-period wiring."""
 
 import httpx
+
 from app.api.routes import nutrition as nutrition_routes
 from app.contracts.api import FoodLabelExtraction, GuaranteedAnalysis
 from app.providers.base import ProviderUsage
-
 from tests.conftest import create_dog
 
 

@@ -10,6 +10,7 @@ export type ApiFoodProduct = {
   id: string;
   dog_id?: string | null;
   label_image_url?: string | null;
+  catalog_image_url?: string | null;
   brand: string | null;
   name: string | null;
   ingredients_raw?: string | null;

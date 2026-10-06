@@ -212,7 +212,7 @@ async def confirm_external_food(
         return await digestive_db.get_food_product(
             engine, user_id=user_id, food_id=str(lookup["food_product_id"])
         )
-    brand, name, ingredients, calories, analysis_values = confirmation_values(
+    brand, name, ingredients, _calories, analysis_values = confirmation_values(
         payload,
         lookup.get("raw_payload"),
     )
@@ -257,7 +257,9 @@ async def confirm_external_food(
                 update public.food_products
                 set barcode = :barcode,
                     external_source = :source,
-                    external_code = :code
+                    external_code = :code,
+                    catalog_image_url = :catalog_image_url,
+                    updated_at = now()
                 where id = cast(:id as uuid)
                 """
             ),
@@ -266,6 +268,7 @@ async def confirm_external_food(
                 "barcode": lookup["barcode"],
                 "source": lookup["provider"],
                 "code": lookup.get("provider_code"),
+                "catalog_image_url": (lookup.get("raw_payload") or {}).get("image_url"),
             },
         )
         await conn.execute(
@@ -285,5 +288,6 @@ async def confirm_external_food(
             "barcode": lookup["barcode"],
             "external_source": lookup["provider"],
             "external_code": lookup.get("provider_code"),
+            "catalog_image_url": (lookup.get("raw_payload") or {}).get("image_url"),
         }
     )

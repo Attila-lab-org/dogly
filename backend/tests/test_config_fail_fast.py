@@ -29,6 +29,7 @@ def test_staging_accepts_complete_non_mock_wiring() -> None:
         supabase_url="https://example.supabase.co",
         supabase_service_role_key="service-role",
         worker_internal_token="internal-token",
+        cron_secret="cron-secret",
         job_queue_backend="vercel_workflows",
         workflow_base_url="https://example.vercel.app",
         storage_provider="supabase",

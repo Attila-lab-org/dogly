@@ -47,6 +47,7 @@ def _food_out(product: FoodProductRec) -> FoodProductOut:
     return FoodProductOut(
         id=product.id,
         dog_id=product.dog_id or None,
+        catalog_image_url=product.catalog_image_url,
         brand=product.brand,
         name=product.name,
         ingredients_raw=product.ingredients_raw,

@@ -3,7 +3,7 @@
  * La schermata espone una sola gerarchia: alimento attivo, poi gli altri.
  */
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -22,6 +22,13 @@ function FoodRow({ food, active, onOpen, onRemove }: { food: ApiFoodProduct; act
     <Card style={[styles.foodCard, ...(active ? [styles.activeCard] : []), ...(!verified ? [styles.pendingCard] : [])]}>
       <Pressable accessibilityRole="button" onPress={onOpen} style={styles.cardPressArea}>
         <View style={styles.foodHeader}>
+          {food.catalog_image_url || food.label_image_url ? (
+            <Image
+              source={{ uri: food.catalog_image_url || food.label_image_url || undefined }}
+              style={styles.foodImage}
+              accessibilityLabel={`Foto di ${food.name || 'questo alimento'}`}
+            />
+          ) : null}
           <View style={styles.foodIconWrap}>
             <Ionicons name={verified ? 'nutrition' : 'alert-circle-outline'} size={20} color={verified ? colors.accent : colors.warning} />
           </View>
@@ -129,6 +136,7 @@ const styles = StyleSheet.create({
   sectionTitle: { marginTop: spacing.lg, marginBottom: spacing.sm, color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
   emptyCopy: { color: colors.textSecondary, fontSize: typography.size.sm, marginTop: spacing.lg },
   foodCard: { marginBottom: spacing.md, padding: spacing.md },
+  foodImage: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.surfaceMuted, },
   activeCard: { borderWidth: 2, borderColor: colors.accent },
   pendingCard: { backgroundColor: colors.warningSoft },
   cardPressArea: { gap: spacing.sm },

@@ -303,8 +303,9 @@ def test_digestive_longitudinal_is_frequency_not_diagnosis():
 
 @pytest.mark.asyncio
 async def test_opff_lookup_requires_flag(
-    client: httpx.AsyncClient, auth_headers: dict[str, str]
+    client: httpx.AsyncClient, auth_headers: dict[str, str], state
 ):
+    state.settings.open_pet_food_facts_v1 = False
     created = await client.post(
         "/v1/dogs", json={"name": "Rocky"}, headers=auth_headers
     )
@@ -394,6 +395,7 @@ async def test_weight_events_and_opff_memory_path(
                 brand="Acme",
                 ingredients_raw="pollo, riso",
                 calories="350 kcal/100g",
+                image_url="https://images.example.test/crocchette.jpg",
             )
 
     user_id = state.store.dogs[dog_id].owner_id
@@ -425,6 +427,7 @@ async def test_weight_events_and_opff_memory_path(
     assert product.external_source == "open_pet_food_facts"
     assert product.ingredients_raw == "pollo, riso"
     assert product.guaranteed_analysis["calories"] == "350 kcal/100g"
+    assert product.catalog_image_url == "https://images.example.test/crocchette.jpg"
 
     draft_id = "photo-draft"
     state.store.food_products[draft_id] = FoodProductRec(
@@ -463,6 +466,7 @@ async def test_weight_events_and_opff_memory_path(
     assert from_photo.image_path == "users/test/food.jpg"
     assert from_photo.guaranteed_analysis["crude_protein_min"] == 24.0
     assert from_photo.guaranteed_analysis["calories"] == "350 kcal/100g"
+    assert from_photo.catalog_image_url == "https://images.example.test/crocchette.jpg"
 
 
 @pytest.mark.asyncio

@@ -133,7 +133,13 @@ def list_dog_photos(
         and photo.deleted_at is None
         and photo.album_id not in story_album_ids
     ]
-    photos.sort(key=lambda photo: photo.taken_at or photo.created_at, reverse=True)
+    # Match the PostgreSQL ordering exactly.  The id tie-breaker matters for
+    # uploads created in the same clock tick, otherwise memory-backed local
+    # runs and production can show a different "latest" photo.
+    photos.sort(
+        key=lambda photo: (photo.taken_at or photo.created_at, photo.id),
+        reverse=True,
+    )
     return [_photo_out(photo) for photo in photos[offset : offset + limit]]
 
 

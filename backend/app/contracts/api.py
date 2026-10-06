@@ -914,6 +914,7 @@ class FoodProductOut(BaseModel):
     id: str
     dog_id: str | None = None
     label_image_url: str | None = None
+    catalog_image_url: str | None = None
     brand: str | None = None
     name: str | None = None
     ingredients_raw: str | None = None

@@ -165,7 +165,7 @@ def confirm_external_food(
         raise ApiError(ErrorCode.NOT_FOUND, "Lookup not found")
     if lookup["status"] == "CONFIRMED" and lookup.get("food_product_id"):
         return store.food_products[lookup["food_product_id"]]
-    brand, name, ingredients, calories, analysis_values = confirmation_values(
+    brand, name, ingredients, _calories, analysis_values = confirmation_values(
         payload,
         lookup.get("candidate"),
     )
@@ -209,6 +209,7 @@ def confirm_external_food(
             "barcode": lookup["barcode"],
             "external_source": lookup["provider"],
             "external_code": lookup.get("provider_code"),
+            "catalog_image_url": (lookup.get("candidate") or {}).get("image_url"),
         }
     )
     store.food_products[updated.id] = updated

@@ -14,7 +14,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Dogly usa la fotocamera per registrare brevi video del tuo cane e aiutarti a capirlo.",
-        "NSMicrophoneUsageDescription": "Dogly usa il microfono quando scegli di parlare in tempo reale o registrare un video con audio."
+        "NSMicrophoneUsageDescription": "Dogly usa il microfono solo quando scegli di registrare un video o raccontare qualcosa a voce."
       }
     },
     "android": {
@@ -35,7 +35,6 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-notifications",
-      "@config-plugins/react-native-webrtc",
       [
         "expo-splash-screen",
         {
@@ -56,7 +55,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Dogly usa il microfono quando scegli di raccontare qualcosa a voce o di registrare un video con audio.",
+          "microphonePermission": "Dogly usa il microfono solo quando scegli di raccontare qualcosa a voce o registrare un video con audio.",
           "recordAudioAndroid": true,
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
