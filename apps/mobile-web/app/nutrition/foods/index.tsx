@@ -14,13 +14,14 @@ import { StackScreenHeader } from '@/features/secondary/components';
 import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { queryKeys } from '@/lib/queryClient';
+import { isPersistedId } from '@/lib/persistedId';
 import { listFeedingPeriods, listFoods } from '@/features/nutrition/api';
 
 export default function FoodsScreen() {
   const router = useRouter();
   const { userId } = useSession();
   const { dog } = useDogProfile();
-  const realEnabled = Boolean(userId);
+  const realEnabled = Boolean(userId) && isPersistedId(dog.id);
 
   const foodsQuery = useQuery({
     queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id)],

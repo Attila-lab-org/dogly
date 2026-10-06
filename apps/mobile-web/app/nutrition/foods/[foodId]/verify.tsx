@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { isPersistedId } from '@/lib/persistedId';
 import { StackScreenHeader } from '@/features/secondary/components';
 import {
   activateFeedingPeriod,
@@ -86,6 +87,7 @@ export default function FoodVerifyScreen() {
   const periodsQuery = useQuery({
     queryKey: ['nutrition-feeding-periods', dog.id],
     queryFn: () => listFeedingPeriods(dog.id),
+    enabled: isPersistedId(dog.id),
   });
 
   const food = foodQuery.data;
