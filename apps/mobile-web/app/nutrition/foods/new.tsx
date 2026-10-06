@@ -26,6 +26,7 @@ import {
   type ExternalFoodCandidate,
 } from '@/features/nutrition/api';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { scheduleCatalogSearch } from '@/features/nutrition/catalogSearch';
 import { queryKeys } from '@/lib/queryClient';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 
@@ -73,34 +74,29 @@ export default function NewFoodScreen() {
     enabled: Boolean(photoFoodId),
   });
 
-  const search = async (raw: string) => {
-    const cleaned = raw.trim();
-    if (cleaned.length < 1 || !dog.id || working) return;
-    setWorking(true);
-    setMessage(null);
-    try {
-      const result = await searchFoodsByName({ dogId: dog.id, query: cleaned });
-      setHits(result.items);
-      setSelected(null);
-      setExactBarcode(null);
-      setStep(result.items.length ? 'results' : 'identify');
-      if (!result.items.length) {
-        setMessage('Non l’ho trovato. Prova con marca e gusto, oppure inseriscilo tu.');
-      }
-    } catch {
-      setMessage('Non riesco a cercare adesso. Puoi riprovare o inserirlo tu.');
-    } finally {
-      setWorking(false);
-    }
-  };
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    if (step !== 'identify' || query.trim().length < 1 || !dog.id) {
-      setHits([]);
-      return;
-    }
-    const timer = setTimeout(() => void search(query), 350);
-    return () => clearTimeout(timer);
+    const cleaned = query.trim();
+    setHits([]);
+    setMessage(null);
+    setSearching(false);
+    if (step !== 'identify' || !cleaned || !dog.id) return;
+    setSearching(true);
+    return scheduleCatalogSearch(
+        () => searchFoodsByName({ dogId: dog.id, query: cleaned }),
+        (result) => {
+          setHits(result.items);
+          setExactBarcode(null);
+          if (!result.items.length) {
+            setMessage(`Nessun risultato nel catalogo per “${cleaned}”. Prova con la marca completa oppure fotografa la confezione.`);
+          }
+        },
+        () => {
+          setMessage('Il catalogo non è raggiungibile adesso. Puoi usare una foto o inserire il nome.');
+        },
+        () => setSearching(false),
+    );
   }, [dog.id, query, step]);
 
   useEffect(() => {
@@ -113,7 +109,7 @@ export default function NewFoodScreen() {
     setName(food?.name ?? '');
     setQuery(extractedQuery);
     if (extractedQuery.trim().length >= 2) {
-      void search(extractedQuery);
+      setStep('identify');
     } else {
       setManual(true);
       setStep('details');
@@ -281,10 +277,19 @@ export default function NewFoodScreen() {
               placeholder="Marca o nome"
               placeholderTextColor={colors.textMuted}
               returnKeyType="search"
-              onSubmitEditing={() => void search(query)}
               style={[styles.input, styles.searchInput]}
             />
           </View>
+
+          {searching ? <Text accessibilityLiveRegion="polite" style={styles.subtitle}>Cerco nel catalogo…</Text> : null}
+          {hits.length > 0 ? (
+            <View style={styles.results}>
+              <Text style={styles.subtitle}>Risultati del catalogo</Text>
+              {hits.map((item) => (
+                <CandidateCard key={item.lookup_id} item={item} exact={false} onPress={() => choose(item)} />
+              ))}
+            </View>
+          ) : null}
 
           <Text style={styles.or}>oppure</Text>
           <MethodButton
