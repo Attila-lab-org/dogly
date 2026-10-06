@@ -62,13 +62,19 @@ export default function FoodsScreen() {
         informazioni con le sue osservazioni digestive.
       </Text>
 
+      <Button
+        title="Aggiungi alimento"
+        icon={<Ionicons name="add" size={18} color={colors.textOnPrimary} />}
+        onPress={() => router.push('/nutrition/foods/new' as never)}
+      />
+
       {foods.length === 0 && (
         <Text style={styles.intro}>
           Non hai ancora salvato alimenti.
         </Text>
       )}
 
-      {foods.map((food) => {
+      {foods.filter((food) => activePeriod?.food_product_id === food.id).map((food) => {
         const isActive = activePeriod?.food_product_id === food.id;
         const verified = food.verified_at !== null;
         return (
@@ -83,7 +89,7 @@ export default function FoodsScreen() {
               )
             }
           >
-            <Card style={styles.foodCard}>
+            <Card style={[styles.foodCard, styles.activeCard]}>
               <View style={styles.foodHeader}>
                 <View style={styles.foodIconWrap}>
                   <Ionicons name="nutrition" size={20} color={colors.accent} />
@@ -114,21 +120,39 @@ export default function FoodsScreen() {
                   {new Date(activePeriod.start_at).toLocaleDateString('it-IT')}
                 </Text>
               )}
-              <Text style={styles.verifyHint}>
-                {verified
-                  ? 'Tocca per aggiornare la quantità giornaliera.'
-                  : 'Tocca per controllare i dati letti dall’etichetta.'}
-              </Text>
+              <Text style={styles.verifyHint}>{verified ? 'Tocca per modificare alimento o quantità.' : 'Tocca per completare i dati.'}</Text>
             </Card>
           </Pressable>
         );
       })}
 
-      <Button
-        title="Aggiungi alimento"
-        icon={<Ionicons name="add" size={18} color={colors.textOnPrimary} />}
-        onPress={() => router.push('/nutrition/foods/new' as never)}
-      />
+      {foods.some((food) => activePeriod?.food_product_id === food.id) ? <Text style={styles.sectionTitle}>Alimenti salvati</Text> : null}
+      {foods.filter((food) => activePeriod?.food_product_id !== food.id && food.verified_at !== null).map((food) => (
+        <Pressable key={food.id} accessibilityRole="button" onPress={() => router.push(`/nutrition/foods/${food.id}/verify?focus=quantity`)}>
+          <Card style={styles.foodCard}>
+            <View style={styles.foodHeader}>
+              <View style={styles.foodIconWrap}><Ionicons name="nutrition" size={20} color={colors.accent} /></View>
+              <View style={styles.foodTextWrap}><Text style={styles.foodBrand}>{food.brand || 'Alimento salvato'}</Text><Text style={styles.foodName}>{food.name || 'Alimento'}</Text></View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </View>
+            <Chip label="Salvato" tone="success" />
+          </Card>
+        </Pressable>
+      ))}
+
+      {foods.some((food) => food.verified_at === null) ? <Text style={styles.sectionTitle}>Da completare</Text> : null}
+      {foods.filter((food) => food.verified_at === null).map((food) => (
+        <Pressable key={food.id} accessibilityRole="button" onPress={() => router.push(`/nutrition/foods/${food.id}/verify`)}>
+          <Card style={[styles.foodCard, styles.pendingCard]}>
+            <View style={styles.foodHeader}>
+              <View style={styles.foodIconWrap}><Ionicons name="alert-circle-outline" size={20} color={colors.warning} /></View>
+              <View style={styles.foodTextWrap}><Text style={styles.foodBrand}>{food.brand || 'Da controllare'}</Text><Text style={styles.foodName}>{food.name || 'Alimento da completare'}</Text></View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </View>
+            <Chip label="Completa dati" tone="warning" />
+          </Card>
+        </Pressable>
+      ))}
     </ScreenContainer>
   );
 }
@@ -143,6 +167,9 @@ const styles = StyleSheet.create({
   foodCard: {
     marginBottom: spacing.md,
   },
+  activeCard: { borderWidth: 2, borderColor: colors.accent },
+  pendingCard: { backgroundColor: colors.warningSoft },
+  sectionTitle: { marginTop: spacing.md, marginBottom: spacing.sm, color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
   foodHeader: {
     flexDirection: 'row',
     alignItems: 'center',
