@@ -133,6 +133,10 @@ export default function FoodsScreen() {
                 </Text>
               )}
               <Text style={styles.verifyHint}>{verified ? 'Tocca per modificare alimento o quantità.' : 'Tocca per completare i dati.'}</Text>
+              <Pressable accessibilityRole="button" onPress={() => void removeFood(food.id)} style={styles.removeAction}>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={styles.removeLabel}>Rimuovi</Text>
+              </Pressable>
             </Card>
           </Pressable>
         );
@@ -148,6 +152,10 @@ export default function FoodsScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </View>
             <Chip label="Salvato" tone="success" />
+            <Pressable accessibilityRole="button" onPress={() => void removeFood(food.id)} style={styles.removeAction}>
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              <Text style={styles.removeLabel}>Rimuovi</Text>
+            </Pressable>
           </Card>
         </Pressable>
       ))}
