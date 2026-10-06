@@ -299,7 +299,8 @@ def test_voice_brief_is_personal_and_ready_to_speak() -> None:
     assert "Oreo" in brief
     assert "Attilio" in brief
     assert "amico intelligente" in brief
-    assert "1-2 frasi" in brief
+    assert "La lunghezza è adattiva" in brief
+    assert "75 parole" not in brief
     assert "Non ripetere quel saluto" in brief
     assert "Oreo sta digerendo bene" in brief
     assert "Scodinzolare" in brief

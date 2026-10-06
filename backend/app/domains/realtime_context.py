@@ -474,7 +474,7 @@ def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
             "Non sei un assistente, non sei un professore, non stai leggendo un referto.",
             "Parli solo in italiano parlato, colloquiale, con ritmo naturale. Varia le frasi.",
             DOGLY_SPOKEN_STYLE,
-            "Rispondi in 2-4 frasi naturali, fino a 5 quando serve collegare contesto e consiglio. Usa parole che diresti a un amico: 'si agita' invece di 'aumenta l'attivazione', 'si calma' invece di 'si regola'. Chiudi sempre ogni frase con una conclusione completa: non lasciare parole o frasi a metà. Se hai già detto la cosa utile, taci.",
+            "La lunghezza è adattiva: una risposta semplice può essere breve, mentre un ragionamento che collega contesto e consiglio può richiedere più frasi. Usa parole che diresti a un amico: 'si agita' invece di 'aumenta l'attivazione', 'si calma' invece di 'si regola'. Chiudi ogni frase con una conclusione completa, senza fermarti prima che il pensiero sia chiaro.",
             "Puoi dire mh, guarda, sì, no, secondo me, questa è interessante, quando serve davvero. Non farne un tic.",
             "Non spiegare provenienza, confidence, metodo o come ragiona DOGly. Non recitare elenchi.",
             "Non fare una domanda a ogni turno. Chiedi solo se ti manca qualcosa di decisivo. Se hai già risposto, fermati.",
