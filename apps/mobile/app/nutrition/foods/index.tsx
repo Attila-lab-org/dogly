@@ -4,7 +4,7 @@
  * mostrano il badge "Da verificare" e portano alla schermata di verifica.
  */
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +15,7 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { queryKeys } from '@/lib/queryClient';
 import { isPersistedId } from '@/lib/persistedId';
-import { listFeedingPeriods, listFoods } from '@/features/nutrition/api';
+import { deleteFood, listFeedingPeriods, listFoods } from '@/features/nutrition/api';
 
 export default function FoodsScreen() {
   const router = useRouter();
@@ -53,6 +53,18 @@ export default function FoodsScreen() {
   const foods = foodsQuery.data ?? [];
   const periods = periodsQuery.data ?? [];
   const activePeriod = periods.find((period) => period.end_at == null);
+  const removeFood = async (foodId: string) => {
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm('Rimuovere questo alimento dall’elenco?')
+      : true;
+    if (!confirmed) return;
+    try {
+      await deleteFood(foodId);
+      await foodsQuery.refetch();
+    } catch {
+      Alert.alert('Alimento non rimosso', 'Questo alimento potrebbe essere già collegato allo storico.');
+    }
+  };
 
   return (
     <ScreenContainer scroll>
@@ -150,6 +162,10 @@ export default function FoodsScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </View>
             <Chip label="Completa dati" tone="warning" />
+              <Pressable accessibilityRole="button" onPress={() => void removeFood(food.id)} style={styles.removeAction}>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={styles.removeLabel}>Rimuovi</Text>
+              </Pressable>
           </Card>
         </Pressable>
       ))}
@@ -169,6 +185,8 @@ const styles = StyleSheet.create({
   },
   activeCard: { borderWidth: 2, borderColor: colors.accent },
   pendingCard: { backgroundColor: colors.warningSoft },
+  removeAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, alignSelf: 'flex-start' },
+  removeLabel: { color: colors.danger, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
   sectionTitle: { marginTop: spacing.md, marginBottom: spacing.sm, color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
   foodHeader: {
     flexDirection: 'row',
