@@ -106,6 +106,7 @@ export default function FoodVerifyScreen() {
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -119,6 +120,7 @@ export default function FoodVerifyScreen() {
     setMoisture(food.guaranteed_analysis?.moisture_max?.toString() ?? '');
     setCalories(food.guaranteed_analysis?.calories ?? '');
     setFeedingDirections(food.feeding_directions ?? '');
+    setEditing(!food.verified_at);
   }, [food]);
 
   useEffect(() => {
@@ -293,8 +295,16 @@ export default function FoodVerifyScreen() {
 
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>È questo l’alimento?</Text>
-        <EditableField label="Nome prodotto" value={name} onChangeText={setName} needsReview={!name.trim() || needsReview('name')} />
-        <EditableField label="Marca" value={brand} onChangeText={setBrand} needsReview={!brand.trim() || needsReview('brand')} />
+        {editing ? <>
+          <EditableField label="Nome prodotto" value={name} onChangeText={setName} needsReview={!name.trim() || needsReview('name')} />
+          <EditableField label="Marca" value={brand} onChangeText={setBrand} needsReview={!brand.trim() || needsReview('brand')} />
+        </> : <>
+          <Text style={styles.foodName}>{name}</Text>
+          <Text style={styles.foodBrand}>{brand}</Text>
+          <Pressable accessibilityRole="button" onPress={() => setEditing(true)} style={styles.editAction}>
+            <Ionicons name="create-outline" size={16} color={colors.primary} /><Text style={styles.editLabel}>Modifica dati</Text>
+          </Pressable>
+        </>}
       </Card>
 
       <Pressable
@@ -321,8 +331,10 @@ export default function FoodVerifyScreen() {
         />
         </Card>
 
-      <Card style={styles.card}>
+        <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Analisi garantita</Text>
+        {!editing && <View style={styles.nutritionSummary}><Text style={styles.summaryText}>Proteine {protein || '—'}% · Grassi {fat || '—'}% · Fibre {fiber || '—'}% · Umidità {moisture || '—'}%</Text><Text style={styles.summaryHint}>Valori dichiarati in etichetta</Text></View>}
+        {editing ? <>
         <EditableField
           label="Proteine grezze min (%)"
           value={protein}
@@ -370,6 +382,7 @@ export default function FoodVerifyScreen() {
           onChangeText={setQuantityPerDay}
           needsReview={quantityFocus && !quantityPerDay.trim()}
         />
+        </> : null}
         </Card>
       </> : null}
 
@@ -392,6 +405,13 @@ export default function FoodVerifyScreen() {
 }
 
 const styles = StyleSheet.create({
+  foodName: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
+  foodBrand: { color: colors.textSecondary, fontSize: typography.size.sm, marginTop: spacing.xs },
+  editAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
+  editLabel: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
+  nutritionSummary: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, marginBottom: spacing.md },
+  summaryText: { color: colors.text, fontSize: typography.size.sm, lineHeight: typography.size.sm * 1.5 },
+  summaryHint: { color: colors.textSecondary, fontSize: typography.size.xs, marginTop: spacing.xs },
   labelImage: {
     width: '100%',
     height: 180,
