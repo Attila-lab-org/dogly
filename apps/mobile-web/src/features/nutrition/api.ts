@@ -39,6 +39,11 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Create once per user action and reuse for retries of that action. */
+export function createNutritionOperationId(prefix = 'nutrition'): string {
+  return newId(prefix);
+}
+
 async function fileBytes(localUri: string): Promise<number> {
   if (
     Platform.OS === 'web' &&
@@ -267,6 +272,7 @@ export async function confirmExternalFood(options: {
 export async function updateFeedingPeriod(options: {
   periodId: string;
   quantityPerDay?: string;
+  operationId: string;
 }): Promise<ApiFeedingPeriod> {
   const quantity = options.quantityPerDay?.trim() || '';
   return api.patch<ApiFeedingPeriod>(
@@ -274,7 +280,7 @@ export async function updateFeedingPeriod(options: {
     { quantity_per_day: quantity || null },
     {
       headers: {
-        'X-Idempotency-Key': `feed-qty-${options.periodId}-${Date.now()}`,
+        'X-Idempotency-Key': options.operationId,
       },
     },
   );
@@ -286,10 +292,8 @@ export async function activateFeedingPeriod(options: {
   quantityPerDay?: string;
   treatsNotes?: string;
   transitionNotes?: string;
+  operationId: string;
 }): Promise<ApiFeedingPeriod> {
-  // FIX 3.4: deterministic key per food so a duplicate activation tap is a
-  // server-side no-op instead of creating a second feeding period.
-  const key = `feed-${options.foodId}-${Date.now()}`;
   return api.post<ApiFeedingPeriod>(
     '/v1/nutrition/feeding-periods',
     {
@@ -300,6 +304,6 @@ export async function activateFeedingPeriod(options: {
       treats_notes: options.treatsNotes?.trim() || null,
       transition_notes: options.transitionNotes?.trim() || null,
     },
-    { headers: { 'X-Idempotency-Key': key } },
+    { headers: { 'X-Idempotency-Key': options.operationId } },
   );
 }

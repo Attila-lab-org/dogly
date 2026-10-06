@@ -8,7 +8,7 @@
  * filter, mixed behavior/digestive, deleted media (badge sulle righe).
  * Il design language segue UX_REFERENCE (card bianche, icone teal).
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -137,19 +137,25 @@ export default function DiaryScreen() {
   const { userId, usingMockGate } = useSession();
   const [filter, setFilter] = useState<DiaryFilter>('ALL');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
 
   // Timeline reale: cursor pagination server-side (GET /v1/diary, sez. 9)
   const query = useInfiniteQuery({
-    queryKey: [...queryKeys.diary(userId ?? 'anon', dog.id), filter, search.trim()],
+    queryKey: [...queryKeys.diary(userId ?? 'anon', dog.id), filter, debouncedSearch],
     queryFn: ({ pageParam }) =>
       fetchDiaryPage({
         dogId: dog.id,
         domain: filter === 'ALL' ? undefined : filter,
         cursor: pageParam,
         limit: 20,
-        q: search.trim() || undefined,
+        q: debouncedSearch || undefined,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
@@ -161,14 +167,14 @@ export default function DiaryScreen() {
           .flatMap((page) => page.items)
           .map(mapDiaryItemToEntry)
           .filter((entry): entry is DiaryEntry => entry !== null);
-    const term = search.trim().toLocaleLowerCase('it-IT');
+    const term = debouncedSearch.toLocaleLowerCase('it-IT');
     if (!term) return source;
     return source.filter((entry) =>
       `${entry.title} ${entry.subtitle ?? ''}`
         .toLocaleLowerCase('it-IT')
         .includes(term),
     );
-  }, [filter, query.data, search]);
+  }, [query.data, debouncedSearch]);
 
   // Raggruppamento per giorno (timeline cursor, sez. 5.1)
   const groups = useMemo(() => {
@@ -211,7 +217,7 @@ export default function DiaryScreen() {
   );
   const showMemorySummary =
     filter === 'ALL' &&
-    search.trim().length === 0 &&
+    debouncedSearch.length === 0 &&
     completedEntries.length > 0;
 
   return (
@@ -293,14 +299,38 @@ export default function DiaryScreen() {
       ) : groups.length === 0 ? (
         <EmptyState
           title={
-            filter === 'ALL'
-              ? 'Il diario è ancora vuoto'
-              : 'Nessun evento in questo filtro'
+            debouncedSearch
+              ? 'Nessun risultato'
+              : filter === 'ALL'
+                ? 'Il diario è ancora vuoto'
+                : filter === 'BEHAVIOR'
+                  ? 'Nessun video nel diario'
+                  : 'Nessun controllo digestivo'
           }
-          message={`Registra il primo video di ${dog.name}: i suoi momenti appariranno qui, insieme alle osservazioni digestive.`}
+          message={
+            debouncedSearch
+              ? 'Prova un’altra parola oppure cancella la ricerca.'
+              : filter === 'DIGESTIVE'
+                ? 'Aggiungi una foto per seguire la digestione nel tempo.'
+                : `Mostra un momento di ${dog.name}: lo ritroverai qui con la sua lettura.`
+          }
           icon={<Ionicons name="calendar-outline" size={40} color={colors.textMuted} />}
-          actionLabel={`Scopri i segnali di ${dog.name}`}
-          onAction={() => router.push('/behavior/capture')}
+          actionLabel={
+            debouncedSearch
+              ? undefined
+              : filter === 'DIGESTIVE'
+                ? 'Controlla la digestione'
+                : filter === 'BEHAVIOR'
+                  ? 'Registra un video'
+                  : 'Registra un momento'
+          }
+          onAction={
+            debouncedSearch
+              ? undefined
+              : filter === 'DIGESTIVE'
+                ? () => router.push('/digestive/capture')
+                : () => router.push('/behavior/capture')
+          }
         />
       ) : (
         <FlatList

@@ -37,6 +37,7 @@ let state: CheckInState = {
   welcomePending: true,
   analysisContext: null,
 };
+let hydratedDogId: string | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -78,10 +79,15 @@ export function shouldShowWelcomeCheckIn(
 }
 
 /** Idempotente: legge prefs + ultima risposta e decide welcomePending. */
-export async function hydrateCheckIn(): Promise<void> {
+export async function hydrateCheckIn(dogId = ''): Promise<void> {
+  if (state.hydrated && hydratedDogId === dogId) return;
+  if (hydratedDogId !== dogId && (hydratedDogId !== null || state.analysisContext)) {
+    state = { ...state, hydrated: false, welcomePending: true, analysisContext: null };
+    emit();
+  }
   const [prefs, lastAnswer] = await Promise.all([
-    loadCheckInPrefs(),
-    loadLastCheckInAnswer(),
+    loadCheckInPrefs(dogId),
+    loadLastCheckInAnswer(dogId),
   ]);
   const mergedPrefs = prefs ?? state.prefs;
   state = {
@@ -92,13 +98,14 @@ export async function hydrateCheckIn(): Promise<void> {
       mergedPrefs.smartReminders &&
       shouldShowWelcomeCheckIn(lastAnswer?.dayKey ?? null, mergedPrefs.frequency),
   };
+  hydratedDogId = dogId;
   emit();
 }
 
 export function setCheckInFrequency(frequency: CheckInFrequency) {
   state = { ...state, prefs: { ...state.prefs, frequency } };
   emit();
-  void saveCheckInPrefs(state.prefs);
+  void saveCheckInPrefs(state.prefs, hydratedDogId ?? undefined);
 }
 
 export function setSmartReminders(smartReminders: boolean) {
@@ -108,7 +115,7 @@ export function setSmartReminders(smartReminders: boolean) {
     welcomePending: smartReminders ? state.welcomePending : false,
   };
   emit();
-  void saveCheckInPrefs(state.prefs);
+  void saveCheckInPrefs(state.prefs, hydratedDogId ?? undefined);
 }
 
 export function dismissWelcomeCheckIn() {
@@ -128,7 +135,7 @@ export function markCheckInSoftOk(dogId = '') {
     },
   };
   emit();
-  void saveLastCheckInAnswer({ dayKey: localDayKey(), concern: 'soft' });
+  void saveLastCheckInAnswer({ dayKey: localDayKey(), concern: 'soft' }, dogId || hydratedDogId || undefined);
 }
 
 /** Tiene il modal aperto (welcomePending) per lo step CTA. */
@@ -143,7 +150,7 @@ export function markCheckInNeedsCare(dogName: string, dogId = '') {
     },
   };
   emit();
-  void saveLastCheckInAnswer({ dayKey: localDayKey(), concern: 'off' });
+  void saveLastCheckInAnswer({ dayKey: localDayKey(), concern: 'off' }, dogId || hydratedDogId || undefined);
 }
 
 export function clearAnalysisContext() {

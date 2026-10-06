@@ -40,6 +40,7 @@ export default function BehaviorResultScreen() {
   const meQuery = useMeProfile();
   const ownerDisplayName = meQuery.data?.display_name;
   const { analysisContext } = useCheckIn();
+  const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const useApi =
     isApiConfigured() &&
@@ -189,8 +190,8 @@ export default function BehaviorResultScreen() {
             if (!savingFeedback) void handleFeedback(v);
           }}
           careNote={
-            !result.baseline_note && analysisContext?.concern === 'off'
-              ? analysisContext.note
+            !result.baseline_note && dogAnalysisContext?.concern === 'off'
+              ? dogAnalysisContext.note
               : null
           }
           photoUri={dog.photoUri}

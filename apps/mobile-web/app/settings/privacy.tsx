@@ -25,6 +25,7 @@ import {
 } from '@/features/privacy/consents';
 import {
   requestAccountDeletion,
+  getPrivacyExportStatus,
   requestPrivacyExport,
   waitForExportReady,
 } from '@/features/privacy/api';
@@ -91,7 +92,7 @@ export default function PrivacyScreen() {
   const { dog } = useDogProfile();
   const consents = useConsents();
   const [exportState, setExportState] = useState<ExportState>('idle');
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deleteStarted, setDeleteStarted] = useState(false);
 
@@ -122,7 +123,7 @@ export default function PrivacyScreen() {
 
   const startExport = async () => {
     setExportState('pending');
-    setExportUrl(null);
+    setExportJobId(null);
     if (usingMockGate) {
       setTimeout(() => setExportState('ready'), 2000);
       return;
@@ -131,7 +132,7 @@ export default function PrivacyScreen() {
       const started = await requestPrivacyExport();
       const ready = await waitForExportReady(started.export_job_id);
       if (ready.status === 'completed') {
-        setExportUrl(ready.download_url);
+        setExportJobId(started.export_job_id);
         setExportState('ready');
         return;
       }
@@ -149,6 +150,23 @@ export default function PrivacyScreen() {
         'Controlla la connessione e riprova.',
       );
     }
+  };
+
+  const downloadExport = async () => {
+    if (usingMockGate || !exportJobId) {
+      Alert.alert('Download non disponibile', 'Il file è disponibile solo dopo una richiesta reale di esportazione.');
+      return;
+    }
+    try {
+      const fresh = await getPrivacyExportStatus(exportJobId);
+      if (fresh.download_url) {
+        void Linking.openURL(fresh.download_url);
+        return;
+      }
+    } catch {
+      // fall through to the honest message below
+    }
+    Alert.alert('Link non disponibile', 'Il file è pronto, ma non riesco a creare il link temporaneo. Riprova tra poco.');
   };
 
   const confirmDelete = () => {
@@ -293,22 +311,13 @@ export default function PrivacyScreen() {
             <View style={styles.statusRow}>
               <Ionicons name="checkmark-circle" size={18} color={colors.teal} />
               <Text style={styles.statusText}>
-                Il tuo export è pronto. Il link è privato e scade tra 7 giorni.
+                Il file è disponibile per 7 giorni. Il link di download viene creato quando tocchi Scarica.
               </Text>
             </View>
             <Button
               title="Scarica l'export"
               icon={<Ionicons name="download" size={18} color={colors.textOnPrimary} />}
-              onPress={() => {
-                if (exportUrl) {
-                  void Linking.openURL(exportUrl);
-                  return;
-                }
-                Alert.alert(
-                  'Link non disponibile',
-                  'L’export è pronto lato server, ma il link di download non è ancora arrivato. Riprova tra poco.',
-                );
-              }}
+              onPress={() => void downloadExport()}
               style={styles.exportButton}
             />
           </>

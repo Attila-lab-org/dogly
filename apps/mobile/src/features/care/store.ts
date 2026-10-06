@@ -13,7 +13,10 @@ import {
   rescheduleCareReminders,
   scheduleCareReminder,
 } from './notifications';
-import { getNotificationPreferences } from '../notifications/store';
+import {
+  getNotificationPreferences,
+  hydrateNotificationPreferences,
+} from '../notifications/store';
 
 export interface CreateCareEventInput {
   dogId: string;
@@ -176,6 +179,7 @@ export async function syncCareReminders(
   dogId: string,
   dogName: string,
 ): Promise<void> {
+  await hydrateNotificationPreferences();
   await cancelAllCareReminders();
   if (!getNotificationPreferences().careReminders) return;
   await rescheduleCareReminders(

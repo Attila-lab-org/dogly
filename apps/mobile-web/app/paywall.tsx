@@ -128,8 +128,8 @@ export default function PaywallScreen() {
         ))}
       </Card>
 
-      {/* Piani (dal mock entitlements; in produzione: RevenueCat offerings) */}
-      {plans.map((plan) => {
+      {/* Piani: mostrali solo quando esiste un acquisto realmente collegato. */}
+      {canPurchase ? plans.map((plan) => {
         const active = selected === plan.code;
         return (
           <Pressable
@@ -157,10 +157,17 @@ export default function PaywallScreen() {
             </View>
           </Pressable>
         );
-      })}
+      }) : (
+        <Card style={styles.betaCard}>
+          <Text style={styles.betaTitle}>Premium arriverà più avanti</Text>
+          <Text style={styles.betaText}>
+            In questa beta gli acquisti non sono ancora attivi. Puoi continuare a usare DOGly senza interrompere le analisi.
+          </Text>
+        </Card>
+      )}
 
       <Button
-        title={canPurchase ? 'Acquista' : 'Continua in beta'}
+        title={canPurchase ? 'Acquista' : 'Torna a DOGly'}
         onPress={canPurchase ? explainStorePending : () => router.back()}
         style={styles.buy}
       />
@@ -172,10 +179,7 @@ export default function PaywallScreen() {
           style={styles.restore}
         />
       ) : (
-        <Text style={styles.legal}>
-          Gli acquisti arrivano a breve. Per ora puoi continuare senza
-          interrompere le analisi.
-        </Text>
+        <Text style={styles.legal}>Nessun acquisto è disponibile in questa beta.</Text>
       )}
 
       {/* Il piano FREE resta sempre visibile come scelta (no dark pattern) */}
@@ -210,6 +214,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.size.sm,
     color: colors.text,
+    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  },
+  betaCard: {
+    marginBottom: spacing.lg,
+    backgroundColor: colors.primarySoft,
+  },
+  betaTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  betaText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.normal,
   },
   header: {

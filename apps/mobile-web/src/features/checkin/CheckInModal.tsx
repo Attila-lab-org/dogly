@@ -27,8 +27,8 @@ export function CheckInModal({
   const [step, setStep] = useState<'ask' | 'cta'>('ask');
 
   useEffect(() => {
-    void hydrateCheckIn();
-  }, []);
+    void hydrateCheckIn(dogId);
+  }, [dogId]);
 
   useEffect(() => {
     if (analysisContext?.concern === 'off' && welcomePending) {

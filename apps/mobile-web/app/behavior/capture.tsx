@@ -52,9 +52,10 @@ export default function BehaviorCaptureScreen() {
   const { dog } = useDogProfile();
   const { userId } = useSession();
   const { analysisContext } = useCheckIn();
+  const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
   const params = useLocalSearchParams<{ from?: string }>();
   const fromCheckIn =
-    params.from === 'checkin' || analysisContext?.concern === 'off';
+    params.from === 'checkin' || dogAnalysisContext?.concern === 'off';
 
   const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -462,8 +463,8 @@ export default function BehaviorCaptureScreen() {
           </View>
         </View>
 
-        {fromCheckIn && analysisContext?.note ? (
-          <Text style={styles.careBanner}>{analysisContext.note}</Text>
+        {fromCheckIn && dogAnalysisContext?.note ? (
+          <Text style={styles.careBanner}>{dogAnalysisContext.note}</Text>
         ) : null}
 
         <View style={styles.preview}>

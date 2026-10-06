@@ -20,15 +20,16 @@ const STORAGE_KEY = 'dogly.notification-preferences.v1';
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   careReminders: true,
-  resultReady: true,
-  newPattern: true,
-  digestiveTrend: true,
+  resultReady: false,
+  newPattern: false,
+  digestiveTrend: false,
   weeklySummary: false,
   checkIn: true,
 };
 
 let preferences: NotificationPreferences = { ...DEFAULT_PREFERENCES };
 let hydrated = false;
+let hydrationPromise: Promise<void> | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -56,21 +57,31 @@ export function getNotificationPreferences() {
 /** Carica le preferenze persistite (idempotente). */
 export async function hydrateNotificationPreferences(): Promise<void> {
   if (hydrated) return;
-  hydrated = true;
-  const storage = getKeyValueStorage();
-  if (!storage) return;
+  if (hydrationPromise) return hydrationPromise;
+  hydrationPromise = (async () => {
+    const storage = getKeyValueStorage();
+    if (storage) {
+      try {
+        const raw = await storage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<NotificationPreferences>;
+          const next = { ...preferences };
+          (Object.keys(next) as Array<keyof NotificationPreferences>).forEach((key) => {
+            if (typeof parsed[key] === 'boolean') next[key] = parsed[key];
+          });
+          preferences = next;
+          emit();
+        }
+      } catch {
+        // storage illeggibile: restano i default di sessione
+      }
+    }
+    hydrated = true;
+  })();
   try {
-    const raw = await storage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Partial<NotificationPreferences>;
-    const next = { ...preferences };
-    (Object.keys(next) as Array<keyof NotificationPreferences>).forEach((key) => {
-      if (typeof parsed[key] === 'boolean') next[key] = parsed[key];
-    });
-    preferences = next;
-    emit();
-  } catch {
-    // storage illeggibile: restano i default di sessione
+    await hydrationPromise;
+  } finally {
+    hydrationPromise = null;
   }
 }
 
@@ -91,5 +102,6 @@ export function setNotificationPreference(
 export function resetNotificationPreferencesForTests(): void {
   preferences = { ...DEFAULT_PREFERENCES };
   hydrated = false;
+  hydrationPromise = null;
   emit();
 }

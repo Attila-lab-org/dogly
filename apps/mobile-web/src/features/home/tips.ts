@@ -22,7 +22,6 @@ export type HomeBannerKind = 'advice' | 'use' | 'news';
 export type HomeBannerAction =
   | 'analyze'
   | 'realtime'
-  | 'stories'
   | 'diary'
   | 'digestive'
   | 'profile';
@@ -108,14 +107,6 @@ const TEMPLATES: TipTemplate[] = [
     action: 'realtime',
   },
   {
-    id: 'use-story',
-    kind: 'use',
-    title: 'Oggi di {name} può restare una storia.',
-    body: 'Una foto nella rail dei momenti privati, da ritrovare quando vuoi.',
-    ctaLabel: 'Aggiungi storia',
-    action: 'stories',
-  },
-  {
     id: 'use-diary',
     kind: 'use',
     title: 'Le letture stanno nel diario.',
@@ -155,14 +146,6 @@ const TEMPLATES: TipTemplate[] = [
     body: 'Ti diciamo la lettura più chiara. Tu ci confermi se ti ritrovi, e DOGly impara da voi.',
     ctaLabel: 'Vedi le letture',
     action: 'diary',
-  },
-  {
-    id: 'news-stories',
-    kind: 'news',
-    title: 'I momenti restano tuoi, così puoi ritrovarli quando vuoi.',
-    body: 'Un ricordo di {name}, dentro il suo spazio privato.',
-    ctaLabel: 'Aggiungi storia',
-    action: 'stories',
   },
   {
     id: 'news-talk',

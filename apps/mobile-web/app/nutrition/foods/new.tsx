@@ -18,6 +18,7 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   activateFeedingPeriod,
+  createNutritionOperationId,
   confirmExternalFood,
   createManualFood,
   getFood,
@@ -51,6 +52,7 @@ export default function NewFoodScreen() {
   const { userId } = useSession();
   const photoStarted = useRef(false);
   const barcodeStarted = useRef(false);
+  const feedingOperationIdRef = useRef<string | null>(null);
 
   const [step, setStep] = useState<Step>('identify');
   const [query, setQuery] = useState(photoQuery);
@@ -240,14 +242,19 @@ export default function NewFoodScreen() {
         food = await createManualFood({ dogId: dog.id, brand, name });
       }
       if (activeNow) {
+        const operationId =
+          feedingOperationIdRef.current ?? createNutritionOperationId('feed-activate');
+        feedingOperationIdRef.current = operationId;
         await activateFeedingPeriod({
           dogId: dog.id,
           foodId: food.id,
           quantityPerDay: quantity,
           treatsNotes: treats,
           transitionNotes: transition,
+          operationId,
         });
       }
+      feedingOperationIdRef.current = null;
       if (userId) {
         await queryClient.invalidateQueries({
           queryKey: queryKeys.foods(userId, dog.id),

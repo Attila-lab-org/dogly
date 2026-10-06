@@ -3759,6 +3759,55 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Delete Food",
+        "operationId": "delete_food_v1_nutrition_foods__food_id__delete",
+        "parameters": [
+          {
+            "name": "food_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Food Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/nutrition/feeding-periods": {
@@ -8090,6 +8139,11 @@
             ],
             "title": "Ingredients Raw"
           },
+          "guaranteed_analysis": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Guaranteed Analysis"
+          },
           "calories": {
             "anyOf": [
               {
@@ -8191,6 +8245,9 @@
             ],
             "title": "Calories"
           },
+          "guaranteed_analysis": {
+            "$ref": "#/components/schemas/GuaranteedAnalysis"
+          },
           "activate": {
             "type": "boolean",
             "title": "Activate",
@@ -8261,7 +8318,7 @@
           "query": {
             "type": "string",
             "maxLength": 80,
-            "minLength": 2,
+            "minLength": 1,
             "title": "Query"
           },
           "client_request_id": {
@@ -8622,6 +8679,17 @@
               }
             ],
             "title": "Label Image Url"
+          },
+          "catalog_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Image Url"
           },
           "brand": {
             "anyOf": [

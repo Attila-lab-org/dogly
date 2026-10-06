@@ -5,7 +5,7 @@
  * FeedingPeriod (POST /v1/nutrition/feeding-periods), chiudendo quello
  * precedente senza riscrivere la storia.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -25,6 +25,7 @@ import { isPersistedId } from '@/lib/persistedId';
 import { StackScreenHeader } from '@/features/secondary/components';
 import {
   activateFeedingPeriod,
+  createNutritionOperationId,
   getFood,
   listFeedingPeriods,
   updateFeedingPeriod,
@@ -105,6 +106,7 @@ export default function FoodVerifyScreen() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const feedingOperationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!food) return;
@@ -204,12 +206,18 @@ export default function FoodVerifyScreen() {
     if (!foodId) return;
     setSaving(true);
     setSaveError(null);
+    const operationId =
+      feedingOperationIdRef.current ??
+      createNutritionOperationId(quantityOnly ? 'feed-qty' : 'feed-activate');
+    feedingOperationIdRef.current = operationId;
     try {
       if (quantityOnly && openPeriod) {
         await updateFeedingPeriod({
           periodId: openPeriod.id,
           quantityPerDay: quantityPerDay.trim(),
+          operationId,
         });
+        feedingOperationIdRef.current = null;
         router.replace('/nutrition/foods');
         return;
       }
@@ -232,8 +240,10 @@ export default function FoodVerifyScreen() {
           dogId: dog.id,
           foodId,
           quantityPerDay: quantityPerDay.trim() || undefined,
+          operationId,
         });
       }
+      feedingOperationIdRef.current = null;
       router.replace('/nutrition/foods');
     } catch {
       setSaveError(

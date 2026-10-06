@@ -260,4 +260,24 @@ describe('check-in: frequenza e persistenza', () => {
       setCheckInStorageBackend(null);
     }
   });
+
+  it('hydrate: separa il contesto tra cani diversi', async () => {
+    const mem = new Map<string, string>();
+    const fake: KeyValueStorage = {
+      getItem: async (k) => mem.get(k) ?? null,
+      setItem: async (k, v) => void mem.set(k, v),
+    };
+    setCheckInStorageBackend(fake);
+    try {
+      await saveLastCheckInAnswer({ dayKey: localDayKey(), concern: 'soft' }, 'dog-a');
+      await hydrateCheckIn('dog-a');
+      expect(getCheckInSnapshot().welcomePending).toBe(false);
+
+      await hydrateCheckIn('dog-b');
+      expect(getCheckInSnapshot().welcomePending).toBe(true);
+      expect(getCheckInSnapshot().analysisContext).toBeNull();
+    } finally {
+      setCheckInStorageBackend(null);
+    }
+  });
 });

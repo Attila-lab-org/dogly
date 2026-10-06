@@ -12,6 +12,9 @@ import * as Sentry from '@sentry/react-native';
 import { SessionProvider } from '../src/features/auth/SessionProvider';
 import { queryClient } from '../src/lib/queryClient';
 import { configureCareNotifications } from '../src/features/care/notifications';
+import { hydrateNotificationPreferences } from '../src/features/notifications/store';
+import { hydrateCheckIn } from '../src/features/checkin/store';
+import { useDogProfile } from '../src/features/core/useDogProfile';
 import { NotificationNavigator } from '../src/features/home/NotificationNavigator';
 import { applyAvailableUpdate } from '../src/features/updates/applyAvailableUpdate';
 import { colors } from '../src/theme/tokens';
@@ -55,6 +58,21 @@ function repairWebAriaHiddenFocus() {
     }
     node = node.parentElement;
   }
+}
+
+function RuntimeHydration() {
+  const { dog } = useDogProfile();
+
+  useEffect(() => {
+    if (!dog.id) return;
+    void hydrateCheckIn(dog.id);
+  }, [dog.id]);
+
+  useEffect(() => {
+    void hydrateNotificationPreferences().then(() => configureCareNotifications());
+  }, []);
+
+  return null;
 }
 
 function RootLayout() {
@@ -101,15 +119,12 @@ function RootLayout() {
     });
   }, []);
 
-  useEffect(() => {
-    void configureCareNotifications();
-  }, []);
-
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <SessionProvider>
+            <RuntimeHydration />
             <NotificationNavigator />
             <StatusBar style="dark" />
             <Stack

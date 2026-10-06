@@ -14,8 +14,9 @@ export interface KeyValueStorage {
   setItem(key: string, value: string): Promise<void>;
 }
 
-const PREFS_KEY = 'checkin:prefs:v1';
-const LAST_ANSWER_KEY = 'checkin:last-answer:v1';
+function scopedKey(base: string, dogId?: string): string {
+  return `${base}:${dogId?.trim() || 'default'}`;
+}
 
 let injectedBackend: KeyValueStorage | null = null;
 
@@ -41,11 +42,11 @@ export function localDayKey(date: Date = new Date()): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export async function loadCheckInPrefs(): Promise<CheckInPreferences | null> {
+export async function loadCheckInPrefs(dogId?: string): Promise<CheckInPreferences | null> {
   const store = await storage();
   if (!store) return null;
   try {
-    const raw = await store.getItem(PREFS_KEY);
+    const raw = await store.getItem(scopedKey('checkin:prefs:v1', dogId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CheckInPreferences>;
     const frequency = parsed.frequency;
@@ -65,11 +66,11 @@ export async function loadCheckInPrefs(): Promise<CheckInPreferences | null> {
   }
 }
 
-export async function saveCheckInPrefs(prefs: CheckInPreferences): Promise<void> {
+export async function saveCheckInPrefs(prefs: CheckInPreferences, dogId?: string): Promise<void> {
   const store = await storage();
   if (!store) return;
   try {
-    await store.setItem(PREFS_KEY, JSON.stringify(prefs));
+    await store.setItem(scopedKey('checkin:prefs:v1', dogId), JSON.stringify(prefs));
   } catch {
     // persistenza best-effort: lo stato in memoria resta valido
   }
@@ -81,11 +82,11 @@ export interface PersistedCheckInAnswer {
   concern: 'soft' | 'off';
 }
 
-export async function loadLastCheckInAnswer(): Promise<PersistedCheckInAnswer | null> {
+export async function loadLastCheckInAnswer(dogId?: string): Promise<PersistedCheckInAnswer | null> {
   const store = await storage();
   if (!store) return null;
   try {
-    const raw = await store.getItem(LAST_ANSWER_KEY);
+    const raw = await store.getItem(scopedKey('checkin:last-answer:v1', dogId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersistedCheckInAnswer>;
     if (
@@ -102,11 +103,12 @@ export async function loadLastCheckInAnswer(): Promise<PersistedCheckInAnswer | 
 
 export async function saveLastCheckInAnswer(
   answer: PersistedCheckInAnswer,
+  dogId?: string,
 ): Promise<void> {
   const store = await storage();
   if (!store) return;
   try {
-    await store.setItem(LAST_ANSWER_KEY, JSON.stringify(answer));
+    await store.setItem(scopedKey('checkin:last-answer:v1', dogId), JSON.stringify(answer));
   } catch {
     // persistenza best-effort
   }

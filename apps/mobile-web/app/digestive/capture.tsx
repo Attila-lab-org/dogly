@@ -29,9 +29,10 @@ export default function DigestiveCaptureScreen() {
   const { dog } = useDogProfile();
   const { loading: sessionLoading, userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
+  const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
   const params = useLocalSearchParams<{ from?: string }>();
   const fromCheckIn =
-    params.from === 'checkin' || analysisContext?.concern === 'off';
+    params.from === 'checkin' || dogAnalysisContext?.concern === 'off';
   const [phase, setPhase] = useState<Phase>('ready');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -91,8 +92,8 @@ export default function DigestiveCaptureScreen() {
     >
       <StackScreenHeader title="Controllo digestione" />
 
-      {fromCheckIn && analysisContext?.note ? (
-        <Text style={styles.careBanner}>{analysisContext.note}</Text>
+      {fromCheckIn && dogAnalysisContext?.note ? (
+        <Text style={styles.careBanner}>{dogAnalysisContext.note}</Text>
       ) : null}
 
       <View style={styles.viewport}>

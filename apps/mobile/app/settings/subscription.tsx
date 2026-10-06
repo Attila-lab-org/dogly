@@ -125,7 +125,7 @@ export default function SubscriptionScreen() {
       {/* Azioni */}
       {!isPremium && (
         <Button
-          title="Scopri Premium"
+          title="Scopri la beta Premium"
           icon={<Ionicons name="star" size={18} color={colors.textOnPrimary} />}
           onPress={() => router.push('/paywall')}
           style={styles.action}
