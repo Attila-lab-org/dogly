@@ -14,6 +14,7 @@ from app.contracts.taxonomy import ConfidenceBand, IntentCode
 from app.domains.behavior_intelligence import (
     BEHAVIOR_CONSUMER_VERSION,
     BaselineComparison,
+    behavior_meaning_copy,
     build_behavior_consumer,
 )
 from app.domains.dog_context import build_dog_context
@@ -60,6 +61,17 @@ def test_new_dog_says_still_learning():
     assert "Rocky cerca il tuo sguardo" == result.consumer_headline
     assert "torna verso di te" in result.consumer_summary
     assert result.safety is None
+
+
+def test_attention_copy_recognizes_affection_before_instruction():
+    headline, summary, voice = behavior_meaning_copy(
+        "Rocky", IntentCode.ATTENTION_REQUEST
+    )
+
+    assert headline == "Rocky sta cercando la tua attenzione"
+    assert "sembra stare bene vicino a te" in summary
+    assert "quando ne ha abbastanza" in summary
+    assert voice == "«Mi piace stare qui con te.»"
 
 
 def test_checkin_off_is_personal_variation():

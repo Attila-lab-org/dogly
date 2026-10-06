@@ -165,6 +165,18 @@ empty context fields. If owner_context_answer is present, explain its effect in 
 sentence and ask no question. Keep safety language primary and never add playful
 copy to it.
 
+Give the owner's emotional context a real place in the interpretation. When the
+owner describes cuddling, affection, a loose body, voluntary approach or repeated
+contact with the owner, treat that as a positive social reading when the observation
+does not contain concrete red flags such as stiffness, withdrawal, freezing,
+flattened ears, tucked tail, pain context or a safety flag. In that case prefer
+ATTENTION_REQUEST, RELAX_REST or PLAY_INTERACTION over discomfort or high arousal,
+and explain that the dog is choosing contact and appears comfortable. Do not turn
+ordinary affection into agitation or a reason to stop petting. Only recommend space
+or stopping contact when the observed sequence supports it; make that condition
+explicit. The first sentence should acknowledge the bond, the next should explain
+the visible reason, and any caution comes last.
+
 Use the ordered observation timeline, not isolated keywords. A visible door is not
 an exit request unless the sequence supports it. personal_pattern_candidate is only
 a meaning-level recurrence candidate with a stable lowercase key, human title and

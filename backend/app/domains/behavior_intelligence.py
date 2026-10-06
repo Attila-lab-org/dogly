@@ -126,8 +126,8 @@ _SUMMARIES: dict[IntentCode, str] = {
         "Se ti va, rispondi con un gioco breve e leggero."
     ),
     IntentCode.ATTENTION_REQUEST: (
-        "{name} vuole coinvolgerti o ottenere una tua risposta. "
-        "Un contatto breve e chiaro è la cosa più utile ora."
+        "{name} ti cerca e sembra stare bene vicino a te. "
+        "Puoi ricambiare con calma e lasciare che sia lui a mostrarti quando ne ha abbastanza."
     ),
     IntentCode.OUTSIDE_REQUEST: (
         "{name} collega questo momento all’uscita. "
@@ -174,7 +174,7 @@ _SUMMARIES: dict[IntentCode, str] = {
 
 _DOG_VOICES: dict[IntentCode, str] = {
     IntentCode.PLAY_INTERACTION: "«Ti va di fare qualcosa insieme?»",
-    IntentCode.ATTENTION_REQUEST: "«Guardami un momento: ho bisogno di una tua risposta.»",
+    IntentCode.ATTENTION_REQUEST: "«Mi piace stare qui con te.»",
     IntentCode.OUTSIDE_REQUEST: "«Vorrei uscire: mi accompagni?»",
     IntentCode.ALERT_VIGILANCE: "«C’è qualcosa qui: voglio che tu lo sappia.»",
     IntentCode.DISCOMFORT_AVOIDANCE: (

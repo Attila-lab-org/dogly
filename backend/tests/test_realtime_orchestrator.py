@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
     _resume_history,
@@ -25,6 +24,7 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
+
 from tests.conftest import create_dog
 
 
@@ -334,3 +334,5 @@ def test_voice_and_orchestrated_turns_share_spoken_delivery_and_memory_boundarie
     assert DOGLY_SPOKEN_STYLE in brief
     assert "fingere mai di vedere o sentire" in brief
     assert "isolato non è un'abitudine" in brief
+    assert "Il significato che il proprietario sta vivendo" in _SYSTEM
+    assert "Non trasformare un gesto affettuoso in agitazione" in _SYSTEM

@@ -33,9 +33,21 @@ function followUpPrompts(turn?: RealtimeTurn): string[] {
   const text = turn.assistant_text.toLocaleLowerCase('it-IT');
   if (domains.has('BEHAVIOR')) {
     if (text.includes('video') || text.includes('guardare')) {
-      return ['Ti mando un video', 'Cosa posso osservare nel frattempo?'];
+      return ['Ti mando un video', 'Cosa guardiamo insieme?'];
     }
-    return ['Cosa posso fare adesso?', 'Come capisco se si sta calmando?'];
+    if (/(coccol|carezz|contatto|ti cerca|cerca te|vicino a te|stare bene con te|momento tenero|si appoggia|appoggia)/.test(text)) {
+      return ['Come capisco se vuole ancora coccole?', 'Come riconosco quando ne ha abbastanza?'];
+    }
+    if (/(rigid|tes[oa]|disagio|spazio|allerta|paura|evita|non forz|tensione)/.test(text)) {
+      return ['Cosa guardo per capire se si rilassa?', 'Come gli lascio spazio senza perderlo di vista?'];
+    }
+    if (/(gioc|invita|insieme)/.test(text)) {
+      return ['Come capisco se vuole continuare?', 'Come chiudo il gioco senza frustrarlo?'];
+    }
+    if (/(tranquill|rilassat|sta bene)/.test(text)) {
+      return ['Come capisco se vuole restare così?', 'Come riconosco quando cambia umore?'];
+    }
+    return ['Come lo riconosco la prossima volta?', 'Ti racconto cosa succede dopo'];
   }
   if (domains.has('DIGESTIVE')) {
     if (text.includes('vomit') || text.includes('diarr') || text.includes('feci')) {
@@ -47,9 +59,9 @@ function followUpPrompts(turn?: RealtimeTurn): string[] {
     return ['Come lo collego al suo cibo?', 'Cosa osservo dopo questo cambio?'];
   }
   if (domains.has('CARE')) {
-    return ['Cosa controllo oggi?', 'Quando chiedo aiuto?'];
+    return ['Qual è il segnale più utile da controllare oggi?', 'Quando è il momento di chiedere aiuto?'];
   }
-  return ['Cosa posso fare adesso?', 'Ti racconto cosa è successo dopo'];
+  return ['Da dove vuoi continuare?', 'Ti racconto cosa è successo dopo'];
 }
 
 export default function AskScreen() {
@@ -195,7 +207,7 @@ export default function AskScreen() {
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
-          {!starting && messages.length === 1 ? <View style={styles.starters}><Text style={styles.starterLabel}>{eventId ? 'Cosa vuoi fare?' : 'Possiamo partire da qui'}</Text>{(eventId ? ['Approfondisci questo momento', 'Cosa posso fare adesso?', 'Parliamo d’altro'] : starters).map((starter) => <Pressable key={starter} onPress={() => void send(starter)} style={styles.starter}><Text style={styles.starterText}>{starter}</Text><Ionicons name="arrow-up" size={16} color={colors.primary} /></Pressable>)}</View> : null}
+          {!starting && messages.length === 1 ? <View style={styles.starters}><Text style={styles.starterLabel}>{eventId ? 'Partiamo da questo momento' : 'Possiamo partire da qui'}</Text>{(eventId ? (behaviorSource ? ['Come capisco meglio questo momento?', 'Come posso accompagnarlo?', 'Ti racconto cosa è successo dopo'] : ['Cosa osservo nelle prossime ore?', 'Come lo collego alla sua routine?', 'Ti racconto cosa è successo dopo']) : starters).map((starter) => <Pressable key={starter} onPress={() => void send(starter)} style={styles.starter}><Text style={styles.starterText}>{starter}</Text><Ionicons name="arrow-up" size={16} color={colors.primary} /></Pressable>)}</View> : null}
           {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>DOGly sta pensando…</Text></View> : null}
         </ScrollView>
         <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi una domanda su ' + dog.name} placeholder={'Cosa vuoi capire di ' + dog.name + '?'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} />{Platform.OS === 'web' ? <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta una domanda'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Invia domanda" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
