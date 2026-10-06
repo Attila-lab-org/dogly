@@ -212,7 +212,7 @@ async def confirm_external_food(
         return await digestive_db.get_food_product(
             engine, user_id=user_id, food_id=str(lookup["food_product_id"])
         )
-    brand, name, ingredients, calories = confirmation_values(
+    brand, name, ingredients, calories, analysis_values = confirmation_values(
         payload,
         lookup.get("raw_payload"),
     )
@@ -224,9 +224,7 @@ async def confirm_external_food(
         )
         if draft.dog_id != payload.dog_id:
             raise ApiError(ErrorCode.NOT_FOUND, "Food draft not found")
-        analysis = GuaranteedAnalysis.model_validate(draft.guaranteed_analysis or {})
-        if calories:
-            analysis = analysis.model_copy(update={"calories": calories})
+        analysis = GuaranteedAnalysis.model_validate({**(draft.guaranteed_analysis or {}), **analysis_values})
         product = await digestive_db.verify_food_product(
             engine,
             user_id=user_id,
@@ -249,7 +247,7 @@ async def confirm_external_food(
                 brand=brand,
                 name=name,
                 ingredients_raw=ingredients,
-                guaranteed_analysis=GuaranteedAnalysis(calories=calories),
+                guaranteed_analysis=GuaranteedAnalysis.model_validate(analysis_values),
             ),
         )
     async with engine.begin() as conn:

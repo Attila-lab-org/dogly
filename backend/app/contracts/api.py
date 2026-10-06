@@ -998,6 +998,7 @@ class ExternalFoodCandidateOut(BaseModel):
     package_size: str | None = None
     food_form: str | None = None
     ingredients_raw: str | None = None
+    guaranteed_analysis: dict[str, Any] = Field(default_factory=dict)
     calories: str | None = None
     image_url: str | None = None
     attribution: str
@@ -1017,6 +1018,7 @@ class ExternalFoodConfirmRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     ingredients_raw: str | None = None
     calories: str | None = None
+    guaranteed_analysis: GuaranteedAnalysis = Field(default_factory=GuaranteedAnalysis)
     activate: bool = False
 
 

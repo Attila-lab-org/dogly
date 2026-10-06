@@ -47,6 +47,7 @@ class ExternalFoodCandidate(BaseModel):
     package_size: str | None = None
     food_form: str | None = None
     ingredients_raw: str | None = None
+    guaranteed_analysis: dict[str, Any] = Field(default_factory=dict)
     calories: str | None = None
     image_url: str | None = None
     attribution: str = ATTRIBUTION
@@ -333,10 +334,26 @@ def _candidate_from_product(
     ingredients = product.get("ingredients_text_it") or product.get("ingredients_text")
     nutriments = product.get("nutriments") or {}
     calories = None
+    guaranteed_analysis: dict[str, Any] = {}
     if isinstance(nutriments, dict):
         energy = nutriments.get("energy-kcal_100g") or nutriments.get("energy-kcal")
         if energy is not None:
             calories = f"{energy} kcal/100g"
+        mappings = (
+            ("crude_protein_min", ("proteins_100g", "proteins")),
+            ("crude_fat_min", ("fat_100g", "fat")),
+            ("crude_fiber_max", ("fiber_100g", "fiber")),
+            ("moisture_max", ("water_100g", "water")),
+        )
+        for target, keys in mappings:
+            value = next((nutriments.get(key) for key in keys if nutriments.get(key) is not None), None)
+            try:
+                if value is not None:
+                    guaranteed_analysis[target] = float(value)
+            except (TypeError, ValueError):
+                continue
+        if calories:
+            guaranteed_analysis["calories"] = calories
     return ExternalFoodCandidate(
         barcode=code,
         provider_code=str(product.get("code") or code),
@@ -346,6 +363,7 @@ def _candidate_from_product(
         package_size=quantity,
         food_form=_food_form(product),
         ingredients_raw=str(ingredients).strip() if ingredients else None,
+        guaranteed_analysis=guaranteed_analysis,
         calories=calories,
         image_url=(
             product.get("image_front_small_url")

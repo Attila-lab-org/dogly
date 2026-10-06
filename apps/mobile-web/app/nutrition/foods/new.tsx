@@ -206,6 +206,7 @@ export default function NewFoodScreen() {
           name,
           ingredientsRaw: selected.ingredients_raw ?? undefined,
           calories: selected.calories ?? undefined,
+          guaranteedAnalysis: selected.guaranteed_analysis,
           activate: false,
         });
       } else if (photoFoodId) {
@@ -232,6 +233,7 @@ export default function NewFoodScreen() {
           name,
           ingredientsRaw: selected.ingredients_raw ?? undefined,
           calories: selected.calories ?? undefined,
+          guaranteedAnalysis: selected.guaranteed_analysis,
           activate: false,
         });
       } else {
@@ -477,6 +479,15 @@ export default function NewFoodScreen() {
             <Text style={styles.previewBrand}>{previewItem?.brand}</Text>
             <Text style={styles.previewName}>{previewItem?.name}</Text>
             {previewItem?.variant ? <Text style={styles.productMeta}>{previewItem.variant}</Text> : null}
+            {previewItem?.guaranteed_analysis && Object.keys(previewItem.guaranteed_analysis).length > 0 ? (
+              <View style={styles.previewAnalysis}>
+                <Text style={styles.previewAnalysisTitle}>Valori rilevati dalla confezione</Text>
+                {previewItem.guaranteed_analysis.crude_protein_min != null ? <Text>Proteine {previewItem.guaranteed_analysis.crude_protein_min}%</Text> : null}
+                {previewItem.guaranteed_analysis.crude_fat_min != null ? <Text>Grassi {previewItem.guaranteed_analysis.crude_fat_min}%</Text> : null}
+                {previewItem.guaranteed_analysis.crude_fiber_max != null ? <Text>Fibre {previewItem.guaranteed_analysis.crude_fiber_max}%</Text> : null}
+                {previewItem.guaranteed_analysis.moisture_max != null ? <Text>Umidità {previewItem.guaranteed_analysis.moisture_max}%</Text> : null}
+              </View>
+            ) : null}
             <Button title="Scegli questo alimento" onPress={() => { if (previewItem) choose(previewItem); setPreviewItem(null); }} />
           </Pressable>
         </Pressable>
@@ -624,6 +635,8 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
   previewBrand: { color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
   previewName: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold },
+  previewAnalysis: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, gap: spacing.xs },
+  previewAnalysisTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
   product: {
     flexDirection: 'row',
     alignItems: 'center',

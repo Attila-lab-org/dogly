@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 import { api } from '../../lib/apiClient';
 import { putSignedUpload } from '../../lib/signedUpload';
-import { contentTypeFromUri } from '../dogs/photoUri';
+import { detectImageContentType } from '../dogs/photoUri';
 import { hasReadableFoodLabelData } from './label';
 
 export type ApiFoodProduct = {
@@ -86,7 +86,7 @@ export async function scanAndUploadFoodLabel(options: {
   food: ApiFoodProduct | null;
   readAutomatically: boolean;
 }> {
-  const contentType = contentTypeFromUri(options.localUri);
+  const contentType = await detectImageContentType(options.localUri);
   const bytes = await fileBytes(options.localUri);
   const clientRequestId = newId('food');
   const init = await api.post<{
@@ -163,6 +163,7 @@ export async function createManualFood(options: {
   name: string;
   ingredientsRaw?: string;
   calories?: string;
+  guaranteedAnalysis?: ExternalFoodCandidate['guaranteed_analysis'];
 }): Promise<ApiFoodProduct> {
   const clientRequestId = newId('manual-food');
   return api.post<ApiFoodProduct>(
@@ -190,6 +191,7 @@ export type ExternalFoodCandidate = {
   package_size?: string | null;
   food_form?: string | null;
   ingredients_raw?: string | null;
+  guaranteed_analysis?: ApiFoodProduct['guaranteed_analysis'];
   calories?: string | null;
   image_url?: string | null;
   attribution: string;
@@ -237,6 +239,7 @@ export async function confirmExternalFood(options: {
   name: string;
   ingredientsRaw?: string;
   calories?: string;
+  guaranteedAnalysis?: ExternalFoodCandidate['guaranteed_analysis'];
   activate?: boolean;
 }): Promise<ApiFoodProduct> {
   const key = `opff-confirm-${options.lookupId}`;
@@ -250,6 +253,7 @@ export async function confirmExternalFood(options: {
       name: options.name.trim(),
       ingredients_raw: options.ingredientsRaw?.trim() || null,
       calories: options.calories?.trim() || null,
+      guaranteed_analysis: options.guaranteedAnalysis || {},
       activate: options.activate ?? false,
     },
     { headers: { 'X-Idempotency-Key': key } },

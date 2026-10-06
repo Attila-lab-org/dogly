@@ -66,14 +66,18 @@ def _require_feature(enabled: bool) -> None:
 def confirmation_values(
     payload: ExternalFoodConfirmRequest,
     candidate_raw: Any,
-) -> tuple[str | None, str, str | None, str | None]:
+) -> tuple[str | None, str, str | None, str | None, dict[str, Any]]:
     """Owner edits win; omitted optional fields fall back to the audited hit."""
     raw = candidate_raw if isinstance(candidate_raw, dict) else {}
     brand = payload.brand or raw.get("brand")
     name = payload.name or raw.get("name")
     ingredients = payload.ingredients_raw or raw.get("ingredients_raw")
     calories = payload.calories or raw.get("calories")
-    return brand, name, ingredients, calories
+    analysis = dict(raw.get("guaranteed_analysis") or {})
+    analysis.update(payload.guaranteed_analysis.model_dump(exclude_none=True))
+    if calories:
+        analysis["calories"] = calories
+    return brand, name, ingredients, calories, analysis
 
 
 async def lookup_external_food(
@@ -161,7 +165,7 @@ def confirm_external_food(
         raise ApiError(ErrorCode.NOT_FOUND, "Lookup not found")
     if lookup["status"] == "CONFIRMED" and lookup.get("food_product_id"):
         return store.food_products[lookup["food_product_id"]]
-    brand, name, ingredients, calories = confirmation_values(
+    brand, name, ingredients, calories, analysis_values = confirmation_values(
         payload,
         lookup.get("candidate"),
     )
@@ -176,8 +180,7 @@ def confirm_external_food(
         if draft.owner_id != user_id or draft.dog_id != payload.dog_id:
             raise ApiError(ErrorCode.NOT_FOUND, "Food draft not found")
         analysis = dict(draft.guaranteed_analysis or {})
-        if calories:
-            analysis["calories"] = calories
+        analysis.update(analysis_values)
         product = draft.model_copy(
             update={
                 "brand": brand,
@@ -198,7 +201,7 @@ def confirm_external_food(
                 brand=brand,
                 name=name,
                 ingredients_raw=ingredients,
-                guaranteed_analysis=GuaranteedAnalysis(calories=calories),
+                guaranteed_analysis=GuaranteedAnalysis.model_validate(analysis_values),
             ),
         )
     updated = product.model_copy(

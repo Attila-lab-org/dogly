@@ -77,7 +77,7 @@ export default function FoodVerifyScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const quantityFocus = focus === 'quantity';
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
 
   const foodQuery = useQuery({
     queryKey: ['nutrition-food', foodId],
@@ -105,7 +105,7 @@ export default function FoodVerifyScreen() {
   const [savedMode, setSavedMode] = useState<'quantity' | 'activated' | null>(
     null,
   );
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
