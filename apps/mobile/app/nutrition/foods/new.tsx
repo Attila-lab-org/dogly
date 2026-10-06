@@ -21,7 +21,6 @@ import {
   createManualFood,
   getFood,
   lookupFoodByBarcode,
-  listFoods,
   searchFoodsByName,
   verifyFood,
   type ExternalFoodCandidate,
@@ -50,7 +49,6 @@ export default function NewFoodScreen() {
   const { userId } = useSession();
   const photoStarted = useRef(false);
   const barcodeStarted = useRef(false);
-  const searchRequest = useRef(0);
 
   const [step, setStep] = useState<Step>('identify');
   const [query, setQuery] = useState(photoQuery);
@@ -74,24 +72,14 @@ export default function NewFoodScreen() {
     queryFn: () => getFood(photoFoodId),
     enabled: Boolean(photoFoodId),
   });
-  const foodsQuery = useQuery({
-    queryKey: ['nutrition-foods-for-search', dog.id],
-    queryFn: () => listFoods(dog.id),
-    enabled: Boolean(dog.id),
-  });
-  const localMatches = (foodsQuery.data ?? []).filter((food) =>
-    [food.brand, food.name].filter(Boolean).join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
-  );
 
   const search = async (raw: string) => {
     const cleaned = raw.trim();
-    if (cleaned.length < 2 || !dog.id) return;
-    const requestId = ++searchRequest.current;
+    if (cleaned.length < 1 || !dog.id || working) return;
     setWorking(true);
     setMessage(null);
     try {
       const result = await searchFoodsByName({ dogId: dog.id, query: cleaned });
-      if (requestId !== searchRequest.current) return;
       setHits(result.items);
       setSelected(null);
       setExactBarcode(null);
@@ -100,10 +88,9 @@ export default function NewFoodScreen() {
         setMessage('Non l’ho trovato. Prova con marca e gusto, oppure inseriscilo tu.');
       }
     } catch {
-      if (requestId !== searchRequest.current) return;
       setMessage('Non riesco a cercare adesso. Puoi riprovare o inserirlo tu.');
     } finally {
-      if (requestId === searchRequest.current) setWorking(false);
+      setWorking(false);
     }
   };
 
@@ -125,7 +112,7 @@ export default function NewFoodScreen() {
     setBrand(food?.brand ?? '');
     setName(food?.name ?? '');
     setQuery(extractedQuery);
-    if (extractedQuery.trim().length >= 1) {
+    if (extractedQuery.trim().length >= 2) {
       void search(extractedQuery);
     } else {
       setManual(true);
@@ -298,18 +285,6 @@ export default function NewFoodScreen() {
               style={[styles.input, styles.searchInput]}
             />
           </View>
-
-          {query.trim() && localMatches.length > 0 ? (
-            <View style={styles.localMatches}>
-              <Text style={styles.localMatchesTitle}>Già usati da {dog.name}</Text>
-              {localMatches.map((food) => (
-                <Pressable key={food.id} accessibilityRole="button" onPress={() => { setBrand(food.brand ?? ''); setName(food.name ?? ''); setManual(true); setStep('details'); }} style={styles.localMatch}>
-                  <View style={styles.localMatchCopy}><Text style={styles.localMatchName}>{food.name || 'Alimento'}</Text>{food.brand ? <Text style={styles.localMatchBrand}>{food.brand}</Text> : null}</View>
-                  <Ionicons name="chevron-forward" size={17} color={colors.textSecondary} />
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
 
           <Text style={styles.or}>oppure</Text>
           <MethodButton
@@ -571,12 +546,6 @@ const styles = StyleSheet.create({
   },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   searchInput: { flex: 1, minWidth: 0 },
-  localMatches: { marginTop: spacing.sm, marginBottom: spacing.md, gap: spacing.xs },
-  localMatchesTitle: { color: colors.textSecondary, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
-  localMatch: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  localMatchCopy: { flex: 1, gap: 2 },
-  localMatchName: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
-  localMatchBrand: { color: colors.textSecondary, fontSize: typography.size.xs },
   input: {
     minHeight: 52,
     paddingHorizontal: spacing.md,
