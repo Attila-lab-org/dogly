@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Switch,
@@ -67,6 +68,7 @@ export default function NewFoodScreen() {
   const [transition, setTransition] = useState('');
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<ExternalFoodCandidate | null>(null);
 
   const photoFoodQuery = useQuery({
     queryKey: ['nutrition-photo-food', photoFoodId],
@@ -86,7 +88,7 @@ export default function NewFoodScreen() {
     return scheduleCatalogSearch(
         () => searchFoodsByName({ dogId: dog.id, query: cleaned }),
         (result) => {
-          setHits(result.items);
+          setHits(result.items.slice(0, 5));
           setExactBarcode(null);
           if (!result.items.length) {
             setMessage(`Nessun risultato nel catalogo per “${cleaned}”. Prova con la marca completa oppure fotografa la confezione.`);
@@ -281,7 +283,7 @@ export default function NewFoodScreen() {
             />
           </View>
 
-          {searching ? <Text accessibilityLiveRegion="polite" style={styles.subtitle}>Cerco nel catalogo…</Text> : null}
+          {searching ? <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>Cerco nel catalogo…</Text> : null}
           {hits.length > 0 ? (
             <View style={styles.results}>
               <Text style={styles.subtitle}>Risultati del catalogo</Text>
@@ -358,7 +360,7 @@ export default function NewFoodScreen() {
             {manual ? 'Inserisci l’alimento' : 'Hai scelto questo'}
           </Text>
           {selected ? (
-            <CandidateCard item={selected} exact={selected.barcode === exactBarcode} />
+            <CandidateCard item={selected} exact={selected.barcode === exactBarcode} onPress={() => setPreviewItem(selected)} />
           ) : null}
           {manual ? (
             <View style={styles.manualFields}>
@@ -468,6 +470,17 @@ export default function NewFoodScreen() {
 
       {working ? <Text style={styles.status}>Sto cercando…</Text> : null}
       {message ? <Text style={styles.message}>{message}</Text> : null}
+      <Modal visible={Boolean(previewItem)} transparent animationType="fade" onRequestClose={() => setPreviewItem(null)}>
+        <Pressable style={styles.previewBackdrop} onPress={() => setPreviewItem(null)}>
+          <Pressable style={styles.previewCard} onPress={(event) => event.stopPropagation()}>
+            {previewItem?.image_url ? <Image source={{ uri: previewItem.image_url }} style={styles.previewImage} /> : null}
+            <Text style={styles.previewBrand}>{previewItem?.brand}</Text>
+            <Text style={styles.previewName}>{previewItem?.name}</Text>
+            {previewItem?.variant ? <Text style={styles.productMeta}>{previewItem.variant}</Text> : null}
+            <Button title="Scegli questo alimento" onPress={() => { if (previewItem) choose(previewItem); setPreviewItem(null); }} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -605,6 +618,12 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
   },
   results: { gap: spacing.sm },
+  searchStatus: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
+  previewBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(15,35,65,0.48)' },
+  previewCard: { width: '100%', maxWidth: 360, padding: spacing.lg, gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface },
+  previewImage: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
+  previewBrand: { color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
+  previewName: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold },
   product: {
     flexDirection: 'row',
     alignItems: 'center',
