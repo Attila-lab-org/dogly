@@ -28,15 +28,26 @@ const starterPool = [
 ];
 
 function followUpPrompts(turn?: RealtimeTurn): string[] {
-  const domains = new Set(turn?.domains ?? []);
-  if (domains.has('DIGESTIVE') || domains.has('NUTRITION')) {
-    return ['Cosa controllo nei prossimi giorni?', 'Cosa posso cambiare da oggi?'];
+  if (!turn || turn.terminal_state === 'SAFETY_INTERRUPT') return [];
+  const domains = new Set(turn.domains ?? []);
+  const text = turn.assistant_text.toLocaleLowerCase('it-IT');
+  if (domains.has('BEHAVIOR')) {
+    if (text.includes('video') || text.includes('guardare')) {
+      return ['Ti mando un video', 'Cosa posso osservare nel frattempo?'];
+    }
+    return ['Cosa posso fare adesso?', 'Come capisco se si sta calmando?'];
+  }
+  if (domains.has('DIGESTIVE')) {
+    if (text.includes('vomit') || text.includes('diarr') || text.includes('feci')) {
+      return ['Cosa osservo nelle prossime ore?', 'Quando sento il veterinario?'];
+    }
+    return ['Cosa osservo nei prossimi giorni?', 'Come lo collego al suo cibo?'];
+  }
+  if (domains.has('NUTRITION')) {
+    return ['Come lo collego al suo cibo?', 'Cosa osservo dopo questo cambio?'];
   }
   if (domains.has('CARE')) {
-    return ['Quanto è urgente?', 'Cosa osservo adesso?'];
-  }
-  if (domains.has('BEHAVIOR')) {
-    return ['Cosa posso fare adesso?', 'Come capisco se è tranquillo?'];
+    return ['Cosa controllo oggi?', 'Quando chiedo aiuto?'];
   }
   return ['Cosa posso fare adesso?', 'Ti racconto cosa è successo dopo'];
 }
@@ -71,6 +82,16 @@ export default function AskScreen() {
   }, [dog.id]);
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+  const usedFollowUps = new Set(
+    messages
+      .filter((message) => message.role === 'user')
+      .map((message) => message.text.trim().toLocaleLowerCase('it-IT')),
+  );
+  const availableFollowUps = latestAssistant?.turn
+    ? followUpPrompts(latestAssistant.turn).filter(
+        (prompt) => !usedFollowUps.has(prompt.toLocaleLowerCase('it-IT')),
+      )
+    : [];
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
   const startedKey = useRef<string | null>(null);
@@ -170,7 +191,7 @@ export default function AskScreen() {
               {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.retryText ?? ''); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
-              {!sending && message.id === latestAssistantId && latestAssistant?.turn && !message.turn?.question_options?.length ? <View style={styles.followUps}><Text style={styles.followUpLabel}>Se vuoi, possiamo continuare da qui</Text>{followUpPrompts(message.turn).map((prompt) => <Pressable key={prompt} accessibilityRole="button" onPress={() => void send(prompt)} style={({ pressed }) => [styles.followUp, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{prompt}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
+              {!sending && message.id === latestAssistantId && latestAssistant?.turn && !message.turn?.question_options?.length && !message.turn?.memory_proposal && availableFollowUps.length ? <View style={styles.followUps}><Text style={styles.followUpLabel}>Se vuoi, possiamo continuare da qui</Text>{availableFollowUps.map((prompt) => <Pressable key={prompt} accessibilityRole="button" onPress={() => void send(prompt)} style={({ pressed }) => [styles.followUp, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{prompt}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
