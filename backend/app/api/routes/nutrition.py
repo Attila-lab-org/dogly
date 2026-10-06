@@ -32,6 +32,17 @@ from app.providers.openai_food_label import extract_food_label
 router = APIRouter()
 
 
+def _has_readable_food_label_data(product: FoodProductRec) -> bool:
+    """An extraction attempt is reusable only when it produced real fields."""
+    return bool(
+        product.brand
+        or product.name
+        or product.ingredients_raw
+        or product.feeding_directions
+        or any(value is not None for value in (product.guaranteed_analysis or {}).values())
+    )
+
+
 def _food_out(product: FoodProductRec) -> FoodProductOut:
     return FoodProductOut(
         id=product.id,
@@ -204,7 +215,7 @@ async def extract_food(
             user_id=user_id,
             food_id=food_id,
         )
-    if product.verified_at is not None or product.extraction_confidence:
+    if product.verified_at is not None or _has_readable_food_label_data(product):
         return _food_out(product)
     if not product.image_path:
         raise ApiError(

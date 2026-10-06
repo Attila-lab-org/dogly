@@ -73,6 +73,9 @@ _CAT_MARKERS = (
     "british shorthair",
     "per gatti",
     "for cats",
+    "kattenvoer",
+    "kattenvoeding",
+    "hondenvoer voor katten",
 )
 _DOG_MARKERS = (
     "en:dog-food",
@@ -84,6 +87,8 @@ _DOG_MARKERS = (
     "puppy",
     "hund",
     "special dog",
+    "hondenvoer",
+    "hondenvoeding",
 )
 
 
@@ -141,6 +146,48 @@ _WET_MARKERS = (
     "pouch",
     "gravy",
 )
+
+_ANALYTICAL_PATTERNS: dict[str, re.Pattern[str]] = {
+    "crude_protein_min": re.compile(
+        r"(?:prot[eé]ine|proteina|protein|eiwit)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%",
+        re.IGNORECASE,
+    ),
+    "crude_fat_min": re.compile(
+        r"(?:teneur\s+en\s+mati[eè]res\s+grasses|mati[eè]res\s+grasses|grassi|fat|vet)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%",
+        re.IGNORECASE,
+    ),
+    "crude_fiber_max": re.compile(
+        r"(?:cellulose\s+brute|fibre\s+brute|fibra\s+grezza|fibra|fibre|fiber|cellulose)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%",
+        re.IGNORECASE,
+    ),
+    "moisture_max": re.compile(
+        r"(?:humidit[eé]|umidit[aà]|moisture|vocht)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%",
+        re.IGNORECASE,
+    ),
+}
+_CALORIE_TEXT_PATTERN = re.compile(
+    r"(?:energy|[ée]nergie|calorie|calories)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*kcal(?:\s*/\s*(?:100\s*)?g)?",
+    re.IGNORECASE,
+)
+
+
+def _analysis_from_ingredients_text(text: str | None) -> dict[str, Any]:
+    """Read only explicitly printed analytical values from the ingredients text."""
+    if not text:
+        return {}
+    values: dict[str, Any] = {}
+    for key, pattern in _ANALYTICAL_PATTERNS.items():
+        match = pattern.search(text)
+        if not match:
+            continue
+        try:
+            values[key] = float(match.group(1).replace(",", "."))
+        except ValueError:
+            continue
+    calorie_match = _CALORIE_TEXT_PATTERN.search(text)
+    if calorie_match:
+        values["calories"] = f"{calorie_match.group(1).replace(',', '.')} kcal/100g"
+    return values
 
 
 def _title_case_name(value: str) -> str:
@@ -335,8 +382,15 @@ def _candidate_from_product(
     nutriments = product.get("nutriments") or {}
     calories = None
     guaranteed_analysis: dict[str, Any] = {}
+    text_analysis = _analysis_from_ingredients_text(
+        str(ingredients) if ingredients else None
+    )
     if isinstance(nutriments, dict):
-        energy = nutriments.get("energy-kcal_100g") or nutriments.get("energy-kcal")
+        energy = (
+            nutriments.get("energy-kcal_100g")
+            if nutriments.get("energy-kcal_100g") is not None
+            else nutriments.get("energy-kcal")
+        )
         if energy is not None:
             calories = f"{energy} kcal/100g"
         mappings = (
@@ -354,6 +408,10 @@ def _candidate_from_product(
                 continue
         if calories:
             guaranteed_analysis["calories"] = calories
+    for key, value in text_analysis.items():
+        guaranteed_analysis.setdefault(key, value)
+    if calories is None and text_analysis.get("calories"):
+        calories = str(text_analysis["calories"])
     return ExternalFoodCandidate(
         barcode=code,
         provider_code=str(product.get("code") or code),
@@ -366,9 +424,9 @@ def _candidate_from_product(
         guaranteed_analysis=guaranteed_analysis,
         calories=calories,
         image_url=(
-            product.get("image_front_small_url")
+            product.get("image_front_url")
             or product.get("image_url")
-            or product.get("image_front_url")
+            or product.get("image_front_small_url")
         ),
         raw={"code": product.get("code"), "product_name": name, "brands": brand},
     )

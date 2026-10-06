@@ -129,6 +129,46 @@ async def test_uploaded_label_is_read_into_an_unverified_draft(
     assert calls == 1
 
 
+async def test_empty_label_read_can_be_retried(
+    client: httpx.AsyncClient,
+    auth_headers,
+    state,
+    monkeypatch,
+):
+    dog_id = await create_dog(client, auth_headers)
+    init = await client.post(
+        "/v1/nutrition/foods/scan/init",
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "food-extract-retry-0001",
+            "bytes": 80_000,
+            "content_type": "image/jpeg",
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "food-extract-retry-0001"},
+    )
+    food_id = init.json()["food_product_id"]
+    state.storage.objects.add(("food-labels", init.json()["upload"]["storage_path"]))
+    calls = 0
+
+    async def fake_extract(settings, *, image_ref):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return FoodLabelExtraction(), ProviderUsage(provider="openai", model="test")
+        return (
+            FoodLabelExtraction(brand="DOGly", name="Adult Pollo"),
+            ProviderUsage(provider="openai", model="test"),
+        )
+
+    monkeypatch.setattr(nutrition_routes, "extract_food_label", fake_extract)
+    first = await client.post(f"/v1/nutrition/foods/{food_id}/extract", headers=auth_headers)
+    second = await client.post(f"/v1/nutrition/foods/{food_id}/extract", headers=auth_headers)
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["brand"] == "DOGly"
+    assert calls == 2
+
+
 async def test_owner_can_add_food_without_scanning_a_label(
     client: httpx.AsyncClient, auth_headers
 ):

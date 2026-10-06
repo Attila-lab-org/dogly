@@ -8,6 +8,7 @@ import pytest
 from app.providers.base import ProviderRateLimitError
 from app.providers.open_pet_food_facts import (
     OpenPetFoodFactsClient,
+    _candidate_from_product,
     clear_barcode_cache,
     spoken_product_name,
 )
@@ -130,6 +131,66 @@ def test_spoken_product_name_keeps_the_specific_variant():
         spoken_product_name("Royal Canin", "Royal Canin Mini Adult")
         == "Royal Canin Mini Adult"
     )
+
+
+def test_reads_guaranteed_analysis_printed_inside_ingredients_text():
+    candidate = _candidate_from_product(
+        {
+            "code": "8000000000011",
+            "product_name": "Felix Soup",
+            "brands": "Purina",
+            "ingredients_text": (
+                "Viandes et sous-produits. Constituants analytiques: "
+                "Humidité: 87,5 %, Protéine: 7,5%, "
+                "Teneur en matières grasses: 1,5 %, "
+                "Cellulose brute: 0,2%."
+            ),
+            "nutriments": {},
+            "image_front_small_url": "https://example.test/small.jpg",
+            "image_front_url": "https://example.test/front.jpg",
+        }
+    )
+    assert candidate is not None
+    assert candidate.guaranteed_analysis == {
+        "crude_protein_min": 7.5,
+        "crude_fat_min": 1.5,
+        "crude_fiber_max": 0.2,
+        "moisture_max": 87.5,
+    }
+    assert candidate.image_url == "https://example.test/front.jpg"
+
+
+def test_recognizes_dutch_cat_food_as_cat_product():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "products": [
+                    {
+                        "code": "8000000000012",
+                        "product_name": "Nat kattenvoer mous",
+                        "brands": "Nat",
+                    },
+                    {
+                        "code": "8000000000013",
+                        "product_name": "Adult dog pollo",
+                        "brands": "Acme",
+                        "categories_tags": ["en:dog-food"],
+                    },
+                ]
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    # A dog result remains available; the Dutch cat result is not promoted over it.
+    import asyncio
+
+    hits = asyncio.run(client.search_products("Nat"))
+    assert all("kattenvoer" not in (item.name or "").lower() for item in hits)
 
 
 @pytest.mark.asyncio
