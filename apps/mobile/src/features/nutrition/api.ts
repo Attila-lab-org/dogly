@@ -70,6 +70,10 @@ export async function getFood(foodId: string): Promise<ApiFoodProduct> {
   return api.get<ApiFoodProduct>(`/v1/nutrition/foods/${foodId}`);
 }
 
+export async function deleteFood(foodId: string): Promise<void> {
+  await api.delete(`/v1/nutrition/foods/${foodId}`);
+}
+
 export async function listFeedingPeriods(
   dogId: string,
 ): Promise<ApiFeedingPeriod[]> {
