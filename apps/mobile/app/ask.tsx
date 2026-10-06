@@ -30,40 +30,8 @@ const starterPool = [
 ];
 
 function followUpPrompts(turn?: RealtimeTurn): string[] {
-  if (!turn || turn.terminal_state === 'SAFETY_INTERRUPT') return [];
-  const domains = new Set(turn.domains ?? []);
-  const text = turn.assistant_text.toLocaleLowerCase('it-IT');
-  if (domains.has('BEHAVIOR')) {
-    if (text.includes('video') || text.includes('guardare')) {
-      return ['Cosa guardiamo insieme?', 'Ti racconto cos’è successo dopo'];
-    }
-    if (/(coccol|carezz|contatto|ti cerca|cerca te|vicino a te|stare bene con te|momento tenero|si appoggia|appoggia)/.test(text)) {
-      return ['Vuole ancora coccole?', 'Come capisco quando ne ha abbastanza?'];
-    }
-    if (/(rigid|tes[oa]|disagio|spazio|allerta|paura|evita|non forz|tensione)/.test(text)) {
-      return ['Cosa guardo adesso?', 'Come gli lascio spazio?'];
-    }
-    if (/(gioc|invita|insieme)/.test(text)) {
-      return ['Vuole continuare a giocare?', 'Come chiudo bene il gioco?'];
-    }
-    if (/(tranquill|rilassat|sta bene)/.test(text)) {
-      return ['Restiamo così?', 'Come mi accorgo se cambia?'];
-    }
-    return ['Cosa guardo la prossima volta?', 'Ti racconto il seguito'];
-  }
-  if (domains.has('DIGESTIVE')) {
-    if (text.includes('vomit') || text.includes('diarr') || text.includes('feci')) {
-      return ['Cosa guardo nelle prossime ore?', 'Quando lo sento?'];
-    }
-    return ['Cosa guardo nei prossimi giorni?', 'Lo colleghiamo al cibo?'];
-  }
-  if (domains.has('NUTRITION')) {
-    return ['Cosa guardo dopo il cambio?', 'Lo colleghiamo al cibo?'];
-  }
-  if (domains.has('CARE')) {
-    return ['Qual è la cosa più importante?', 'Quando chiedo aiuto?'];
-  }
-  return ['Come continuo da qui?', 'Ti racconto il seguito'];
+  if (!turn || turn.terminal_state === 'SAFETY_INTERRUPT' || turn.media_invite) return [];
+  return (turn.suggested_prompts ?? []).slice(0, 2);
 }
 
 export default function AskScreen() {
@@ -239,7 +207,7 @@ export default function AskScreen() {
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'PHOTO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || `Mostrami ${dog.name} in una foto`} onPress={() => void sharePhoto()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="camera-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica una foto</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'VIDEO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || 'Mostrami questo momento in un video'} onPress={openVideoCapture} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="videocam-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica un video</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
-              {!sending && message.id === latestAssistantId && latestAssistant?.turn && !message.turn?.question_options?.length && !message.turn?.memory_proposal && availableFollowUps.length ? <View style={styles.followUps}><Text style={styles.followUpLabel}>Vuoi continuare?</Text>{availableFollowUps.map((prompt) => <Pressable key={prompt} accessibilityRole="button" onPress={() => void send(prompt)} style={({ pressed }) => [styles.followUp, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{prompt}</Text><Ionicons name="chevron-forward" size={14} color={colors.primary} /></Pressable>)}</View> : null}
+              {!sending && message.id === latestAssistantId && latestAssistant?.turn && !message.turn?.question_options?.length && !message.turn?.memory_proposal && availableFollowUps.length ? <View style={styles.followUps}><Text style={styles.followUpLabel}>Se vuoi, possiamo continuare da qui</Text>{availableFollowUps.map((prompt) => <Pressable key={prompt} accessibilityRole="button" onPress={() => void send(prompt)} style={({ pressed }) => [styles.followUp, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{prompt}</Text><Ionicons name="chevron-forward" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}

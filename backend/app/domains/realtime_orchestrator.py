@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
@@ -25,7 +26,7 @@ from app.knowledge.claim_validation import (
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
 
-REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v2"
+REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v3"
 
 _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
@@ -68,6 +69,28 @@ _GREETING = re.compile(
 _TECHNICAL_COPY = re.compile(
     r"\b(modello|database|prompt|elaborazione|invio il (tuo )?messaggio|"
     r"strumento|chiamata api)\b",
+    re.IGNORECASE,
+)
+# Conservative hints, never substitutes for semantic interpretation of a turn.
+_RELATIONSHIP_AFFECTION = re.compile(
+    r"\b(la mia vita|tutto per me|(?:la )?mia famiglia|lo amo|l'amo|"
+    r"amo da morire|il mio mondo)\b", re.IGNORECASE,
+)
+_CONCRETE_CONCERN = re.compile(
+    r"\b(perde (?:il )?pelo|ferit\w*|prurito|prude|si gratta|dolore|zopp\w*|"
+    r"vomit\w*|diarrea|sangue|non mangia|non beve|abbattut\w*|sta male|"
+    r"preoccup\w*)\b", re.IGNORECASE,
+)
+_GRIEF = re.compile(r"\b(mi manca|morto|morta|non c'è più|scomparso|scomparsa)\b", re.IGNORECASE)
+_DECLINE_MEDIA = re.compile(
+    r"\b(non (?:voglio|posso|ho voglia di) (?:mandar\w*|inviar\w*|fare|scattar\w*)"
+    r"|niente foto|senza foto|non ora|preferisco parlare)\b", re.IGNORECASE,
+)
+_MEDIA_INVITATION = re.compile(
+    r"\b(?:foto|video|fotografia)\b", re.IGNORECASE,
+)
+_AFFECTION_ACK = re.compile(
+    r"\b(si sente|si capisce|conta|famiglia|legame|importante per te|cuore)\b",
     re.IGNORECASE,
 )
 
@@ -163,6 +186,39 @@ diagnosi. Se la foto è un momento bello, riconosci prima il legame e il valore 
 momento; se riguarda un possibile problema, spiega cosa si può osservare e quale dato
 servirebbe dopo.
 
+Prima scegli response_mode dal significato dell'ULTIMO messaggio e dalla conversazione:
+AFFECTION per legame, orgoglio o gioia; CONCERN per una preoccupazione attuale;
+GRIEF per perdita o mancanza; ANALYSIS per una richiesta di interpretazione;
+CLOSURE quando saluta, ringrazia o vuole fermarsi; CONVERSATION negli altri casi.
+OWNER_TURN_SIGNALS sono indizi lessicali fallibili, non classificazioni obbligatorie.
+"Lo amo ma oggi sta male" richiede CONCERN, non un invito a celebrare. Non classificare
+"bellissimo il parco" come amore per il cane. Una negazione o un esempio non è un fatto.
+Prima rispondi a ciò che sta vivendo la persona, poi interpreta solo se è richiesto,
+infine proponi al massimo un gesto utile. Non serve sempre un consiglio o una domanda.
+"Oreo è la mia vita" dopo un'analisi cambia il significato: accogli il legame in modo
+semplice, senza ripetere pause nelle coccole o istruzioni educative. Puoi invitarlo a
+mostrarti Oreo con PHOTO, se non lo hai già invitato da poco e non ha già inviato la foto.
+Non dedurre che il cane ricambi un sentimento solo perché il proprietario lo ama.
+Con GRIEF ascolta senza entusiasmo forzato, inviti automatici o supposizioni sul decesso.
+Con CLOSURE concludi con calore e lascia vuote domande, suggerimenti e inviti.
+Se il proprietario corregge "ma è piacevole", accogli la correzione e rivedi la lettura.
+Non ripetere istruzioni già date con parole diverse. Una memoria pertinente è un richiamo
+breve, non qualcosa da citare in ogni turno. Non salvare emozioni del momento come fatti.
+La foto va commentata per il motivo dell'invio: orgoglio, coccole, pelo, dettaglio da vedere.
+Non chiedere un'altra foto appena ne ricevi una, salvo un dettaglio realmente illeggibile;
+spiega quale dettaglio manca. Una foto non permette di concludere come si muove il cane.
+Se il proprietario rifiuta una foto o un video, continua parlando senza insistere.
+media_prompt descrive il motivo della foto ("La zona dove perde pelo"), non un comando
+da attribuire al proprietario. L'invito umano compare in assistant_text, il CTA resta breve.
+
+suggested_prompts sono al massimo 2 brevi inviti opzionali a proseguire. Usali solo
+quando aiutano davvero il proprietario e non quando hai già dato una risposta
+completa. Devono essere messaggi scritti dal punto di vista del PROPRIETARIO, concreti e collegati
+all'ultimo messaggio (per esempio "Come capisco quando vuole ancora coccole?" o
+"Cosa guardo oggi?"). Non scrivere domande di DOGly al proprietario, suggerimenti generici o
+identici alla risposta. Se hai già un media_invite, evita di duplicare la stessa
+azione nei suggested_prompts.
+
 La risposta deve suonare parlata e deve lasciare al proprietario la sensazione di aver
 ricevuto un aiuto, non un compito. Non trattare un abbaio come una parola; una frase
 in prima persona del cane è solo una possibile parafrasi introdotta come "in parole
@@ -210,9 +266,14 @@ def _provider_decision(
     question = raw.get("question") if isinstance(raw.get("question"), str) else None
     question_options = [
         str(option).strip()
-        for option in raw.get("question_options", [])
+        for option in (raw.get("question_options") if isinstance(raw.get("question_options"), list) else [])
         if isinstance(option, str) and option.strip()
     ][:4]
+    suggested_prompts = [
+        str(prompt).strip()
+        for prompt in (raw.get("suggested_prompts") if isinstance(raw.get("suggested_prompts"), list) else [])
+        if isinstance(prompt, str) and prompt.strip()
+    ][:3]
     information_gain = raw.get("question_information_gain")
     allowed_gain = {
         "CHANGES_MEANING",
@@ -223,8 +284,6 @@ def _provider_decision(
         question = None
         information_gain = "NONE"
         question_options = []
-    elif question and not question_options:
-        question_options = ["È successo oggi", "Succede spesso", "È una cosa nuova"]
     terminal = raw.get("terminal_state")
     if terminal not in {
         "ANSWERED",
@@ -249,11 +308,23 @@ def _provider_decision(
     media_prompt = raw.get("media_prompt")
     if not isinstance(media_prompt, str) or not media_prompt.strip():
         media_prompt = None
+    response_mode = raw.get("response_mode")
+    if response_mode not in {
+        "CONVERSATION", "AFFECTION", "CONCERN", "GRIEF", "ANALYSIS", "CLOSURE"
+    }:
+        response_mode = "CONVERSATION"
+    suggested_prompts = _valid_suggested_prompts(
+        suggested_prompts,
+        assistant_text=answer.strip(),
+        media_invite=media_invite,
+    )
     try:
         return RealtimeDecision(
             assistant_text=answer.strip(),
+            response_mode=response_mode,
             question=question,
             question_options=question_options,
+            suggested_prompts=suggested_prompts,
             terminal_state=terminal,
             domains=[
                 value
@@ -304,13 +375,173 @@ def _direct_context_summary(value: str) -> str:
     return re.sub(r"sembra molto attento", "è molto attento", text, flags=re.IGNORECASE)
 
 
+def _owner_turn_signals(text: str) -> list[str]:
+    """Hints only: mixed messages and implicit emotion are interpreted by the model."""
+    signals = []
+    if _CONCRETE_CONCERN.search(text):
+        signals.append("CONCRETE_CONCERN")
+    if _GRIEF.search(text):
+        signals.append("LOSS_OR_ABSENCE")
+    if _RELATIONSHIP_AFFECTION.search(text):
+        signals.append("RELATIONSHIP_AFFECTION")
+    if _DECLINE_MEDIA.search(text):
+        signals.append("MEDIA_DECLINED")
+    return signals
+
+
+def _last_assistant_text(history: list[dict[str, str]]) -> str | None:
+    return next((
+        item["content"] for item in reversed(history)
+        if item.get("role") == "assistant" and item.get("content", "").strip()
+    ), None)
+
+
+def _repeats_previous_answer(candidate: str, previous: str | None) -> bool:
+    if not previous or min(len(candidate.split()), len(previous.split())) < 12:
+        return False
+    return SequenceMatcher(
+        None, " ".join(candidate.casefold().split()), " ".join(previous.casefold().split())
+    ).ratio() >= 0.78
+
+
+def _valid_suggested_prompts(
+    prompts: list[str], *, assistant_text: str, media_invite: str | None
+) -> list[str]:
+    # Relevance belongs to the reasoner; do not invent substitute chips.
+    if media_invite:
+        return []
+    seen = set()
+    result = []
+    for raw in prompts:
+        prompt = " ".join(raw.split())
+        key = prompt.casefold()
+        if not prompt or len(prompt) > 90 or key in seen or key in assistant_text.casefold():
+            continue
+        if re.search(
+            r"\b(lui|lei|il cane|oreo)\s+(deve|vuole|può|potrebbe|ha|è)\b",
+            prompt,
+            re.IGNORECASE,
+        ):
+            continue
+        seen.add(key)
+        result.append(prompt)
+    return result[:2]
+
+
+def _recent_media_invite(history: list[dict[str, str]]) -> bool:
+    return any(
+        item.get("role") == "assistant" and (
+            item.get("media_invite")
+            or _MEDIA_INVITATION.search(item.get("content", ""))
+        ) for item in history[-6:]
+    )
+
+
+def _relationship_response(
+    *, context: RealtimeDogContext, domains: list[RealtimeDomain],
+    invite: bool = True,
+) -> RealtimeDecision:
+    # Reflect the owner's feeling, never invent reciprocal canine feelings or events.
+    answer = f"Da come ne parli si sente quanto conta {context.dog_name} per te: è famiglia."
+    if invite:
+        answer += " Se ti va, fammelo vedere in una foto."
+    return RealtimeDecision(
+        assistant_text=answer, response_mode="AFFECTION", domains=domains,
+        media_invite="PHOTO" if invite else None,
+        media_prompt=f"Fammi vedere quanto è bello {context.dog_name}" if invite else None,
+    )
+
+
+def _apply_conversation_policy(
+    decision: RealtimeDecision, *, context: RealtimeDogContext, user_text: str,
+    history: list[dict[str, str]], domains: list[RealtimeDomain],
+    image_attached: bool = False,
+) -> RealtimeDecision:
+    data = decision.model_dump()
+    if decision.terminal_state == "SAFETY_INTERRUPT" or decision.safety_flags:
+        data.update(media_invite=None, media_prompt=None, suggested_prompts=[])
+        return RealtimeDecision.model_validate(data)
+    signals = _owner_turn_signals(user_text)
+    affection = (
+        "RELATIONSHIP_AFFECTION" in signals
+        and "CONCRETE_CONCERN" not in signals
+        and "LOSS_OR_ABSENCE" not in signals
+    )
+    # The model owns semantic intent. Rules only constrain competing/repeated actions.
+    social = decision.response_mode in {"AFFECTION", "GRIEF", "CLOSURE"}
+    declined = bool(_DECLINE_MEDIA.search(user_text)) or any(
+        _DECLINE_MEDIA.search(item.get("content", ""))
+        for item in history[-4:] if item.get("role") == "user"
+    )
+    if affection:
+        data["response_mode"] = "AFFECTION"
+        if (
+            _TECHNICAL_COPY.search(decision.assistant_text)
+            or not _AFFECTION_ACK.search(decision.assistant_text)
+            or _repeats_previous_answer(
+                decision.assistant_text, _last_assistant_text(history)
+            )
+        ):
+            replacement = _relationship_response(
+                context=context,
+                domains=domains,
+                invite=not image_attached
+                and not _recent_media_invite(history)
+                and not declined,
+            )
+            data = replacement.model_dump()
+        elif not image_attached and not _recent_media_invite(history) and not declined:
+            data.update(
+                media_invite="PHOTO",
+                media_prompt=f"Fammi vedere quanto è bello {context.dog_name}",
+            )
+    if affection or social:
+        data.update(question=None, question_options=[], question_information_gain="NONE",
+                    suggested_prompts=[], behavior_handoff=False, terminal_state="ANSWERED",
+                    memory_candidate=None, memory_category=None)
+    if declined or decision.response_mode in {"GRIEF", "CLOSURE"} or (
+        decision.response_mode == "AFFECTION"
+        and (image_attached or _recent_media_invite(history))
+    ):
+        data.update(media_invite=None, media_prompt=None, behavior_handoff=False)
+        if data["terminal_state"] == "BEHAVIOR_VIDEO_HANDOFF":
+            data["terminal_state"] = "ANSWERED"
+    used = {item.get("content", "").strip().casefold() for item in history if item.get("role") == "user"}
+    data["suggested_prompts"] = [
+        prompt for prompt in _valid_suggested_prompts(
+            data["suggested_prompts"], assistant_text=decision.assistant_text,
+            media_invite=data["media_invite"],
+        ) if prompt.casefold() not in used
+    ]
+    return RealtimeDecision.model_validate(data)
+
+
 def _fallback_decision(
     *,
     text: str,
     context: RealtimeDogContext,
     domains: list[RealtimeDomain],
+    history: list[dict[str, str]] | None = None,
+    image_attached: bool = False,
 ) -> RealtimeDecision:
     name = context.dog_name
+    history = history or []
+    signals = _owner_turn_signals(text)
+    if image_attached:
+        return RealtimeDecision(
+            assistant_text="La foto è arrivata, ma ora non riesco a leggerla. Non voglio dirti di aver visto qualcosa che non ho verificato: possiamo riprovare tra poco.",
+            terminal_state="ABSTAINED", domains=domains,
+        )
+    if "LOSS_OR_ABSENCE" in signals:
+        return RealtimeDecision(
+            assistant_text=f"Si sente quanto ti manca {name}. Se ti va di parlarne, ti ascolto.",
+            response_mode="GRIEF", domains=domains,
+        )
+    if "RELATIONSHIP_AFFECTION" in signals and "CONCRETE_CONCERN" not in signals:
+        return _relationship_response(
+            context=context, domains=domains,
+            invite=not _recent_media_invite(history) and "MEDIA_DECLINED" not in signals,
+        )
     latest = next(
         (
             item
@@ -322,7 +553,7 @@ def _fallback_decision(
         ),
         None,
     )
-    if latest:
+    if latest and not history:
         latest_text = str(
             (latest.data or {}).get("headline")
             or latest.summary
@@ -338,6 +569,11 @@ def _fallback_decision(
             assistant_text=assistant_text,
             domains=domains,
             used_source_ids=[latest.source_id],
+        )
+    if history:
+        return RealtimeDecision(
+            assistant_text="Non riesco a risponderti bene in questo momento. Quello che mi hai raccontato resta qui: riproviamo tra poco.",
+            terminal_state="ABSTAINED", domains=domains,
         )
     if "BEHAVIOR" in domains:
         return RealtimeDecision(
@@ -357,6 +593,7 @@ def _fallback_decision(
         ),
         question=f"Qual è il cambiamento concreto che hai notato in {name}?",
         question_options=["È successo oggi", "Succede spesso", "È una cosa nuova"],
+        suggested_prompts=[],
         question_information_gain="CHANGES_MEANING",
         domains=domains,
     )
@@ -437,7 +674,7 @@ async def orchestrate_realtime_turn(
     if safety:
         return safety, {"provider": "deterministic", "version": REALTIME_ORCHESTRATOR_VERSION}
 
-    if _GREETING.fullmatch(user_text):
+    if not image_url and _GREETING.fullmatch(user_text):
         owner = (context.owner_display_name or "").strip().split(" ", 1)[0].capitalize()
         hello = f"Ciao {owner}," if owner else "Ciao,"
         return RealtimeDecision(
@@ -457,7 +694,10 @@ async def orchestrate_realtime_turn(
         or not settings.realtime_enabled
         or not settings.openai_api_key
     ):
-        fallback = _fallback_decision(text=user_text, context=context, domains=domains)
+        fallback = _fallback_decision(
+            text=user_text, context=context, domains=domains, history=history,
+            image_attached=bool(image_url),
+        )
         fallback, canine_audit = _apply_claim_governance(fallback, context=context)
         return fallback, {
             "provider": "deterministic",
@@ -481,8 +721,16 @@ async def orchestrate_realtime_turn(
         "seasonal_context": context.seasonal_context,
         "canine_science": companion_science_brief(),
         "routed_domains": domains,
-        "conversation": history[-6:],
+        "conversation": history[-12:],
+        "conversation_state": {
+            "current_message_has_priority": True,
+            "recent_media_invite": _recent_media_invite(history),
+            "image_attached": bool(image_url),
+            "last_assistant_message": _last_assistant_text(history),
+            "instruction": "Riconosci cambi di significato, correzioni e risposte già date; non ripartire dalla vecchia analisi.",
+        },
         "owner_turn": user_text,
+        "owner_turn_signals": _owner_turn_signals(user_text),
         "owner_media_context": media_context,
         "output_schema": openai_realtime_decision_schema(),
     }
@@ -499,7 +747,7 @@ async def orchestrate_realtime_turn(
                     + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
                 ),
             },
-            {"type": "image_url", "image_url": {"url": image_url, "detail": "low"}},
+            {"type": "image_url", "image_url": {"url": image_url, "detail": "auto"}},
         ]
     body: dict[str, Any] = {
         "model": settings.realtime_reasoning_model,
@@ -527,8 +775,11 @@ async def orchestrate_realtime_turn(
             )
             response.raise_for_status()
             raw = response.json()
-    except httpx.HTTPError:
-        fallback = _fallback_decision(text=user_text, context=context, domains=domains)
+    except (httpx.HTTPError, ValueError):
+        fallback = _fallback_decision(
+            text=user_text, context=context, domains=domains, history=history,
+            image_attached=bool(image_url),
+        )
         fallback, canine_audit = _apply_claim_governance(fallback, context=context)
         return fallback, {
             "provider": "deterministic_fallback",
@@ -538,11 +789,14 @@ async def orchestrate_realtime_turn(
         }
     try:
         content = raw["choices"][0]["message"]["content"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, IndexError):
         content = ""
     decision = _provider_decision(content, domains=domains)
     if decision is None:
-        fallback = _fallback_decision(text=user_text, context=context, domains=domains)
+        fallback = _fallback_decision(
+            text=user_text, context=context, domains=domains, history=history,
+            image_attached=bool(image_url),
+        )
         fallback, canine_audit = _apply_claim_governance(fallback, context=context)
         return fallback, {
             "provider": "deterministic_fallback",
@@ -551,7 +805,54 @@ async def orchestrate_realtime_turn(
             "canine_intelligence": canine_audit,
         }
 
-    allowed_ids = {item.source_id for item in context.items}
+    repaired = False
+    repair_usage: dict[str, Any] = {}
+    if decision.terminal_state != "SAFETY_INTERRUPT" and not decision.safety_flags and (
+        _repeats_previous_answer(decision.assistant_text, _last_assistant_text(history))
+    ):
+        # One bounded repair, with the original context and image still present.
+        # A failed repair never recycles the old advice as a fresh response.
+        repaired = True
+        repair_body = {**body, "messages": [*body["messages"], {
+            "role": "system",
+            "content": "La risposta candidata ripete troppo il turno precedente. Rispondi al significato dell'ULTIMO messaggio: riconosci ciò che è cambiato e avanza, senza ripetere il consiglio. Restituisci lo stesso schema JSON.",
+        }]}
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                repair_response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                    json=repair_body,
+                )
+                repair_response.raise_for_status()
+                repair_raw = repair_response.json()
+            repair_content = repair_raw["choices"][0]["message"]["content"]
+            repair_usage = repair_raw.get("usage", {})
+            replacement = _provider_decision(repair_content, domains=domains)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
+            replacement = None
+        if replacement and not _repeats_previous_answer(
+            replacement.assistant_text, _last_assistant_text(history)
+        ):
+            decision = replacement
+            content = repair_content
+        else:
+            decision = _fallback_decision(
+                text=user_text, context=context, domains=domains, history=history,
+                image_attached=bool(image_url),
+            )
+            content = ""  # Do not apply claims from the discarded response.
+
+    decision = _apply_conversation_policy(
+        decision,
+        context=context,
+        user_text=user_text,
+        history=history,
+        domains=domains,
+        image_attached=bool(image_url),
+    )
+
+    allowed_ids = _context_ids(context)
     decision.used_source_ids = [
         source_id for source_id in decision.used_source_ids if source_id in allowed_ids
     ]
@@ -574,5 +875,7 @@ async def orchestrate_realtime_turn(
         "model": settings.realtime_reasoning_model,
         "version": REALTIME_ORCHESTRATOR_VERSION,
         "usage": raw.get("usage", {}),
+        "repetition_repair": repaired,
+        "repair_usage": repair_usage,
         "canine_intelligence": canine_audit,
     }

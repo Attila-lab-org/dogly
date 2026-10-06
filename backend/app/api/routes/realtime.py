@@ -79,7 +79,13 @@ def _resume_history(
             continue
         normalized = "user" if role in {"proprietario", "user"} else "assistant"
         resumed.append({"role": normalized, "content": content})
-    return (resumed + current)[-8:]
+    # Memory is refreshed after each turn and can already contain this session.
+    # Merge the overlap instead of replaying the same exchange twice.
+    overlap = 0
+    for size in range(1, min(len(resumed), len(current)) + 1):
+        if resumed[-size:] == current[:size]:
+            overlap = size
+    return (resumed + current[overlap:])[-12:]
 
 
 @router.post("/sessions", response_model=RealtimeSessionOut, status_code=201)
@@ -271,7 +277,7 @@ async def create_realtime_turn(
                     ),
                 )
             history = []
-            for turn in state.store.realtime_turns.get(session_id, [])[-3:]:
+            for turn in state.store.realtime_turns.get(session_id, [])[-6:]:
                 history.extend(
                     [
                         {"role": "user", "content": turn["user_transcript"]},
@@ -344,6 +350,7 @@ async def create_realtime_turn(
         assistant_text=decision.assistant_text,
         question=decision.question,
         question_options=decision.question_options,
+        suggested_prompts=decision.suggested_prompts,
         terminal_state=decision.terminal_state,
         domains=decision.domains,
         safety_flags=decision.safety_flags,

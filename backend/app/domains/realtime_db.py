@@ -295,7 +295,7 @@ async def load_history_db(
                     where session_id=cast(:session_id as uuid)
                       and user_id=cast(:user_id as uuid)
                     order by ordinal desc
-                    limit 3
+                    limit 6
                     """
                 ),
                 {"session_id": session_id, "user_id": user_id},

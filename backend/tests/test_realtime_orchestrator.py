@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
     _resume_history,
@@ -20,12 +21,12 @@ from app.domains.realtime_context import (
     route_realtime_domains,
 )
 from app.domains.realtime_orchestrator import (
+    _apply_conversation_policy,
     _provider_decision,
     deterministic_safety_interrupt,
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
-
 from tests.conftest import create_dog
 
 
@@ -61,6 +62,84 @@ def test_provider_decision_keeps_contextual_media_invite() -> None:
     assert decision is not None
     assert decision.media_invite == "PHOTO"
     assert decision.media_prompt == "Fammi vedere dove perde pelo"
+
+
+def test_provider_decision_keeps_backend_owned_continuation_prompts() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"È un momento tenero.","domains":["BEHAVIOR"],'
+        '"suggested_prompts":["Come capisco quando vuole ancora coccole?",'
+        '"Lui vuole sempre questo"],"question_information_gain":"NONE"}',
+        domains=["BEHAVIOR"],
+    )
+
+    assert decision is not None
+    assert decision.suggested_prompts == ["Come capisco quando vuole ancora coccole?"]
+
+
+def test_repeated_affection_answer_is_replaced_by_a_warm_next_step() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    decision = _apply_conversation_policy(
+        RealtimeDecision(
+            assistant_text=(
+                "Oreo resta vicino a te e si rilassa con le coccole. "
+                "Continua con qualche pausa e osserva se torna da te."
+            )
+        ),
+        context=context,
+        user_text="Oreo è la mia vita",
+        history=[
+            {
+                "role": "assistant",
+                "content": (
+                    "Oreo resta vicino a te e si rilassa con le coccole. "
+                    "Continua con qualche pausa e osserva se torna da te."
+                ),
+            }
+        ],
+        domains=["GENERAL"],
+    )
+
+    assert "famiglia" in decision.assistant_text
+    assert decision.media_invite == "PHOTO"
+    assert decision.media_prompt == "Fammi vedere quanto è bello Oreo"
+    assert decision.question is None
+    assert decision.suggested_prompts == []
+
+
+def test_affection_signal_does_not_override_a_concrete_concern() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    decision = _apply_conversation_policy(
+        RealtimeDecision(
+            assistant_text="Capisco quanto ci tieni a Oreo. Guardiamo il problema.",
+            response_mode="CONVERSATION",
+        ),
+        context=context,
+        user_text="Oreo è la mia vita, ma oggi perde pelo e si gratta.",
+        history=[],
+        domains=["CARE"],
+    )
+
+    assert decision.response_mode == "CONVERSATION"
+    assert decision.media_invite is None
+
+
+def test_recent_photo_invite_is_not_repeated() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    decision = _apply_conversation_policy(
+        RealtimeDecision(
+            assistant_text="Che bello sentirti parlare così di lui.",
+            response_mode="CONVERSATION",
+        ),
+        context=context,
+        user_text="È davvero tutto per me.",
+        history=[
+            {"role": "assistant", "content": "Se vuoi, fammi vedere Oreo in una foto."}
+        ],
+        domains=["GENERAL"],
+    )
+
+    assert decision.response_mode == "AFFECTION"
+    assert decision.media_invite is None
 
 
 def test_voice_session_accepts_database_uuid_owner() -> None:
@@ -221,6 +300,24 @@ async def test_disabled_realtime_makes_legacy_headline_direct() -> None:
     )
     assert decision.assistant_text == "Oreo è tranquillo e rilassato"
     assert "sembra" not in decision.assistant_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_disabled_realtime_prioritizes_relationship_affection() -> None:
+    settings = Settings(realtime_enabled=False)
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+
+    decision, _ = await orchestrate_realtime_turn(
+        settings=settings,
+        user_text="Oreo è la mia vita",
+        domains=["GENERAL"],
+        context=context,
+        history=[],
+    )
+
+    assert "famiglia" in decision.assistant_text
+    assert decision.media_invite == "PHOTO"
+    assert decision.suggested_prompts == []
 
 
 @pytest.mark.asyncio
