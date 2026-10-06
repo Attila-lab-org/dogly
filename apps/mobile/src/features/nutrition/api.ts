@@ -157,7 +157,7 @@ export async function verifyFood(options: {
       },
       feeding_directions: options.feedingDirections?.trim() || null,
     },
-    { headers: { 'X-Idempotency-Key': `verify-${options.foodId}` } },
+      { headers: { 'X-Idempotency-Key': newId(`verify-${options.foodId}`) } },
   );
 }
 
@@ -167,7 +167,6 @@ export async function createManualFood(options: {
   name: string;
   ingredientsRaw?: string;
   calories?: string;
-  guaranteedAnalysis?: ExternalFoodCandidate['guaranteed_analysis'];
 }): Promise<ApiFoodProduct> {
   const clientRequestId = newId('manual-food');
   return api.post<ApiFoodProduct>(

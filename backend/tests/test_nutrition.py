@@ -230,6 +230,45 @@ async def test_quantity_change_updates_active_period_without_food_change(
     assert any(row["quantity_per_day"] == "260 g" and row["end_at"] is None for row in listed.json())
 
 
+async def test_removing_active_food_archives_it_and_closes_open_period(
+    client: httpx.AsyncClient, auth_headers
+):
+    dog_id = await create_dog(client, auth_headers)
+    created = await client.post(
+        "/v1/nutrition/foods/manual",
+        json={
+            "dog_id": dog_id,
+            "client_request_id": "manual-food-remove-0001",
+            "brand": "DOGly",
+            "name": "Alimento da rimuovere",
+            "guaranteed_analysis": {},
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "manual-food-remove-0001"},
+    )
+    assert created.status_code == 201, created.text
+    food_id = created.json()["id"]
+    started = await client.post(
+        "/v1/nutrition/feeding-periods",
+        json={
+            "dog_id": dog_id,
+            "food_product_id": food_id,
+            "start_at": "2026-09-01T10:00:00Z",
+            "quantity_per_day": "180 g",
+        },
+        headers={**auth_headers, "X-Idempotency-Key": "feed-remove-0001"},
+    )
+    assert started.status_code == 201, started.text
+
+    removed = await client.delete(f"/v1/nutrition/foods/{food_id}", headers=auth_headers)
+    assert removed.status_code == 204, removed.text
+    listed = await client.get(f"/v1/nutrition/foods?dog_id={dog_id}", headers=auth_headers)
+    assert all(item["id"] != food_id for item in listed.json())
+    periods = await client.get(f"/v1/nutrition/feeding-periods?dog_id={dog_id}", headers=auth_headers)
+    assert periods.status_code == 200
+    assert periods.json()[0]["food_product_id"] == food_id
+    assert periods.json()[0]["end_at"] is not None
+
+
 def test_quantity_update_preserves_history_and_starts_new_period():
     from datetime import UTC, datetime, timedelta
 

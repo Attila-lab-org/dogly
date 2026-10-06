@@ -1353,9 +1353,29 @@ async def get_food_product(
 
 async def delete_food_product(engine: AsyncEngine, *, user_id: str, food_id: str) -> None:
     async with engine.begin() as conn:
-        result = await conn.execute(text("update public.food_products set archived_at = now() where id = :id and owner_id = :owner and archived_at is null"), {"id": food_id, "owner": user_id})
+        result = await conn.execute(
+            text(
+                """
+                update public.food_products
+                set archived_at = now()
+                where id = :id and owner_id = :owner and archived_at is null
+                returning id
+                """
+            ),
+            {"id": food_id, "owner": user_id},
+        )
         if result.rowcount == 0:
             raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
+        await conn.execute(
+            text(
+                """
+                update public.feeding_periods
+                set end_at = now()
+                where food_product_id = :id and end_at is null
+                """
+            ),
+            {"id": food_id},
+        )
 
 
 async def list_feeding_periods(

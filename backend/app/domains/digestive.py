@@ -670,7 +670,11 @@ def get_food_product(
 
 def delete_food_product(store: InMemoryStore, *, user_id: str, food_id: str) -> None:
     product = get_food_product(store, user_id=user_id, food_id=food_id)
-    store.food_products[product.id] = product.model_copy(update={"archived_at": now_utc()})
+    archived_at = now_utc()
+    for period_id, period in store.feeding_periods.items():
+        if period.food_product_id == product.id and period.end_at is None:
+            store.feeding_periods[period_id] = period.model_copy(update={"end_at": archived_at})
+    store.food_products[product.id] = product.model_copy(update={"archived_at": archived_at})
 
 
 def list_feeding_periods(

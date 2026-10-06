@@ -31,7 +31,6 @@ import {
   verifyFood,
 } from '@/features/nutrition/api';
 import {
-  feedingQuantitySuccessCopy,
   isOpenPeriodForFood,
 } from '@/features/nutrition/period';
 
@@ -77,7 +76,8 @@ export default function FoodVerifyScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const quantityFocus = focus === 'quantity';
-  const [detailsOpen, setDetailsOpen] = useState(true);
+  // Technical label fields stay closed until the owner explicitly asks to edit them.
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const foodQuery = useQuery({
     queryKey: ['nutrition-food', foodId],
@@ -102,9 +102,6 @@ export default function FoodVerifyScreen() {
   const [calories, setCalories] = useState('');
   const [feedingDirections, setFeedingDirections] = useState('');
   const [quantityPerDay, setQuantityPerDay] = useState('');
-  const [savedMode, setSavedMode] = useState<'quantity' | 'activated' | null>(
-    null,
-  );
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -177,7 +174,7 @@ export default function FoodVerifyScreen() {
     isOpenPeriodForFood(period, foodId ?? ''),
   );
   const quantityOnly = quantityFocus && Boolean(food.verified_at);
-  const foodLabel = [brand.trim(), name.trim()].filter(Boolean).join(' ');
+  const shouldActivate = !food.verified_at || quantityOnly || Boolean(quantityPerDay.trim());
 
   const confirm = async () => {
     if (quantityOnly) {
@@ -213,7 +210,7 @@ export default function FoodVerifyScreen() {
           periodId: openPeriod.id,
           quantityPerDay: quantityPerDay.trim(),
         });
-        setSavedMode('quantity');
+        router.replace('/nutrition/foods');
         return;
       }
       if (!quantityOnly) {
@@ -230,12 +227,14 @@ export default function FoodVerifyScreen() {
           feedingDirections,
         });
       }
-      await activateFeedingPeriod({
-        dogId: dog.id,
-        foodId,
-        quantityPerDay: quantityPerDay.trim() || undefined,
-      });
-      setSavedMode('activated');
+      if (shouldActivate) {
+        await activateFeedingPeriod({
+          dogId: dog.id,
+          foodId,
+          quantityPerDay: quantityPerDay.trim() || undefined,
+        });
+      }
+      router.replace('/nutrition/foods');
     } catch {
       setSaveError(
         'Non sono riuscito a salvare il cibo. Controlla i campi e riprova.',
@@ -244,33 +243,6 @@ export default function FoodVerifyScreen() {
       setSaving(false);
     }
   };
-
-  if (savedMode) {
-    const success =
-      savedMode === 'quantity'
-        ? feedingQuantitySuccessCopy(dog.name, foodLabel || name || 'questo alimento')
-        : {
-            title: 'Cibo attivato',
-            body: `"${foodLabel}" è ora il cibo attivo di ${dog.name}. Il periodo del cibo precedente è stato chiuso: le prossime osservazioni digestive saranno collegate a questo alimento.`,
-          };
-    return (
-      <ScreenContainer>
-        <StackScreenHeader title="Verifica etichetta" />
-        <Card>
-          <View style={styles.doneHeader}>
-            <Ionicons name="checkmark-circle" size={40} color={colors.accent} />
-            <Text style={styles.doneTitle}>{success.title}</Text>
-          </View>
-          <Text style={styles.note}>{success.body}</Text>
-          <Button
-            title={`Vai ai cibi di ${dog.name}`}
-            style={styles.doneButton}
-            onPress={() => router.replace('/nutrition/foods')}
-          />
-        </Card>
-      </ScreenContainer>
-    );
-  }
 
   return (
     <ScreenContainer scroll>
@@ -307,6 +279,14 @@ export default function FoodVerifyScreen() {
         </>}
       </Card>
 
+      {quantityOnly ? (
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Quanto ne mangia?</Text>
+          <Text style={styles.sectionHint}>Questa è l’unica informazione necessaria per aggiornare il cibo attivo.</Text>
+          <EditableField label="Quantità giornaliera" value={quantityPerDay} onChangeText={setQuantityPerDay} needsReview={!quantityPerDay.trim()} />
+        </Card>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: detailsOpen }}
@@ -322,13 +302,16 @@ export default function FoodVerifyScreen() {
 
       {detailsOpen ? <>
         <Card style={styles.card}>
-        <EditableField
+        {editing ? <EditableField
           label="Ingredienti (testo dell'etichetta)"
           value={ingredients}
           onChangeText={setIngredients}
           needsReview={needsReview('ingredients')}
           multiline
-        />
+        /> : <>
+          <Text style={styles.fieldLabel}>Ingredienti (testo dell'etichetta)</Text>
+          <Text style={styles.readOnlyText}>{ingredients || 'Non presenti nella lettura.'}</Text>
+        </>}
         </Card>
 
         <Card style={styles.card}>
@@ -386,11 +369,11 @@ export default function FoodVerifyScreen() {
         </Card>
       </> : null}
 
-      <Text style={styles.note}>
+      {detailsOpen ? <Text style={styles.note}>
         Le percentuali sono i valori minimi/massimi dichiarati in etichetta,
         non misure esatte del contenuto. Non le useremo mai da sole per trarre
         conclusioni nutrizionali.
-      </Text>
+      </Text> : null}
       {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
 
       <Button
@@ -412,6 +395,8 @@ const styles = StyleSheet.create({
   nutritionSummary: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, marginBottom: spacing.md },
   summaryText: { color: colors.text, fontSize: typography.size.sm, lineHeight: typography.size.sm * 1.5 },
   summaryHint: { color: colors.textSecondary, fontSize: typography.size.xs, marginTop: spacing.xs },
+  sectionHint: { color: colors.textSecondary, fontSize: typography.size.xs, lineHeight: typography.size.xs * 1.5, marginBottom: spacing.md },
+  readOnlyText: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: typography.size.sm * 1.5, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md },
   labelImage: {
     width: '100%',
     height: 180,
@@ -499,18 +484,5 @@ const styles = StyleSheet.create({
   },
   confirm: {
     marginBottom: spacing.xl,
-  },
-  doneHeader: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  doneTitle: {
-    fontSize: typography.size.xl,
-    fontWeight: typography.weight.bold,
-    color: colors.text,
-  },
-  doneButton: {
-    marginTop: spacing.lg,
   },
 });
