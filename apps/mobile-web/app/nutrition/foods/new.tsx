@@ -49,6 +49,7 @@ export default function NewFoodScreen() {
   const { userId } = useSession();
   const photoStarted = useRef(false);
   const barcodeStarted = useRef(false);
+  const searchRequest = useRef(0);
 
   const [step, setStep] = useState<Step>('identify');
   const [query, setQuery] = useState(photoQuery);
@@ -75,11 +76,13 @@ export default function NewFoodScreen() {
 
   const search = async (raw: string) => {
     const cleaned = raw.trim();
-    if (cleaned.length < 1 || !dog.id || working) return;
+    if (cleaned.length < 1 || !dog.id) return;
+    const requestId = ++searchRequest.current;
     setWorking(true);
     setMessage(null);
     try {
       const result = await searchFoodsByName({ dogId: dog.id, query: cleaned });
+      if (requestId !== searchRequest.current) return;
       setHits(result.items);
       setSelected(null);
       setExactBarcode(null);
@@ -88,9 +91,10 @@ export default function NewFoodScreen() {
         setMessage('Non l’ho trovato. Prova con marca e gusto, oppure inseriscilo tu.');
       }
     } catch {
+      if (requestId !== searchRequest.current) return;
       setMessage('Non riesco a cercare adesso. Puoi riprovare o inserirlo tu.');
     } finally {
-      setWorking(false);
+      if (requestId === searchRequest.current) setWorking(false);
     }
   };
 
@@ -112,7 +116,7 @@ export default function NewFoodScreen() {
     setBrand(food?.brand ?? '');
     setName(food?.name ?? '');
     setQuery(extractedQuery);
-    if (extractedQuery.trim().length >= 2) {
+    if (extractedQuery.trim().length >= 1) {
       void search(extractedQuery);
     } else {
       setManual(true);
