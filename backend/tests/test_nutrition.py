@@ -1,10 +1,10 @@
 """Nutrition label extraction, owner verification, and feeding-period wiring."""
 
 import httpx
-
 from app.api.routes import nutrition as nutrition_routes
 from app.contracts.api import FoodLabelExtraction, GuaranteedAnalysis
 from app.providers.base import ProviderUsage
+
 from tests.conftest import create_dog
 
 
@@ -202,8 +202,8 @@ async def test_quantity_change_updates_active_period_without_food_change(
         headers={**auth_headers, "X-Idempotency-Key": f"feed-qty-{period_id}-250"},
     )
     assert patched.status_code == 200, patched.text
-    assert patched.json()["id"] == period_id
-    assert patched.json()["start_at"].startswith("2026-09-01")
+    assert patched.json()["id"] != period_id
+    assert patched.json()["start_at"] > "2026-09-01"
     assert patched.json()["quantity_per_day"] == "250 g"
     assert patched.json()["end_at"] is None
 
@@ -218,19 +218,19 @@ async def test_quantity_change_updates_active_period_without_food_change(
         headers={**auth_headers, "X-Idempotency-Key": "feed-qty-repost"},
     )
     assert repeated.status_code == 201, repeated.text
-    assert repeated.json()["id"] == period_id
-    assert repeated.json()["start_at"].startswith("2026-09-01")
+    assert repeated.json()["id"] != patched.json()["id"]
+    assert repeated.json()["start_at"] > patched.json()["start_at"]
     assert repeated.json()["quantity_per_day"] == "260 g"
 
     listed = await client.get(
         f"/v1/nutrition/feeding-periods?dog_id={dog_id}", headers=auth_headers
     )
     assert listed.status_code == 200
-    assert len(listed.json()) == 1
-    assert listed.json()[0]["quantity_per_day"] == "260 g"
+    assert len(listed.json()) == 3
+    assert any(row["quantity_per_day"] == "260 g" and row["end_at"] is None for row in listed.json())
 
 
-def test_quantity_update_keeps_food_start_and_notes():
+def test_quantity_update_preserves_history_and_starts_new_period():
     from datetime import UTC, datetime, timedelta
 
     from app.contracts.api import FeedingPeriodCreate, FeedingPeriodUpdate
@@ -280,11 +280,13 @@ def test_quantity_update_keeps_food_start_and_notes():
         period_id=period.id,
         payload=FeedingPeriodUpdate(quantity_per_day="250 g"),
     )
-    assert updated.id == period.id
-    assert updated.start_at == period.start_at
+    assert updated.id != period.id
+    assert updated.start_at > period.start_at
     assert updated.quantity_per_day == "250 g"
     assert updated.treats_notes == "un biscotto"
     assert updated.transition_notes == "passaggio lento"
+    assert period.end_at == updated.start_at
+    assert period.quantity_per_day == "200 g"
 
     event = FecalEventRec(
         id="now",
@@ -299,8 +301,8 @@ def test_quantity_update_keeps_food_start_and_notes():
     )
     store.fecal_events["now"] = event
     context = build_inmemory_digestive_context(store, event=event)
-    assert context.food_started_days_ago == 10
-    assert context.quantity_per_day == "250 g"
+    assert context.food_started_days_ago is None
+    assert context.quantity_per_day is None
 
 
 def test_manual_food_insert_matches_partial_unique_index():

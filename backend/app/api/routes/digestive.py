@@ -107,7 +107,11 @@ async def init_fecal(
     _limiter: None = Depends(rate_limit("digestive.init", limit=30)),
 ) -> FecalInitResponse:
     if cached := guard.lookup():
-        return FecalInitResponse.model_validate(cached)
+        cached_response = FecalInitResponse.model_validate(cached)
+        from app.domains.repository import now_utc
+
+        if cached_response.upload.expires_at > now_utc():
+            return cached_response
     if state.engine is not None:
         event, url, expires, reserved = await digestive_db.init_fecal_event(
             state.engine,

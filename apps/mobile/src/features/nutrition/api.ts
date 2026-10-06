@@ -266,7 +266,7 @@ export async function updateFeedingPeriod(options: {
     { quantity_per_day: quantity || null },
     {
       headers: {
-        'X-Idempotency-Key': `feed-qty-${options.periodId}-${quantity || 'clear'}`,
+        'X-Idempotency-Key': `feed-qty-${options.periodId}-${Date.now()}`,
       },
     },
   );
@@ -281,10 +281,7 @@ export async function activateFeedingPeriod(options: {
 }): Promise<ApiFeedingPeriod> {
   // FIX 3.4: deterministic key per food so a duplicate activation tap is a
   // server-side no-op instead of creating a second feeding period.
-  const quantityKey = options.quantityPerDay?.trim();
-  const key = quantityKey
-    ? `feed-${options.foodId}-qty-${quantityKey}`
-    : `feed-${options.foodId}`;
+  const key = `feed-${options.foodId}-${Date.now()}`;
   return api.post<ApiFeedingPeriod>(
     '/v1/nutrition/feeding-periods',
     {

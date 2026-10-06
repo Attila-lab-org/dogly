@@ -7,6 +7,7 @@ safety/rule layer (sez. 19.3).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from app.config import Settings
@@ -546,19 +547,21 @@ def create_feeding_period(
         None,
     )
     if open_period is not None and open_period.food_product_id == payload.food_product_id:
-        return _apply_open_period_fields(
-            open_period,
-            payload.model_dump(),
-            ignore_none=True,
-        )
+        requested = payload.model_dump()
+        if all(
+            requested.get(field) in (None, getattr(open_period, field))
+            for field in ("quantity_per_day", "treats_notes", "transition_notes")
+        ):
+            return open_period
+    effective_start = max(payload.start_at, datetime.now(UTC))
     for period in store.feeding_periods.values():
         if period.dog_id == payload.dog_id and period.end_at is None:
-            period.end_at = payload.start_at
+            period.end_at = effective_start
     rec = FeedingPeriodRec(
         id=new_id(),
         dog_id=payload.dog_id,
         food_product_id=payload.food_product_id,
-        start_at=payload.start_at,
+        start_at=effective_start,
         quantity_per_day=payload.quantity_per_day,
         treats_notes=payload.treats_notes,
         transition_notes=payload.transition_notes,
@@ -580,11 +583,23 @@ def update_feeding_period(
             ErrorCode.VALIDATION_FAILED,
             "Only the active feeding period can be updated.",
         )
-    return _apply_open_period_fields(
-        period,
-        payload.model_dump(exclude_unset=True),
-        ignore_none=False,
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        return period
+    # Feeding history is immutable. A correction starts a new effective period
+    # instead of rewriting what was true before the correction.
+    period.end_at = datetime.now(UTC)
+    rec = FeedingPeriodRec(
+        id=new_id(),
+        dog_id=period.dog_id,
+        food_product_id=period.food_product_id,
+        start_at=period.end_at,
+        quantity_per_day=updates.get("quantity_per_day", period.quantity_per_day),
+        treats_notes=updates.get("treats_notes", period.treats_notes),
+        transition_notes=updates.get("transition_notes", period.transition_notes),
     )
+    store.feeding_periods[rec.id] = rec
+    return rec
 
 
 def digestive_summary(store: InMemoryStore, *, user_id: str, dog_id: str) -> dict:

@@ -210,8 +210,8 @@ export default function BehaviorProcessingScreen() {
           primaryTitle="Torna alla Home"
           primaryVariant="primary"
           onPrimary={goHome}
-          secondaryTitle="Registra di nuovo"
-          onSecondary={retryCapture}
+          secondaryTitle="Vai al Diario"
+          onSecondary={() => router.replace('/(tabs)/diary')}
         />
       </ScreenContainer>
     );
@@ -263,9 +263,9 @@ export default function BehaviorProcessingScreen() {
           iconBg={colors.coralSoft}
           iconColor={colors.coral}
           title="L’analisi sta impiegando troppo"
-          message="Sto ancora lavorando in background e ti avviso se il risultato arriva. Questa attesa non viene conteggiata come un’analisi andata a buon fine: puoi riprovare o tornare più tardi dal Diario."
-          primaryTitle="Riprova"
-          onPrimary={retryCapture}
+          message="Puoi ricontrollare questa analisi o ritrovarla più tardi nel Diario. Non serve inviare un altro video."
+          primaryTitle="Ricontrolla"
+          onPrimary={() => { void query.refetch(); }}
           onSecondary={goHome}
         />
       </ScreenContainer>

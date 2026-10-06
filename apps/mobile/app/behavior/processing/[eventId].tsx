@@ -232,13 +232,12 @@ export default function BehaviorProcessingScreen() {
           </View>
           <Text style={styles.stateTitle}>L’analisi sta impiegando troppo</Text>
           <Text style={styles.stateText}>
-            Sto ancora lavorando in background e ti avviso se il risultato
-            arriva. Questa attesa non viene conteggiata come un’analisi
-            andata a buon fine: puoi riprovare o tornare più tardi dal Diario.
+            Puoi ricontrollare questa analisi o ritrovarla più tardi nel Diario.
+            Non serve inviare un altro video.
           </Text>
           <Button
-            title="Riprova"
-            onPress={() => router.replace('/behavior/capture')}
+            title="Ricontrolla"
+            onPress={() => { void query.refetch(); }}
           />
           <Button
             title="Torna alla Home"

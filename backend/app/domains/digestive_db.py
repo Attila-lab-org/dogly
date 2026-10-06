@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -1140,30 +1141,13 @@ async def create_feeding_period(
         if (
             open_row is not None
             and str(open_row["food_product_id"]) == str(payload.food_product_id)
+            and all(
+                getattr(payload, field) is None or getattr(payload, field) == open_row[field]
+                for field in ("quantity_per_day", "treats_notes", "transition_notes")
+            )
         ):
-            updated = (
-                await conn.execute(
-                    text(
-                        """
-                        update public.feeding_periods
-                        set quantity_per_day = coalesce(:quantity_per_day, quantity_per_day),
-                            treats_notes = coalesce(:treats_notes, treats_notes),
-                            transition_notes = coalesce(:transition_notes, transition_notes),
-                            updated_at = now()
-                        where id = :id
-                        returning id, dog_id, food_product_id, start_at, end_at,
-                                  quantity_per_day, treats_notes, transition_notes
-                        """
-                    ),
-                    {
-                        "id": open_row["id"],
-                        "quantity_per_day": payload.quantity_per_day,
-                        "treats_notes": payload.treats_notes,
-                        "transition_notes": payload.transition_notes,
-                    },
-                )
-            ).mappings().one()
-            return _feeding_from_row(updated)
+                return _feeding_from_row(open_row)
+        effective_start = max(payload.start_at, datetime.now(UTC))
         await conn.execute(
             text(
                 """
@@ -1172,7 +1156,7 @@ async def create_feeding_period(
                 where dog_id = :dog_id and end_at is null
                 """
             ),
-            {"dog_id": payload.dog_id, "start_at": payload.start_at},
+            {"dog_id": payload.dog_id, "start_at": effective_start},
         )
         row = (
             await conn.execute(
@@ -1192,7 +1176,7 @@ async def create_feeding_period(
                 {
                     "dog_id": payload.dog_id,
                     "food_product_id": payload.food_product_id,
-                    "start_at": payload.start_at,
+                    "start_at": effective_start,
                     "quantity_per_day": payload.quantity_per_day,
                     "treats_notes": payload.treats_notes,
                     "transition_notes": payload.transition_notes,
@@ -1235,24 +1219,36 @@ async def update_feeding_period(
             )
         if not updates:
             return _feeding_from_row(existing)
-        assignments = ["updated_at = now()"]
-        params: dict[str, Any] = {"id": period_id}
-        for field in ("quantity_per_day", "treats_notes", "transition_notes"):
-            if field in updates:
-                assignments.append(f"{field} = :{field}")
-                params[field] = updates[field]
+        if not updates:
+            return _feeding_from_row(existing)
+        effective_at = datetime.now(UTC)
+        await conn.execute(
+            text("update public.feeding_periods set end_at=:effective_at, updated_at=:effective_at where id=:id"),
+            {"id": period_id, "effective_at": effective_at},
+        )
         row = (
             await conn.execute(
                 text(
-                    f"""
-                    update public.feeding_periods
-                    set {", ".join(assignments)}
-                    where id = :id
+                    """
+                    insert into public.feeding_periods(
+                      dog_id, food_product_id, start_at, quantity_per_day,
+                      treats_notes, transition_notes
+                    ) values (
+                      :dog_id, :food_product_id, :start_at, :quantity_per_day,
+                      :treats_notes, :transition_notes
+                    )
                     returning id, dog_id, food_product_id, start_at, end_at,
                               quantity_per_day, treats_notes, transition_notes
                     """
                 ),
-                params,
+                {
+                    "dog_id": existing["dog_id"],
+                    "food_product_id": existing["food_product_id"],
+                    "start_at": effective_at,
+                    "quantity_per_day": updates.get("quantity_per_day", existing["quantity_per_day"]),
+                    "treats_notes": updates.get("treats_notes", existing["treats_notes"]),
+                    "transition_notes": updates.get("transition_notes", existing["transition_notes"]),
+                },
             )
         ).mappings().one()
     return _feeding_from_row(row)

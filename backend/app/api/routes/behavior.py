@@ -267,7 +267,13 @@ async def init_capture(
     _limiter: None = Depends(rate_limit("behavior.init", limit=30)),
 ) -> BehaviorCaptureInitResponse:
     if cached := guard.lookup():
-        return BehaviorCaptureInitResponse.model_validate(cached)
+        # Reuse the reservation, not an expiring upload credential. The domain
+        # resolves client_request_id to the existing capture and signs again.
+        cached_response = BehaviorCaptureInitResponse.model_validate(cached)
+        from app.domains.repository import now_utc
+
+        if cached_response.upload.expires_at > now_utc():
+            return cached_response
     if state.engine is not None:
         lifestyle_out = await lifestyle_db.get_lifestyle(
             state.engine, user_id, payload.dog_id

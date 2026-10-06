@@ -199,8 +199,7 @@ export default function DigestiveProcessingScreen() {
     query.data &&
     isRetryableDigestiveStatus(query.data.status)
   ) {
-    // FAILED_RETRYABLE: the platform is retrying with backoff. Show a retry
-    // UI so the owner can re-submit immediately instead of waiting.
+    // The worker owns retries. Recheck the same event; never duplicate it.
     return (
       <ScreenContainer style={styles.screen}>
         <View style={styles.failedPage}>
@@ -214,12 +213,12 @@ export default function DigestiveProcessingScreen() {
           <Text style={styles.failedTitle}>Riprovo tra un momento</Text>
           <Text style={styles.failedText}>
             L'analisi non è partita al primo tentativo, ma ci sto riprovando in
-            background. Non è colpa della foto: non viene conteggiata. Puoi
-            aspettare o riprovare adesso.
+            background. Non serve inviare una seconda foto: puoi ricontrollare
+            questa analisi oppure ritrovarla nel Diario.
           </Text>
           <Button
-            title="Riprova adesso"
-            onPress={() => router.replace('/digestive/capture')}
+            title="Ricontrolla"
+            onPress={() => { void query.refetch(); }}
           />
           <Button
             title="Torna alla Home"
@@ -244,13 +243,12 @@ export default function DigestiveProcessingScreen() {
           </View>
           <Text style={styles.failedTitle}>L’analisi sta impiegando troppo</Text>
           <Text style={styles.failedText}>
-            Sto ancora lavorando in background. Questa attesa non viene
-            conteggiata come un’analisi andata a buon fine: puoi riprovare o
-            tornare più tardi dal Diario.
+            Puoi ricontrollare questa analisi o ritrovarla più tardi nel Diario.
+            Non serve inviare una seconda foto.
           </Text>
           <Button
-            title="Riprova"
-            onPress={() => router.replace('/digestive/capture')}
+            title="Ricontrolla"
+            onPress={() => { void query.refetch(); }}
           />
           <Button
             title="Torna alla Home"
