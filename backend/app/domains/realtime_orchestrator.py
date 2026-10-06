@@ -150,6 +150,19 @@ Puoi proporre un solo memory_candidate quando il proprietario ha detto chiaramen
 un fatto stabile: non salvarlo e non dedurlo. Se c'è un segnale urgente, dai subito
 l'indicazione di sicurezza necessaria; non diagnosticare né prescrivere.
 
+Quando una foto o un video aggiungerebbe davvero qualcosa alla risposta, valorizza
+media_invite con PHOTO o VIDEO e scrivi un media_prompt breve, naturale e legato
+alla frase appena detta (per esempio "Fammi vedere dove perde pelo" oppure
+"Fammi vedere come si muove in quel momento"). Non proporre media in ogni risposta:
+lascia entrambi i campi vuoti quando il racconto è già sufficiente. Una foto può
+servire anche per condividere un momento bello, non solo per segnalare un problema.
+Quando ricevi una foto allegata, guardala insieme al motivo dichiarato dal proprietario
+e rispondi a quel motivo: descrivi solo ciò che l'immagine rende davvero osservabile,
+separa ciò che vedi da ciò che non puoi verificare e non trasformare una foto in una
+diagnosi. Se la foto è un momento bello, riconosci prima il legame e il valore del
+momento; se riguarda un possibile problema, spiega cosa si può osservare e quale dato
+servirebbe dopo.
+
 La risposta deve suonare parlata e deve lasciare al proprietario la sensazione di aver
 ricevuto un aiuto, non un compito. Non trattare un abbaio come una parola; una frase
 in prima persona del cane è solo una possibile parafrasi introdotta come "in parole
@@ -230,6 +243,12 @@ def _provider_decision(
     if category not in {"ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL"}:
         candidate = None
         category = None
+    media_invite = raw.get("media_invite")
+    if media_invite not in {"PHOTO", "VIDEO"}:
+        media_invite = None
+    media_prompt = raw.get("media_prompt")
+    if not isinstance(media_prompt, str) or not media_prompt.strip():
+        media_prompt = None
     try:
         return RealtimeDecision(
             assistant_text=answer.strip(),
@@ -252,6 +271,8 @@ def _provider_decision(
             memory_category=category,
             question_information_gain=information_gain or "NONE",
             behavior_handoff=bool(raw.get("behavior_handoff", False)),
+            media_invite=media_invite,
+            media_prompt=media_prompt.strip()[:180] if media_prompt else None,
             claims=extract_claims_from_provider_payload(raw),
         )
     except (TypeError, ValidationError):
@@ -326,6 +347,8 @@ def _fallback_decision(
             ),
             domains=domains,
             behavior_handoff=True,
+            media_invite="VIDEO",
+            media_prompt="Fammi vedere come si comporta in quel momento",
         )
     return RealtimeDecision(
         assistant_text=(
@@ -407,6 +430,8 @@ async def orchestrate_realtime_turn(
     domains: list[RealtimeDomain],
     context: RealtimeDogContext,
     history: list[dict[str, str]],
+    image_url: str | None = None,
+    media_context: str | None = None,
 ) -> tuple[RealtimeDecision, dict[str, Any]]:
     safety = deterministic_safety_interrupt(user_text)
     if safety:
@@ -458,16 +483,31 @@ async def orchestrate_realtime_turn(
         "routed_domains": domains,
         "conversation": history[-6:],
         "owner_turn": user_text,
+        "owner_media_context": media_context,
         "output_schema": openai_realtime_decision_schema(),
     }
+    user_content: str | list[dict[str, Any]] = (
+        "PERSONAL_DOG_CONTEXT\n"
+        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    )
+    if image_url:
+        user_content = [
+            {
+                "type": "text",
+                "text": (
+                    "PERSONAL_DOG_CONTEXT\n"
+                    + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                ),
+            },
+            {"type": "image_url", "image_url": {"url": image_url, "detail": "low"}},
+        ]
     body: dict[str, Any] = {
         "model": settings.realtime_reasoning_model,
         "messages": [
             {"role": "system", "content": _SYSTEM},
             {
                 "role": "user",
-                "content": "PERSONAL_DOG_CONTEXT\n"
-                + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                "content": user_content,
             },
         ],
         "response_format": {"type": "json_object"},

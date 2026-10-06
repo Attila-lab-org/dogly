@@ -1259,21 +1259,21 @@
         }
       }
     },
-    "/v1/albums/{album_id}/photos/init": {
-      "post": {
+    "/v1/photos/{photo_id}": {
+      "get": {
         "tags": [
           "gallery"
         ],
-        "summary": "Init Photo",
-        "operationId": "init_photo_v1_albums__album_id__photos_init_post",
+        "summary": "Get Photo",
+        "operationId": "get_photo_v1_photos__photo_id__get",
         "parameters": [
           {
-            "name": "album_id",
+            "name": "photo_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Album Id"
+              "title": "Photo Id"
             }
           },
           {
@@ -1293,23 +1293,13 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DogPhotoInitRequest"
-              }
-            }
-          }
-        },
         "responses": {
-          "201": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DogPhotoUploadResponse"
+                  "$ref": "#/components/schemas/DogPhotoOut"
                 }
               }
             }
@@ -1325,9 +1315,7 @@
             }
           }
         }
-      }
-    },
-    "/v1/photos/{photo_id}": {
+      },
       "patch": {
         "tags": [
           "gallery"
@@ -1430,6 +1418,74 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/albums/{album_id}/photos/init": {
+      "post": {
+        "tags": [
+          "gallery"
+        ],
+        "summary": "Init Photo",
+        "operationId": "init_photo_v1_albums__album_id__photos_init_post",
+        "parameters": [
+          {
+            "name": "album_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Album Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DogPhotoInitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DogPhotoUploadResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -10411,6 +10467,30 @@
             ],
             "title": "Context Source"
           },
+          "photo_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Id"
+          },
+          "photo_context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 280
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Context"
+          },
           "assistant_text": {
             "anyOf": [
               {
@@ -10515,6 +10595,46 @@
               }
             ],
             "title": "Behavior Handoff Href"
+          },
+          "media_invite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "PHOTO",
+                  "VIDEO"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Invite"
+          },
+          "media_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Prompt"
+          },
+          "attachment": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment"
           },
           "created_at": {
             "type": "string",

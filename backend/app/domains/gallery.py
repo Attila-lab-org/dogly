@@ -108,6 +108,13 @@ def list_photos(store: InMemoryStore, *, user_id: str, album_id: str) -> list[Do
     return [_photo_out(p) for p in photos]
 
 
+def get_photo(store: InMemoryStore, *, user_id: str, photo_id: str) -> DogPhotoOut:
+    photo = store.dog_photos.get(photo_id)
+    if photo is None or photo.owner_id != user_id or photo.deleted_at is not None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Photo not found.")
+    return _photo_out(photo)
+
+
 def list_dog_photos(
     store: InMemoryStore,
     *,

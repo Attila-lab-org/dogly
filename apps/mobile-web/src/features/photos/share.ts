@@ -85,6 +85,34 @@ export async function takeStoryPhoto(): Promise<string | null> {
   return prepareNativeImage(result.assets[0].uri);
 }
 
+/** Foto inviata dentro una conversazione: mantiene il formato originale. */
+export async function takeConversationPhoto(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const picked = await pickWebImage({ capture: true });
+    return picked?.uri ?? null;
+  }
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    Alert.alert(
+      'Serve la fotocamera',
+      'Per mostrarmi un momento del tuo cane abilita la fotocamera.',
+    );
+    return null;
+  }
+  try {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: IMAGE_COMPRESSION,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets[0]) return null;
+    return prepareNativeImage(result.assets[0].uri);
+  } catch {
+    Alert.alert('Fotocamera non disponibile', 'Riprova tra poco.');
+    return null;
+  }
+}
+
 export async function pickAvatarPhoto(): Promise<string | null> {
   return pickAlbumPhoto();
 }

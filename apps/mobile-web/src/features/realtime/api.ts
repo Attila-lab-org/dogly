@@ -35,6 +35,9 @@ export type RealtimeTurn = {
   safety_flags: string[];
   memory_proposal: MemoryProposal | null;
   behavior_handoff_href: string | null;
+  media_invite: 'PHOTO' | 'VIDEO' | null;
+  media_prompt: string | null;
+  attachment: { kind: 'PHOTO'; photo_id: string; purpose: string } | null;
   created_at: string;
 };
 
@@ -49,13 +52,20 @@ export function createRealtimeTurn(
   sessionId: string,
   text: string,
   assistantText?: string,
-  options?: { eventId?: string; source?: 'behavior' | 'digestive' },
+  options?: {
+    eventId?: string;
+    source?: 'behavior' | 'digestive';
+    photoId?: string;
+    photoContext?: string;
+  },
 ) {
   return api.post<RealtimeTurn>(`/v1/realtime/sessions/${sessionId}/turns`, {
     text,
     ...(assistantText ? { assistant_text: assistantText } : {}),
     ...(options?.eventId ? { event_id: options.eventId } : {}),
     ...(options?.source ? { context_source: options.source } : {}),
+    ...(options?.photoId ? { photo_id: options.photoId } : {}),
+    ...(options?.photoContext ? { photo_context: options.photoContext } : {}),
   });
 }
 

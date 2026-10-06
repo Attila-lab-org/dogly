@@ -194,6 +194,30 @@ async def list_photos(engine: AsyncEngine, *, user_id: str, album_id: str) -> li
     return [_photo_out(row) for row in rows]
 
 
+async def get_photo(
+    engine: AsyncEngine, *, user_id: str, photo_id: str
+) -> DogPhotoOut:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    select id, album_id, dog_id, storage_path, caption,
+                           visibility, taken_at, created_at
+                    from public.dog_photos
+                    where id = :photo_id
+                      and owner_id = :user_id
+                      and deleted_at is null
+                    """
+                ),
+                {"photo_id": photo_id, "user_id": user_id},
+            )
+        ).mappings().first()
+    if not row:
+        raise ApiError(ErrorCode.NOT_FOUND, "Photo not found.")
+    return _photo_out(row)
+
+
 async def list_dog_photos(
     engine: AsyncEngine,
     *,

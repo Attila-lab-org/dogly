@@ -20,6 +20,7 @@ from app.domains.realtime_context import (
     route_realtime_domains,
 )
 from app.domains.realtime_orchestrator import (
+    _provider_decision,
     deterministic_safety_interrupt,
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
@@ -47,6 +48,19 @@ def test_openai_schema_requires_every_nullable_field() -> None:
     assert set(schema["required"]) == set(schema["properties"])
     assert schema["additionalProperties"] is False
     assert "default" not in str(schema)
+
+
+def test_provider_decision_keeps_contextual_media_invite() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"Capisco il momento.","domains":["BEHAVIOR"],'
+        '"media_invite":"PHOTO","media_prompt":"Fammi vedere dove perde pelo",'
+        '"question_information_gain":"NONE"}',
+        domains=["BEHAVIOR"],
+    )
+
+    assert decision is not None
+    assert decision.media_invite == "PHOTO"
+    assert decision.media_prompt == "Fammi vedere dove perde pelo"
 
 
 def test_voice_session_accepts_database_uuid_owner() -> None:
@@ -278,6 +292,49 @@ async def test_realtime_api_session_turn_and_close(
     )
     # Live voice is intentionally retired; the conversation endpoint is text-only.
     assert again.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_realtime_turn_can_attach_owned_private_photo(
+    client, auth_headers: dict[str, str]
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    album = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Momenti", "default_visibility": "PRIVATE"},
+        headers=auth_headers,
+    )
+    assert album.status_code == 201
+    photo = await client.post(
+        f"/v1/albums/{album.json()['id']}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 1_024},
+        headers=auth_headers,
+    )
+    assert photo.status_code == 201
+
+    session = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "TEXT"},
+    )
+    assert session.status_code == 201
+    turn = await client.post(
+        f"/v1/realtime/sessions/{session.json()['id']}/turns",
+        headers=auth_headers,
+        json={
+            "text": "Ti mostro dove perde pelo.",
+            "photo_id": photo.json()["photo"]["id"],
+            "photo_context": "Fammi vedere dove perde pelo",
+            "assistant_text": "Vedo il momento, guardiamolo insieme.",
+        },
+    )
+
+    assert turn.status_code == 201, turn.text
+    assert turn.json()["attachment"] == {
+        "kind": "PHOTO",
+        "photo_id": photo.json()["photo"]["id"],
+        "purpose": "Fammi vedere dove perde pelo",
+    }
 
 
 @pytest.mark.asyncio

@@ -19,7 +19,16 @@ from app.contracts.realtime import (
     RealtimeTurnCreate,
     RealtimeTurnOut,
 )
-from app.domains import behavior, behavior_db, digestive, digestive_db, realtime_db
+from app.domains import (
+    behavior,
+    behavior_db,
+    digestive,
+    digestive_db,
+    gallery,
+    gallery_db,
+    realtime_db,
+)
+from app.domains.gallery_db import GALLERY_BUCKET
 from app.domains.realtime_context import (
     REALTIME_CONTEXT_VERSION,
     conversation_topic,
@@ -153,6 +162,37 @@ async def create_realtime_turn(
     if session["status"] != "ACTIVE" or session["expires_at"] <= now_utc():
         raise ApiError(ErrorCode.INVALID_STATE, "Questa conversazione è terminata.")
 
+    attachment: dict[str, str] | None = None
+    image_url: str | None = None
+    if body.photo_id:
+        if state.engine is not None:
+            photo = await gallery_db.get_photo(
+                state.engine, user_id=user_id, photo_id=body.photo_id
+            )
+        else:
+            photo = gallery.get_photo(
+                state.store, user_id=user_id, photo_id=body.photo_id
+            )
+        if str(photo.dog_id) != str(session["dog_id"]):
+            raise ApiError(ErrorCode.NOT_FOUND, "Foto non trovata per questo cane.")
+        try:
+            image_url = await state.storage.create_signed_read_url(
+                bucket=GALLERY_BUCKET,
+                path=photo.storage_path,
+                ttl_seconds=min(max(state.settings.storage_signed_url_ttl_seconds, 600), 1800),
+            )
+        except Exception as exc:
+            raise ApiError(
+                ErrorCode.PROCESSING_FAILED,
+                "Non riesco a leggere questa foto. Riprova a inviarla.",
+                retryable=True,
+            ) from exc
+        attachment = {
+            "kind": "PHOTO",
+            "photo_id": str(photo.id),
+            "purpose": (body.photo_context or body.text).strip()[:280],
+        }
+
     domains = route_realtime_domains(body.text)
     source_refs: list[dict[str, str]] = []
     try:
@@ -203,6 +243,8 @@ async def create_realtime_turn(
                 domains=domains,
                 context=context,
                 history=history,
+                image_url=image_url,
+                media_context=body.photo_context,
             )
             used = set(decision.used_source_ids)
             source_refs = [
@@ -250,6 +292,8 @@ async def create_realtime_turn(
                 domains=domains,
                 context=context,
                 history=history,
+                image_url=image_url,
+                media_context=body.photo_context,
             )
     except ApiError:
         raise
@@ -263,6 +307,8 @@ async def create_realtime_turn(
         ) from exc
 
     decision_json = decision.model_dump(mode="json")
+    if attachment is not None:
+        decision_json["attachment"] = attachment
     if state.engine is not None:
         row, proposal = await realtime_db.record_turn_db(
             state.engine,
@@ -302,6 +348,9 @@ async def create_realtime_turn(
         domains=decision.domains,
         safety_flags=decision.safety_flags,
         memory_proposal=memory,
+        media_invite=decision.media_invite,
+        media_prompt=decision.media_prompt,
+        attachment=attachment,
         behavior_handoff_href=(
             f"/behavior/capture?dogId={session['dog_id']}"
             if decision.behavior_handoff

@@ -17,6 +17,7 @@ RealtimeTerminalState = Literal[
     "BEHAVIOR_VIDEO_HANDOFF",
     "MEMORY_CONFIRMATION_REQUIRED",
 ]
+RealtimeMediaKind = Literal["PHOTO", "VIDEO"]
 
 
 class RealtimeSessionCreate(BaseModel):
@@ -41,6 +42,10 @@ class RealtimeTurnCreate(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     event_id: str | None = Field(default=None, max_length=80)
     context_source: Literal["behavior", "digestive"] | None = None
+    # A photo shared from the conversation remains attached to this turn so
+    # the reasoner can see it in the same context as the owner's message.
+    photo_id: str | None = Field(default=None, max_length=80)
+    photo_context: str | None = Field(default=None, max_length=280)
     # Internal test/migration bridge only; the product never exposes live voice.
     assistant_text: str | None = Field(default=None, max_length=1400)
 
@@ -62,6 +67,9 @@ class RealtimeTurnOut(BaseModel):
     safety_flags: list[str] = Field(default_factory=list)
     memory_proposal: RealtimeMemoryProposal | None = None
     behavior_handoff_href: str | None = None
+    media_invite: RealtimeMediaKind | None = None
+    media_prompt: str | None = None
+    attachment: dict[str, str] | None = None
     created_at: datetime
 
 
@@ -83,6 +91,8 @@ class RealtimeDecision(BaseModel):
         "NONE", "CHANGES_MEANING", "CHANGES_ACTION", "CHANGES_SAFETY"
     ] = "NONE"
     behavior_handoff: bool = False
+    media_invite: RealtimeMediaKind | None = None
+    media_prompt: str | None = Field(default=None, max_length=180)
     # Internal Canine Intelligence claims. Never copied into RealtimeTurnOut.
     claims: list[ReasoningClaim] = Field(default_factory=list, max_length=8)
 

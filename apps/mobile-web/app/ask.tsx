@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,8 +13,10 @@ import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type M
 import { queryKeys } from '@/lib/queryClient';
 import { getBehaviorEvent } from '@/features/behavior/api';
 import { getDigestiveEvent } from '@/features/digestive/api';
+import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
+import { takeConversationPhoto } from '@/features/photos/share';
 
-type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryText?: string };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
 const starterPool = [
   'Mi aiuti a capire cosa sta vivendo?',
   'Come posso aiutarlo oggi?',
@@ -84,6 +86,7 @@ export default function AskScreen() {
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
+  const [mediaPhase, setMediaPhase] = useState<'uploading' | 'analyzing' | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<string | undefined>(eventId);
   const dictationRef = useRef<{ stop: () => void } | null>(null);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
@@ -126,29 +129,59 @@ export default function AskScreen() {
   useEffect(() => { void start(); }, [start]);
   useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending]);
 
-  const send = useCallback(async (value: string) => {
+  const send = useCallback(async (value: string, attachment?: { uri: string; purpose: string }, existingPhotoId?: string) => {
     const text = value.trim();
     if (!text || sending || !session) return;
     setDraft(''); setError(null);
     const localId = 'question-' + Date.now();
-    setMessages((current) => [...current, { id: localId, role: 'user', text }]);
+    setMessages((current) => [...current, { id: localId, role: 'user', text, attachmentUri: attachment?.uri }]);
     setSending(true);
+    setMediaPhase(existingPhotoId ? 'analyzing' : attachment ? 'uploading' : null);
+    let photoId: string | undefined = existingPhotoId;
     try {
+      if (attachment && !photoId) {
+        const album = await getOrCreateMomentsAlbum(dog.id);
+        const photo = await uploadAlbumPhoto(album.id, attachment.uri, {
+          caption: attachment.purpose,
+          visibility: 'PRIVATE',
+        });
+        photoId = photo.id;
+        setMediaPhase('analyzing');
+      }
       const turn = await createRealtimeTurn(
         session.id,
         text,
         undefined,
-        focusedEventId ? { eventId: focusedEventId, source: behaviorSource ? 'behavior' : digestiveSource ? 'digestive' : undefined } : undefined,
+        (focusedEventId || photoId) ? {
+          eventId: focusedEventId,
+          source: behaviorSource ? 'behavior' : digestiveSource ? 'digestive' : undefined,
+          photoId,
+          photoContext: attachment?.purpose,
+        } : undefined,
       );
       if (focusedEventId) setFocusedEventId(undefined);
       if (!mounted.current) return;
       setMessages((current) => [...current, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
     } catch {
       if (!mounted.current) return;
-      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a rispondere. Puoi riprovare senza perdere la domanda?', failed: true, retryText: text }]);
+      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a leggere questo momento. Puoi riprovare senza perdere la foto?', failed: true, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId }]);
       setError('La risposta non è arrivata.');
-    } finally { if (mounted.current) setSending(false); }
-  }, [behaviorSource, digestiveSource, focusedEventId, sending, session]);
+    } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
+  }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session]);
+
+  const sharePhoto = useCallback(async () => {
+    const turn = latestAssistant?.turn;
+    if (!turn || turn.media_invite !== 'PHOTO' || sending || !session) return;
+    const uri = await takeConversationPhoto();
+    if (!uri) return;
+    const purpose = turn.media_prompt || `Ti mostro ${dog.name} in questo momento`;
+    void send(purpose, { uri, purpose });
+  }, [dog.name, latestAssistant, send, sending, session]);
+
+  const openVideoCapture = useCallback(() => {
+    if (sending || !session) return;
+    router.push('/behavior/capture' as never);
+  }, [router, sending, session]);
 
   const toggleDictation = () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -200,15 +233,18 @@ export default function AskScreen() {
           {messages.map((message) => <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
             <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
-              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.retryText ?? ''); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
+              {message.attachmentUri ? <Image source={{ uri: message.attachmentUri }} style={styles.messageAttachment} accessibilityLabel="Foto condivisa nella conversazione" /> : null}
+              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
+              {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'PHOTO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || `Mostrami ${dog.name} in una foto`} onPress={() => void sharePhoto()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="camera-outline" size={19} color={colors.primary} /></View><View style={styles.mediaCopy}><Text style={styles.mediaTitle}>{message.turn.media_prompt || `Fammi vedere ${dog.name}`}</Text><Text style={styles.mediaSubtitle}>Scatta una foto e continuiamo da qui</Text></View><Ionicons name="arrow-forward" size={17} color={colors.primary} /></Pressable> : null}
+              {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'VIDEO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || 'Mostrami questo momento in un video'} onPress={openVideoCapture} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="videocam-outline" size={19} color={colors.primary} /></View><View style={styles.mediaCopy}><Text style={styles.mediaTitle}>{message.turn.media_prompt || 'Fammi vedere questo momento'}</Text><Text style={styles.mediaSubtitle}>Registra un breve video e lo guardiamo insieme</Text></View><Ionicons name="arrow-forward" size={17} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && latestAssistant?.turn && !message.turn?.question_options?.length && !message.turn?.memory_proposal && availableFollowUps.length ? <View style={styles.followUps}><Text style={styles.followUpLabel}>Se vuoi, possiamo continuare da qui</Text>{availableFollowUps.map((prompt) => <Pressable key={prompt} accessibilityRole="button" onPress={() => void send(prompt)} style={({ pressed }) => [styles.followUp, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{prompt}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
           {!starting && messages.length === 1 ? <View style={styles.starters}><Text style={styles.starterLabel}>{eventId ? 'Partiamo da questo momento' : 'Possiamo partire da qui'}</Text>{(eventId ? (behaviorSource ? ['Come capisco meglio questo momento?', 'Come posso accompagnarlo?', 'Ti racconto cosa è successo dopo'] : ['Cosa osservo nelle prossime ore?', 'Come lo collego alla sua routine?', 'Ti racconto cosa è successo dopo']) : starters).map((starter) => <Pressable key={starter} onPress={() => void send(starter)} style={styles.starter}><Text style={styles.starterText}>{starter}</Text><Ionicons name="arrow-up" size={16} color={colors.primary} /></Pressable>)}</View> : null}
-          {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>DOGly sta pensando…</Text></View> : null}
+          {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>{mediaPhase === 'uploading' ? 'Preparo la foto…' : mediaPhase === 'analyzing' ? 'Guardo questo momento…' : 'DOGly sta pensando…'}</Text></View> : null}
         </ScrollView>
         <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi una domanda su ' + dog.name} placeholder={'Cosa vuoi capire di ' + dog.name + '?'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} />{Platform.OS === 'web' ? <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta una domanda'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Invia domanda" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
         <Text style={styles.disclaimer}>DOGly aiuta a leggere i comportamenti. Per sintomi o urgenze, contatta un veterinario.</Text>
@@ -219,7 +255,5 @@ export default function AskScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 }, safe: { flex: 1 }, header: { minHeight: 72, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(148,163,184,0.16)' }, headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, eyebrow: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold, letterSpacing: 0.8 }, headerTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold }, body: { flex: 1 }, scroll: { flex: 1 }, conversation: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }, intro: { backgroundColor: 'rgba(255,255,255,0.84)', borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(0,80,216,0.1)' }, sparkle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E6F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }, introTitle: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold, marginBottom: spacing.xs }, introText: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22 }, loading: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm }, muted: { color: colors.textMuted, fontSize: typography.size.sm }, error: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: '#FFF2F0' }, errorText: { color: colors.danger, flex: 1, fontSize: typography.size.sm }, retry: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, messageRow: { width: '100%', alignItems: 'flex-start' }, userRow: { alignItems: 'flex-end' }, bubble: { maxWidth: '88%', borderRadius: radius.lg, padding: spacing.md }, assistantBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4EDF6', borderBottomLeftRadius: 6 }, userBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 }, messageText: { color: colors.text, fontSize: typography.size.md, lineHeight: 23 }, userText: { color: '#FFFFFF' }, retryInside: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }, helpLink: { marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, helpLinkText: { color: colors.primary, fontWeight: typography.weight.bold }, memory: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: '#E4EDF6', paddingTop: spacing.md }, memoryLabel: { color: colors.text, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryText: { color: colors.textSecondary, marginTop: spacing.xs, fontSize: typography.size.sm, lineHeight: 19 }, memoryActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.md }, memoryButton: { backgroundColor: '#E6F1FF', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, memoryConfirm: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryReject: { color: colors.textMuted, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, starters: { gap: spacing.sm, marginTop: spacing.xs }, starterLabel: { color: colors.textMuted, fontSize: typography.size.sm, fontWeight: typography.weight.semibold }, starter: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7E6F4', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, starterText: { color: colors.textSecondary, fontSize: typography.size.sm, flex: 1 }, thinking: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm }, composerWrap: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.sm, flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm }, input: { flex: 1, minHeight: 48, maxHeight: 120, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7E6F4', borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.text, fontSize: typography.size.md }, mic: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E6F1FF' }, micActive: { backgroundColor: colors.primary }, send: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary }, sendDisabled: { backgroundColor: '#B7C7DB' }, pressed: { opacity: 0.82 }, disclaimer: { width: '100%', maxWidth: 560, alignSelf: 'center', color: colors.textMuted, fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   questionOptions: { marginTop: spacing.md, gap: spacing.xs }, questionOption: { minHeight: 38, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#D7E6F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, questionOptionText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm }, followUps: { marginTop: spacing.md, gap: spacing.xs }, followUpLabel: { color: colors.textMuted, fontSize: typography.size.xs, marginBottom: spacing.xs }, followUp: { minHeight: 38, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: '#F8FBFF', borderWidth: 1, borderColor: '#D7E6F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  messageAttachment: { width: 220, height: 160, borderRadius: radius.md, marginBottom: spacing.sm, resizeMode: 'cover' }, mediaCta: { marginTop: spacing.md, padding: spacing.sm, borderRadius: radius.md, backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#C9E2FF', flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, mediaIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }, mediaCopy: { flex: 1 }, mediaTitle: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold }, mediaSubtitle: { color: colors.textMuted, fontSize: typography.size.xs, marginTop: 2 },
 });
-
-
-

@@ -156,6 +156,19 @@ async def list_photos(album_id: str, state: StateDep, user_id: UserIdDep) -> Dog
     return DogPhotoListResponse(items=await photos_with_urls(items, state))
 
 
+@router.get("/photos/{photo_id}", response_model=DogPhotoOut)
+async def get_photo(photo_id: str, state: StateDep, user_id: UserIdDep) -> DogPhotoOut:
+    if state.engine is not None:
+        photo = await gallery_db.get_photo(
+            state.engine, user_id=user_id, photo_id=photo_id
+        )
+    else:
+        photo = gallery_domain.get_photo(
+            state.store, user_id=user_id, photo_id=photo_id
+        )
+    return await photo_with_url(photo, state)
+
+
 @router.post(
     "/albums/{album_id}/photos/init",
     response_model=DogPhotoUploadResponse,
