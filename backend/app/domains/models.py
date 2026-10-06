@@ -273,6 +273,7 @@ class FoodProductRec(BaseModel):
     external_source: str | None = None
     external_code: str | None = None
     created_at: datetime
+    archived_at: datetime | None = None
 
 
 class FeedingPeriodRec(BaseModel):

@@ -1321,6 +1321,7 @@ async def list_food_products(
                     from public.food_products
                     where owner_id = :owner_id
                       and dog_id = cast(:dog_id as uuid)
+                      and archived_at is null
                     order by created_at desc, id desc
                     """
                 ),
@@ -1352,10 +1353,7 @@ async def get_food_product(
 
 async def delete_food_product(engine: AsyncEngine, *, user_id: str, food_id: str) -> None:
     async with engine.begin() as conn:
-        used = await conn.execute(text("select 1 from public.feeding_periods where food_product_id = :id limit 1"), {"id": food_id})
-        if used.first():
-            raise ApiError(ErrorCode.INVALID_STATE, "Non puoi rimuovere un alimento già usato nello storico.")
-        result = await conn.execute(text("delete from public.food_products where id = :id and owner_id = :owner"), {"id": food_id, "owner": user_id})
+        result = await conn.execute(text("update public.food_products set archived_at = now() where id = :id and owner_id = :owner and archived_at is null"), {"id": food_id, "owner": user_id})
         if result.rowcount == 0:
             raise ApiError(ErrorCode.NOT_FOUND, "Food product not found")
 

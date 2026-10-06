@@ -3,8 +3,8 @@
  * Solo i campi verificati diventano dati durevoli: i prodotti non verificati
  * mostrano il badge "Da verificare" e portano alla schermata di verifica.
  */
-import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -53,16 +53,15 @@ export default function FoodsScreen() {
   const foods = foodsQuery.data ?? [];
   const periods = periodsQuery.data ?? [];
   const activePeriod = periods.find((period) => period.end_at == null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const removeFood = async (foodId: string) => {
-    const confirmed = typeof window !== 'undefined'
-      ? window.confirm('Rimuovere questo alimento dall’elenco?')
-      : true;
-    if (!confirmed) return;
     try {
       await deleteFood(foodId);
       await foodsQuery.refetch();
+      setPendingId(null);
     } catch {
-      Alert.alert('Alimento non rimosso', 'Questo alimento potrebbe essere già collegato allo storico.');
+      setRemoveError('Non è stato possibile rimuoverlo. Riprova tra poco.');
     }
   };
 
@@ -133,7 +132,7 @@ export default function FoodsScreen() {
                 </Text>
               )}
               <Text style={styles.verifyHint}>{verified ? 'Tocca per modificare alimento o quantità.' : 'Tocca per completare i dati.'}</Text>
-              <Pressable accessibilityRole="button" onPress={() => void removeFood(food.id)} style={styles.removeAction}>
+              <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); setRemoveError(null); setPendingId(food.id); }} style={styles.removeAction}>
                 <Ionicons name="trash-outline" size={16} color={colors.danger} />
                 <Text style={styles.removeLabel}>Rimuovi</Text>
               </Pressable>
@@ -152,7 +151,7 @@ export default function FoodsScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </View>
             <Chip label="Salvato" tone="success" />
-            <Pressable accessibilityRole="button" onPress={() => void removeFood(food.id)} style={styles.removeAction}>
+            <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); setRemoveError(null); setPendingId(food.id); }} style={styles.removeAction}>
               <Ionicons name="trash-outline" size={16} color={colors.danger} />
               <Text style={styles.removeLabel}>Rimuovi</Text>
             </Pressable>
@@ -170,13 +169,24 @@ export default function FoodsScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </View>
             <Chip label="Completa dati" tone="warning" />
-              <Pressable accessibilityRole="button" onPress={() => void removeFood(food.id)} style={styles.removeAction}>
+              <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); setRemoveError(null); setPendingId(food.id); }} style={styles.removeAction}>
                 <Ionicons name="trash-outline" size={16} color={colors.danger} />
                 <Text style={styles.removeLabel}>Rimuovi</Text>
               </Pressable>
           </Card>
         </Pressable>
       ))}
+      <Modal transparent visible={pendingId !== null} animationType="fade" onRequestClose={() => setPendingId(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Rimuovere alimento?</Text>
+            <Text style={styles.intro}>Scomparirà dall’elenco, mentre lo storico resterà conservato.</Text>
+            {removeError ? <Text style={styles.removeLabel}>{removeError}</Text> : null}
+            <Button title="Rimuovi alimento" onPress={() => pendingId && void removeFood(pendingId)} />
+            <Pressable onPress={() => setPendingId(null)} style={styles.cancelAction}><Text style={styles.foodName}>Annulla</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -195,6 +205,10 @@ const styles = StyleSheet.create({
   pendingCard: { backgroundColor: colors.warningSoft },
   removeAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, alignSelf: 'flex-start' },
   removeLabel: { color: colors.danger, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
+  modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(15,35,65,0.48)' },
+  modalCard: { width: '100%', maxWidth: 380, padding: spacing.lg, borderRadius: 24, backgroundColor: colors.surface },
+  modalTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold, marginBottom: spacing.sm },
+  cancelAction: { alignItems: 'center', padding: spacing.md },
   sectionTitle: { marginTop: spacing.md, marginBottom: spacing.sm, color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
   foodHeader: {
     flexDirection: 'row',

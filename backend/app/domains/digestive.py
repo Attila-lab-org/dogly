@@ -656,7 +656,7 @@ def list_food_products(
     return [
         product
         for product in store.food_products.values()
-        if product.owner_id == user_id and product.dog_id == dog_id
+        if product.owner_id == user_id and product.dog_id == dog_id and product.archived_at is None
     ]
 
 
@@ -670,9 +670,7 @@ def get_food_product(
 
 def delete_food_product(store: InMemoryStore, *, user_id: str, food_id: str) -> None:
     product = get_food_product(store, user_id=user_id, food_id=food_id)
-    if any(p.food_product_id == food_id for p in store.feeding_periods.values()):
-        raise ApiError(ErrorCode.INVALID_STATE, "Non puoi rimuovere un alimento già usato nello storico.")
-    store.food_products.pop(product.id, None)
+    store.food_products[product.id] = product.model_copy(update={"archived_at": now_utc()})
 
 
 def list_feeding_periods(
