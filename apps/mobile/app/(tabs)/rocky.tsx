@@ -84,17 +84,17 @@ export default function DogProfileTabScreen() {
   const digestiveSummaryQuery = useQuery({
     queryKey: ['digestive-summary', dog.id],
     queryFn: () => getDigestiveSummary(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
   const foodsQuery = useQuery({
     queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
     queryFn: () => listFoods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
   const feedingPeriodsQuery = useQuery({
     queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
     queryFn: () => listFeedingPeriods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id) && showMoreSections,
+    enabled: !useDemoData && isPersistedId(dog.id),
   });
   const activeRealPeriod = feedingPeriodsQuery.data?.find(
     (period) => period.end_at == null,

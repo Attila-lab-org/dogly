@@ -450,7 +450,7 @@ class OpenPetFoodFactsClient:
         self, query: str, *, limit: int = 20
     ) -> list[ExternalFoodCandidate]:
         cleaned = " ".join(query.split())
-        if len(cleaned) < 2:
+        if len(cleaned) < 1:
             return []
         cache_key = cleaned.casefold()
         if cache_key in self._search_cache:
