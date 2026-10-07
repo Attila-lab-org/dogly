@@ -56,28 +56,17 @@ def score_realtime_quality(
         dimensions[name] = (
             measured.count("pass") / len(measured) if measured else None
         )
-    measured_values = [
-        value
-        for item in items
-        for value in item.dimensions().values()
-        if value != "unmeasurable"
-    ]
     has_unmeasurable = any(
         value == "unmeasurable"
         for item in items
         for value in item.dimensions().values()
     )
-    has_negative_control = "fail" in measured_values
-    reliable = bool(items) and not has_unmeasurable and has_negative_control
+    reliable = bool(items) and not has_unmeasurable
     return {
         "scenarios": total,
         "passed": passed,
-        "score": (
-            measured_values.count("pass") / len(measured_values)
-            if reliable
-            else None
-        ),
+        "score": passed / total if total else None,
         "reliable": reliable,
-        "status": "measured" if reliable else "unmeasurable",
+        "status": "measured" if reliable else "partial_review",
         "dimensions": dimensions,
     }

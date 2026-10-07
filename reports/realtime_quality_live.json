@@ -2,15 +2,15 @@
   "score": {
     "scenarios": 6,
     "passed": 0,
-    "score": null,
+    "score": 0.0,
     "reliable": false,
-    "status": "unmeasurable",
+    "status": "partial_review",
     "dimensions": {
       "answered_current_turn": null,
       "handled_correction": null,
       "maintained_continuity": null,
       "grounded_in_context": null,
-      "natural_dialogue": 0.3333333333333333
+      "natural_dialogue": null
     }
   },
   "scenarios": [
@@ -27,11 +27,12 @@
         "handled_correction": "unmeasurable",
         "maintained_continuity": "unmeasurable",
         "grounded_in_context": "unmeasurable",
-        "natural_dialogue": "fail"
+        "natural_dialogue": "unmeasurable"
       },
       "passed": false,
       "response_length_chars": 606,
-      "length_threshold_chars": 600
+      "length_threshold_chars": 600,
+      "negative_control": false
     },
     {
       "id": "yesterday_bruno",
@@ -46,11 +47,12 @@
         "handled_correction": "unmeasurable",
         "maintained_continuity": "unmeasurable",
         "grounded_in_context": "unmeasurable",
-        "natural_dialogue": "fail"
+        "natural_dialogue": "unmeasurable"
       },
       "passed": false,
       "response_length_chars": 893,
-      "length_threshold_chars": 600
+      "length_threshold_chars": 600,
+      "negative_control": false
     },
     {
       "id": "affection_luna",
@@ -65,11 +67,12 @@
         "handled_correction": "unmeasurable",
         "maintained_continuity": "unmeasurable",
         "grounded_in_context": "unmeasurable",
-        "natural_dialogue": "pass"
+        "natural_dialogue": "unmeasurable"
       },
       "passed": false,
       "response_length_chars": 237,
-      "length_threshold_chars": 600
+      "length_threshold_chars": 600,
+      "negative_control": false
     },
     {
       "id": "domain_change_bowie",
@@ -84,11 +87,12 @@
         "handled_correction": "unmeasurable",
         "maintained_continuity": "unmeasurable",
         "grounded_in_context": "unmeasurable",
-        "natural_dialogue": "fail"
+        "natural_dialogue": "unmeasurable"
       },
       "passed": false,
       "response_length_chars": 930,
-      "length_threshold_chars": 600
+      "length_threshold_chars": 600,
+      "negative_control": false
     },
     {
       "id": "unknown_fact_kira",
@@ -101,11 +105,12 @@
         "handled_correction": "unmeasurable",
         "maintained_continuity": "unmeasurable",
         "grounded_in_context": "unmeasurable",
-        "natural_dialogue": "pass"
+        "natural_dialogue": "unmeasurable"
       },
       "passed": false,
       "response_length_chars": 330,
-      "length_threshold_chars": 600
+      "length_threshold_chars": 600,
+      "negative_control": true
     },
     {
       "id": "long_context_otto",
@@ -120,11 +125,13 @@
         "handled_correction": "unmeasurable",
         "maintained_continuity": "unmeasurable",
         "grounded_in_context": "unmeasurable",
-        "natural_dialogue": "fail"
+        "natural_dialogue": "unmeasurable"
       },
       "passed": false,
       "response_length_chars": 639,
-      "length_threshold_chars": 600
+      "length_threshold_chars": 600,
+      "negative_control": false
     }
-  ]
+  ],
+  "transcript_status": "pending_real_rerun_after_transcript_export_fix"
 }

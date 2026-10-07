@@ -21,6 +21,7 @@ def test_realtime_quality_fixture_covers_required_realistic_scenarios() -> None:
     }
     assert all(len(case["turns"]) >= 1 for case in cases)
     assert all(len(case["rubric"]) == 3 for case in cases)
+    assert sum(case.get("negative_control", False) for case in cases) == 1
     assert {case["dog_name"] for case in cases} == {"Nala", "Bruno", "Luna", "Bowie", "Kira", "Otto"}
 
 
@@ -48,7 +49,7 @@ def test_realtime_quality_score_requires_all_dimensions_for_a_pass() -> None:
 
     assert report["scenarios"] == 2
     assert report["passed"] == 1
-    assert report["score"] == 0.9
+    assert report["score"] == 0.5
     assert report["reliable"] is True
     assert report["dimensions"]["natural_dialogue"] == 0.5
 
@@ -59,7 +60,7 @@ def test_realtime_quality_score_is_explicit_for_empty_evaluation() -> None:
         "passed": 0,
         "score": None,
         "reliable": False,
-        "status": "unmeasurable",
+        "status": "partial_review",
         "dimensions": {
             "answered_current_turn": None,
             "handled_correction": None,
@@ -83,6 +84,6 @@ def test_realtime_quality_marks_semantic_dimensions_unmeasurable() -> None:
             )
         ]
     )
-    assert report["score"] is None
+    assert report["score"] == 0.0
     assert report["reliable"] is False
-    assert report["status"] == "unmeasurable"
+    assert report["status"] == "partial_review"

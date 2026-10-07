@@ -21,31 +21,23 @@ EVALS = ROOT / "backend" / "tests" / "evals" / "realtime_quality.jsonl"
 REPORT = ROOT / "reports" / "realtime_quality_live.json"
 
 
-def _context(case_id: str, dog_name: str) -> RealtimeDogContext:
-    stable_facts = []
-    items = []
-    if case_id == "unknown_fact_kira":
-        stable_facts = []
-    elif case_id == "domain_change_bowie":
-        items = [
-            RealtimeContextItem(
-                source_id="digestive-live-1",
-                source_type="DIGESTIVE_EVENT",
-                occurred_at=datetime(2026, 1, 5, tzinfo=UTC),
-                summary="Episodio digestivo osservato",
-                data={"headline": "Dopo cena"},
-            )
-        ]
-    else:
-        stable_facts = [
-            {"source_id": f"fact-{case_id}", "key": "food", "value": "pollo e riso"}
-        ]
+def _context(case: dict[str, object]) -> RealtimeDogContext:
+    evidence = [
+        RealtimeContextItem(
+            source_id=item["source_id"],
+            source_type=item["source_type"],
+            occurred_at=datetime(2026, 1, 5, tzinfo=UTC),
+            summary=item["summary"],
+            data=item.get("data", {}),
+        )
+        for item in case.get("evidence", [])
+    ]
     return RealtimeDogContext(
-        dog_id=f"eval-{case_id}",
-        dog_name=dog_name,
+        dog_id=f"eval-{case['id']}",
+        dog_name=case["dog_name"],
         identity={"source": "offline_eval"},
-        stable_facts=stable_facts,
-        items=items,
+        stable_facts=case.get("known_facts", []),
+        items=evidence,
     )
 
 
@@ -56,11 +48,13 @@ async def _run() -> dict[str, object]:
     results = []
     labels = []
     for case in cases:
-        context = _context(case["id"], case["dog_name"])
+        context = _context(case)
         history: list[dict[str, str]] = []
         decision = None
         metadata = {}
+        transcript = []
         for turn in case["turns"]:
+            history_before_turn = list(history)
             decision, metadata = await orchestrate_realtime_turn(
                 settings=settings,
                 user_text=turn,
@@ -73,6 +67,15 @@ async def _run() -> dict[str, object]:
                     {"role": "user", "content": turn},
                     {"role": "assistant", "content": decision.assistant_text},
                 ]
+            )
+            transcript.append(
+                {
+                    "input": turn,
+                    "history": history_before_turn,
+                    "response": decision.assistant_text,
+                    "used_source_ids": decision.used_source_ids,
+                    "provider": metadata.get("provider"),
+                }
             )
         assert decision is not None
         answer = decision.assistant_text
@@ -90,12 +93,14 @@ async def _run() -> dict[str, object]:
             {
                 "id": case["id"],
                 "dog_name": case["dog_name"],
+                "negative_control": case.get("negative_control", False),
                 "response": answer,
                 "used_source_ids": decision.used_source_ids,
                 "provider": metadata.get("provider"),
                 "rubric": label.dimensions(),
                 "passed": label.passed,
                 "response_length_chars": len(answer),
+                "transcript": transcript,
             }
         )
     return {"score": score_realtime_quality(labels), "scenarios": results}
