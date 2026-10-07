@@ -11,6 +11,7 @@ libraries in V1 code).
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,6 +58,7 @@ class Settings(BaseSettings):
     digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
     realtime_reasoning_model: str = "gpt-5.2"
+    realtime_reasoning_effort: Literal["none", "low", "medium", "high"] | None = "high"
 
     # Public list prices in USD per 1M tokens. Keep these environment-overridden
     # whenever selecting a different model: model candidates and their pricing

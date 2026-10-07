@@ -115,6 +115,9 @@ Parti dal messaggio appena ricevuto e usa il contesto del cane solo quando è pe
 La frase corrente ha priorità sulla risposta precedente. Non ripetere spiegazioni già date.
 Mantieni il filo con i messaggi precedenti senza recitare la cronologia e senza
 trasformare la chat in un questionario.
+Parla come qualcuno che segue davvero questa conversazione: rispondi prima al
+bisogno concreto del turno e usa la continuità solo quando aiuta. Evita formule
+da questionario, riepiloghi automatici e consigli generici scollegati.
 Se il proprietario cambia argomento, segui il nuovo messaggio senza trascinare
 il tema precedente. Per riferimenti come "ieri" o "prima", usa la cronologia
 disponibile e non inventare date o dettagli mancanti.
@@ -442,7 +445,9 @@ async def orchestrate_realtime_turn(
         "conversation": recent_history,
         "conversation_state": {
             "current_message_has_priority": True,
-            "recent_media_invite": _recent_media_invite(recent_history),
+            # Media metadata is server-owned turn state; keep it from the
+            # original history because the GPT context projection strips it.
+            "recent_media_invite": _recent_media_invite(history),
             "image_attached": bool(image_url),
             "last_assistant_message": _last_assistant_text(recent_history),
             "instruction": "Riconosci cambi di significato, correzioni e risposte già date; non ripartire dalla vecchia analisi.",
@@ -483,8 +488,11 @@ async def orchestrate_realtime_turn(
             },
         },
     }
-    if settings.realtime_reasoning_model.lower().startswith("gpt-5"):
-        body["reasoning_effort"] = "none"
+    if (
+        settings.realtime_reasoning_model.lower().startswith("gpt-5")
+        and settings.realtime_reasoning_effort
+    ):
+        body["reasoning_effort"] = settings.realtime_reasoning_effort
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:

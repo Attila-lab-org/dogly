@@ -876,22 +876,34 @@ async def test_realtime_payload_keeps_only_recent_conversation_window(monkeypatc
         {"role": "user", "content": f"vecchio-{index}"}
         for index in range(5)
     ] + [
-        {"role": "assistant", "content": f"recente-{index}"}
+        {
+            "role": "assistant",
+            "content": f"recente-{index}",
+            **({"media_invite": "VIDEO"} if index == 4 else {}),
+        }
         for index in range(5)
     ]
 
     await orchestrate_realtime_turn(
-        settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
+        settings=Settings(
+            realtime_enabled=True,
+            openai_api_key="test-key",
+            realtime_reasoning_effort="low",
+        ),
         user_text="Cosa mi consigli?",
         domains=["GENERAL"],
         context=RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={}),
         history=history,
     )
 
-    payload = captured["body"]["messages"][1]["content"]
+    body = captured["body"]
+    payload = body["messages"][1]["content"]
+    parsed = json.loads(payload.removeprefix("PERSONAL_DOG_CONTEXT\n"))
     assert "vecchio-0" not in payload
     assert "vecchio-1" not in payload
     assert "recente-4" in payload
+    assert body["reasoning_effort"] == "low"
+    assert parsed["conversation_state"]["recent_media_invite"] is True
 
 
 @pytest.mark.asyncio
