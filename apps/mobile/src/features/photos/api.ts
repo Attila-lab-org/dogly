@@ -117,10 +117,6 @@ export async function getOrCreateMomentsAlbum(
     momentsAlbumCache.set(dogId, moments);
     return moments;
   }
-  if (albums[0]) {
-    momentsAlbumCache.set(dogId, albums[0]);
-    return albums[0];
-  }
   const created = await createAlbum(dogId, 'Momenti');
   momentsAlbumCache.set(dogId, created);
   return created;

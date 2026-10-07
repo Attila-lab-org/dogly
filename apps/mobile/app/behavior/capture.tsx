@@ -49,7 +49,7 @@ export default function BehaviorCaptureScreen() {
   const { loading: sessionLoading, userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{ from?: string; sessionId?: string }>();
   const fromCheckIn =
     params.from === 'checkin' || dogAnalysisContext?.concern === 'off';
 
@@ -338,7 +338,10 @@ export default function BehaviorCaptureScreen() {
           durationMs,
           hasAudio: micGranted && !state.audioDegraded,
         });
-        router.replace(`/behavior/processing/${eventId}`);
+        router.replace({
+          pathname: '/behavior/processing/[eventId]',
+          params: { eventId, ...(params.from === 'ask' ? { returnTo: 'ask', sessionId: params.sessionId } : {}) },
+        });
       } catch (err) {
         if (isQuotaExhaustedError(err) && purchasesEnabled) {
           router.replace('/paywall');
@@ -359,6 +362,8 @@ export default function BehaviorCaptureScreen() {
     userId,
     dog.id,
     micGranted,
+    params.from,
+    params.sessionId,
     router,
   ]);
 
@@ -386,7 +391,10 @@ export default function BehaviorCaptureScreen() {
         durationMs,
         hasAudio: micGranted && !state.audioDegraded,
       });
-      router.replace(`/behavior/processing/${eventId}`);
+      router.replace({
+        pathname: '/behavior/processing/[eventId]',
+        params: { eventId, ...(params.from === 'ask' ? { returnTo: 'ask', sessionId: params.sessionId } : {}) },
+      });
     } catch (err) {
       if (isQuotaExhaustedError(err) && purchasesEnabled) {
         router.replace('/paywall');

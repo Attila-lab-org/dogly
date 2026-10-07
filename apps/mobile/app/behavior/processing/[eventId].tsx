@@ -35,7 +35,7 @@ export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId, returnTo, sessionId } = useLocalSearchParams<{ eventId: string; returnTo?: string; sessionId?: string }>();
   const useApi =
     isApiConfigured() &&
     Boolean(userId) &&
@@ -98,11 +98,13 @@ export default function BehaviorProcessingScreen() {
       completionStarted.current = true;
       setFinishing(true);
       completionTimer.current = setTimeout(
-        () => router.replace(`/behavior/result/${query.data!.id}`),
+        () => returnTo === 'ask'
+          ? router.replace({ pathname: '/ask', params: { eventId: query.data!.id, source: 'behavior', sessionId } } as never)
+          : router.replace(`/behavior/result/${query.data!.id}`),
         850,
       );
     }
-  }, [useApi, query.data, router]);
+  }, [useApi, query.data, router, returnTo, sessionId]);
 
   // "Ti avviso quando il risultato è pronto": se l'utente lascia la
   // schermata prima dello stato terminale, schedula la notifica locale.

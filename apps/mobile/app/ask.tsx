@@ -12,6 +12,7 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type MemoryProposal, type RealtimeSession, type RealtimeTurn } from '@/features/realtime/api';
 import { queryKeys } from '@/lib/queryClient';
 import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
+import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
 import { takeConversationPhoto } from '@/features/photos/share';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
@@ -21,9 +22,10 @@ export default function AskScreen() {
   const { dog } = useDogProfile();
   const { userId } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[] }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const behaviorSource = source === 'behavior';
   const digestiveSource = source === 'digestive';
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -51,13 +53,26 @@ export default function AskScreen() {
     startedKey.current = key;
     setStarting(true); setError(null);
     try {
-      const next = await createRealtimeSession(dog.id);
+      const resumed = sessionId ? resumeRealtimeSession<Message>(sessionId, dog.id) : null;
+      if (sessionId && !resumed) throw new Error('Conversation unavailable');
+      const next = resumed?.session ?? await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
+      if (resumed) {
+        setMessages(resumed.messages);
+        if (eventId) {
+          const text = 'Ho caricato il video richiesto.';
+          const turn = await createRealtimeTurn(next.id, text, undefined, { eventId, source: 'behavior' });
+          if (!mounted.current) return;
+          setMessages([...resumed.messages, { id: 'video-' + eventId, role: 'user', text }, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
+          setFocusedEventId(undefined);
+        }
+      } else {
       setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
+      }
     } catch { startedKey.current = null; if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.'); }
     finally { if (mounted.current) setStarting(false); }
-  }, [dog.id, eventId]);
+  }, [dog.id, dog.name, eventId, sessionId]);
   useEffect(() => { void start(); }, [start]);
   useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending]);
 
@@ -78,6 +93,12 @@ export default function AskScreen() {
           visibility: 'PRIVATE',
         });
         photoId = photo.id;
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
+          queryClient.invalidateQueries({ queryKey: ['gallery-album', album.id] }),
+          queryClient.invalidateQueries({ queryKey: ['gallery-albums', dog.id] }),
+          queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dog.id] }),
+        ]);
         setMediaPhase('analyzing');
       }
       const turn = await createRealtimeTurn(
@@ -99,7 +120,7 @@ export default function AskScreen() {
       setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a leggere questo momento. Puoi riprovare senza perdere la foto?', failed: true, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId }]);
       setError('La risposta non è arrivata.');
     } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
-  }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session]);
+  }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session, queryClient]);
 
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
@@ -112,8 +133,9 @@ export default function AskScreen() {
 
   const openVideoCapture = useCallback(() => {
     if (sending || !session) return;
-    router.push('/behavior/capture' as never);
-  }, [router, sending, session]);
+    rememberRealtimeSession(session, messages);
+    router.push({ pathname: '/behavior/capture', params: { from: 'ask', sessionId: session.id } } as never);
+  }, [router, sending, session, messages]);
 
   const toggleDictation = () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
