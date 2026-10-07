@@ -51,9 +51,9 @@ def deterministic_safety_interrupt(
     user_text: str, *, dog_name: str | None = None
 ) -> RealtimeDecision | None:
     subject = (
-        re.escape(dog_name.strip())
+        rf"(?:{re.escape(dog_name.strip())}|il mio cane|il cane|un cane)"
         if dog_name and dog_name.strip()
-        else r"(?:[A-ZÀ-ÖØ-Ý][\wÀ-ÿ'-]*|il cane|il mio cane)"
+        else r"(?:[A-ZÀ-ÖØ-Ý][\wÀ-ÿ'-]*|il mio cane|il cane|un cane)"
     )
     for code, pattern, answer in _URGENT_RULES:
         if re.search(pattern.format(subject=subject), user_text, re.IGNORECASE):
