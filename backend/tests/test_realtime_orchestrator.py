@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -701,6 +702,112 @@ async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
     payload = captured["body"]["messages"][1]["content"]
     assert "source_domains" not in payload
     assert "routed_domains" not in payload
+
+
+@pytest.mark.asyncio
+async def test_realtime_reasoner_receives_real_continuity_and_core_facts(
+    monkeypatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [{"message": {"content": (
+                    '{"assistant_text":"Capito.","action_type":"none",'
+                    '"action_options":[],"action_prompt":null,"used_source_ids":[]}'
+                )}}]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, url, *, headers, json):
+            captured.append(json)
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        realtime_orchestrator_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: FakeClient(),
+    )
+
+    behavior_item = RealtimeContextItem(
+        source_id="behavior-1",
+        source_type="BEHAVIOR_EVENT",
+        occurred_at=datetime(2026, 1, 2, tzinfo=UTC),
+        summary="Ha giocato con la palla",
+        data={"headline": "Gioco normale"},
+    )
+    digestive_item = RealtimeContextItem(
+        source_id="digestive-1",
+        source_type="DIGESTIVE_EVENT",
+        occurred_at=datetime(2026, 1, 3, tzinfo=UTC),
+        summary="Feci formate",
+        data={"headline": "Digestione regolare"},
+    )
+    base_context = RealtimeDogContext(
+        dog_id="dog-1",
+        dog_name="Nala",
+        identity={"weight_kg": 12},
+        core_facts=[{"source_id": "core-1", "key": "mobility", "value": "normale"}],
+        stable_facts=[{"source_id": "fact-1", "key": "routine", "value": "passeggiate"}],
+        items=[behavior_item],
+    )
+
+    scenarios = [
+        (
+            "No, non era ansiosa: stava giocando.",
+            [{"role": "assistant", "content": "Sembra ansiosa."}],
+            ["behavior-1"],
+        ),
+        (
+            "Oggi invece abbaia.",
+            [{"role": "user", "content": "Ieri era tranquilla."}],
+            ["behavior-1"],
+        ),
+        (
+            "Ha vomitato dopo il pasto.",
+            [{"role": "user", "content": "Prima parlavamo di comportamento."}],
+            ["digestive-1"],
+        ),
+        ("Nala è la mia vita.", [], ["behavior-1"]),
+    ]
+
+    for user_text, history, expected_sources in scenarios:
+        context = base_context.model_copy(
+            update={
+                "items": (
+                    [digestive_item]
+                    if user_text.startswith("Ha vomitato")
+                    else [behavior_item]
+                )
+            }
+        )
+        await orchestrate_realtime_turn(
+            settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
+            user_text=user_text,
+            domains=["DIGESTIVE"] if user_text.startswith("Ha vomitato") else ["BEHAVIOR"],
+            context=context,
+            history=history,
+        )
+
+    assert len(captured) == 4
+    for body, (user_text, history, expected_sources) in zip(captured, scenarios):
+        content = body["messages"][1]["content"]
+        payload = json.loads(content.removeprefix("PERSONAL_DOG_CONTEXT\n"))
+        assert payload["owner_turn"] == user_text
+        assert payload["conversation"] == history
+        assert payload["personal_dog_context"]["core_facts"] == base_context.core_facts
+        assert "core_dog" not in payload["personal_dog_context"]
+        assert [item["source_id"] for item in payload["personal_dog_context"]["relevant_evidence"]] == expected_sources
 
 
 @pytest.mark.asyncio

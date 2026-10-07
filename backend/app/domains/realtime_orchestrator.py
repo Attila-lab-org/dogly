@@ -433,7 +433,7 @@ async def orchestrate_realtime_turn(
             "dog_id": context.dog_id,
             "dog_name": context.dog_name,
             "identity": context.identity,
-            "core_dog": context.core_facts,
+            "core_facts": context.core_facts,
             "retrieved_personal_facts": context.stable_facts,
             "relevant_evidence": [item.model_dump(mode="json") for item in context.items],
             "missing": context.missing,
