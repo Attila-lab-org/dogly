@@ -15,7 +15,6 @@ from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
 from app.domains.personal_dog_context import (
     build_personal_dog_context,
-    context_tokens,
     load_cross_domain_evidence_db,
     load_cross_domain_evidence_memory,
     personal_to_core_facts,
@@ -25,6 +24,7 @@ from app.domains.personal_dog_context import (
 from app.domains.repository import InMemoryStore
 
 REALTIME_CONTEXT_VERSION = "personal-dog-context/v2"
+REALTIME_EVIDENCE_LIMIT = 16
 
 
 class RealtimeContextItem(BaseModel):
@@ -184,37 +184,6 @@ def route_realtime_domains(user_text: str) -> list[RealtimeDomain]:
     return domains[:3] or ["GENERAL"]
 
 
-def _item_score(
-    item: RealtimeContextItem,
-    *,
-    query_tokens: set[str],
-    selected_domains: set[RealtimeDomain],
-) -> tuple[int, int, datetime]:
-    haystack = " ".join(
-        [item.source_type, item.summary, *(str(v) for v in item.data.values())]
-    ).casefold()
-    overlap = len(query_tokens & context_tokens(haystack))
-    source_domain = {
-        "BEHAVIOR_EVENT": "BEHAVIOR",
-        "PERSONAL_PATTERN": "BEHAVIOR",
-        "DIGESTIVE_EVENT": "DIGESTIVE",
-        "FEEDING_PERIOD": "NUTRITION",
-        "CARE_EVENT": "CARE",
-    }.get(item.source_type)
-    domain_match = source_domain in selected_domains if source_domain else False
-    # GENERAL is intentionally not a request for every specialist record. An
-    # evidence item must match the current message or it stays out of GPT's
-    # turn context. Routed specialist turns can use their own domain records.
-    eligible = overlap > 0 or domain_match and "GENERAL" not in selected_domains
-    return (
-        (100 if eligible else 0)
-        + overlap * 8
-        + (25 if domain_match else 0),
-        overlap,
-        item.occurred_at or datetime.min.replace(tzinfo=UTC),
-    )
-
-
 def _select_realtime_items(
     personal: Any,
     *,
@@ -222,8 +191,7 @@ def _select_realtime_items(
     domains: list[RealtimeDomain],
     limit: int = 16,
 ) -> list[RealtimeContextItem]:
-    selected_domains = set(domains or ["GENERAL"])
-    query_tokens = context_tokens(user_text) - context_tokens(personal.dog_name)
+    del user_text, domains
     core_source_ids = {
         str(item["source_id"])
         for item in personal_to_core_facts(personal)
@@ -240,28 +208,21 @@ def _select_realtime_items(
         for raw in personal_to_realtime_items(personal)
         if str(raw["source_id"]) not in core_source_ids
     ]
-    ranked = sorted(
-        items,
-        key=lambda item: _item_score(
-            item, query_tokens=query_tokens, selected_domains=selected_domains
+    candidates = [
+        item
+        for item in items
+        if item.source_type
+        in {"BEHAVIOR_EVENT", "PERSONAL_PATTERN", "DIGESTIVE_EVENT", "FEEDING_PERIOD"}
+    ]
+    candidates.sort(
+        key=lambda item: (
+            item.source_type == "FEEDING_PERIOD"
+            and item.data.get("end_at") is None,
+            item.occurred_at or datetime.min.replace(tzinfo=UTC),
         ),
         reverse=True,
     )
-    # With a genuinely general message, send no unrelated specialist evidence.
-    # This is the important distinction between durable storage and turn context.
-    if "GENERAL" in selected_domains:
-        ranked = [
-            item for item in ranked
-            if _item_score(
-                item, query_tokens=query_tokens, selected_domains=selected_domains
-            )[0] > 0
-            and _item_score(
-                item, query_tokens=query_tokens, selected_domains=selected_domains
-            )[1] > 0
-        ]
-    return [item for item in ranked if _item_score(
-        item, query_tokens=query_tokens, selected_domains=selected_domains
-    )[0] >= 100][:limit]
+    return candidates[: min(limit, REALTIME_EVIDENCE_LIMIT)]
 
 
 

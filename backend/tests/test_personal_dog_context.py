@@ -15,6 +15,7 @@ from app.domains.personal_dog_context import (
     merge_owner_stories_into_context,
     personal_to_stable_facts,
 )
+from app.domains.realtime_context import realtime_context_from_personal
 from app.domains.repository import InMemoryStore
 from app.knowledge.models import LifestyleFact
 
@@ -147,7 +148,7 @@ def test_unlinked_catalog_food_is_not_personal_dog_context() -> None:
     assert all(item.source_type != "FOOD_PRODUCT" for item in evidence)
 
 
-def test_stable_facts_are_ranked_for_turn_instead_of_first_ten() -> None:
+def test_stable_facts_are_independent_of_turn_wording() -> None:
     dog = _dog()
     base = build_dog_context(dog, {})
     stories = [
@@ -169,4 +170,58 @@ def test_stable_facts_are_ranked_for_turn_instead_of_first_ten() -> None:
     selected = personal_to_stable_facts(
         personal, user_text="Oreo mangia lentamente?", domains=["NUTRITION"]
     )
-    assert selected[0]["statement"] == "Oreo mangia lentamente"
+    equivalent = personal_to_stable_facts(
+        personal, user_text="Quale routine alimentare ha Oreo?", domains=["BEHAVIOR"]
+    )
+    assert [fact["source_id"] for fact in selected] == [
+        fact["source_id"] for fact in equivalent
+    ]
+
+
+def test_realtime_evidence_candidates_are_independent_of_turn_wording() -> None:
+    dog = _dog()
+    base = build_dog_context(dog, {})
+    evidence = [
+        CanineEvidenceItem(
+            evidence_id="behavior:b1",
+            domain="BEHAVIOR",
+            source_type="BEHAVIOR_EVENT",
+            source_id="b1",
+            occurred_at=datetime(2026, 1, 3, tzinfo=UTC),
+            provenance="OBSERVED",
+            summary="Abbaio osservato",
+        ),
+        CanineEvidenceItem(
+            evidence_id="digestive:d1",
+            domain="DIGESTIVE",
+            source_type="DIGESTIVE_EVENT",
+            source_id="d1",
+            occurred_at=datetime(2026, 1, 2, tzinfo=UTC),
+            provenance="OBSERVED",
+            summary="Feci osservate",
+        ),
+        CanineEvidenceItem(
+            evidence_id="care:c1",
+            domain="CARE",
+            source_type="CARE_EVENT",
+            source_id="c1",
+            occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+            provenance="OWNER_REPORTED",
+            summary="Visita passata",
+        ),
+    ]
+    personal = build_personal_dog_context(
+        dog=dog, dog_context=base, evidence=evidence
+    )
+
+    first = realtime_context_from_personal(
+        personal, user_text="Perché abbaia?", domains=["GENERAL"]
+    )
+    second = realtime_context_from_personal(
+        personal, user_text="Come comunica di solito?", domains=["GENERAL"]
+    )
+
+    assert [item.source_id for item in first.items] == ["b1", "d1"]
+    assert [item.source_id for item in first.items] == [
+        item.source_id for item in second.items
+    ]

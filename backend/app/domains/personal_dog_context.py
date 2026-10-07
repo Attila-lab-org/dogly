@@ -7,8 +7,6 @@ results. Does not own writes or create a parallel memory store.
 from __future__ import annotations
 
 import json
-import re
-import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 
@@ -599,17 +597,8 @@ def personal_to_realtime_items(personal: PersonalDogContext) -> list[dict[str, A
     ]
 
 
-# Retrieval only: these tokens never select a response template or emotional mode.
-_STOPWORDS = {"che", "cosa", "come", "dove", "quando", "perche", "oggi", "ieri", "sono", "con", "una", "uno", "del", "della", "delle", "degli", "gli", "non", "nel", "nella", "nelle", "suo", "sua", "suoi", "sue", "mio", "mia", "questo", "questa", "quello", "quella", "lui", "lei", "per", "tra", "fra", "alla", "alle", "allo", "anche", "ancora", "sempre", "molto", "poco", "tanto", "piu", "puoi", "vorrei", "sapere", "dimmi", "raccontami", "cane", "oreo", "sta", "stai", "fai", "dice", "detto", "fatto", "solo", "bene", "tutto", "nulla", "ogni", "qual", "quale", "dopo", "prima", "tuo", "tua", "have", "with", "the", "about", "and", "this", "that"}
-
-
-def context_tokens(value: str) -> set[str]:
-    normalized = "".join(c for c in unicodedata.normalize("NFKD", value.casefold()) if not unicodedata.combining(c))
-    return {
-        token[:6] if len(token) > 6 else token
-        for token in re.findall(r"[^\W_]+", normalized)
-        if len(token) > 2 and token not in _STOPWORDS
-    }
+STABLE_FACT_LIMIT = 16
+REALTIME_EVIDENCE_LIMIT = 16
 
 
 def personal_to_stable_facts(
@@ -617,35 +606,20 @@ def personal_to_stable_facts(
     *,
     user_text: str = "",
     domains: list[RealtimeDomain] | None = None,
-    limit: int = 16,
+    limit: int = STABLE_FACT_LIMIT,
 ) -> list[dict[str, Any]]:
-    """Rank the complete durable read model, never its first N records.
-
-    Exact/stemmed token overlap beats domain and recency. Health constraints
-    remain available in specialist turns. Dates distinguish historical reports
-    from present facts. This is lexical retrieval, not inferred truth.
-    """
-    query = context_tokens(user_text) - context_tokens(personal.dog_name)
-    selected_domains = set(domains or []) - {"GENERAL"}
-    documents = [context_tokens(f"{fact.key} {fact.value}") for fact in personal.personal_facts]
-    frequency = {token: sum(token in doc for doc in documents) for token in query}
-
-    def score(pair: tuple[PersonalFact, set[str]]) -> tuple[float, bool, str]:
-        fact, tokens = pair
-        overlap = sum(1 / frequency[token] for token in query & tokens)
-        return (
-            overlap,
-            fact.domain in selected_domains,
-            str(fact.last_confirmed_at or ""),
-        )
-
-    ranked = sorted(zip(personal.personal_facts, documents, strict=True), key=score, reverse=True)
-    if query:
-        matches = [pair for pair in ranked if query & pair[1] or pair[0].domain in selected_domains]
-        # A generic personal question can still use a small profile overview;
-        # specialist turns never receive unrelated memories as filler.
-        ranked = matches if matches or selected_domains else ranked
-    selected = [fact for fact, _ in ranked[:limit]]
+    """Project a bounded, confirmed personal-fact set independent of the turn."""
+    del user_text, domains
+    confirmed = [
+        fact
+        for fact in personal.personal_facts
+        if fact.provenance in {"OWNER_CONFIRMED", "OBSERVED", "ESTABLISHED_PATTERN"}
+    ]
+    selected = sorted(
+        confirmed,
+        key=lambda fact: fact.last_confirmed_at or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )[: min(limit, STABLE_FACT_LIMIT)]
     facts: list[dict[str, Any]] = []
     for fact in selected:
         facts.append(
