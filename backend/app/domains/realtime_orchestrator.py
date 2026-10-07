@@ -65,11 +65,6 @@ _GREETING = re.compile(
     r"^\s*(ciao|salve|buongiorno|buonasera|ehi|hey|ciao dogly)[!.?\s]*$",
     re.IGNORECASE,
 )
-_TECHNICAL_COPY = re.compile(
-    r"\b(modello|database|prompt|elaborazione|invio il (tuo )?messaggio|"
-    r"strumento|chiamata api)\b",
-    re.IGNORECASE,
-)
 # Conservative concern hints remain only for fallback safety/abstention.
 _CONCRETE_CONCERN = re.compile(
     r"\b(perde (?:il )?pelo|ferit\w*|prurito|prude|si gratta|dolore|zopp\w*|"
@@ -213,7 +208,7 @@ def _provider_decision(
     if not isinstance(raw, dict):
         return None
     answer = raw.get("assistant_text")
-    if not isinstance(answer, str) or not answer.strip() or _TECHNICAL_COPY.search(answer):
+    if not isinstance(answer, str) or not answer.strip():
         return None
     question = raw.get("question") if isinstance(raw.get("question"), str) else None
     question_options = [

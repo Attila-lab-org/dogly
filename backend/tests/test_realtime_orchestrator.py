@@ -74,6 +74,16 @@ def test_provider_decision_keeps_contextual_media_invite() -> None:
     assert decision.media_prompt == "Fammi vedere dove perde pelo"
 
 
+def test_provider_decision_does_not_reject_words_as_technical_copy() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"Ho controllato il contesto disponibile.",'
+        '"question_information_gain":"NONE"}',
+        domains=["GENERAL"],
+    )
+    assert decision is not None
+    assert decision.assistant_text == "Ho controllato il contesto disponibile."
+
+
 def test_backend_does_not_infer_an_answer_from_missing_question_mark() -> None:
     context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
     decision = _apply_conversation_policy(
