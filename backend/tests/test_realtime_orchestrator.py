@@ -359,8 +359,12 @@ def test_conversation_policy_does_not_rewrite_affection_or_force_media() -> None
 def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
     from app.domains.realtime_orchestrator import _SYSTEM
     assert "usa il contesto del cane solo quando è pertinente" in _SYSTEM
+    assert "La frase corrente ha priorità sulla risposta precedente" in _SYSTEM
+    assert "Non ripetere spiegazioni già date" in _SYSTEM
     assert "Non aggiungere una domanda per chiudere automaticamente" in _SYSTEM
     assert "Evita titoli, elenchi, numerazioni, grassetto, asterischi" in _SYSTEM
+    assert "riconosci il legame senza trasformarlo" in _SYSTEM
+    assert "separa ciò che si vede davvero" in _SYSTEM
     assert "Oreo" not in _SYSTEM
     assert "Restituisci soltanto JSON" not in _SYSTEM
     assert "suggested_prompts" not in _SYSTEM
