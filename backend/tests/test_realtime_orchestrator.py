@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+
 from app.api.routes import realtime as realtime_route
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
@@ -31,7 +32,6 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
-
 from tests.conftest import create_dog
 
 
@@ -358,8 +358,11 @@ def test_conversation_policy_does_not_rewrite_affection_or_force_media() -> None
 
 def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
     from app.domains.realtime_orchestrator import _SYSTEM
-    assert "frase corrente ha priorità" in _SYSTEM
-    assert "Non creare domande o menu" in _SYSTEM
+    assert "usa il contesto del cane solo quando è pertinente" in _SYSTEM
+    assert "Non aggiungere una domanda per chiudere automaticamente" in _SYSTEM
+    assert "Evita titoli, elenchi, numerazioni, grassetto, asterischi" in _SYSTEM
+    assert "Oreo" not in _SYSTEM
+    assert "Restituisci soltanto JSON" not in _SYSTEM
     assert "suggested_prompts" not in _SYSTEM
 
 
