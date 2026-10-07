@@ -449,6 +449,56 @@ async def test_realtime_route_keeps_domains_as_provenance_only(
 
 
 @pytest.mark.asyncio
+async def test_realtime_api_prioritizes_explicit_behavior_event(
+    client, auth_headers: dict[str, str], state, user_id: str, monkeypatch
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    selected_id = str(uuid.uuid4())
+    for index in range(16):
+        event_id = selected_id if index == 0 else str(uuid.uuid4())
+        state.store.behavior_events[event_id] = BehaviorEventRec(
+            id=event_id,
+            capture_id=f"capture-{index}",
+            dog_id=dog_id,
+            user_id=user_id,
+            status="COMPLETED",
+            summary=f"Lettura behavior {index}",
+            created_at=datetime(2026, 1, 1 + index, tzinfo=UTC),
+        )
+
+    captured_contexts: list[RealtimeDogContext] = []
+    original_focus = realtime_route.focus_behavior_event
+
+    def capture_focus(context, event):
+        original_focus(context, event)
+        captured_contexts.append(context)
+
+    monkeypatch.setattr(realtime_route, "focus_behavior_event", capture_focus)
+    session_response = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "TEXT"},
+    )
+    session_id = session_response.json()["id"]
+
+    response = await client.post(
+        f"/v1/realtime/sessions/{session_id}/turns",
+        headers=auth_headers,
+        json={
+            "text": "Qual è il colore del cielo?",
+            "event_id": selected_id,
+            "context_source": "behavior",
+        },
+    )
+
+    assert response.status_code == 201
+    assert len(captured_contexts) == 1
+    assert len(captured_contexts[0].items) == 12
+    assert captured_contexts[0].items[0].source_id == selected_id
+    assert captured_contexts[0].items[0].source_type == "BEHAVIOR_EVENT"
+
+
+@pytest.mark.asyncio
 async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
     monkeypatch,
 ) -> None:
