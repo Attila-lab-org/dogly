@@ -16,10 +16,7 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision, RealtimeDomain
-from app.domains.owner_stories import (
-    extract_owner_reported_facts,
-    is_persistent_owner_fact,
-)
+from app.domains.owner_stories import extract_owner_reported_facts
 from app.domains.realtime_context import RealtimeDogContext
 from app.knowledge.claim_validation import (
     extract_claims_from_provider_payload,
@@ -129,7 +126,6 @@ def natural_memory_candidate(user_text: str) -> dict[str, str] | None:
     facts = [
         fact for fact in extract_owner_reported_facts(user_text)
         if fact.category in {"HEALTH", "DIET", "ROUTINE", "PREFERENCE"}
-        and is_persistent_owner_fact(fact.statement)
         and not any(marker in fact.statement.casefold() for marker in _EPISODIC_MARKERS)
     ]
     if len(facts) != 1:
@@ -168,11 +164,6 @@ al veterinario. La memoria stabile viene proposta separatamente quando emerge
 una possibile informazione duratura, oppure su richiesta esplicita del
 proprietario; serve sempre una conferma separata e il modello non la crea dentro
 questa chiamata.
-Scrivi come in una chat tra persone: preferisci prosa naturale e paragrafi brevi.
-Non usare titoli, Markdown, grassetti, elenchi o numerazioni se non servono davvero
-alla chiarezza o se il proprietario non li chiede. La lunghezza resta libera: una
-risposta può essere articolata quando il tema lo richiede, ma non deve sembrare un
-articolo o una scheda tecnica.
 Restituisci soltanto JSON conforme allo schema richiesto.
 """
 

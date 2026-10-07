@@ -25,11 +25,7 @@ from app.contracts.provenance import PROVENANCE_OWNER_LABEL, normalize_provenanc
 from app.contracts.realtime import RealtimeDomain
 from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
-from app.domains.owner_stories import (
-    clean_owner_stories,
-    is_persistent_owner_fact,
-    normalized_statement,
-)
+from app.domains.owner_stories import clean_owner_stories, normalized_statement
 from app.domains.repository import InMemoryStore
 from app.knowledge.models import DogContextSnapshot, LifestyleFact
 from app.providers.base import EligiblePatternSummary
@@ -696,7 +692,6 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
         }
         for fact in personal.personal_facts
         if fact.domain in {"CARE", "NUTRITION"}
-        and (not isinstance(fact.value, str) or is_persistent_owner_fact(fact.value))
     ]
     for item in personal.evidence:
         if item.source_type == "FEEDING_PERIOD" and item.data.get("end_at") is None:
