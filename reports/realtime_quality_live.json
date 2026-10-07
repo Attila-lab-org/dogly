@@ -1,0 +1,116 @@
+{
+  "score": {
+    "scenarios": 6,
+    "passed": 6,
+    "score": 1.0,
+    "dimensions": {
+      "answered_current_turn": 1.0,
+      "handled_correction": 1.0,
+      "maintained_continuity": 1.0,
+      "grounded_in_context": 1.0,
+      "natural_dialogue": 1.0
+    }
+  },
+  "scenarios": [
+    {
+      "id": "correction_nala",
+      "dog_name": "Nala",
+      "response": "Ok, perfetto: se sta giocando allora “ansia” possiamo metterla da parte.\n\nIn genere il gioco può sembrare agitazione perché ansima, fa scatti, gira in tondo o vocalizza, ma se il corpo è morbido, fa pause spontanee, torna da te e riprende volentieri, è tutto nella norma.\n\nTieni solo d’occhio che non vada troppo “su di giri”: inserisci mini-pause, acqua a disposizione e stop se vedi segnali tipo ansimo che non cala, occhi molto “spalancati”, movimenti più frenetici o se inizia a non riuscire a fermarsi.\n\nCom’era il gioco in quel momento: rincorse/riporto, tira e molla, o gioco da sola con un oggetto?",
+      "used_source_ids": [
+        "fact-correction_nala"
+      ],
+      "provider": "openai",
+      "rubric": {
+        "answered_current_turn": true,
+        "handled_correction": true,
+        "maintained_continuity": true,
+        "grounded_in_context": true,
+        "natural_dialogue": true
+      },
+      "passed": true
+    },
+    {
+      "id": "yesterday_bruno",
+      "dog_name": "Bruno",
+      "response": "Ok: se oggi è diverso rispetto a ieri, il punto è capire in che direzione è cambiato, perché l’azione cambia.\n\nSe oggi è più abbattuto o “spento” (meno voglia di uscire/giocare, sonnolenza insolita, mangia poco anche il suo pollo e riso), oggi io terrei la giornata più leggera e lo monitorerei: acqua disponibile, passeggiate brevi, niente sforzi o giochi intensi. Se insieme a questo ci sono vomito, diarrea, tremori, dolore evidente, respirazione strana, o rifiuto totale di cibo e acqua, meglio sentire il veterinario.\n\nSe invece oggi è più agitato/irrequieto (ansima, cammina avanti e indietro, fatica a rilassarsi), prova a riportarlo su routine e calma: uscita tranquilla per annusare, ambiente silenzioso, niente stimoli forti; spesso basta anche solo quello per rimettere le cose in bolla.\n\nMi dici in che senso è “diverso” oggi: più giù o più su? E sta mangiando e bevendo come ieri?",
+      "used_source_ids": [
+        "fact-yesterday_bruno"
+      ],
+      "provider": "openai",
+      "rubric": {
+        "answered_current_turn": true,
+        "handled_correction": true,
+        "maintained_continuity": true,
+        "grounded_in_context": true,
+        "natural_dialogue": true
+      },
+      "passed": true
+    },
+    {
+      "id": "affection_luna",
+      "dog_name": "Luna",
+      "response": "Che bella cosa da dire. Si sente proprio quanto è importante per te Luna: quel legame lì vale tantissimo.\n\nSe ti va, raccontami una cosa piccola di oggi che ha fatto Luna e che ti ha fatto pensare “è la mia vita” (anche una sciocchezza).",
+      "used_source_ids": [
+        "fact-affection_luna"
+      ],
+      "provider": "openai",
+      "rubric": {
+        "answered_current_turn": true,
+        "handled_correction": true,
+        "maintained_continuity": true,
+        "grounded_in_context": true,
+        "natural_dialogue": true
+      },
+      "passed": true
+    },
+    {
+      "id": "domain_change_bowie",
+      "dog_name": "Bowie",
+      "response": "Ok, cambio tema. Se Bowie ha vomitato dopo cena, la cosa più utile adesso è capire se è un episodio “singolo” o se c’è qualcosa che richiede attenzione.\n\nSe è stato un solo vomito e ora è vigile, non prova a vomitare di continuo e non sembra dolorante: per stanotte terrei riposo e acqua a piccoli sorsi (non una ciotola intera tutta insieme). Niente snack o masticativi. Se dopo 6–8 ore sta bene, puoi provare un pasto piccolissimo e leggero; se lo tiene, il giorno dopo 2–3 pasti piccoli.\n\nInvece contatta un veterinario (o urgenza se peggiora) se succede uno di questi: vomiti ripetuti, sangue nel vomito, addome gonfio/dolore marcato, conati improduttivi, grande abbattimento, difficoltà a respirare, sospetto che abbia mangiato un oggetto/ossa/veleni, oppure se non riesce a trattenere nemmeno l’acqua.\n\nMi dici com’è stato il vomito (cibo non digerito, schiuma, bile gialla) e quante volte? E come sta adesso, normale o giù?",
+      "used_source_ids": [
+        "digestive-live-1"
+      ],
+      "provider": "openai",
+      "rubric": {
+        "answered_current_turn": true,
+        "handled_correction": true,
+        "maintained_continuity": true,
+        "grounded_in_context": true,
+        "natural_dialogue": true
+      },
+      "passed": true
+    },
+    {
+      "id": "unknown_fact_kira",
+      "dog_name": "Kira",
+      "response": "Non ho informazioni qui su che cibo mangia Kira: in questo contesto non è stato indicato, quindi non posso “ricordarlo”.\n\nSe mi dici marca/linea e tipo (crocchette, umido, casalingo) e magari età/peso, posso aiutarti anche a capire se la scelta e le quantità hanno senso o come fare un eventuale cambio senza stressarle la pancia.",
+      "used_source_ids": [],
+      "provider": "openai",
+      "rubric": {
+        "answered_current_turn": true,
+        "handled_correction": true,
+        "maintained_continuity": true,
+        "grounded_in_context": true,
+        "natural_dialogue": true
+      },
+      "passed": true
+    },
+    {
+      "id": "long_context_otto",
+      "dog_name": "Otto",
+      "response": "Oggi lo gestirei “normale”, senza fare grandi cambiamenti, a meno che tu non abbia notato pancia molle, vomito o feci strane dopo il premio.\n\nQuindi: pasti regolari come al solito, acqua a disposizione, e con i premi stai leggero (magari niente pollo oggi o pochissimo) così non sommi troppo. Se vuoi usare premi per addestramento, meglio micro-bocconcini o una parte della sua razione.\n\nSe invece oggi vedi diarrea, vomito, inappetenza o molta sonnolenza, lì conviene fare giornata tranquilla e sentire il veterinario se non rientra in fretta.\n\nIeri quanto pollo avrà mangiato più o meno: due-tre bocconcini o una quantità più importante?",
+      "used_source_ids": [
+        "fact-long_context_otto"
+      ],
+      "provider": "openai",
+      "rubric": {
+        "answered_current_turn": true,
+        "handled_correction": true,
+        "maintained_continuity": true,
+        "grounded_in_context": true,
+        "natural_dialogue": true
+      },
+      "passed": true
+    }
+  ]
+}
