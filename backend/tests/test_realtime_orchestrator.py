@@ -600,6 +600,69 @@ async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
 
 
 @pytest.mark.asyncio
+async def test_black_stool_reaches_gpt_without_deterministic_hard_stop(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"assistant_text":"Contatta il veterinario.",'
+                                '"question_information_gain":"NONE"}'
+                            )
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, url, *, headers, json):
+            captured["body"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        realtime_orchestrator_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: FakeClient(),
+    )
+    decision, audit = await orchestrate_realtime_turn(
+        settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
+        user_text="Oreo ha fatto cacca nera",
+        domains=["GENERAL"],
+        context=RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={}),
+        history=[],
+    )
+
+    payload = captured["body"]["messages"][1]["content"]
+    assert '"safety_guardrails":{"flags":[]' in payload
+    assert "URGENT_DIGESTIVE" not in payload
+    assert decision.safety_flags == []
+    assert audit["provider"] == "openai"
+
+
+def test_black_stool_is_not_a_deterministic_safety_interrupt() -> None:
+    assert deterministic_safety_interrupt("Oreo ha fatto cacca nera") is None
+    assert (
+        deterministic_safety_interrupt(
+            "Sto chiedendo cosa può significare la cacca nera"
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
 async def test_realtime_turn_can_attach_owned_private_photo(
     client, auth_headers: dict[str, str]
 ) -> None:
