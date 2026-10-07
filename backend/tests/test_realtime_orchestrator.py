@@ -361,10 +361,16 @@ def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
     assert "usa il contesto del cane solo quando è pertinente" in _SYSTEM
     assert "La frase corrente ha priorità sulla risposta precedente" in _SYSTEM
     assert "Non ripetere spiegazioni già date" in _SYSTEM
+    assert "trasformare la chat in un questionario" in _SYSTEM
     assert "Non aggiungere una domanda per chiudere automaticamente" in _SYSTEM
+    assert "Se non serve una domanda, continua la conversazione" in _SYSTEM
     assert "Evita titoli, elenchi, numerazioni, grassetto, asterischi" in _SYSTEM
     assert "riconosci il legame senza trasformarlo" in _SYSTEM
     assert "separa ciò che si vede davvero" in _SYSTEM
+    assert "La correzione sostituisce la lettura precedente" in _SYSTEM
+    assert "Non trasformare un comportamento normale" in _SYSTEM
+    assert "Se il proprietario cambia argomento" in _SYSTEM
+    assert "ieri" in _SYSTEM
     assert "Oreo" not in _SYSTEM
     assert "Restituisci soltanto JSON" not in _SYSTEM
     assert "suggested_prompts" not in _SYSTEM

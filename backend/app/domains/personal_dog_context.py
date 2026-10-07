@@ -433,7 +433,7 @@ async def load_cross_domain_evidence_db(
                         ),
                     )
                 )
-            # A catalog or scanned product is not part of Oreo's context until
+            # A catalog or scanned product is not part of the dog's context until
             # a feeding period links it to this dog. This prevents unused foods
             # from being presented as the current diet.
 
