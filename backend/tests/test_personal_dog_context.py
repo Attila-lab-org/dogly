@@ -178,7 +178,7 @@ def test_stable_facts_are_independent_of_turn_wording() -> None:
     ]
 
 
-def test_realtime_evidence_candidates_are_independent_of_turn_wording() -> None:
+def test_realtime_evidence_selection_keeps_only_relevant_domain_items() -> None:
     dog = _dog()
     base = build_dog_context(dog, {})
     evidence = [
@@ -214,17 +214,44 @@ def test_realtime_evidence_candidates_are_independent_of_turn_wording() -> None:
         dog=dog, dog_context=base, evidence=evidence
     )
 
-    first = realtime_context_from_personal(
-        personal, user_text="Perché abbaia?", domains=["GENERAL"]
-    )
-    second = realtime_context_from_personal(
-        personal, user_text="Come comunica di solito?", domains=["GENERAL"]
+    context = realtime_context_from_personal(
+        personal, user_text="Perché abbaia?", domains=["BEHAVIOR"]
     )
 
-    assert [item.source_id for item in first.items] == ["b1", "d1", "c1"]
-    assert [item.source_id for item in first.items] == [
-        item.source_id for item in second.items
+    assert [item.source_id for item in context.items] == ["b1"]
+
+
+def test_realtime_evidence_selection_excludes_recent_irrelevant_event() -> None:
+    dog = _dog()
+    evidence = [
+        CanineEvidenceItem(
+            evidence_id="behavior:relevant",
+            domain="BEHAVIOR",
+            source_type="BEHAVIOR_EVENT",
+            source_id="relevant",
+            occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+            provenance="OBSERVED",
+            summary="Abbaio osservato durante la passeggiata",
+        ),
+        CanineEvidenceItem(
+            evidence_id="digestive:recent",
+            domain="DIGESTIVE",
+            source_type="DIGESTIVE_EVENT",
+            source_id="recent",
+            occurred_at=datetime(2026, 1, 10, tzinfo=UTC),
+            provenance="OBSERVED",
+            summary="Feci formate nella mattina",
+        ),
     ]
+    personal = build_personal_dog_context(
+        dog=dog, dog_context=build_dog_context(dog, {}), evidence=evidence
+    )
+
+    context = realtime_context_from_personal(
+        personal, user_text="Cosa significa quando abbaia?", domains=["BEHAVIOR"]
+    )
+
+    assert [item.source_id for item in context.items] == ["relevant"]
 
 
 def test_realtime_evidence_selection_keeps_care_event() -> None:

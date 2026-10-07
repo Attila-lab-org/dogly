@@ -25,6 +25,18 @@ from app.domains.repository import InMemoryStore
 
 REALTIME_CONTEXT_VERSION = "personal-dog-context/v2"
 REALTIME_EVIDENCE_LIMIT = 16
+_EVIDENCE_DOMAINS = {
+    "BEHAVIOR_EVENT": "BEHAVIOR",
+    "PERSONAL_PATTERN": "BEHAVIOR",
+    "DIGESTIVE_EVENT": "DIGESTIVE",
+    "FEEDING_PERIOD": "NUTRITION",
+    "CARE_EVENT": "CARE",
+}
+_CONTEXT_STOPWORDS = {
+    "cosa", "come", "quale", "quali", "perché", "perche", "posso", "devo",
+    "oggi", "questo", "questa", "modo", "fare", "mi", "ti", "il", "la", "lo",
+    "un", "una", "di", "del", "della", "per", "con", "che", "ha", "è", "e",
+}
 
 
 class RealtimeContextItem(BaseModel):
@@ -203,7 +215,6 @@ def _select_realtime_items(
     domains: list[RealtimeDomain],
     limit: int = 16,
 ) -> list[RealtimeContextItem]:
-    del user_text, domains
     core_source_ids = {
         str(item["source_id"])
         for item in personal_to_core_facts(personal)
@@ -232,14 +243,31 @@ def _select_realtime_items(
             "CARE_EVENT",
         }
     ]
-    candidates.sort(
-        key=lambda item: (
-            item.source_type == "FEEDING_PERIOD"
-            and item.data.get("end_at") is None,
+    query_terms = {
+        term.casefold()
+        for term in re.findall(r"[\wÀ-ÖØ-öø-ÿ]+", user_text)
+        if len(term) > 2 and term.casefold() not in _CONTEXT_STOPWORDS
+    }
+    selected_domains = set(domains or []) - {"GENERAL"}
+
+    def relevance(item: RealtimeContextItem) -> tuple[int, bool, datetime]:
+        searchable = " ".join(
+            [item.summary, item.source_type, *(str(value) for value in item.data.values())]
+        ).casefold()
+        overlap = sum(1 for term in query_terms if term in searchable)
+        domain_match = int(_EVIDENCE_DOMAINS.get(item.source_type) in selected_domains)
+        return (
+            overlap * 10 + domain_match * 4,
+            item.source_type == "FEEDING_PERIOD" and item.data.get("end_at") is None,
             item.occurred_at or datetime.min.replace(tzinfo=UTC),
-        ),
-        reverse=True,
-    )
+        )
+
+    ranked = sorted(candidates, key=relevance, reverse=True)
+    if query_terms or selected_domains:
+        matched = [item for item in ranked if relevance(item)[0] > 0]
+        if matched:
+            ranked = matched
+    candidates = ranked
     return candidates[: min(limit, REALTIME_EVIDENCE_LIMIT)]
 
 
