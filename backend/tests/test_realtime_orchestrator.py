@@ -646,7 +646,7 @@ async def test_black_stool_reaches_gpt_without_deterministic_hard_stop(monkeypat
     )
 
     payload = captured["body"]["messages"][1]["content"]
-    assert '"safety_guardrails":{"flags":[]' in payload
+    assert '"safety_guardrails"' not in payload
     assert "URGENT_DIGESTIVE" not in payload
     assert decision.safety_flags == []
     assert audit["provider"] == "openai"
@@ -654,12 +654,23 @@ async def test_black_stool_reaches_gpt_without_deterministic_hard_stop(monkeypat
 
 def test_black_stool_is_not_a_deterministic_safety_interrupt() -> None:
     assert deterministic_safety_interrupt("Oreo ha fatto cacca nera") is None
+    assert deterministic_safety_interrupt("Ho fatto feci nere ieri") is None
     assert (
         deterministic_safety_interrupt(
             "Sto chiedendo cosa può significare la cacca nera"
         )
         is None
     )
+
+
+def test_informational_breathing_question_is_not_a_deterministic_interrupt() -> None:
+    assert deterministic_safety_interrupt("Cosa devo fare se non respira?") is None
+
+
+def test_direct_current_breathing_declaration_is_deterministic() -> None:
+    decision = deterministic_safety_interrupt("Oreo non respira")
+    assert decision is not None
+    assert decision.safety_flags == ["EMERGENCY_BREATHING"]
 
 
 @pytest.mark.asyncio

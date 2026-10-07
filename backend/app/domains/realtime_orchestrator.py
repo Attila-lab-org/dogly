@@ -30,7 +30,7 @@ _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "EMERGENCY_BREATHING",
         re.compile(
-            r"\b(non respira|fa fatica a respirare|sta soffocando)\b",
+            r"^\s*(?:oreo|il cane|il mio cane)\s+(?:non respira|fa fatica a respirare|sta soffocando)\b",
             re.IGNORECASE,
         ),
         "Se fa fatica a respirare o sta soffocando, contatta subito un pronto soccorso veterinario. Non aspettare una risposta in chat.",
@@ -38,7 +38,7 @@ _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "EMERGENCY_COLLAPSE",
         re.compile(
-            r"\b(non si alza|sta avendo convulsioni)\b",
+            r"^\s*(?:oreo|il cane|il mio cane)\s+(?:non si alza|sta avendo convulsioni)\b",
             re.IGNORECASE,
         ),
         "Questo può richiedere assistenza urgente: contatta subito un pronto soccorso veterinario e segui le loro indicazioni.",
@@ -46,7 +46,7 @@ _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "POSSIBLE_POISONING",
         re.compile(
-            r"\b(ha ingerito|può aver ingerito)\s+(veleno|topicida|cioccolato|xilitolo|antigelo)\b",
+            r"^\s*(?:oreo|il cane|il mio cane)\s+(?:ha ingerito|può aver ingerito)\s+(?:veleno|topicida|cioccolato|xilitolo|antigelo)\b",
             re.IGNORECASE,
         ),
         "Se può aver ingerito una sostanza tossica, chiama subito il veterinario o un centro antiveleni veterinario. Non provocare il vomito senza indicazione professionale.",
@@ -180,7 +180,6 @@ def _provider_decision(
     content: str,
     *,
     domains: list[RealtimeDomain],
-    safety_flags: list[str] | None = None,
 ) -> RealtimeDecision | None:
     try:
         raw = json.loads(content)
@@ -230,7 +229,7 @@ def _provider_decision(
             domains=domains,
             # Safety flags are server-owned; provider output cannot activate an
             # interrupt or change the safety state of this turn.
-            safety_flags=list(safety_flags or []),
+            safety_flags=[],
             used_source_ids=[
                 str(value) for value in raw.get("used_source_ids", []) if value
             ][:12],
@@ -394,9 +393,8 @@ async def orchestrate_realtime_turn(
     media_context: str | None = None,
 ) -> tuple[RealtimeDecision, dict[str, Any]]:
     safety = deterministic_safety_interrupt(user_text)
-    if safety and "URGENT_DIGESTIVE" not in safety.safety_flags:
+    if safety:
         return safety, {"provider": "deterministic", "version": REALTIME_ORCHESTRATOR_VERSION}
-    safety_flags = list(safety.safety_flags) if safety else []
 
     if not image_url and _GREETING.fullmatch(user_text):
         owner = (context.owner_display_name or "").strip().split(" ", 1)[0].capitalize()
@@ -440,15 +438,6 @@ async def orchestrate_realtime_turn(
             "missing": context.missing,
         },
         "context_contract": "personal-dog-core-plus-evidence/v1",
-        "safety_guardrails": {
-            "flags": safety_flags,
-            "instruction": (
-                "Valuta tu il significato clinico e rispondi con prudenza. "
-                "Se il segnale è urgente, indica chiaramente di contattare il veterinario."
-            )
-            if safety_flags
-            else None,
-        },
         "conversation": history[-12:],
         "conversation_state": {
             "current_message_has_priority": True,
@@ -524,9 +513,7 @@ async def orchestrate_realtime_turn(
         content = raw["choices"][0]["message"]["content"]
     except (KeyError, TypeError, IndexError):
         content = ""
-    decision = _provider_decision(
-        content, domains=domains, safety_flags=safety_flags
-    )
+    decision = _provider_decision(content, domains=domains)
     if decision is None:
         fallback = _fallback_decision(
             text=user_text, context=context, domains=domains, history=history,
