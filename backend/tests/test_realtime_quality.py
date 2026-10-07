@@ -29,26 +29,27 @@ def test_realtime_quality_score_requires_all_dimensions_for_a_pass() -> None:
         [
             RealtimeQualityLabel(
                 case_id="correction",
-                answered_current_turn=True,
-                handled_correction=True,
-                maintained_continuity=True,
-                grounded_in_context=True,
-                natural_dialogue=True,
+                answered_current_turn="pass",
+                handled_correction="pass",
+                maintained_continuity="pass",
+                grounded_in_context="pass",
+                natural_dialogue="pass",
             ),
             RealtimeQualityLabel(
                 case_id="topic-change",
-                answered_current_turn=True,
-                handled_correction=True,
-                maintained_continuity=True,
-                grounded_in_context=True,
-                natural_dialogue=False,
+                answered_current_turn="pass",
+                handled_correction="pass",
+                maintained_continuity="pass",
+                grounded_in_context="pass",
+                natural_dialogue="fail",
             ),
         ]
     )
 
     assert report["scenarios"] == 2
     assert report["passed"] == 1
-    assert report["score"] == 0.5
+    assert report["score"] == 0.9
+    assert report["reliable"] is True
     assert report["dimensions"]["natural_dialogue"] == 0.5
 
 
@@ -56,12 +57,32 @@ def test_realtime_quality_score_is_explicit_for_empty_evaluation() -> None:
     assert score_realtime_quality([]) == {
         "scenarios": 0,
         "passed": 0,
-        "score": 0.0,
+        "score": None,
+        "reliable": False,
+        "status": "unmeasurable",
         "dimensions": {
-            "answered_current_turn": 0.0,
-            "handled_correction": 0.0,
-            "maintained_continuity": 0.0,
-            "grounded_in_context": 0.0,
-            "natural_dialogue": 0.0,
+            "answered_current_turn": None,
+            "handled_correction": None,
+            "maintained_continuity": None,
+            "grounded_in_context": None,
+            "natural_dialogue": None,
         },
     }
+
+
+def test_realtime_quality_marks_semantic_dimensions_unmeasurable() -> None:
+    report = score_realtime_quality(
+        [
+            RealtimeQualityLabel(
+                case_id="only-pass",
+                answered_current_turn="pass",
+                handled_correction="unmeasurable",
+                maintained_continuity="unmeasurable",
+                grounded_in_context="unmeasurable",
+                natural_dialogue="pass",
+            )
+        ]
+    )
+    assert report["score"] is None
+    assert report["reliable"] is False
+    assert report["status"] == "unmeasurable"

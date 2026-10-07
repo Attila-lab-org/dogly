@@ -1,14 +1,16 @@
 {
   "score": {
     "scenarios": 6,
-    "passed": 6,
-    "score": 1.0,
+    "passed": 0,
+    "score": null,
+    "reliable": false,
+    "status": "unmeasurable",
     "dimensions": {
-      "answered_current_turn": 1.0,
-      "handled_correction": 1.0,
-      "maintained_continuity": 1.0,
-      "grounded_in_context": 1.0,
-      "natural_dialogue": 1.0
+      "answered_current_turn": null,
+      "handled_correction": null,
+      "maintained_continuity": null,
+      "grounded_in_context": null,
+      "natural_dialogue": 0.3333333333333333
     }
   },
   "scenarios": [
@@ -21,13 +23,15 @@
       ],
       "provider": "openai",
       "rubric": {
-        "answered_current_turn": true,
-        "handled_correction": true,
-        "maintained_continuity": true,
-        "grounded_in_context": true,
-        "natural_dialogue": true
+        "answered_current_turn": "unmeasurable",
+        "handled_correction": "unmeasurable",
+        "maintained_continuity": "unmeasurable",
+        "grounded_in_context": "unmeasurable",
+        "natural_dialogue": "fail"
       },
-      "passed": true
+      "passed": false,
+      "response_length_chars": 606,
+      "length_threshold_chars": 600
     },
     {
       "id": "yesterday_bruno",
@@ -38,13 +42,15 @@
       ],
       "provider": "openai",
       "rubric": {
-        "answered_current_turn": true,
-        "handled_correction": true,
-        "maintained_continuity": true,
-        "grounded_in_context": true,
-        "natural_dialogue": true
+        "answered_current_turn": "unmeasurable",
+        "handled_correction": "unmeasurable",
+        "maintained_continuity": "unmeasurable",
+        "grounded_in_context": "unmeasurable",
+        "natural_dialogue": "fail"
       },
-      "passed": true
+      "passed": false,
+      "response_length_chars": 893,
+      "length_threshold_chars": 600
     },
     {
       "id": "affection_luna",
@@ -55,13 +61,15 @@
       ],
       "provider": "openai",
       "rubric": {
-        "answered_current_turn": true,
-        "handled_correction": true,
-        "maintained_continuity": true,
-        "grounded_in_context": true,
-        "natural_dialogue": true
+        "answered_current_turn": "unmeasurable",
+        "handled_correction": "unmeasurable",
+        "maintained_continuity": "unmeasurable",
+        "grounded_in_context": "unmeasurable",
+        "natural_dialogue": "pass"
       },
-      "passed": true
+      "passed": false,
+      "response_length_chars": 237,
+      "length_threshold_chars": 600
     },
     {
       "id": "domain_change_bowie",
@@ -72,13 +80,15 @@
       ],
       "provider": "openai",
       "rubric": {
-        "answered_current_turn": true,
-        "handled_correction": true,
-        "maintained_continuity": true,
-        "grounded_in_context": true,
-        "natural_dialogue": true
+        "answered_current_turn": "unmeasurable",
+        "handled_correction": "unmeasurable",
+        "maintained_continuity": "unmeasurable",
+        "grounded_in_context": "unmeasurable",
+        "natural_dialogue": "fail"
       },
-      "passed": true
+      "passed": false,
+      "response_length_chars": 930,
+      "length_threshold_chars": 600
     },
     {
       "id": "unknown_fact_kira",
@@ -87,13 +97,15 @@
       "used_source_ids": [],
       "provider": "openai",
       "rubric": {
-        "answered_current_turn": true,
-        "handled_correction": true,
-        "maintained_continuity": true,
-        "grounded_in_context": true,
-        "natural_dialogue": true
+        "answered_current_turn": "unmeasurable",
+        "handled_correction": "unmeasurable",
+        "maintained_continuity": "unmeasurable",
+        "grounded_in_context": "unmeasurable",
+        "natural_dialogue": "pass"
       },
-      "passed": true
+      "passed": false,
+      "response_length_chars": 330,
+      "length_threshold_chars": 600
     },
     {
       "id": "long_context_otto",
@@ -104,13 +116,15 @@
       ],
       "provider": "openai",
       "rubric": {
-        "answered_current_turn": true,
-        "handled_correction": true,
-        "maintained_continuity": true,
-        "grounded_in_context": true,
-        "natural_dialogue": true
+        "answered_current_turn": "unmeasurable",
+        "handled_correction": "unmeasurable",
+        "maintained_continuity": "unmeasurable",
+        "grounded_in_context": "unmeasurable",
+        "natural_dialogue": "fail"
       },
-      "passed": true
+      "passed": false,
+      "response_length_chars": 639,
+      "length_threshold_chars": 600
     }
   ]
 }

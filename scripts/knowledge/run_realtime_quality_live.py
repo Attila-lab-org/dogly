@@ -76,17 +76,14 @@ async def _run() -> dict[str, object]:
             )
         assert decision is not None
         answer = decision.assistant_text
-        allowed_ids = {item.source_id for item in context.items}
-        allowed_ids.update(str(fact["source_id"]) for fact in context.stable_facts)
-        grounded = all(source_id in allowed_ids for source_id in decision.used_source_ids)
-        correction_ok = case["id"] != "correction_nala" or "ansiosa" not in answer.lower()
+        length_result = "fail" if len(answer) > 600 else "pass"
         label = RealtimeQualityLabel(
             case_id=case["id"],
-            answered_current_turn=bool(answer.strip()),
-            handled_correction=correction_ok,
-            maintained_continuity=(len(case["turns"]) == 1 or len(history) >= 2 * len(case["turns"])),
-            grounded_in_context=grounded,
-            natural_dialogue=("**" not in answer and "##" not in answer),
+            answered_current_turn="unmeasurable",
+            handled_correction="unmeasurable",
+            maintained_continuity="unmeasurable",
+            grounded_in_context="unmeasurable",
+            natural_dialogue=length_result,
         )
         labels.append(label)
         results.append(
@@ -98,6 +95,7 @@ async def _run() -> dict[str, object]:
                 "provider": metadata.get("provider"),
                 "rubric": label.dimensions(),
                 "passed": label.passed,
+                "response_length_chars": len(answer),
             }
         )
     return {"score": score_realtime_quality(labels), "scenarios": results}
