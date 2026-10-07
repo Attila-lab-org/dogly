@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from app.api.routes import realtime as realtime_route
@@ -12,10 +13,12 @@ from app.api.routes.realtime import (
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
 from app.domains import realtime_orchestrator as realtime_orchestrator_module
+from app.domains.models import BehaviorEventRec
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
     conversation_topic,
+    focus_behavior_event,
     resume_welcome_text,
     route_realtime_domains,
 )
@@ -213,6 +216,40 @@ def test_new_text_session_resumes_previous_conversation_turns() -> None:
 
 def test_generic_weather_is_not_misrouted_to_behavior() -> None:
     assert route_realtime_domains("Oggi fa caldo e sono stanco") == ["GENERAL"]
+
+
+def test_explicit_behavior_event_is_prioritized_without_question_overlap() -> None:
+    context = RealtimeDogContext(
+        dog_id="dog-1",
+        dog_name="Oreo",
+        identity={},
+        items=[
+            RealtimeContextItem(
+                source_id="digestive-1",
+                source_type="DIGESTIVE_EVENT",
+                summary="Feci regolari",
+            )
+        ],
+    )
+    selected_event = BehaviorEventRec(
+        id="behavior-1",
+        capture_id="capture-1",
+        dog_id="dog-1",
+        user_id="owner-1",
+        status="COMPLETED",
+        summary="Abbaio osservato durante la separazione",
+        created_at=datetime(2026, 1, 3, tzinfo=UTC),
+    )
+
+    # The owner question is unrelated; explicit event selection still wins.
+    focus_behavior_event(context, selected_event)
+
+    assert context.items[0].source_id == "behavior-1"
+    assert context.items[0].source_type == "BEHAVIOR_EVENT"
+    assert context.source_refs()[0] == {
+        "source_id": "behavior-1",
+        "source_type": "BEHAVIOR_EVENT",
+    }
 
 
 def test_conversation_policy_does_not_rewrite_affection_or_force_media() -> None:
