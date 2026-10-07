@@ -283,7 +283,7 @@ async def load_cross_domain_evidence_db(
 ) -> list[CanineEvidenceItem]:
     """Project specialist consumer results into typed evidence items."""
     selected = set(domains or ["GENERAL"])
-    want_all = "GENERAL" in selected
+    want_all = False
     items: list[CanineEvidenceItem] = []
 
     async with engine.connect() as conn:
@@ -487,7 +487,7 @@ def load_cross_domain_evidence_memory(
     domains: list[RealtimeDomain] | list[str] | None = None,
 ) -> list[CanineEvidenceItem]:
     selected = set(domains or ["GENERAL"])
-    want_all = "GENERAL" in selected
+    want_all = False
     items: list[CanineEvidenceItem] = []
 
     if want_all or "NUTRITION" in selected or "DIGESTIVE" in selected:

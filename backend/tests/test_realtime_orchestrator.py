@@ -520,7 +520,7 @@ async def test_realtime_api_session_turn_and_close(
 
 
 @pytest.mark.asyncio
-async def test_realtime_route_keeps_domains_as_provenance_only(
+async def test_realtime_route_passes_domains_to_context_builder(
     client, auth_headers: dict[str, str], monkeypatch
 ) -> None:
     dog_id = await create_dog(client, auth_headers, name="Oreo")
@@ -544,8 +544,54 @@ async def test_realtime_route_keeps_domains_as_provenance_only(
     )
 
     assert response.status_code == 201
-    assert captured["domains"] == ["GENERAL"]
+    assert captured["domains"] == ["BEHAVIOR"]
     assert response.json()["domains"] == ["BEHAVIOR"]
+
+
+@pytest.mark.asyncio
+async def test_realtime_route_aligns_domain_and_context_end_to_end(
+    client, auth_headers: dict[str, str], state, user_id: str, monkeypatch
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    event_id = str(uuid.uuid4())
+    state.store.behavior_events[event_id] = BehaviorEventRec(
+        id=event_id,
+        capture_id="capture-context-route",
+        dog_id=dog_id,
+        user_id=user_id,
+        status="COMPLETED",
+        summary="Abbaio osservato durante la passeggiata",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    captured: list[RealtimeDogContext] = []
+
+    async def fake_orchestrate(**kwargs):
+        captured.append(kwargs["context"])
+        return RealtimeDecision(assistant_text="Capito."), {"provider": "test"}
+
+    monkeypatch.setattr(realtime_route, "orchestrate_realtime_turn", fake_orchestrate)
+    session_response = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "TEXT"},
+    )
+    session_id = session_response.json()["id"]
+
+    general_response = await client.post(
+        f"/v1/realtime/sessions/{session_id}/turns",
+        headers=auth_headers,
+        json={"text": "Fuori piove"},
+    )
+    behavior_response = await client.post(
+        f"/v1/realtime/sessions/{session_id}/turns",
+        headers=auth_headers,
+        json={"text": "Perché abbaia?"},
+    )
+
+    assert general_response.status_code == 201
+    assert behavior_response.status_code == 201
+    assert captured[0].items == []
+    assert [item.source_id for item in captured[1].items] == [event_id]
 
 
 @pytest.mark.asyncio

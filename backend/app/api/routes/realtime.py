@@ -208,9 +208,8 @@ async def create_realtime_turn(
         }
 
     domains = route_realtime_domains(body.text)
-    # Keep the router output as provenance only. Context loading must not use
-    # lexical domains to decide which specialist data reaches GPT.
-    context_domains = ["GENERAL"]
+    # The route and context builder share the same bounded domain contract.
+    context_domains = domains
     source_refs: list[dict[str, str]] = []
     try:
         if body.assistant_text:
