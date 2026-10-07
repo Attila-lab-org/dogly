@@ -25,6 +25,7 @@ from app.knowledge.claim_validation import (
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v5"
+REALTIME_HISTORY_LIMIT = 8
 
 _URGENT_RULES: tuple[tuple[str, str, str], ...] = (
     (
@@ -233,6 +234,21 @@ def _recent_media_invite(history: list[dict[str, Any]]) -> bool:
     )
 
 
+def _recent_conversation(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only the latest complete conversational window for GPT."""
+    turns = [
+        {
+            "role": item.get("role"),
+            "content": item.get("content"),
+        }
+        for item in history
+        if item.get("role") in {"user", "assistant"}
+        and isinstance(item.get("content"), str)
+        and item["content"].strip()
+    ]
+    return turns[-REALTIME_HISTORY_LIMIT:]
+
+
 def _apply_conversation_policy(
     decision: RealtimeDecision, *, context: RealtimeDogContext, user_text: str,
     history: list[dict[str, Any]], domains: list[RealtimeDomain],
@@ -401,6 +417,7 @@ async def orchestrate_realtime_turn(
             "canine_intelligence": canine_audit,
         }
 
+    recent_history = _recent_conversation(history)
     payload = {
         "personal_dog_context": {
             "dog_id": context.dog_id,
@@ -412,12 +429,12 @@ async def orchestrate_realtime_turn(
             "missing": context.missing,
         },
         "context_contract": "personal-dog-core-plus-evidence/v1",
-        "conversation": history[-12:],
+        "conversation": recent_history,
         "conversation_state": {
             "current_message_has_priority": True,
-            "recent_media_invite": _recent_media_invite(history),
+            "recent_media_invite": _recent_media_invite(recent_history),
             "image_attached": bool(image_url),
-            "last_assistant_message": _last_assistant_text(history),
+            "last_assistant_message": _last_assistant_text(recent_history),
             "instruction": "Riconosci cambi di significato, correzioni e risposte già date; non ripartire dalla vecchia analisi.",
         },
         "owner_turn": user_text,

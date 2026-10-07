@@ -652,6 +652,60 @@ async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
 
 
 @pytest.mark.asyncio
+async def test_realtime_payload_keeps_only_recent_conversation_window(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [{"message": {"content": (
+                    '{"assistant_text":"Capito.","action_type":"none",'
+                    '"action_options":[],"action_prompt":null,"used_source_ids":[]}'
+                )}}]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, url, *, headers, json):
+            captured["body"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        realtime_orchestrator_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: FakeClient(),
+    )
+    history = [
+        {"role": "user", "content": f"vecchio-{index}"}
+        for index in range(5)
+    ] + [
+        {"role": "assistant", "content": f"recente-{index}"}
+        for index in range(5)
+    ]
+
+    await orchestrate_realtime_turn(
+        settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
+        user_text="Cosa mi consigli?",
+        domains=["GENERAL"],
+        context=RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={}),
+        history=history,
+    )
+
+    payload = captured["body"]["messages"][1]["content"]
+    assert "vecchio-0" not in payload
+    assert "vecchio-1" not in payload
+    assert "recente-4" in payload
+
+
+@pytest.mark.asyncio
 async def test_black_stool_reaches_gpt_without_deterministic_hard_stop(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
