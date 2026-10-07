@@ -267,7 +267,7 @@ async def test_disabled_realtime_uses_grounded_latest_analysis() -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_realtime_makes_legacy_headline_direct() -> None:
+async def test_disabled_realtime_preserves_legacy_headline_uncertainty() -> None:
     settings = Settings(realtime_enabled=False)
     context = RealtimeDogContext(
         dog_id="dog-1",
@@ -289,8 +289,7 @@ async def test_disabled_realtime_makes_legacy_headline_direct() -> None:
         context=context,
         history=[],
     )
-    assert decision.assistant_text == "Oreo è tranquillo e rilassato"
-    assert "sembra" not in decision.assistant_text.lower()
+    assert decision.assistant_text == "Oreo sembra rilassato"
 
 
 @pytest.mark.asyncio

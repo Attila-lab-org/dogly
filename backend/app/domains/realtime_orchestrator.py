@@ -262,31 +262,6 @@ def _provider_decision(
         return None
 
 
-def _direct_context_summary(value: str) -> str:
-    """Keep deterministic chat fallbacks as direct as provider responses."""
-    text = " ".join(str(value or "").split())
-    if not text:
-        return text
-    text = re.sub(r"^Probabilmente\s+", "", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"sembra voler giocare", "ti sta invitando a giocare", text, flags=re.IGNORECASE
-    )
-    text = re.sub(
-        r"sembra rilassato", "è tranquillo e rilassato", text, flags=re.IGNORECASE
-    )
-    text = re.sub(r"potrebbe voler uscire", "vuole uscire", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"potrebbe cercare il gioco", "ti invita a giocare", text, flags=re.IGNORECASE
-    )
-    text = re.sub(
-        r"potrebbe cercare il tuo coinvolgimento",
-        "ti chiede attenzione",
-        text,
-        flags=re.IGNORECASE,
-    )
-    return re.sub(r"sembra molto attento", "è molto attento", text, flags=re.IGNORECASE)
-
-
 def _owner_turn_signals(text: str) -> list[str]:
     """Hints only: mixed messages and implicit emotion are interpreted by the model."""
     signals = []
@@ -369,7 +344,7 @@ def _fallback_decision(
             or latest.summary
             or "Ho una lettura da approfondire"
         )
-        friendly = _direct_context_summary(latest_text)
+        friendly = " ".join(latest_text.split())
         assistant_text = (
             friendly
             if re.match(rf"^{re.escape(name)}\b", friendly, flags=re.IGNORECASE)
