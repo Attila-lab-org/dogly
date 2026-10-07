@@ -84,6 +84,6 @@ def test_realtime_quality_marks_semantic_dimensions_unmeasurable() -> None:
             )
         ]
     )
-    assert report["score"] == 0.0
+    assert report["score"] is None
     assert report["reliable"] is False
     assert report["status"] == "partial_review"

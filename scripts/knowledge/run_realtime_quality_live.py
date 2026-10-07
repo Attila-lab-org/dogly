@@ -79,14 +79,13 @@ async def _run() -> dict[str, object]:
             )
         assert decision is not None
         answer = decision.assistant_text
-        length_result = "fail" if len(answer) > 600 else "pass"
         label = RealtimeQualityLabel(
             case_id=case["id"],
             answered_current_turn="unmeasurable",
             handled_correction="unmeasurable",
             maintained_continuity="unmeasurable",
             grounded_in_context="unmeasurable",
-            natural_dialogue=length_result,
+            natural_dialogue="unmeasurable",
         )
         labels.append(label)
         results.append(

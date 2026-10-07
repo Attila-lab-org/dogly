@@ -65,7 +65,7 @@ def score_realtime_quality(
     return {
         "scenarios": total,
         "passed": passed,
-        "score": passed / total if total else None,
+        "score": None if has_unmeasurable else (passed / total if total else None),
         "reliable": reliable,
         "status": "measured" if reliable else "partial_review",
         "dimensions": dimensions,
