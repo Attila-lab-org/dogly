@@ -26,29 +26,20 @@ from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v5"
 
-_URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
+_URGENT_RULES: tuple[tuple[str, str, str], ...] = (
     (
         "EMERGENCY_BREATHING",
-        re.compile(
-            r"^\s*(?:oreo|il cane|il mio cane)\s+(?:non respira|fa fatica a respirare|sta soffocando)\b",
-            re.IGNORECASE,
-        ),
+        r"^\s*{subject}\s+(?:non respira|fa fatica a respirare|sta soffocando)\b",
         "Se fa fatica a respirare o sta soffocando, contatta subito un pronto soccorso veterinario. Non aspettare una risposta in chat.",
     ),
     (
         "EMERGENCY_COLLAPSE",
-        re.compile(
-            r"^\s*(?:oreo|il cane|il mio cane)\s+(?:non si alza|sta avendo convulsioni)\b",
-            re.IGNORECASE,
-        ),
+        r"^\s*{subject}\s+(?:non si alza|sta avendo convulsioni)\b",
         "Questo può richiedere assistenza urgente: contatta subito un pronto soccorso veterinario e segui le loro indicazioni.",
     ),
     (
         "POSSIBLE_POISONING",
-        re.compile(
-            r"^\s*(?:oreo|il cane|il mio cane)\s+(?:ha ingerito|può aver ingerito)\s+(?:veleno|topicida|cioccolato|xilitolo|antigelo)\b",
-            re.IGNORECASE,
-        ),
+        r"^\s*{subject}\s+(?:ha ingerito|può aver ingerito)\s+(?:veleno|topicida|cioccolato|xilitolo|antigelo)\b",
         "Se può aver ingerito una sostanza tossica, chiama subito il veterinario o un centro antiveleni veterinario. Non provocare il vomito senza indicazione professionale.",
     ),
 )
@@ -56,9 +47,16 @@ _GREETING = re.compile(
     r"^\s*(ciao|salve|buongiorno|buonasera|ehi|hey|ciao dogly)[!.?\s]*$",
     re.IGNORECASE,
 )
-def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
+def deterministic_safety_interrupt(
+    user_text: str, *, dog_name: str | None = None
+) -> RealtimeDecision | None:
+    subject = (
+        re.escape(dog_name.strip())
+        if dog_name and dog_name.strip()
+        else r"(?:[A-ZÀ-ÖØ-Ý][\wÀ-ÿ'-]*|il cane|il mio cane)"
+    )
     for code, pattern, answer in _URGENT_RULES:
-        if pattern.search(user_text):
+        if re.search(pattern.format(subject=subject), user_text, re.IGNORECASE):
             return RealtimeDecision(
                 assistant_text=answer,
                 terminal_state="SAFETY_INTERRUPT",
@@ -392,7 +390,7 @@ async def orchestrate_realtime_turn(
     image_url: str | None = None,
     media_context: str | None = None,
 ) -> tuple[RealtimeDecision, dict[str, Any]]:
-    safety = deterministic_safety_interrupt(user_text)
+    safety = deterministic_safety_interrupt(user_text, dog_name=context.dog_name)
     if safety:
         return safety, {"provider": "deterministic", "version": REALTIME_ORCHESTRATOR_VERSION}
 

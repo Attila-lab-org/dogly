@@ -671,6 +671,9 @@ def test_direct_current_breathing_declaration_is_deterministic() -> None:
     decision = deterministic_safety_interrupt("Oreo non respira")
     assert decision is not None
     assert decision.safety_flags == ["EMERGENCY_BREATHING"]
+    rocky = deterministic_safety_interrupt("Rocky non respira", dog_name="Rocky")
+    assert rocky is not None
+    assert rocky.safety_flags == ["EMERGENCY_BREATHING"]
 
 
 @pytest.mark.asyncio
