@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
+from app.api.routes import realtime as realtime_route
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
     _resume_history,
@@ -26,6 +26,7 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
+
 from tests.conftest import create_dog
 
 
@@ -378,6 +379,35 @@ async def test_realtime_api_session_turn_and_close(
     )
     # Live voice is intentionally retired; the conversation endpoint is text-only.
     assert again.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_realtime_route_keeps_domains_as_provenance_only(
+    client, auth_headers: dict[str, str], monkeypatch
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    session_response = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "TEXT"},
+    )
+    session_id = session_response.json()["id"]
+    captured: dict[str, object] = {}
+
+    def fake_load_context(store, *, dog_id, domains, user_text):
+        captured["domains"] = domains
+        return RealtimeDogContext(dog_id=dog_id, dog_name="Oreo", identity={})
+
+    monkeypatch.setattr(realtime_route, "load_realtime_context_memory", fake_load_context)
+    response = await client.post(
+        f"/v1/realtime/sessions/{session_id}/turns",
+        headers=auth_headers,
+        json={"text": "Perché Oreo abbaia così?"},
+    )
+
+    assert response.status_code == 201
+    assert captured["domains"] == ["GENERAL"]
+    assert response.json()["domains"] == ["BEHAVIOR"]
 
 
 @pytest.mark.asyncio

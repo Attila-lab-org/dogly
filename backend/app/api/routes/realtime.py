@@ -208,6 +208,9 @@ async def create_realtime_turn(
         }
 
     domains = route_realtime_domains(body.text)
+    # Keep the router output as provenance only. Context loading must not use
+    # lexical domains to decide which specialist data reaches GPT.
+    context_domains = ["GENERAL"]
     source_refs: list[dict[str, str]] = []
     try:
         if body.assistant_text:
@@ -220,7 +223,7 @@ async def create_realtime_turn(
                 state.engine,
                 user_id=user_id,
                 dog_id=str(session["dog_id"]),
-                domains=domains,
+                domains=context_domains,
                 user_text=body.text,
             )
             if body.event_id and body.context_source == "behavior":
@@ -267,7 +270,7 @@ async def create_realtime_turn(
             ]
         else:
             context = load_realtime_context_memory(
-                state.store, dog_id=str(session["dog_id"]), domains=domains,
+                state.store, dog_id=str(session["dog_id"]), domains=context_domains,
                 user_text=body.text,
             )
             if body.event_id and body.context_source == "behavior":
