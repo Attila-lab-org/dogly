@@ -773,7 +773,7 @@ async def test_realtime_reasoner_receives_real_continuity_and_core_facts(
             ["behavior-1"],
         ),
         (
-            "Oggi invece abbaia.",
+            "E ieri?",
             ["BEHAVIOR"],
             [],
             [],
@@ -833,6 +833,7 @@ async def test_realtime_reasoner_receives_real_continuity_and_core_facts(
         assert "core_dog" not in payload["personal_dog_context"]
         assert [item["source_id"] for item in payload["personal_dog_context"]["relevant_evidence"]] == expected_sources
 
+    assert payloads[1]["owner_turn"] == "E ieri?"
     assert payloads[1]["conversation"][0]["content"] == "Ieri era tranquilla."
     assert payloads[2]["owner_turn"] == "Ti ricordi che cibo mangia Nala?"
     assert payloads[2]["personal_dog_context"]["retrieved_personal_facts"] == base_context.stable_facts
