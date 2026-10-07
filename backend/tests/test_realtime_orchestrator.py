@@ -11,6 +11,7 @@ from app.api.routes.realtime import (
 )
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
+from app.domains import realtime_orchestrator as realtime_orchestrator_module
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
@@ -408,6 +409,59 @@ async def test_realtime_route_keeps_domains_as_provenance_only(
     assert response.status_code == 201
     assert captured["domains"] == ["GENERAL"]
     assert response.json()["domains"] == ["BEHAVIOR"]
+
+
+@pytest.mark.asyncio
+async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"assistant_text":"Capito.",'
+                                '"question_information_gain":"NONE"}'
+                            )
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, url, *, headers, json):
+            captured["body"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        realtime_orchestrator_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: FakeClient(),
+    )
+    await orchestrate_realtime_turn(
+        settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
+        user_text="Perché Oreo abbaia così?",
+        domains=["BEHAVIOR"],
+        context=RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={}),
+        history=[],
+    )
+
+    payload = captured["body"]["messages"][1]["content"]
+    assert "source_domains" not in payload
+    assert "routed_domains" not in payload
 
 
 @pytest.mark.asyncio
