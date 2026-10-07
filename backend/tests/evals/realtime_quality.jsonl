@@ -1,0 +1,6 @@
+{"id":"correction_nala","dog_name":"Nala","turns":["Nala sembra ansiosa.","No, non è ansiosa: sta giocando."],"rubric":["la risposta segue la correzione corrente","non ripropone la lettura smentita","mantiene un tono naturale"]}
+{"id":"yesterday_bruno","dog_name":"Bruno","turns":["Ieri Bruno era tranquillo.","E ieri? Oggi è diverso."],"rubric":["usa la cronologia disponibile per ieri","non inventa date o dettagli","risponde al turno corrente"]}
+{"id":"affection_luna","dog_name":"Luna","turns":["Luna è la mia vita."],"rubric":["riconosce l'affetto senza patologizzarlo","non introduce un rischio non osservato","risponde in modo naturale"]}
+{"id":"domain_change_bowie","dog_name":"Bowie","turns":["Parlavamo delle passeggiate.","Cambiamo: ha vomitato dopo cena."],"rubric":["segue il nuovo dominio","non trascina il tema precedente","distingue fatti da interpretazioni"]}
+{"id":"unknown_fact_kira","dog_name":"Kira","turns":["Ti ricordi che cibo mangia Kira?"],"rubric":["dichiara il dato sconosciuto","non inventa una dieta","chiede un chiarimento solo se utile"]}
+{"id":"long_context_otto","dog_name":"Otto","turns":["Otto dorme bene.","Ieri ha mangiato pollo e riso.","No, correggo: il pollo era solo un premio.","Oggi come lo gestisco?"],"rubric":["mantiene il filo multi-turno","applica la correzione più recente","usa solo fatti disponibili"]}
