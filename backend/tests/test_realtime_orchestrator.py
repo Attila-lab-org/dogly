@@ -28,6 +28,7 @@ from app.domains.realtime_context import (
 from app.domains.realtime_orchestrator import (
     _apply_conversation_policy,
     _provider_decision,
+    _select_realtime_reasoning_effort,
     deterministic_safety_interrupt,
     explicit_memory_request,
     openai_realtime_decision_schema,
@@ -36,6 +37,32 @@ from app.domains.realtime_orchestrator import (
 from tests.conftest import create_dog
 
 
+def test_realtime_reasoning_effort_scales_with_structural_complexity() -> None:
+    settings = Settings(realtime_reasoning_effort=None)
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    assert _select_realtime_reasoning_effort(
+        settings, user_text="Ciao", domains=["GENERAL"], context=context,
+        history=[], image_attached=False,
+    ) == "low"
+    assert _select_realtime_reasoning_effort(
+        settings, user_text="Colleghiamo questi aspetti", domains=["BEHAVIOR", "DIGESTIVE"],
+        context=context, history=[], image_attached=False,
+    ) == "medium"
+    complex_context = context.model_copy(update={"items": [object()] * 6})
+    assert _select_realtime_reasoning_effort(
+        settings, user_text="Metti insieme tutta la storia", domains=["BEHAVIOR", "DIGESTIVE", "NUTRITION"],
+        context=complex_context, history=[{"role": "user", "content": "x"}] * 8,
+        image_attached=True,
+    ) == "high"
+
+
+def test_realtime_reasoning_effort_override_wins() -> None:
+    settings = Settings(realtime_reasoning_effort="high")
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    assert _select_realtime_reasoning_effort(
+        settings, user_text="Ciao", domains=["GENERAL"], context=context,
+        history=[], image_attached=False,
+    ) == "high"
 def test_cross_domain_router_is_bounded() -> None:
     assert route_realtime_domains(
         "Oreo ha diarrea e da quando ho cambiato cibo è anche agitato"

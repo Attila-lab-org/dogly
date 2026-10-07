@@ -58,7 +58,9 @@ class Settings(BaseSettings):
     digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
     realtime_reasoning_model: str = "gpt-5.2"
-    realtime_reasoning_effort: Literal["none", "low", "medium", "high"] | None = "high"
+    # Optional operational override. When absent, realtime chooses a bounded
+    # effort from the structural complexity of the current turn.
+    realtime_reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
 
     # Public list prices in USD per 1M tokens. Keep these environment-overridden
     # whenever selecting a different model: model candidates and their pricing

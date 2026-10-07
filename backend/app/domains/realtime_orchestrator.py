@@ -262,6 +262,31 @@ def _recent_conversation(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return turns[-REALTIME_HISTORY_LIMIT:]
 
 
+def _select_realtime_reasoning_effort(
+    settings: Settings,
+    *,
+    user_text: str,
+    domains: list[RealtimeDomain],
+    context: RealtimeDogContext,
+    history: list[dict[str, Any]],
+    image_attached: bool,
+) -> str:
+    """Choose effort from bounded structural signals; config remains an override."""
+    if settings.realtime_reasoning_effort:
+        return settings.realtime_reasoning_effort
+
+    complexity = 0
+    if len(user_text.strip()) > 180 or len(history) >= 4:
+        complexity += 1
+    if len(domains) >= 2 or len(context.items) >= 3:
+        complexity += 1
+    if len(history) >= 8 or len(domains) >= 3 or len(context.items) >= 6:
+        complexity += 1
+    if image_attached and complexity:
+        complexity += 1
+    return "high" if complexity >= 3 else "medium" if complexity else "low"
+
+
 def _apply_conversation_policy(
     decision: RealtimeDecision, *, context: RealtimeDogContext, user_text: str,
     history: list[dict[str, Any]], domains: list[RealtimeDomain],
@@ -488,11 +513,15 @@ async def orchestrate_realtime_turn(
             },
         },
     }
-    if (
-        settings.realtime_reasoning_model.lower().startswith("gpt-5")
-        and settings.realtime_reasoning_effort
-    ):
-        body["reasoning_effort"] = settings.realtime_reasoning_effort
+    if settings.realtime_reasoning_model.lower().startswith("gpt-5"):
+        body["reasoning_effort"] = _select_realtime_reasoning_effort(
+            settings,
+            user_text=user_text,
+            domains=domains,
+            context=context,
+            history=history,
+            image_attached=bool(image_url),
+        )
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
