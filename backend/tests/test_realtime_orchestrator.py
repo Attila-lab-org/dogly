@@ -41,12 +41,12 @@ def test_cross_domain_router_is_bounded() -> None:
     ) == ["DIGESTIVE", "NUTRITION", "BEHAVIOR"]
 
 
-def test_question_requires_real_information_gain() -> None:
-    with pytest.raises(ValueError, match="change the decision"):
-        RealtimeDecision(
-            assistant_text="Posso aiutarti.",
-            question="Mi racconti altro?",
-        )
+def test_question_can_live_inside_assistant_text_without_backend_inference() -> None:
+    decision = RealtimeDecision(
+        assistant_text="Mi racconti altro?",
+        question="Mi racconti altro?",
+    )
+    assert decision.question == "Mi racconti altro?"
 
 
 def test_openai_schema_is_small_and_server_owned_fields_are_absent() -> None:
@@ -56,7 +56,16 @@ def test_openai_schema_is_small_and_server_owned_fields_are_absent() -> None:
     assert "suggested_prompts" not in schema["properties"]
     assert "response_mode" not in schema["properties"]
     assert "memory_candidate" not in schema["properties"]
-    assert "SAFETY_INTERRUPT" not in schema["properties"]["terminal_state"]["enum"]
+    assert set(schema["properties"]) == {
+        "assistant_text",
+        "action_type",
+        "action_options",
+        "action_prompt",
+        "used_source_ids",
+    }
+    assert schema["properties"]["action_type"]["enum"] == [
+        "none", "options", "photo", "video"
+    ]
 
 
 def test_memory_requires_explicit_owner_request_outside_gpt() -> None:
@@ -69,9 +78,9 @@ def test_memory_requires_explicit_owner_request_outside_gpt() -> None:
 
 def test_provider_decision_keeps_contextual_media_invite() -> None:
     decision = _provider_decision(
-        '{"assistant_text":"Capisco il momento.","domains":["BEHAVIOR"],'
-        '"media_invite":"PHOTO","media_prompt":"Fammi vedere dove perde pelo",'
-        '"question_information_gain":"NONE"}',
+        '{"assistant_text":"Capisco il momento.","action_type":"photo",'
+        '"action_options":[],"action_prompt":"Fammi vedere dove perde pelo",'
+        '"used_source_ids":[]}',
         domains=["BEHAVIOR"],
     )
 
@@ -80,10 +89,46 @@ def test_provider_decision_keeps_contextual_media_invite() -> None:
     assert decision.media_prompt == "Fammi vedere dove perde pelo"
 
 
+def test_provider_decision_maps_options_without_question() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"Quale situazione descrive meglio Oreo?",'
+        '"action_type":"options","action_options":["A","B"],'
+        '"action_prompt":null,"used_source_ids":[]}',
+        domains=["GENERAL"],
+    )
+    assert decision is not None
+    assert decision.question is None
+    assert decision.question_options == ["A", "B"]
+
+
+def test_provider_decision_maps_none_action() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"Capito.","action_type":"none",'
+        '"action_options":[],"action_prompt":null,"used_source_ids":[]}',
+        domains=["GENERAL"],
+    )
+    assert decision is not None
+    assert decision.question_options == []
+    assert decision.media_invite is None
+
+
+def test_provider_decision_maps_video_action() -> None:
+    decision = _provider_decision(
+        '{"assistant_text":"Fammi vedere questo momento.","action_type":"video",'
+        '"action_options":[],"action_prompt":"Mostrami il video",'
+        '"used_source_ids":[]}',
+        domains=["BEHAVIOR"],
+    )
+    assert decision is not None
+    assert decision.media_invite == "VIDEO"
+    assert decision.media_prompt == "Mostrami il video"
+
+
 def test_provider_decision_does_not_reject_words_as_technical_copy() -> None:
     decision = _provider_decision(
         '{"assistant_text":"Ho controllato il contesto disponibile.",'
-        '"question_information_gain":"NONE"}',
+        '"action_type":"none","action_options":[],"action_prompt":null,'
+        '"used_source_ids":[]}',
         domains=["GENERAL"],
     )
     assert decision is not None
@@ -562,8 +607,8 @@ async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
                     {
                         "message": {
                             "content": (
-                                '{"assistant_text":"Capito.",'
-                                '"question_information_gain":"NONE"}'
+                                '{"assistant_text":"Capito.","action_type":"none",'
+                                '"action_options":[],"action_prompt":null,"used_source_ids":[]}'
                             )
                         }
                     }
@@ -613,8 +658,8 @@ async def test_black_stool_reaches_gpt_without_deterministic_hard_stop(monkeypat
                     {
                         "message": {
                             "content": (
-                                '{"assistant_text":"Contatta il veterinario.",'
-                                '"question_information_gain":"NONE"}'
+                                '{"assistant_text":"Contatta il veterinario.","action_type":"none",'
+                                '"action_options":[],"action_prompt":null,"used_source_ids":[]}'
                             )
                         }
                     }

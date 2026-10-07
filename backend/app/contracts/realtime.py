@@ -97,12 +97,9 @@ class RealtimeDecision(BaseModel):
 
     @model_validator(mode="after")
     def bounded_conversation(self) -> RealtimeDecision:
-        if self.question and self.question_information_gain == "NONE":
-            raise ValueError("A question must be able to change the decision")
         if not self.question:
             self.question_information_gain = "NONE"
-            self.question_options = []
-        elif any(not option.strip() or len(option) > 80 for option in self.question_options):
+        if any(not option.strip() or len(option) > 80 for option in self.question_options):
             raise ValueError("Question options must be short and non-empty")
         if self.terminal_state == "SAFETY_INTERRUPT":
             self.behavior_handoff = False

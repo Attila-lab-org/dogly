@@ -146,30 +146,23 @@ def openai_realtime_decision_schema() -> dict[str, Any]:
         "additionalProperties": False,
         "required": [
             "assistant_text",
-            "question",
-            "question_options",
-            "question_information_gain",
-            "terminal_state",
-            "behavior_handoff",
-            "media_invite",
-            "media_prompt",
+            "action_type",
+            "action_options",
+            "action_prompt",
             "used_source_ids",
         ],
         "properties": {
             "assistant_text": {"type": "string"},
-            "question": {"type": ["string", "null"]},
-            "question_options": {"type": "array", "items": {"type": "string"}},
-            "question_information_gain": {
+            "action_type": {
                 "type": "string",
-                "enum": ["NONE", "CHANGES_MEANING", "CHANGES_ACTION", "CHANGES_SAFETY"],
+                "enum": ["none", "options", "photo", "video"],
             },
-            "terminal_state": {
-                "type": "string",
-                "enum": ["ANSWERED", "ABSTAINED", "BEHAVIOR_VIDEO_HANDOFF", "MEMORY_CONFIRMATION_REQUIRED"],
+            "action_options": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": 3,
             },
-            "behavior_handoff": {"type": "boolean"},
-            "media_invite": {"type": ["string", "null"], "enum": ["PHOTO", "VIDEO", None]},
-            "media_prompt": {"type": ["string", "null"]},
+            "action_prompt": {"type": ["string", "null"]},
             "used_source_ids": {"type": "array", "items": {"type": "string"}},
         },
     }
@@ -188,42 +181,24 @@ def _provider_decision(
     answer = raw.get("assistant_text")
     if not isinstance(answer, str) or not answer.strip():
         return None
-    question = raw.get("question") if isinstance(raw.get("question"), str) else None
-    question_options = [
+    action_type = raw.get("action_type")
+    if action_type not in {"none", "options", "photo", "video"}:
+        return None
+    action_options = [
         str(option).strip()
-        for option in (raw.get("question_options") if isinstance(raw.get("question_options"), list) else [])
+        for option in (raw.get("action_options") if isinstance(raw.get("action_options"), list) else [])
         if isinstance(option, str) and option.strip()
     ][:3]
-    information_gain = raw.get("question_information_gain")
-    allowed_gain = {
-        "CHANGES_MEANING",
-        "CHANGES_ACTION",
-        "CHANGES_SAFETY",
-    }
-    if question and information_gain not in allowed_gain:
-        question = None
-        information_gain = "NONE"
-        question_options = []
-    terminal = raw.get("terminal_state")
-    if terminal not in {
-        "ANSWERED",
-        "ABSTAINED",
-        "BEHAVIOR_VIDEO_HANDOFF",
-        "MEMORY_CONFIRMATION_REQUIRED",
-    }:
-        terminal = "ANSWERED"
-    media_invite = raw.get("media_invite")
-    if media_invite not in {"PHOTO", "VIDEO"}:
-        media_invite = None
-    media_prompt = raw.get("media_prompt")
-    if not isinstance(media_prompt, str) or not media_prompt.strip():
-        media_prompt = None
+    action_prompt = raw.get("action_prompt")
+    if not isinstance(action_prompt, str) or not action_prompt.strip():
+        action_prompt = None
+    question_options = action_options if action_type == "options" else []
+    media_invite = action_type.upper() if action_type in {"photo", "video"} else None
+    media_prompt = action_prompt if media_invite else None
     try:
         return RealtimeDecision(
             assistant_text=answer.strip(),
-            question=question,
             question_options=question_options,
-            terminal_state=terminal,
             domains=domains,
             # Safety flags are server-owned; provider output cannot activate an
             # interrupt or change the safety state of this turn.
@@ -231,8 +206,6 @@ def _provider_decision(
             used_source_ids=[
                 str(value) for value in raw.get("used_source_ids", []) if value
             ][:12],
-            question_information_gain=information_gain or "NONE",
-            behavior_handoff=bool(raw.get("behavior_handoff", False)),
             media_invite=media_invite,
             media_prompt=media_prompt.strip()[:180] if media_prompt else None,
             claims=extract_claims_from_provider_payload(raw),
