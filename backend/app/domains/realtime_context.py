@@ -212,7 +212,13 @@ def _select_realtime_items(
         item
         for item in items
         if item.source_type
-        in {"BEHAVIOR_EVENT", "PERSONAL_PATTERN", "DIGESTIVE_EVENT", "FEEDING_PERIOD"}
+        in {
+            "BEHAVIOR_EVENT",
+            "PERSONAL_PATTERN",
+            "DIGESTIVE_EVENT",
+            "FEEDING_PERIOD",
+            "CARE_EVENT",
+        }
     ]
     candidates.sort(
         key=lambda item: (

@@ -598,7 +598,6 @@ def personal_to_realtime_items(personal: PersonalDogContext) -> list[dict[str, A
 
 
 STABLE_FACT_LIMIT = 16
-REALTIME_EVIDENCE_LIMIT = 16
 
 
 def personal_to_stable_facts(

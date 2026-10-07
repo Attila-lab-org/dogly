@@ -221,7 +221,32 @@ def test_realtime_evidence_candidates_are_independent_of_turn_wording() -> None:
         personal, user_text="Come comunica di solito?", domains=["GENERAL"]
     )
 
-    assert [item.source_id for item in first.items] == ["b1", "d1"]
+    assert [item.source_id for item in first.items] == ["b1", "d1", "c1"]
     assert [item.source_id for item in first.items] == [
         item.source_id for item in second.items
     ]
+
+
+def test_realtime_evidence_selection_keeps_care_event() -> None:
+    dog = _dog()
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=build_dog_context(dog, {}),
+        evidence=[
+            CanineEvidenceItem(
+                evidence_id="care:c1",
+                domain="CARE",
+                source_type="CARE_EVENT",
+                source_id="c1",
+                occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+                provenance="OWNER_REPORTED",
+                summary="Visita veterinaria",
+            )
+        ],
+    )
+
+    context = realtime_context_from_personal(
+        personal, user_text="Qual è la situazione?", domains=["GENERAL"]
+    )
+
+    assert [item.source_id for item in context.items] == ["c1"]
