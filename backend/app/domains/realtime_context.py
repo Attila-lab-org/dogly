@@ -254,7 +254,8 @@ def _select_realtime_items(
         searchable = " ".join(
             [item.summary, item.source_type, *(str(value) for value in item.data.values())]
         ).casefold()
-        overlap = sum(1 for term in query_terms if term in searchable)
+        searchable_terms = set(re.findall(r"[\wÀ-ÖØ-öø-ÿ]+", searchable))
+        overlap = len(query_terms & searchable_terms)
         domain_match = int(_EVIDENCE_DOMAINS.get(item.source_type) in selected_domains)
         return (
             overlap * 10 + domain_match * 4,
@@ -262,11 +263,10 @@ def _select_realtime_items(
             item.occurred_at or datetime.min.replace(tzinfo=UTC),
         )
 
+    if not query_terms and not selected_domains:
+        return []
     ranked = sorted(candidates, key=relevance, reverse=True)
-    if query_terms or selected_domains:
-        matched = [item for item in ranked if relevance(item)[0] > 0]
-        if matched:
-            ranked = matched
+    ranked = [item for item in ranked if relevance(item)[0] > 0]
     candidates = ranked
     return candidates[: min(limit, REALTIME_EVIDENCE_LIMIT)]
 

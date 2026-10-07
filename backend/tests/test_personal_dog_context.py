@@ -254,7 +254,36 @@ def test_realtime_evidence_selection_excludes_recent_irrelevant_event() -> None:
     assert [item.source_id for item in context.items] == ["relevant"]
 
 
-def test_realtime_evidence_selection_keeps_care_event() -> None:
+def test_realtime_evidence_selection_returns_empty_for_unrelated_general_turn() -> None:
+    dog = _dog()
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=build_dog_context(dog, {}),
+        evidence=[
+            CanineEvidenceItem(
+                evidence_id="behavior:b1",
+                domain="BEHAVIOR",
+                source_type="BEHAVIOR_EVENT",
+                source_id="b1",
+                occurred_at=datetime(2026, 1, 3, tzinfo=UTC),
+                provenance="OBSERVED",
+                summary="Abbaio osservato durante la passeggiata",
+            )
+        ],
+    )
+
+    outside = realtime_context_from_personal(
+        personal, user_text="Fuori piove", domains=["GENERAL"]
+    )
+    mood = realtime_context_from_personal(
+        personal, user_text="Oggi è felicissimo", domains=["GENERAL"]
+    )
+
+    assert outside.items == []
+    assert mood.items == []
+
+
+def test_realtime_evidence_selection_is_empty_without_relevance() -> None:
     dog = _dog()
     personal = build_personal_dog_context(
         dog=dog,
@@ -276,4 +305,4 @@ def test_realtime_evidence_selection_keeps_care_event() -> None:
         personal, user_text="Qual è la situazione?", domains=["GENERAL"]
     )
 
-    assert [item.source_id for item in context.items] == ["c1"]
+    assert context.items == []

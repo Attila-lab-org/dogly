@@ -593,7 +593,7 @@ async def test_realtime_api_prioritizes_explicit_behavior_event(
 
     assert response.status_code == 201
     assert len(captured_contexts) == 1
-    assert len(captured_contexts[0].items) == 12
+    assert len(captured_contexts[0].items) == 1
     assert captured_contexts[0].items[0].source_id == selected_id
     assert captured_contexts[0].items[0].source_type == "BEHAVIOR_EVENT"
 
