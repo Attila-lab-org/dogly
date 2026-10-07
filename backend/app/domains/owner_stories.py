@@ -9,6 +9,24 @@ from typing import Any
 from app.contracts.api import OwnerReportedFact
 from app.domains.repository import new_id
 
+_PERSISTENT_FACT_MARKERS = (
+    "amput", "allergic", "intolleran", "ciec", "sord", "disabil",
+    "epiless", "diabet", "cronico", "terapia", "farmac",
+)
+_EPISODIC_FACT_MARKERS = (
+    "vomit", "rigurgit", "diarrea", "feci", "dolore", "zopp",
+    "prurito", "tosse", "febbre", "sangue", "abbattut", "non mangia",
+    "sta male",
+)
+
+
+def is_persistent_owner_fact(statement: str) -> bool:
+    """Keep transient episodes out of the durable personal core."""
+    text = statement.casefold()
+    if any(marker in text for marker in _PERSISTENT_FACT_MARKERS):
+        return True
+    return not any(marker in text for marker in _EPISODIC_FACT_MARKERS)
+
 
 def normalized_statement(value: str) -> str:
     """Exact-content deduplication, never semantic merging of different facts."""
