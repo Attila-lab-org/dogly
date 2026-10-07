@@ -165,13 +165,10 @@ def test_welcome_is_personal_and_never_technical() -> None:
     assert "modello" not in welcome
 
 
-def test_welcome_offers_to_resume_the_last_conversation() -> None:
+def test_welcome_keeps_previous_conversation_internal() -> None:
     welcome = resume_welcome_text("attilio", "Oreo", "perché Oreo abbaia la sera")
-    assert welcome == (
-        "Ciao Attilio. Ho ancora presente l'ultima cosa che stavamo guardando: “perché Oreo abbaia la sera”. "
-        "Vuoi riprenderla oppure mi racconti com'è Oreo oggi?"
-    )
-    assert "Luna" in resume_welcome_text("attilio", "Luna", "perché abbaia la sera")
+    assert welcome == "Ciao Attilio. Sono qui con te e Oreo. Raccontami cosa vuoi guardare oggi."
+    assert "Ho ancora presente" not in welcome
 
 
 def test_conversation_topic_ignores_rotating_starter_questions() -> None:

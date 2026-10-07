@@ -101,12 +101,10 @@ _EXPLICIT_MEMORY_REQUEST = re.compile(
     re.IGNORECASE,
 )
 
-_STABLE_FACT_HINTS = re.compile(
-    r"\b(di solito|sempre|mai|ama|preferisce|gli piace|le piace|è allergic|"
-    r"non può|non deve|ha una|ha il|ha la|soffre di|segue una dieta|"
-    r"da quando era|ogni giorno)\b",
-    re.IGNORECASE,
-)
+_EPISODIC_MARKERS = {
+    "oggi", "ieri", "stamattina", "stasera", "poco fa",
+    "questa settimana", "in questi giorni", "all'improvviso",
+}
 
 
 def explicit_memory_request(user_text: str) -> dict[str, str] | None:
@@ -125,7 +123,11 @@ def natural_memory_candidate(user_text: str) -> dict[str, str] | None:
     """Suggest a stable owner fact discovered in ordinary conversation."""
     if _EXPLICIT_MEMORY_REQUEST.match(user_text or ""):
         return explicit_memory_request(user_text)
-    facts = [fact for fact in extract_owner_reported_facts(user_text) if _STABLE_FACT_HINTS.search(fact.statement)]
+    facts = [
+        fact for fact in extract_owner_reported_facts(user_text)
+        if fact.category in {"HEALTH", "DIET", "ROUTINE", "PREFERENCE"}
+        and not any(marker in fact.statement.casefold() for marker in _EPISODIC_MARKERS)
+    ]
     if len(facts) != 1:
         return None
     return {"statement": facts[0].statement, "category": facts[0].category}

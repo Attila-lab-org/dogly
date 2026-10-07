@@ -670,8 +670,8 @@ def personal_to_stable_facts(
 
 
 def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]:
-    """Project the complete personal core; this path never uses query overlap."""
-    return [
+    """Project only durable constraints that can change any recommendation."""
+    core = [
         {
             "key": fact.key,
             "value": fact.value,
@@ -691,7 +691,19 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
             "owner_label": PROVENANCE_OWNER_LABEL[fact.provenance],
         }
         for fact in personal.personal_facts
+        if fact.domain in {"CARE", "NUTRITION"}
     ]
+    for item in personal.evidence:
+        if item.source_type == "FEEDING_PERIOD" and item.data.get("end_at") is None:
+            core.append({
+                "key": "active_feeding", "value": item.summary,
+                "statement": item.summary, "origin": item.provenance,
+                "provenance": item.provenance, "verification_status": "CONFIRMED",
+                "source_id": item.source_id,
+                "last_confirmed_at": item.occurred_at.isoformat() if item.occurred_at else None,
+                "owner_label": PROVENANCE_OWNER_LABEL[item.provenance],
+            })
+    return core
 
 
 def assemble_behavior_dog_context(

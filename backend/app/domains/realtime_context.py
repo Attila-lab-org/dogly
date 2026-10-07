@@ -224,6 +224,11 @@ def _select_realtime_items(
 ) -> list[RealtimeContextItem]:
     selected_domains = set(domains or ["GENERAL"])
     query_tokens = context_tokens(user_text) - context_tokens(personal.dog_name)
+    core_source_ids = {
+        str(item["source_id"])
+        for item in personal_to_core_facts(personal)
+        if item.get("source_id")
+    }
     items = [
         RealtimeContextItem(
             source_id=str(raw["source_id"]),
@@ -233,6 +238,7 @@ def _select_realtime_items(
             data=dict(raw.get("data") or {}),
         )
         for raw in personal_to_realtime_items(personal)
+        if str(raw["source_id"]) not in core_source_ids
     ]
     ranked = sorted(
         items,
@@ -266,15 +272,19 @@ def realtime_context_from_personal(
     user_text: str = "",
 ) -> RealtimeDogContext:
     """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
+    core = personal_to_core_facts(personal)
+    core_source_ids = {item["source_id"] for item in core if item.get("source_id")}
     return RealtimeDogContext(
         dog_id=personal.dog_id,
         dog_name=personal.dog_name,
         owner_display_name=personal.owner_display_name,
         identity=dict(personal.identity),
-        core_facts=personal_to_core_facts(personal),
-        stable_facts=personal_to_stable_facts(
-            personal, user_text=user_text, domains=domains, limit=16
-        ),
+        core_facts=core,
+        stable_facts=[
+            fact for fact in personal_to_stable_facts(
+                personal, user_text=user_text, domains=domains, limit=16
+            ) if not fact.get("source_id") or fact.get("source_id") not in core_source_ids
+        ],
         items=_select_realtime_items(
             personal, user_text=user_text, domains=domains or ["GENERAL"]
         ),

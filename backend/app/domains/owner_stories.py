@@ -64,6 +64,13 @@ def _category(statement: str) -> str:
             "prurito",
             "tosse",
             "febbre",
+            "amput",
+            "allergic",
+            "intolleran",
+            "ciec",
+            "sord",
+            "disabil",
+            "non può",
         )
     ):
         return "HEALTH"
