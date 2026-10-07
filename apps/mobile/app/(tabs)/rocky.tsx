@@ -46,9 +46,6 @@ import {
   type DigestiveSummary,
 } from '@/features/digestive/api';
 import {
-  fetchOwnerStories,
-} from '@/features/ownerStory/api';
-import {
   listFeedingPeriods,
   listFoods,
 } from '@/features/nutrition/api';
@@ -66,9 +63,6 @@ export default function DogProfileTabScreen() {
   useCareEvents(dog.id, dog.name, { enabled: showMoreSections });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
-  const photoSize = Math.floor(
-    (contentWidth - spacing.lg * 2 - spacing.sm * 2) / 3,
-  );
 
   const activePeriod = useDemoData
     ? feedingPeriodsMock.find((period) => period.endedAt === null)
@@ -112,12 +106,6 @@ export default function DogProfileTabScreen() {
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
     .slice(0, 2);
-  const storiesQuery = useQuery({
-    queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
-    queryFn: () => fetchOwnerStories(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const storyFacts = (storiesQuery.data ?? []).flatMap((story) => story.facts);
 
   return (
     <View style={styles.root}>
@@ -194,20 +182,21 @@ export default function DogProfileTabScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.welcomeCard}>
+          <View style={styles.welcomeIcon}>
+            <Ionicons name="heart" size={18} color={colors.accent} />
+          </View>
+          <View style={styles.welcomeCopy}>
+            <Text style={styles.welcomeTitle}>Il mondo di {dog.name}</Text>
+            <Text style={styles.welcomeText}>
+              I momenti che scegli di conservare, con tutto il calore della vostra storia.
+            </Text>
+          </View>
+        </View>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Cosa sto imparando su {dog.name}
           </Text>
-          {learnedPatterns.length > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Vedi tutte le abitudini di ${dog.name}`}
-              onPress={() => router.push('/patterns')}
-              hitSlop={8}
-            >
-              <Text style={styles.seeAll}>Vedi tutto</Text>
-            </Pressable>
-          ) : null}
         </View>
         {patternsQuery.live && patternsQuery.isLoading ? (
           <View style={styles.detailsRow}>
@@ -231,16 +220,11 @@ export default function DogProfileTabScreen() {
             </View>
             <View style={styles.detailsText}>
               {learnedPatterns.map((pattern) => (
-                <Pressable
-                  key={pattern.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={pattern.title}
-                  onPress={() => router.push(`/patterns/${pattern.id}`)}
-                >
+                <View key={pattern.id}>
                   <Text style={styles.detailsTitle} numberOfLines={2}>
                     {pattern.title}
                   </Text>
-                </Pressable>
+                </View>
               ))}
             </View>
             <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
@@ -290,12 +274,16 @@ export default function DogProfileTabScreen() {
             </Pressable>
           </View>
         ) : previewPhotos.length > 0 ? (
-            <View style={styles.photoRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.photoRail}
+            >
               {previewPhotos.map((photo) => (
                 <PhotoThumbnail
                   key={photo.id}
                   photo={photo}
-                  size={photoSize}
+                  size={Math.min(contentWidth * 0.68, 250)}
                   onPress={() =>
                     router.push(
                       `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
@@ -303,7 +291,7 @@ export default function DogProfileTabScreen() {
                   }
                 />
               ))}
-            </View>
+            </ScrollView>
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -400,89 +388,6 @@ export default function DogProfileTabScreen() {
         </View>
 
         </> : null}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quello che ricordo</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Parla con DOGly su ${dog.name}`}
-            onPress={() => router.push('/ask' as never)}
-            hitSlop={8}
-          >
-            <Text style={styles.seeAll}>Aggiungi</Text>
-          </Pressable>
-        </View>
-        {!useDemoData && storiesQuery.isLoading ? (
-          <Text style={styles.notesEmpty}>Carico i ricordi…</Text>
-        ) : null}
-        {!useDemoData && storiesQuery.isError ? (
-          <View style={styles.notesErrorRow}>
-            <Text style={styles.noteError}>
-              Non riesco a caricare i ricordi.
-            </Text>
-            <Pressable onPress={() => void storiesQuery.refetch()}>
-              <Text style={styles.noteActionPrimary}>Riprova</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {!useDemoData &&
-        !storiesQuery.isLoading &&
-        !storiesQuery.isError &&
-        (storiesQuery.data?.length ?? 0) === 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/ask' as never)}
-            style={({ pressed }) => [
-              styles.detailsRow,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
-              <Ionicons name="heart-outline" size={20} color={colors.accent} />
-            </View>
-            <View style={styles.detailsText}>
-              <Text style={styles.detailsTitle}>Raccontami qualcosa di lui</Text>
-              <Text style={styles.detailsSubtitle}>
-                Conserverò soltanto ciò che scegli
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
-        {storyFacts.length > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Apri tutti i ricordi di ${dog.name}`}
-            onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
-            style={({ pressed }) => [
-              styles.noteCard,
-              pressed && styles.pressed,
-            ]}
-          >
-            {storyFacts.slice(0, 2).map((fact) => (
-              <View key={fact.id} style={styles.memoryPreviewRow}>
-                <Ionicons name="heart-outline" size={17} color={colors.accent} />
-                <Text style={styles.noteText} numberOfLines={2}>
-                  {fact.statement}
-                </Text>
-              </View>
-            ))}
-            <View style={styles.memoryPreviewFooter}>
-              <Text style={styles.noteMeta}>
-                {storyFacts.length}{' '}
-                {storyFacts.length === 1 ? 'ricordo' : 'ricordi'}
-              </Text>
-              <View style={styles.memoryPreviewLink}>
-                <Text style={styles.noteActionPrimary}>Vedi tutti</Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={17}
-                  color={colors.primary}
-                />
-              </View>
-            </View>
-          </Pressable>
-        ) : null}
 
       </ScrollView>
     </View>
@@ -728,6 +633,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
+  welcomeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.accentSoft,
+    ...shadows.card,
+  },
+  welcomeIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentSoft,
+  },
+  welcomeCopy: { flex: 1 },
+  welcomeTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  welcomeText: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+  },
   sectionTitle: {
     color: colors.text,
     fontSize: typography.size.lg,
@@ -741,9 +678,8 @@ const styles = StyleSheet.create({
   standaloneTitle: {
     marginBottom: spacing.md,
   },
-  photoRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  photoRail: {
+    gap: spacing.md,
     marginBottom: spacing.xxl,
   },
   emptyMoments: {
