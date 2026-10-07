@@ -36,44 +36,6 @@ class DogIntelligenceContext(BaseModel):
             return None
         return self.breed.observer_safe_morphology()
 
-    def reasoner_payload(self) -> dict[str, Any]:
-        from app.knowledge.canine_science import companion_science_lines
-
-        payload: dict[str, Any] = {
-            "version": self.version,
-            "domain": self.domain,
-            "identity": {
-                "name": self.dog_name,
-                "sex": self.sex,
-                "age_months": self.age_months,
-                "size": self.size,
-                "breed": self.breed_label,
-                "owner_display_name": self.owner_display_name,
-            },
-            "breed_status": self.breed.status,
-            "prior_eligible": self.breed.prior_eligible,
-            "functional_group": (
-                self.breed.functional_group
-                if self.flags.get("breed_intelligence_v1") and self.breed.status == "NAMED"
-                else None
-            ),
-            "claims": [claim.model_dump(mode="json") for claim in self.claims],
-            "canine_science": companion_science_lines(limit=10),
-            "rules": [
-                "Pretraining is language, not a scientific source.",
-                "Mix and unknown have no named-breed prior.",
-                "Never infer aggression from breed or mix.",
-                "Sex and owner name are identity facts, not behavioral verdicts.",
-                "Owner facts stay owner-reported.",
-                "Use canine_science as shared general canine constraints, not as dog-specific facts.",
-            ],
-        }
-        if self.digestive:
-            payload["digestive"] = self.digestive
-        if self.nutrition and self.flags.get("nutrition_intelligence_v1"):
-            payload["nutrition"] = self.nutrition
-        return payload
-
     def audit(self) -> dict[str, Any]:
         return {
             "version": self.version,

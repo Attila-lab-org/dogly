@@ -26,7 +26,6 @@ export type RealtimeTurn = {
   assistant_text: string;
   question: string | null;
   question_options: string[];
-  suggested_prompts: string[];
   terminal_state:
     | 'ANSWERED'
     | 'ABSTAINED'

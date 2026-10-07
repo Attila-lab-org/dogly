@@ -10,10 +10,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.config import Settings
 from app.contracts.realtime import RealtimeDomain
 from app.domains.dog_context import build_dog_context
-from app.domains.intelligence_context import build_dog_intelligence_context
 from app.domains.models import DogRec
 from app.domains.personal_dog_context import (
     build_personal_dog_context,
@@ -23,7 +21,6 @@ from app.domains.personal_dog_context import (
     personal_to_stable_facts,
 )
 from app.domains.repository import InMemoryStore
-from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
 
 REALTIME_CONTEXT_VERSION = "personal-dog-context/v1"
 
@@ -46,10 +43,7 @@ class RealtimeDogContext(BaseModel):
     items: list[RealtimeContextItem] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
     previous_topic: str | None = None
-    previous_turns: list[dict[str, str]] = Field(default_factory=list)
-    # Model-facing only: never render this taxonomy in the customer UI.
-    breed_intelligence: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    seasonal_context: dict[str, Any] = Field(default_factory=dict)
+    previous_turns: list[dict[str, Any]] = Field(default_factory=list)
 
     def source_refs(self) -> list[dict[str, str]]:
         return [
@@ -109,8 +103,8 @@ _NUTRITION_WORDS = {
     "cibo", "mangia", "mangiato", "alimento", "dose", "quantità", "peso", "snack",
 }
 _BEHAVIOR_WORDS = {
-    "fa", "comportamento", "abbaia", "ringhia", "agitato", "irrequieto", "paura",
-    "guarda", "gira", "dorme", "riposa", "video",
+    "comportamento", "abbaia", "ringhia", "agitato", "irrequieto", "paura",
+    "dorme", "riposa", "video", "coccole", "pelo", "zampa", "morde",
 }
 _CARE_WORDS = {"veterinario", "visita", "vaccino", "farmaco", "terapia", "appuntamento"}
 
@@ -195,10 +189,9 @@ def route_realtime_domains(user_text: str) -> list[RealtimeDomain]:
 def realtime_context_from_personal(
     personal,
     *,
+    domains: list[RealtimeDomain] | None = None,
     previous_topic: str | None = None,
-    previous_turns: list[dict[str, str]] | None = None,
-    breed_intelligence: dict[str, dict[str, Any]] | None = None,
-    seasonal_context: dict[str, Any] | None = None,
+    previous_turns: list[dict[str, Any]] | None = None,
 ) -> RealtimeDogContext:
     """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
     items = [
@@ -211,6 +204,27 @@ def realtime_context_from_personal(
         )
         for raw in personal_to_realtime_items(personal)
     ]
+    selected_domains = set(domains or ["GENERAL"])
+    if "GENERAL" not in selected_domains:
+        relevant_source_types = {
+            source_type
+            for domain, source_type in (
+                ("BEHAVIOR", "BEHAVIOR_EVENT"),
+                ("DIGESTIVE", "DIGESTIVE_EVENT"),
+                ("NUTRITION", "FEEDING_PERIOD"),
+                ("CARE", "CARE_EVENT"),
+            )
+            if domain in selected_domains
+        }
+        items.sort(
+            key=lambda item: (
+                item.source_type == "FEEDING_PERIOD"
+                and item.data.get("end_at") is None,
+                item.source_type in relevant_source_types,
+                item.occurred_at or datetime.min.replace(tzinfo=UTC),
+            ),
+            reverse=True,
+        )
     return RealtimeDogContext(
         dog_id=personal.dog_id,
         dog_name=personal.dog_name,
@@ -221,60 +235,7 @@ def realtime_context_from_personal(
         missing=list(personal.missing),
         previous_topic=previous_topic,
         previous_turns=list(previous_turns or []),
-        breed_intelligence=dict(breed_intelligence or {}),
-        seasonal_context=dict(seasonal_context or {}),
     )
-
-
-def _breed_intelligence_payload(
-    dog: DogRec,
-    dog_context,
-    domains: list[RealtimeDomain],
-    *,
-    settings: Settings | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Reuse the governed breed layer in free chat as well as analysis jobs."""
-    requested = set(domains)
-    mapped: list[tuple[str, str]] = []
-    if "BEHAVIOR" in requested or not requested:
-        mapped.append(("BEHAVIOR", "behavior"))
-    if "DIGESTIVE" in requested:
-        mapped.append(("DIGESTIVE", "digestive"))
-    if "NUTRITION" in requested:
-        mapped.append(("NUTRITION", "nutrition"))
-    if "CARE" in requested and not mapped:
-        mapped.append(("BEHAVIOR", "behavior"))
-    if "GENERAL" in requested and not mapped:
-        mapped.append(("BEHAVIOR", "behavior"))
-    return {
-        label: build_dog_intelligence_context(
-            dog,
-            dog_context,
-            domain=domain,  # type: ignore[arg-type]
-            settings=settings,
-        ).reasoner_payload()
-        for label, domain in mapped
-    }
-
-
-def _seasonal_context() -> dict[str, Any]:
-    """Give the model a calendar cue without turning season into a diagnosis."""
-    now = datetime.now(UTC)
-    season = (
-        "inverno" if now.month in {12, 1, 2}
-        else "primavera" if now.month in {3, 4, 5}
-        else "estate" if now.month in {6, 7, 8}
-        else "autunno"
-    )
-    return {
-        "month": now.month,
-        "season": season,
-        "guidance": (
-            "Considera stagione e meteo come contesto: non dedurre automaticamente "
-            "piu cibo, meno uscite o piu attivita. Verifica sempre eta, peso, "
-            "attivita reale, appetito e cambiamenti osservati in questo cane."
-        ),
-    }
 
 
 async def load_realtime_context_db(
@@ -371,7 +332,6 @@ async def load_realtime_context_db(
     dog_context = build_dog_context(
         dog_rec, lifestyle_dump, owner_display_name=owner_name
     )
-    breed_intelligence = _breed_intelligence_payload(dog_rec, dog_context, domains)
     personal = build_personal_dog_context(
         dog=dog_rec,
         dog_context=dog_context,
@@ -393,125 +353,9 @@ async def load_realtime_context_db(
         previous_turns = list(memory.get("turns_json") or [])
     return realtime_context_from_personal(
         personal,
+        domains=domains,
         previous_topic=previous_topic,
         previous_turns=previous_turns,
-        breed_intelligence=breed_intelligence,
-        seasonal_context=_seasonal_context(),
-    )
-
-
-_AGE_LABEL = {
-    "PUPPY": "cucciolo",
-    "JUNIOR": "giovane",
-    "ADULT": "adulto",
-    "SENIOR": "anziano",
-}
-_SEX_LABEL = {"MALE": "maschio", "FEMALE": "femmina"}
-_SOURCE_LABEL = {
-    "BEHAVIOR_EVENT": "Lettura comportamentale",
-    "DIGESTIVE_EVENT": "Lettura digestiva",
-    "PERSONAL_PATTERN": "Abitudine già consolidata",
-    "FEEDING_PERIOD": "Alimentazione",
-    "FOOD_PRODUCT": "Cibo",
-    "CARE_EVENT": "Cura",
-}
-_MISSING_LABEL = {
-    "active_feeding": "alimentazione attiva",
-    "weight": "peso attuale",
-    "confirmed_routine": "routine confermata",
-}
-
-
-def companion_science_brief() -> list[str]:
-    """Owner-facing science from the shared Canine Intelligence science core."""
-    from app.knowledge.canine_science import companion_science_lines
-
-    return companion_science_lines()
-
-
-def render_voice_brief(context: RealtimeDogContext, *, welcome: str) -> str:
-    """Spoken session brief: internal facts stay rich, spoken style stays human."""
-    owner = (context.owner_display_name or "").strip().split(" ", 1)[0]
-    profile: list[str] = []
-    breed = context.identity.get("breed_label")
-    if breed:
-        profile.append(str(breed))
-    age = _AGE_LABEL.get(str(context.identity.get("age_stage") or ""), "")
-    if age:
-        profile.append(age)
-    sex = _SEX_LABEL.get(str(context.identity.get("sex") or ""), "")
-    if sex:
-        profile.append(sex)
-    known: list[str] = []
-    for fact in context.stable_facts[:6]:
-        statement = fact.get("statement") or (
-            f"{fact.get('key')}: {fact.get('value')}" if fact.get("key") else None
-        )
-        if statement:
-            known.append(f"- [{fact.get('owner_label') or 'raccontato'}] {statement}")
-    events: list[str] = []
-    for item in context.items:
-        if item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"}:
-            continue
-        label = _SOURCE_LABEL.get(item.source_type, "Nota")
-        headline = item.data.get("headline") if item.data else None
-        when = (
-            item.occurred_at.strftime("%d/%m")
-            if item.occurred_at
-            else ""
-        )
-        prefix = f"{label} {when}".strip()
-        prov = (item.data or {}).get("owner_label")
-        suffix = f" [{prov}]" if prov else ""
-        events.append(f"- {prefix}{suffix}: {headline or item.summary}")
-    missing = [
-        _MISSING_LABEL.get(key, key) for key in context.missing if key in _MISSING_LABEL
-    ]
-    science = "\n".join(companion_science_brief())
-    return "\n".join(
-        [
-            f"Sei DOGly. Stai parlando a voce con il proprietario di {context.dog_name}, come un amico intelligente e simpatico al telefono.",
-            "Non sei un assistente, non sei un professore, non stai leggendo un referto.",
-            "Parli solo in italiano parlato, colloquiale, con ritmo naturale. Varia le frasi.",
-            DOGLY_SPOKEN_STYLE,
-            "La lunghezza è adattiva: una risposta semplice può essere breve, mentre un ragionamento che collega contesto e consiglio può richiedere più frasi. Usa parole che diresti a un amico: 'si agita' invece di 'aumenta l'attivazione', 'si calma' invece di 'si regola'. Chiudi ogni frase con una conclusione completa, senza fermarti prima che il pensiero sia chiaro.",
-            "Puoi dire mh, guarda, sì, no, secondo me, questa è interessante, quando serve davvero. Non farne un tic.",
-            "Non spiegare provenienza, confidence, metodo o come ragiona DOGly. Non recitare elenchi.",
-            "Non fare una domanda a ogni turno. Chiedi solo se ti manca qualcosa di decisivo. Se hai già risposto, fermati.",
-            "Non pensare ad alta voce e non dire che stai elaborando.",
-            f"Quando parlano di {context.dog_name}, usa prima il suo profilo e le sue letture. Non inventare la sua vita.",
-            "Se parlano di cani in generale, usa CANINE_SCIENCE. Puoi unire le due cose senza fare lezione.",
-            "Osservato / raccontato / imparato / generale ti serve per non mentire, non per verbalizzarlo.",
-            "Salute: niente diagnosi. Se è urgente — non respira, collassa, convulsioni, veleno, molto sangue — dillo subito in modo umano: chiama un pronto soccorso veterinario.",
-            "Se per capire un comportamento di adesso serve vederlo, chiedi un video breve.",
-            f"Il client ha già salutato così: {welcome}. Non ripetere quel saluto.",
-            f"Proprietario: {owner or 'non indicato'}. Cane di questo profilo: {context.dog_name}.",
-            f"Profilo: {', '.join(profile) if profile else 'ancora essenziale'}.",
-            "Fatti confermati dal proprietario:",
-            "\n".join(known) if known else "- nessuno ancora",
-            "Alimentazione:",
-            "\n".join(
-                f"- {item.summary}"
-                for item in context.items
-                if item.source_type in {"FEEDING_PERIOD", "FOOD_PRODUCT"}
-            )
-            or f"- Non hai ancora il cibo di {context.dog_name}. Se te lo dicono, proponilo come ricordo da confermare.",
-            "Ultime letture DOGly:",
-            "\n".join(events) if events else "- nessuna analisi ancora",
-            f"Non hai ancora: {', '.join(missing)}." if missing else "Il profilo essenziale è presente.",
-            (
-                f"ULTIMA CHIACCHIERATA ({context.previous_topic}):\n"
-                + "\n".join(
-                    f"- {turn.get('role')}: {turn.get('content')}"
-                    for turn in context.previous_turns[:8]
-                )
-                + "\nSe vuole riprendere, continua da qui. Se vuole altro, cambia argomento senza insistere."
-            )
-            if context.previous_topic
-            else "Non c'è una chiacchierata precedente da riprendere.",
-            "CANINE_SCIENCE:",
-            science,
-        ]
     )
 
 
@@ -558,7 +402,6 @@ def load_realtime_context_memory(
     dog_context = build_dog_context(
         dog, lifestyle_dump, owner_display_name=owner_name
     )
-    breed_intelligence = _breed_intelligence_payload(dog, dog_context, domains)
     personal = build_personal_dog_context(
         dog=dog,
         dog_context=dog_context,
@@ -570,8 +413,7 @@ def load_realtime_context_memory(
     memory = store.realtime_conversation_memories.get((dog.owner_id, dog_id), {})
     return realtime_context_from_personal(
         personal,
+        domains=domains,
         previous_topic=memory.get("topic"),
         previous_turns=list(memory.get("turns_json") or []),
-        breed_intelligence=breed_intelligence,
-        seasonal_context=_seasonal_context(),
     )

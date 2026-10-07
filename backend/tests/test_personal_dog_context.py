@@ -7,13 +7,15 @@ from datetime import UTC, datetime
 from app.contracts.canine_intelligence import CanineEvidenceItem
 from app.contracts.provenance import normalize_provenance
 from app.domains.dog_context import build_dog_context
-from app.domains.models import DogRec
+from app.domains.models import DogRec, FoodProductRec
 from app.domains.personal_dog_context import (
     assemble_behavior_dog_context,
     build_personal_dog_context,
+    load_cross_domain_evidence_memory,
     merge_owner_stories_into_context,
     personal_to_stable_facts,
 )
+from app.domains.repository import InMemoryStore
 from app.knowledge.models import LifestyleFact
 
 
@@ -123,3 +125,23 @@ def test_cross_domain_evidence_keeps_provenance() -> None:
 def test_lifestyle_fact_accepts_legacy_provenance() -> None:
     fact = LifestyleFact(key="walks", value="2", provenance="SYSTEM_INFERRED")
     assert fact.provenance == "INFERRED"
+
+
+def test_unlinked_catalog_food_is_not_personal_dog_context() -> None:
+    store = InMemoryStore()
+    dog = _dog()
+    store.dogs[dog.id] = dog
+    store.food_products["catalog-1"] = FoodProductRec(
+        id="catalog-1",
+        owner_id=dog.owner_id,
+        dog_id=dog.id,
+        client_request_id="catalog-1",
+        name="Cibo solo salvato",
+        created_at=datetime.now(UTC),
+    )
+
+    evidence = load_cross_domain_evidence_memory(
+        store, dog_id=dog.id, domains=["GENERAL"]
+    )
+
+    assert all(item.source_type != "FOOD_PRODUCT" for item in evidence)

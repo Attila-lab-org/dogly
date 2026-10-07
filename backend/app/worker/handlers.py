@@ -849,6 +849,10 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         knowledge_context = retrieve_evidence(
             observation, context_bucket, dog_context
         )
+        # The reasoner receives the reliable observation plus PersonalDogContext.
+        # Breed/science payloads are not a second conversational brain: the
+        # observer may use morphology only to improve perception, while the
+        # interpretation stays grounded in this dog and this event.
         intelligence = build_dog_intelligence_context(
             dog,
             dog_context,
@@ -871,9 +875,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             "owner_context_answer": None,
             "deterministic_safety_flags": det_flags,
             "processing_owner_context": processing_owner_context,
-            # Always pass the shared Canine Intelligence payload (science + claims).
             "intelligence_context": {
-                **intelligence.reasoner_payload(),
                 "personal_dog_context": personal.reasoner_payload(),
             },
         }
@@ -1159,7 +1161,6 @@ async def refine_behavior_event_context(
         "operation": "reasoner.refine_context",
         "processing_owner_context": processing_owner_context,
         "intelligence_context": {
-            **intelligence.reasoner_payload(),
             "personal_dog_context": personal.reasoner_payload(),
         },
     }

@@ -44,10 +44,18 @@ async def upsert_conversation_memory_db(
     if not any(text.strip() for text in user_texts):
         return None
     topic = conversation_topic(user_texts, dog_name=dog_name)
-    history: list[dict[str, str]] = []
+    history: list[dict[str, Any]] = []
     for turn in turns[-4:]:
         history.append({"role": "proprietario", "content": turn["user_transcript"]})
-        history.append({"role": "DOGly", "content": turn["assistant_text"]})
+        decision = dict(turn.get("decision_json") or {})
+        history.append(
+            {
+                "role": "DOGly",
+                "content": turn["assistant_text"],
+                "question": decision.get("question"),
+                "media_invite": decision.get("media_invite"),
+            }
+        )
     async with engine.begin() as conn:
         row = (
             await conn.execute(
@@ -103,7 +111,7 @@ async def refresh_conversation_memory_db(
             await conn.execute(
                 text(
                     """
-                    select user_transcript, assistant_text
+                    select user_transcript, assistant_text, decision_json
                     from public.realtime_turns
                     where session_id=cast(:session_id as uuid)
                     order by ordinal
@@ -150,7 +158,7 @@ async def create_session_db(
                 await conn.execute(
                     text(
                         """
-                        select user_transcript, assistant_text
+                    select user_transcript, assistant_text, decision_json
                         from public.realtime_turns
                         where session_id=cast(:session_id as uuid)
                         order by ordinal
@@ -169,7 +177,15 @@ async def create_session_db(
                     history.append(
                         {"role": "proprietario", "content": turn["user_transcript"]}
                     )
-                    history.append({"role": "DOGly", "content": turn["assistant_text"]})
+                    decision = dict(turn.get("decision_json") or {})
+                    history.append(
+                        {
+                            "role": "DOGly",
+                            "content": turn["assistant_text"],
+                            "question": decision.get("question"),
+                            "media_invite": decision.get("media_invite"),
+                        }
+                    )
                 await conn.execute(
                     text(
                         """
@@ -284,13 +300,13 @@ async def load_session_db(
 
 async def load_history_db(
     engine: AsyncEngine, *, session_id: str, user_id: str
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     async with engine.connect() as conn:
         rows = (
             await conn.execute(
                 text(
                     """
-                    select user_transcript, assistant_text
+                    select user_transcript, assistant_text, decision_json
                     from public.realtime_turns
                     where session_id=cast(:session_id as uuid)
                       and user_id=cast(:user_id as uuid)
@@ -301,12 +317,18 @@ async def load_history_db(
                 {"session_id": session_id, "user_id": user_id},
             )
         ).mappings().all()
-    history: list[dict[str, str]] = []
+    history: list[dict[str, Any]] = []
     for row in reversed(rows):
+        decision = dict(row.get("decision_json") or {})
         history.extend(
             [
                 {"role": "user", "content": row["user_transcript"]},
-                {"role": "assistant", "content": row["assistant_text"]},
+                {
+                    "role": "assistant",
+                    "content": row["assistant_text"],
+                    "question": decision.get("question"),
+                    "media_invite": decision.get("media_invite"),
+                },
             ]
         )
     return history

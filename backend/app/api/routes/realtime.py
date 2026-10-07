@@ -68,17 +68,23 @@ def _welcome_text(
 
 def _resume_history(
     previous: list[dict[str, Any]] | None,
-    current: list[dict[str, str]],
-) -> list[dict[str, str]]:
+    current: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Carry the last conversation into a new text session in model format."""
-    resumed: list[dict[str, str]] = []
+    resumed: list[dict[str, Any]] = []
     for item in previous or []:
         role = str(item.get("role") or "")
         content = str(item.get("content") or "").strip()
         if not content:
             continue
         normalized = "user" if role in {"proprietario", "user"} else "assistant"
-        resumed.append({"role": normalized, "content": content})
+        entry: dict[str, Any] = {"role": normalized, "content": content}
+        if normalized == "assistant":
+            if item.get("question"):
+                entry["question"] = item["question"]
+            if item.get("media_invite"):
+                entry["media_invite"] = item["media_invite"]
+        resumed.append(entry)
     # Memory is refreshed after each turn and can already contain this session.
     # Merge the overlap instead of replaying the same exchange twice.
     overlap = 0
@@ -282,7 +288,12 @@ async def create_realtime_turn(
                 history.extend(
                     [
                         {"role": "user", "content": turn["user_transcript"]},
-                        {"role": "assistant", "content": turn["assistant_text"]},
+                        {
+                            "role": "assistant",
+                            "content": turn["assistant_text"],
+                            "question": (turn.get("decision_json") or {}).get("question"),
+                            "media_invite": (turn.get("decision_json") or {}).get("media_invite"),
+                        },
                     ]
                 )
             previous_memory = state.store.realtime_conversation_memories.get(
@@ -351,7 +362,6 @@ async def create_realtime_turn(
         assistant_text=decision.assistant_text,
         question=decision.question,
         question_options=decision.question_options,
-        suggested_prompts=decision.suggested_prompts,
         terminal_state=decision.terminal_state,
         domains=decision.domains,
         safety_flags=decision.safety_flags,
@@ -488,7 +498,15 @@ def _store_conversation_memory(store: Any, session: dict[str, Any]) -> None:
     history = []
     for turn in turns[-4:]:
         history.append({"role": "proprietario", "content": turn["user_transcript"]})
-        history.append({"role": "DOGly", "content": turn["assistant_text"]})
+        decision = turn.get("decision_json") or {}
+        history.append(
+            {
+                "role": "DOGly",
+                "content": turn["assistant_text"],
+                "question": decision.get("question"),
+                "media_invite": decision.get("media_invite"),
+            }
+        )
     store.realtime_conversation_memories[(session["user_id"], session["dog_id"])] = {
         "topic": topic,
         "turns_json": history,

@@ -65,7 +65,6 @@ class RealtimeTurnOut(BaseModel):
     assistant_text: str
     question: str | None = None
     question_options: list[str] = Field(default_factory=list, max_length=3)
-    suggested_prompts: list[str] = Field(default_factory=list, max_length=3)
     terminal_state: RealtimeTerminalState
     domains: list[RealtimeDomain] = Field(default_factory=list)
     safety_flags: list[str] = Field(default_factory=list)
@@ -81,16 +80,8 @@ class RealtimeDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     assistant_text: str = Field(min_length=1, max_length=1400)
-    # Per-turn semantic intent, persisted in decision_json, never a dog fact.
-    response_mode: Literal[
-        "CONVERSATION", "AFFECTION", "CONCERN", "GRIEF", "ANALYSIS", "CLOSURE"
-    ] = "CONVERSATION"
     question: str | None = Field(default=None, max_length=240)
     question_options: list[str] = Field(default_factory=list, max_length=3)
-    # Optional continuation chips. These are different from question_options:
-    # they keep the conversation moving without pretending DOGly needs another
-    # fact before it can answer.
-    suggested_prompts: list[str] = Field(default_factory=list, max_length=3)
     terminal_state: RealtimeTerminalState = "ANSWERED"
     domains: list[RealtimeDomain] = Field(default_factory=list, max_length=3)
     safety_flags: list[str] = Field(default_factory=list, max_length=4)
@@ -117,8 +108,6 @@ class RealtimeDecision(BaseModel):
             self.question_options = []
         elif any(not option.strip() or len(option) > 80 for option in self.question_options):
             raise ValueError("Question options must be short and non-empty")
-        if any(not prompt.strip() or len(prompt) > 90 for prompt in self.suggested_prompts):
-            raise ValueError("Suggested prompts must be short and non-empty")
         if self.memory_candidate and not self.memory_category:
             raise ValueError("Memory candidate requires a category")
         if self.terminal_state == "SAFETY_INTERRUPT":
@@ -128,7 +117,6 @@ class RealtimeDecision(BaseModel):
             self.question = None
             self.question_options = []
             self.question_information_gain = "NONE"
-            self.suggested_prompts = []
             self.memory_candidate = None
             self.memory_category = None
         elif self.behavior_handoff:
@@ -139,8 +127,6 @@ class RealtimeDecision(BaseModel):
             # takes priority over an optional media action.
             self.media_invite = None
             self.media_prompt = None
-        if self.question or self.media_invite or self.memory_candidate:
-            self.suggested_prompts = []
         return self
 
 

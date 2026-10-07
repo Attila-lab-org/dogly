@@ -402,6 +402,8 @@ async def load_cross_domain_evidence_db(
                         from public.feeding_periods fp
                         join public.food_products food on food.id=fp.food_product_id
                         where fp.dog_id=cast(:dog_id as uuid)
+                          and food.archived_at is null
+                          and (fp.end_at is null or fp.end_at >= now() - interval '180 days')
                         order by fp.end_at is null desc, fp.start_at desc
                         limit 3
                         """
@@ -409,9 +411,7 @@ async def load_cross_domain_evidence_db(
                     {"dog_id": dog_id},
                 )
             ).mappings().all()
-            linked_food_ids: set[str] = set()
             for feeding in feedings:
-                linked_food_ids.add(str(feeding["food_id"]))
                 active = feeding["end_at"] is None
                 name = feeding["name"] or feeding["brand"] or "cibo"
                 verified = feeding["verified_at"] is not None
@@ -432,47 +432,9 @@ async def load_cross_domain_evidence_db(
                         ),
                     )
                 )
-            foods = (
-                await conn.execute(
-                    text(
-                        """
-                        select id, name, brand, verified_at, ingredients_raw,
-                               feeding_directions, created_at
-                        from public.food_products
-                        where dog_id=cast(:dog_id as uuid)
-                           or (dog_id is null and owner_id=cast(:user_id as uuid))
-                        order by verified_at desc nulls last, created_at desc
-                        limit 4
-                        """
-                    ),
-                    {"dog_id": dog_id, "user_id": user_id},
-                )
-            ).mappings().all()
-            for food in foods:
-                if str(food["id"]) in linked_food_ids:
-                    continue
-                name = food["name"] or food["brand"] or "cibo scansionato"
-                verified = food["verified_at"] is not None
-                items.append(
-                    _evidence_item(
-                        source_id=str(food["id"]),
-                        source_type="FOOD_PRODUCT",
-                        occurred_at=food["created_at"],
-                        summary=(
-                            f"{'Cibo' if verified else 'Cibo da confermare'}: {name}"
-                        ),
-                        data={
-                            "name": food["name"],
-                            "brand": food["brand"],
-                            "verified": verified,
-                            "directions": food["feeding_directions"],
-                        },
-                        provenance=(
-                            "OWNER_CONFIRMED" if verified else "OWNER_REPORTED"
-                        ),
-                        verification="VERIFIED" if verified else "UNVERIFIED",
-                    )
-                )
+            # A catalog or scanned product is not part of Oreo's context until
+            # a feeding period links it to this dog. This prevents unused foods
+            # from being presented as the current diet.
 
         if want_all or "CARE" in selected:
             care = (
@@ -505,7 +467,11 @@ async def load_cross_domain_evidence_db(
                 )
 
     items.sort(
-        key=lambda item: item.occurred_at or datetime.min.replace(tzinfo=UTC),
+        key=lambda item: (
+            item.source_type == "FEEDING_PERIOD"
+            and item.data.get("end_at") is None,
+            item.occurred_at or datetime.min.replace(tzinfo=UTC),
+        ),
         reverse=True,
     )
     return items[:16]
@@ -519,28 +485,15 @@ def load_cross_domain_evidence_memory(
 ) -> list[CanineEvidenceItem]:
     selected = set(domains or ["GENERAL"])
     want_all = "GENERAL" in selected
-    dog = store.dogs[dog_id]
     items: list[CanineEvidenceItem] = []
 
     if want_all or "NUTRITION" in selected or "DIGESTIVE" in selected:
-        for food in store.food_products.values():
-            if food.dog_id != dog_id and food.owner_id != dog.owner_id:
-                continue
-            items.append(
-                _evidence_item(
-                    source_id=food.id,
-                    source_type="FOOD_PRODUCT",
-                    occurred_at=food.created_at,
-                    summary=f"Cibo: {food.name or food.brand or 'scansionato'}",
-                    data={"name": food.name, "brand": food.brand},
-                    provenance="OWNER_REPORTED",
-                    verification="UNVERIFIED",
-                )
-            )
         for period in store.feeding_periods.values():
             if period.dog_id != dog_id:
                 continue
             food = store.food_products.get(period.food_product_id)
+            if food is None or food.archived_at is not None:
+                continue
             items.append(
                 _evidence_item(
                     source_id=period.id,
@@ -550,7 +503,10 @@ def load_cross_domain_evidence_memory(
                         f"Alimentazione attiva: "
                         f"{getattr(food, 'name', None) or 'cibo'}"
                     ),
-                    data={"quantity_per_day": period.quantity_per_day},
+                    data={
+                        "quantity_per_day": period.quantity_per_day,
+                        "end_at": getattr(period, "end_at", None),
+                    },
                     provenance="OWNER_CONFIRMED",
                     verification="OWNER_CONFIRMED",
                 )
@@ -609,7 +565,11 @@ def load_cross_domain_evidence_memory(
             )
 
     items.sort(
-        key=lambda item: item.occurred_at or datetime.min.replace(tzinfo=UTC),
+        key=lambda item: (
+            item.source_type == "FEEDING_PERIOD"
+            and item.data.get("end_at") is None,
+            item.occurred_at or datetime.min.replace(tzinfo=UTC),
+        ),
         reverse=True,
     )
     return items[:16]

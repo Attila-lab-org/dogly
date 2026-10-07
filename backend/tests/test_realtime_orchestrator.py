@@ -14,9 +14,7 @@ from app.contracts.realtime import RealtimeDecision
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
-    companion_science_brief,
     conversation_topic,
-    render_voice_brief,
     resume_welcome_text,
     route_realtime_domains,
 )
@@ -44,11 +42,12 @@ def test_question_requires_real_information_gain() -> None:
         )
 
 
-def test_openai_schema_requires_every_nullable_field() -> None:
+def test_openai_schema_is_small_and_server_owned_fields_are_absent() -> None:
     schema = openai_realtime_decision_schema()
     assert set(schema["required"]) == set(schema["properties"])
     assert schema["additionalProperties"] is False
-    assert "default" not in str(schema)
+    assert "suggested_prompts" not in schema["properties"]
+    assert "response_mode" not in schema["properties"]
 
 
 def test_provider_decision_keeps_contextual_media_invite() -> None:
@@ -64,75 +63,6 @@ def test_provider_decision_keeps_contextual_media_invite() -> None:
     assert decision.media_prompt == "Fammi vedere dove perde pelo"
 
 
-def test_provider_decision_keeps_backend_owned_continuation_prompts() -> None:
-    decision = _provider_decision(
-        '{"assistant_text":"È un momento tenero, fatto di coccole.","domains":["BEHAVIOR"],'
-        '"suggested_prompts":["Come capisco quando vuole ancora coccole?",'
-        '"Lui vuole sempre questo"],"question_information_gain":"NONE"}',
-        domains=["BEHAVIOR"],
-    )
-
-    assert decision is not None
-    assert decision.suggested_prompts == ["Come capisco quando vuole ancora coccole?"]
-
-
-def test_generic_suggested_prompts_are_removed_instead_of_shown_as_a_menu() -> None:
-    decision = _provider_decision(
-        '{"assistant_text":"Oggi Oreo ha dormito quasi sempre.","domains":["BEHAVIOR"],'
-        '"suggested_prompts":["Come posso conoscerlo meglio?",'
-        '"Cosa osservo quando dorme così?"],"question_information_gain":"NONE"}',
-        domains=["BEHAVIOR"],
-    )
-
-    assert decision is not None
-    assert decision.suggested_prompts == ["Cosa osservo quando dorme così?"]
-
-
-def test_repeated_affection_answer_is_replaced_by_a_warm_next_step() -> None:
-    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
-    decision = _apply_conversation_policy(
-        RealtimeDecision(
-            assistant_text=(
-                "Oreo resta vicino a te e si rilassa con le coccole. "
-                "Continua con qualche pausa e osserva se torna da te."
-            )
-        ),
-        context=context,
-        user_text="Oreo è la mia vita",
-        history=[
-            {
-                "role": "assistant",
-                "content": (
-                    "Oreo resta vicino a te e si rilassa con le coccole. "
-                    "Continua con qualche pausa e osserva se torna da te."
-                ),
-            }
-        ],
-        domains=["GENERAL"],
-    )
-
-    assert "famiglia" in decision.assistant_text
-    assert decision.media_invite == "PHOTO"
-    assert decision.media_prompt == "Fammi vedere quanto è bello Oreo"
-    assert decision.question is None
-    assert decision.suggested_prompts == []
-
-
-def test_natural_affection_answer_is_not_replaced_by_a_fixed_phrase() -> None:
-    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
-    original = "Si vede che tra voi c'è qualcosa di speciale, e questo momento parla da solo."
-    decision = _apply_conversation_policy(
-        RealtimeDecision(assistant_text=original),
-        context=context,
-        user_text="Oreo è la mia vita",
-        history=[],
-        domains=["GENERAL"],
-    )
-
-    assert decision.assistant_text == original
-    assert decision.media_invite == "PHOTO"
-
-
 def test_answer_to_previous_question_does_not_trigger_another_question() -> None:
     context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
     decision = _apply_conversation_policy(
@@ -141,7 +71,6 @@ def test_answer_to_previous_question_does_not_trigger_another_question() -> None
             question="Quando succede, abbaia subito?",
             question_options=["Sì", "No"],
             question_information_gain="CHANGES_ACTION",
-            suggested_prompts=["Cosa guardo dopo?"],
         ),
         context=context,
         user_text="Di solito tra 5 e 10 metri.",
@@ -156,7 +85,6 @@ def test_answer_to_previous_question_does_not_trigger_another_question() -> None
 
     assert decision.question is None
     assert decision.question_options == []
-    assert decision.suggested_prompts == []
 
 
 def test_safety_question_can_follow_an_answer_when_really_needed() -> None:
@@ -202,7 +130,6 @@ def test_affection_signal_does_not_override_a_concrete_concern() -> None:
     decision = _apply_conversation_policy(
         RealtimeDecision(
             assistant_text="Capisco quanto ci tieni a Oreo. Guardiamo il problema.",
-            response_mode="CONVERSATION",
         ),
         context=context,
         user_text="Oreo è la mia vita, ma oggi perde pelo e si gratta.",
@@ -210,26 +137,6 @@ def test_affection_signal_does_not_override_a_concrete_concern() -> None:
         domains=["CARE"],
     )
 
-    assert decision.response_mode == "CONVERSATION"
-    assert decision.media_invite is None
-
-
-def test_recent_photo_invite_is_not_repeated() -> None:
-    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
-    decision = _apply_conversation_policy(
-        RealtimeDecision(
-            assistant_text="Che bello sentirti parlare così di lui.",
-            response_mode="CONVERSATION",
-        ),
-        context=context,
-        user_text="È davvero tutto per me.",
-        history=[
-            {"role": "assistant", "content": "Se vuoi, fammi vedere Oreo in una foto."}
-        ],
-        domains=["GENERAL"],
-    )
-
-    assert decision.response_mode == "AFFECTION"
     assert decision.media_invite is None
 
 
@@ -284,53 +191,26 @@ def test_new_text_session_resumes_previous_conversation_turns() -> None:
     )
 
 
-def test_voice_brief_is_personal_and_ready_to_speak() -> None:
-    welcome = _welcome_text("attilio", "Oreo")
-    brief = render_voice_brief(
-        RealtimeDogContext(
-            dog_id="dog-1",
-            dog_name="Oreo",
-            owner_display_name="Attilio",
-            identity={"breed_label": "Meticcio", "age_stage": "ADULT"},
-            items=[
-                RealtimeContextItem(
-                    source_id="fecal-1",
-                    source_type="DIGESTIVE_EVENT",
-                    summary="La digestione è stabile e oggi non serve cambiare alimentazione.",
-                    data={"headline": "Oreo sta digerendo bene"},
-                ),
-                RealtimeContextItem(
-                    source_id="food-1",
-                    source_type="FOOD_PRODUCT",
-                    summary="Cibo da confermare: Royal Canin Adult",
-                ),
-            ],
-        ),
-        welcome=welcome,
+def test_generic_weather_is_not_misrouted_to_behavior() -> None:
+    assert route_realtime_domains("Oggi fa caldo e sono stanco") == ["GENERAL"]
+
+
+def test_conversation_policy_does_not_rewrite_affection_or_force_media() -> None:
+    context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
+    original = "Si vede che tra voi c'è qualcosa di speciale."
+    decision = _apply_conversation_policy(
+        RealtimeDecision(assistant_text=original),
+        context=context, user_text="Oreo è la mia vita", history=[], domains=["GENERAL"]
     )
-    assert "Oreo" in brief
-    assert "Attilio" in brief
-    assert "amico intelligente" in brief
-    assert "La lunghezza è adattiva" in brief
-    assert "75 parole" not in brief
-    assert "Non ripetere quel saluto" in brief
-    assert "Oreo sta digerendo bene" in brief
-    assert "Scodinzolare" in brief
-    assert "Alimentazione:" in brief
-    assert "Royal Canin Adult" in brief
-    assert "3-6 frasi" not in brief
-    assert "voce calma" not in brief
-    assert "Distingui esplicitamente" not in brief
-    assert "modello" not in brief.lower()
-    assert "database" not in brief.lower()
+    assert decision.assistant_text == original
+    assert decision.media_invite is None
 
 
-def test_companion_science_lets_realtime_talk_about_dogs_in_general() -> None:
-    lines = companion_science_brief()
-    joined = "\n".join(lines)
-    assert any("Scodinzolare" in line for line in lines)
-    assert "abbaio" in joined.lower()
-    assert "veterinario" in joined.lower()
+def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
+    from app.domains.realtime_orchestrator import _SYSTEM
+    assert "frase corrente ha priorità" in _SYSTEM
+    assert "Non creare domande o menu" in _SYSTEM
+    assert "suggested_prompts" not in _SYSTEM
 
 
 def test_deterministic_safety_interrupt_precedes_ai() -> None:
@@ -410,7 +290,6 @@ async def test_disabled_realtime_prioritizes_relationship_affection() -> None:
 
     assert "famiglia" in decision.assistant_text
     assert decision.media_invite == "PHOTO"
-    assert decision.suggested_prompts == []
 
 
 @pytest.mark.asyncio
@@ -567,19 +446,3 @@ async def test_confirmed_chat_memory_is_visible_in_owner_stories(
     assert stories.json()["items"][0]["facts"][0]["statement"] == (
         "Oreo ama dormire sul divano."
     )
-
-
-def test_voice_and_orchestrated_turns_share_spoken_delivery_and_memory_boundaries():
-    from app.domains.realtime_orchestrator import _SYSTEM
-    from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
-
-    brief = render_voice_brief(
-        RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={}),
-        welcome="Ciao, sono qui.",
-    )
-    assert DOGLY_SPOKEN_STYLE in _SYSTEM
-    assert DOGLY_SPOKEN_STYLE in brief
-    assert "fingere mai di vedere o sentire" in brief
-    assert "isolato non è un'abitudine" in brief
-    assert "Il significato che il proprietario sta vivendo" in _SYSTEM
-    assert "Non trasformare un gesto affettuoso in agitazione" in _SYSTEM
