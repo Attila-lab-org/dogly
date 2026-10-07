@@ -343,6 +343,7 @@ async def record_turn_db(
     context_version: str,
     source_refs: list[dict[str, str]],
     provider_audit: dict[str, Any],
+    memory_request: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     async with engine.begin() as conn:
         locked = (
@@ -425,7 +426,7 @@ async def record_turn_db(
             },
         )
         proposal: dict[str, Any] | None = None
-        if decision.get("memory_candidate"):
+        if memory_request:
             proposal_row = (
                 await conn.execute(
                     text(
@@ -446,8 +447,8 @@ async def record_turn_db(
                         "turn_id": str(row["id"]),
                         "dog_id": str(session["dog_id"]),
                         "user_id": str(session["user_id"]),
-                        "category": decision["memory_category"],
-                        "statement": decision["memory_candidate"],
+                        "category": memory_request["category"],
+                        "statement": memory_request["statement"],
                     },
                 )
             ).mappings().one()
@@ -503,24 +504,46 @@ async def decide_memory_db(
                 "provenance": "OWNER_REPORTED",
                 "source": "REALTIME_CONFIRMATION",
             }
-            await conn.execute(
-                text(
-                    """
-                    insert into public.owner_reported_observations(
-                      dog_id, user_id, transcript, facts_json, status, confirmed_at
-                    ) values (
-                      cast(:dog_id as uuid), cast(:user_id as uuid), :transcript,
-                      cast(:facts as jsonb), 'CONFIRMED', now()
-                    )
-                    """
-                ),
-                {
-                    "dog_id": str(proposal["dog_id"]),
-                    "user_id": user_id,
-                    "transcript": f"Confermato in conversazione: {proposal['statement']}",
-                    "facts": _json([fact]),
-                },
+            existing = (
+                await conn.execute(
+                    text(
+                        """
+                        select facts_json
+                        from public.owner_reported_observations
+                        where dog_id=cast(:dog_id as uuid)
+                          and user_id=cast(:user_id as uuid)
+                          and status='CONFIRMED'
+                        """
+                    ),
+                    {"dog_id": str(proposal["dog_id"]), "user_id": user_id},
+                )
+            ).mappings().all()
+            needle = " ".join(str(proposal["statement"]).split()).casefold()
+            duplicate = any(
+                needle == " ".join(str(item.get("statement") or "").split()).casefold()
+                for row in existing
+                for item in (row.get("facts_json") or [])
+                if isinstance(item, dict)
             )
+            if not duplicate:
+                await conn.execute(
+                    text(
+                        """
+                        insert into public.owner_reported_observations(
+                          dog_id, user_id, transcript, facts_json, status, confirmed_at
+                        ) values (
+                          cast(:dog_id as uuid), cast(:user_id as uuid), :transcript,
+                          cast(:facts as jsonb), 'CONFIRMED', now()
+                        )
+                        """
+                    ),
+                    {
+                        "dog_id": str(proposal["dog_id"]),
+                        "user_id": user_id,
+                        "transcript": f"Confermato in conversazione: {proposal['statement']}",
+                        "facts": _json([fact]),
+                    },
+                )
     return target_status
 
 

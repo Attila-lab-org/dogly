@@ -16,16 +16,16 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision, RealtimeDomain
+from app.domains.owner_stories import extract_owner_reported_facts
 from app.domains.realtime_context import RealtimeDogContext
 from app.knowledge.claim_validation import (
     extract_claims_from_provider_payload,
-    govern_assistant_text,
     infer_claims_from_answer,
     validate_claims,
 )
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 
-REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v4"
+REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v5"
 
 _URGENT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
@@ -70,11 +70,7 @@ _TECHNICAL_COPY = re.compile(
     r"strumento|chiamata api)\b",
     re.IGNORECASE,
 )
-# Conservative hints, never substitutes for semantic interpretation of a turn.
-_RELATIONSHIP_AFFECTION = re.compile(
-    r"\b(la mia vita|tutto per me|(?:la )?mia famiglia|lo amo|l'amo|"
-    r"amo da morire|il mio mondo)\b", re.IGNORECASE,
-)
+# Conservative concern hints remain only for fallback safety/abstention.
 _CONCRETE_CONCERN = re.compile(
     r"\b(perde (?:il )?pelo|ferit\w*|prurito|prude|si gratta|dolore|zopp\w*|"
     r"vomit\w*|diarrea|sangue|non mangia|non beve|abbattut\w*|sta male|"
@@ -84,9 +80,6 @@ _GRIEF = re.compile(r"\b(mi manca|morto|morta|non c'è più|scomparso|scomparsa)
 _DECLINE_MEDIA = re.compile(
     r"\b(non (?:voglio|posso|ho voglia di) (?:mandar\w*|inviar\w*|fare|scattar\w*)"
     r"|niente foto|senza foto|non ora|preferisco parlare)\b", re.IGNORECASE,
-)
-_MEDIA_INVITATION = re.compile(
-    r"\b(?:foto|video|fotografia)\b", re.IGNORECASE,
 )
 
 
@@ -100,6 +93,25 @@ def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
                 safety_flags=[code],
             )
     return None
+
+
+_EXPLICIT_MEMORY_REQUEST = re.compile(
+    r"^\s*(?:ricordati(?:\s+che)?|tieni\s+presente(?:\s+che)?|"
+    r"salva(?:\s+che)?|annota(?:\s+che)?|da\s+oggi)\s*[:,-]?\s*",
+    re.IGNORECASE,
+)
+
+
+def explicit_memory_request(user_text: str) -> dict[str, str] | None:
+    """Extract one explicit owner statement outside the GPT response call."""
+    match = _EXPLICIT_MEMORY_REQUEST.match(user_text or "")
+    if not match:
+        return None
+    statement = " ".join((user_text or "")[match.end() :].split()).strip(" .,:;-")
+    facts = extract_owner_reported_facts(statement)
+    if len(facts) != 1:
+        return None
+    return {"statement": facts[0].statement, "category": facts[0].category}
 
 
 # Realtime needs the same governance in a smaller spoken contract. The client
@@ -129,8 +141,9 @@ dichiarato e separa ciò che si vede da ciò che non si può verificare.
 
 Non diagnosticare, non affermare causalità certa e non dare istruzioni d'emergenza
 oltre il necessario. In caso di segnali urgenti, la risposta deve indirizzare subito
-al veterinario. Un fatto stabile può diventare memory_candidate solo se il
-proprietario lo ha detto chiaramente: non salvare impressioni del momento.
+al veterinario. La memoria stabile viene proposta separatamente solo su richiesta
+esplicita del proprietario e dopo una conferma separata; il modello non la crea
+dentro questa chiamata.
 Restituisci soltanto JSON conforme allo schema richiesto.
 """
 
@@ -149,8 +162,6 @@ def openai_realtime_decision_schema() -> dict[str, Any]:
             "behavior_handoff",
             "media_invite",
             "media_prompt",
-            "memory_candidate",
-            "memory_category",
             "used_source_ids",
         ],
         "properties": {
@@ -163,13 +174,11 @@ def openai_realtime_decision_schema() -> dict[str, Any]:
             },
             "terminal_state": {
                 "type": "string",
-                "enum": ["ANSWERED", "ABSTAINED", "SAFETY_INTERRUPT", "BEHAVIOR_VIDEO_HANDOFF", "MEMORY_CONFIRMATION_REQUIRED"],
+                "enum": ["ANSWERED", "ABSTAINED", "BEHAVIOR_VIDEO_HANDOFF", "MEMORY_CONFIRMATION_REQUIRED"],
             },
             "behavior_handoff": {"type": "boolean"},
             "media_invite": {"type": ["string", "null"], "enum": ["PHOTO", "VIDEO", None]},
             "media_prompt": {"type": ["string", "null"]},
-            "memory_candidate": {"type": ["string", "null"]},
-            "memory_category": {"type": ["string", "null"], "enum": ["ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL", None]},
             "used_source_ids": {"type": "array", "items": {"type": "string"}},
         },
     }
@@ -208,20 +217,10 @@ def _provider_decision(
     if terminal not in {
         "ANSWERED",
         "ABSTAINED",
-        "SAFETY_INTERRUPT",
         "BEHAVIOR_VIDEO_HANDOFF",
         "MEMORY_CONFIRMATION_REQUIRED",
     }:
         terminal = "ANSWERED"
-    candidate = (
-        raw.get("memory_candidate")
-        if isinstance(raw.get("memory_candidate"), str)
-        else None
-    )
-    category = raw.get("memory_category")
-    if category not in {"ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL"}:
-        candidate = None
-        category = None
     media_invite = raw.get("media_invite")
     if media_invite not in {"PHOTO", "VIDEO"}:
         media_invite = None
@@ -235,14 +234,12 @@ def _provider_decision(
             question_options=question_options,
             terminal_state=terminal,
             domains=domains,
-            safety_flags=[
-                str(value) for value in raw.get("safety_flags", []) if value
-            ][:4],
+            # Safety flags are server-owned; provider output cannot activate an
+            # interrupt or change the safety state of this turn.
+            safety_flags=[],
             used_source_ids=[
                 str(value) for value in raw.get("used_source_ids", []) if value
             ][:12],
-            memory_candidate=candidate,
-            memory_category=category,
             question_information_gain=information_gain or "NONE",
             behavior_handoff=bool(raw.get("behavior_handoff", False)),
             media_invite=media_invite,
@@ -285,8 +282,6 @@ def _owner_turn_signals(text: str) -> list[str]:
         signals.append("CONCRETE_CONCERN")
     if _GRIEF.search(text):
         signals.append("LOSS_OR_ABSENCE")
-    if _RELATIONSHIP_AFFECTION.search(text):
-        signals.append("RELATIONSHIP_AFFECTION")
     if _DECLINE_MEDIA.search(text):
         signals.append("MEDIA_DECLINED")
     return signals
@@ -331,23 +326,8 @@ def _recent_media_invite(history: list[dict[str, Any]]) -> bool:
     """Legacy fallback guard for sessions created before media metadata existed."""
     return any(
         item.get("role") == "assistant"
-        and (item.get("media_invite") or _MEDIA_INVITATION.search(item.get("content", "")))
+        and item.get("media_invite")
         for item in history[-6:]
-    )
-
-
-def _relationship_response(
-    *, context: RealtimeDogContext, domains: list[RealtimeDomain],
-    invite: bool = True,
-) -> RealtimeDecision:
-    # Reflect the owner's feeling, never invent reciprocal canine feelings or events.
-    answer = f"Da come ne parli si sente quanto conta {context.dog_name} per te: è famiglia."
-    if invite:
-        answer += " Se ti va, fammelo vedere in una foto."
-    return RealtimeDecision(
-        assistant_text=answer, domains=domains,
-        media_invite="PHOTO" if invite else None,
-        media_prompt=f"Fammi vedere quanto è bello {context.dog_name}" if invite else None,
     )
 
 
@@ -358,7 +338,7 @@ def _apply_conversation_policy(
 ) -> RealtimeDecision:
     """Apply only server-owned turn boundaries; GPT owns the wording and meaning."""
     data = decision.model_dump()
-    if decision.terminal_state == "SAFETY_INTERRUPT" or decision.safety_flags:
+    if decision.safety_flags:
         data.update(media_invite=None, media_prompt=None)
         return RealtimeDecision.model_validate(data)
     declined = bool(_DECLINE_MEDIA.search(user_text))
@@ -402,11 +382,6 @@ def _fallback_decision(
         return RealtimeDecision(
             assistant_text=f"Si sente quanto ti manca {name}. Se ti va di parlarne, ti ascolto.",
             domains=domains,
-        )
-    if "RELATIONSHIP_AFFECTION" in signals and "CONCRETE_CONCERN" not in signals:
-        return _relationship_response(
-            context=context, domains=domains,
-            invite=not _recent_media_invite(history) and "MEDIA_DECLINED" not in signals,
         )
     latest = next(
         (
@@ -494,34 +469,9 @@ def _apply_claim_governance(
         context_ids=_context_ids(context),
         safety_blocked=safety_blocked,
     )
-    governed_text, downgraded = govern_assistant_text(
-        decision.assistant_text, audit_decision
-    )
-    updates: dict = {"claims": claims}
-    if governed_text != decision.assistant_text:
-        updates["assistant_text"] = governed_text
-    text_for_rule = updates.get("assistant_text", decision.assistant_text)
-    if (
-        "NUTRITION" in decision.domains
-        and "DIGESTIVE" in decision.domains
-        and "associazione temporale" not in text_for_rule.lower()
-    ):
-        updates["assistant_text"] = (
-            text_for_rule.rstrip()
-            + " Il fatto che sia iniziato insieme al cambio di cibo è un indizio, "
-            "ma da solo non dimostra che sia quella la causa."
-        )
-        notes = list(audit_decision.notes) + [
-            "Explicit temporal-association rule applied for nutrition+digestive turn."
-        ]
-        audit_decision = audit_decision.model_copy(
-            update={"notes": notes, "downgraded": True}
-        )
-        downgraded = True
-    if updates:
-        decision = decision.model_copy(update=updates)
-    if downgraded and not audit_decision.downgraded:
-        audit_decision = audit_decision.model_copy(update={"downgraded": True})
+    # Governance is an audit boundary. It must not become a second writer for
+    # the owner's answer after GPT has already handled the current context.
+    decision = decision.model_copy(update={"claims": claims})
     return decision, audit_decision.model_dump(mode="json")
 
 
@@ -578,8 +528,6 @@ async def orchestrate_realtime_turn(
             "confirmed_facts": context.stable_facts,
             "relevant_evidence": [item.model_dump(mode="json") for item in context.items],
             "missing": context.missing,
-            "previous_topic": context.previous_topic,
-            "previous_turns": context.previous_turns[-4:],
         },
         "context_contract": "personal_dog_context/v2",
         "routed_domains": domains,
@@ -674,7 +622,7 @@ async def orchestrate_realtime_turn(
 
     repaired = False
     repair_usage: dict[str, Any] = {}
-    if decision.terminal_state != "SAFETY_INTERRUPT" and not decision.safety_flags and (
+    if not decision.safety_flags and (
         _repeats_previous_answer(decision.assistant_text, _last_assistant_text(history))
     ):
         # One bounded repair, with the original context and image still present.
@@ -723,10 +671,6 @@ async def orchestrate_realtime_turn(
     decision.used_source_ids = [
         source_id for source_id in decision.used_source_ids if source_id in allowed_ids
     ]
-    safety_blocked = False
-    if safety_flags := deterministic_safety_interrupt(decision.assistant_text):
-        decision = safety_flags
-        safety_blocked = True
     try:
         provider_raw = json.loads(content) if content else None
     except (TypeError, json.JSONDecodeError):
@@ -735,7 +679,7 @@ async def orchestrate_realtime_turn(
         decision,
         context=context,
         provider_raw=provider_raw if isinstance(provider_raw, dict) else None,
-        safety_blocked=safety_blocked,
+        safety_blocked=False,
     )
     return decision, {
         "provider": "openai",

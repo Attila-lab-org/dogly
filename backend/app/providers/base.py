@@ -19,7 +19,7 @@ from app.contracts.interpretation import (
 )
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
-from app.knowledge.models import DogContextSnapshot, KnowledgeContext
+from app.knowledge.models import DogContextSnapshot
 
 
 class ProviderRateLimitError(RuntimeError):
@@ -78,7 +78,6 @@ class Reasoner(Protocol):
         context_bucket: ContextBucket,
         policy_version: str,
         eligible_memory: list[EligiblePatternSummary],
-        knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
         dog_name: str = "il cane",
         owner_context_answer: OwnerContextAnswer | None = None,

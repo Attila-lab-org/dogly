@@ -15,6 +15,7 @@ from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
 from app.domains.personal_dog_context import (
     build_personal_dog_context,
+    context_tokens,
     load_cross_domain_evidence_db,
     load_cross_domain_evidence_memory,
     personal_to_realtime_items,
@@ -22,7 +23,7 @@ from app.domains.personal_dog_context import (
 )
 from app.domains.repository import InMemoryStore
 
-REALTIME_CONTEXT_VERSION = "personal-dog-context/v1"
+REALTIME_CONTEXT_VERSION = "personal-dog-context/v2"
 
 
 class RealtimeContextItem(BaseModel):
@@ -42,8 +43,6 @@ class RealtimeDogContext(BaseModel):
     stable_facts: list[dict[str, Any]] = Field(default_factory=list)
     items: list[RealtimeContextItem] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
-    previous_topic: str | None = None
-    previous_turns: list[dict[str, Any]] = Field(default_factory=list)
 
     def source_refs(self) -> list[dict[str, str]]:
         return [
@@ -185,15 +184,46 @@ def route_realtime_domains(user_text: str) -> list[RealtimeDomain]:
     return domains[:3] or ["GENERAL"]
 
 
-
-def realtime_context_from_personal(
-    personal,
+def _item_score(
+    item: RealtimeContextItem,
     *,
-    domains: list[RealtimeDomain] | None = None,
-    previous_topic: str | None = None,
-    previous_turns: list[dict[str, Any]] | None = None,
-) -> RealtimeDogContext:
-    """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
+    query_tokens: set[str],
+    selected_domains: set[RealtimeDomain],
+) -> tuple[int, int, datetime]:
+    haystack = " ".join(
+        [item.source_type, item.summary, *(str(v) for v in item.data.values())]
+    ).casefold()
+    overlap = len(query_tokens & context_tokens(haystack))
+    source_domain = {
+        "BEHAVIOR_EVENT": "BEHAVIOR",
+        "PERSONAL_PATTERN": "BEHAVIOR",
+        "DIGESTIVE_EVENT": "DIGESTIVE",
+        "FEEDING_PERIOD": "NUTRITION",
+        "CARE_EVENT": "CARE",
+    }.get(item.source_type)
+    domain_match = source_domain in selected_domains if source_domain else False
+    # GENERAL is intentionally not a request for every specialist record. An
+    # evidence item must match the current message or it stays out of GPT's
+    # turn context. Routed specialist turns can use their own domain records.
+    eligible = overlap > 0 or domain_match and "GENERAL" not in selected_domains
+    return (
+        (100 if eligible else 0)
+        + overlap * 8
+        + (25 if domain_match else 0),
+        overlap,
+        item.occurred_at or datetime.min.replace(tzinfo=UTC),
+    )
+
+
+def _select_realtime_items(
+    personal: Any,
+    *,
+    user_text: str,
+    domains: list[RealtimeDomain],
+    limit: int = 16,
+) -> list[RealtimeContextItem]:
+    selected_domains = set(domains or ["GENERAL"])
+    query_tokens = context_tokens(user_text) - context_tokens(personal.dog_name)
     items = [
         RealtimeContextItem(
             source_id=str(raw["source_id"]),
@@ -204,37 +234,50 @@ def realtime_context_from_personal(
         )
         for raw in personal_to_realtime_items(personal)
     ]
-    selected_domains = set(domains or ["GENERAL"])
-    if "GENERAL" not in selected_domains:
-        relevant_source_types = {
-            source_type
-            for domain, source_type in (
-                ("BEHAVIOR", "BEHAVIOR_EVENT"),
-                ("DIGESTIVE", "DIGESTIVE_EVENT"),
-                ("NUTRITION", "FEEDING_PERIOD"),
-                ("CARE", "CARE_EVENT"),
-            )
-            if domain in selected_domains
-        }
-        items.sort(
-            key=lambda item: (
-                item.source_type == "FEEDING_PERIOD"
-                and item.data.get("end_at") is None,
-                item.source_type in relevant_source_types,
-                item.occurred_at or datetime.min.replace(tzinfo=UTC),
-            ),
-            reverse=True,
-        )
+    ranked = sorted(
+        items,
+        key=lambda item: _item_score(
+            item, query_tokens=query_tokens, selected_domains=selected_domains
+        ),
+        reverse=True,
+    )
+    # With a genuinely general message, send no unrelated specialist evidence.
+    # This is the important distinction between durable storage and turn context.
+    if "GENERAL" in selected_domains:
+        ranked = [
+            item for item in ranked
+            if _item_score(
+                item, query_tokens=query_tokens, selected_domains=selected_domains
+            )[0] > 0
+            and _item_score(
+                item, query_tokens=query_tokens, selected_domains=selected_domains
+            )[1] > 0
+        ]
+    return [item for item in ranked if _item_score(
+        item, query_tokens=query_tokens, selected_domains=selected_domains
+    )[0] >= 100][:limit]
+
+
+
+def realtime_context_from_personal(
+    personal,
+    *,
+    domains: list[RealtimeDomain] | None = None,
+    user_text: str = "",
+) -> RealtimeDogContext:
+    """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
     return RealtimeDogContext(
         dog_id=personal.dog_id,
         dog_name=personal.dog_name,
         owner_display_name=personal.owner_display_name,
         identity=dict(personal.identity),
-        stable_facts=personal_to_stable_facts(personal),
-        items=items[:12],
-        missing=list(personal.missing),
-        previous_topic=previous_topic,
-        previous_turns=list(previous_turns or []),
+        stable_facts=personal_to_stable_facts(
+            personal, user_text=user_text, domains=domains, limit=16
+        ),
+        items=_select_realtime_items(
+            personal, user_text=user_text, domains=domains or ["GENERAL"]
+        ),
+        missing=[key for key in personal.missing if key != "active_feeding" or set(domains or []) & {"NUTRITION", "DIGESTIVE"}],
     )
 
 
@@ -244,6 +287,7 @@ async def load_realtime_context_db(
     user_id: str,
     dog_id: str,
     domains: list[RealtimeDomain],
+    user_text: str = "",
 ) -> RealtimeDogContext:
     async with engine.connect() as conn:
         dog = (
@@ -289,17 +333,14 @@ async def load_realtime_context_db(
                       and user_id=cast(:user_id as uuid)
                       and status='CONFIRMED'
                     order by confirmed_at desc
-                    limit 4
                     """
                 ),
                 {"dog_id": dog_id, "user_id": user_id},
             )
         ).mappings().all()
 
-    # A free conversation must keep cross-domain continuity. The last message
-    # is not enough to decide whether food, digestion or behaviour matters.
     evidence = await load_cross_domain_evidence_db(
-        engine, user_id=user_id, dog_id=dog_id, domains=["GENERAL"]
+        engine, user_id=user_id, dog_id=dog_id, domains=domains
     )
     dog_rec = DogRec(
         id=str(dog["id"]),
@@ -340,22 +381,10 @@ async def load_realtime_context_db(
         evidence=evidence,
         owner_display_name=owner_name,
     )
-    # Lazy import avoids circular dependency with realtime_db.
-    from app.domains import realtime_db
-
-    memory = await realtime_db.load_conversation_memory_db(
-        engine, user_id=user_id, dog_id=dog_id
-    )
-    previous_topic = None
-    previous_turns: list[dict[str, str]] = []
-    if memory:
-        previous_topic = str(memory.get("topic") or "") or None
-        previous_turns = list(memory.get("turns_json") or [])
     return realtime_context_from_personal(
         personal,
         domains=domains,
-        previous_topic=previous_topic,
-        previous_turns=previous_turns,
+        user_text=user_text,
     )
 
 
@@ -364,6 +393,7 @@ def load_realtime_context_memory(
     *,
     dog_id: str,
     domains: list[RealtimeDomain],
+    user_text: str = "",
 ) -> RealtimeDogContext:
     dog = store.dogs[dog_id]
     evidence = load_cross_domain_evidence_memory(
@@ -410,10 +440,8 @@ def load_realtime_context_memory(
         evidence=evidence,
         owner_display_name=owner_name,
     )
-    memory = store.realtime_conversation_memories.get((dog.owner_id, dog_id), {})
     return realtime_context_from_personal(
         personal,
         domains=domains,
-        previous_topic=memory.get("topic"),
-        previous_turns=list(memory.get("turns_json") or []),
+        user_text=user_text,
     )

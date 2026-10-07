@@ -22,6 +22,7 @@ from app.domains.realtime_orchestrator import (
     _apply_conversation_policy,
     _provider_decision,
     deterministic_safety_interrupt,
+    explicit_memory_request,
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
@@ -48,6 +49,16 @@ def test_openai_schema_is_small_and_server_owned_fields_are_absent() -> None:
     assert schema["additionalProperties"] is False
     assert "suggested_prompts" not in schema["properties"]
     assert "response_mode" not in schema["properties"]
+    assert "memory_candidate" not in schema["properties"]
+    assert "SAFETY_INTERRUPT" not in schema["properties"]["terminal_state"]["enum"]
+
+
+def test_memory_requires_explicit_owner_request_outside_gpt() -> None:
+    assert explicit_memory_request("Oreo ama dormire sul divano") is None
+    assert explicit_memory_request("Ricordati che Oreo ama dormire sul divano") == {
+        "statement": "Oreo ama dormire sul divano",
+        "category": "PREFERENCE",
+    }
 
 
 def test_provider_decision_keeps_contextual_media_invite() -> None:
@@ -276,7 +287,7 @@ async def test_disabled_realtime_makes_legacy_headline_direct() -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_realtime_prioritizes_relationship_affection() -> None:
+async def test_disabled_realtime_does_not_use_affection_regex_cta() -> None:
     settings = Settings(realtime_enabled=False)
     context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
 
@@ -288,8 +299,8 @@ async def test_disabled_realtime_prioritizes_relationship_affection() -> None:
         history=[],
     )
 
-    assert "famiglia" in decision.assistant_text
-    assert decision.media_invite == "PHOTO"
+    assert "famiglia" not in decision.assistant_text
+    assert decision.media_invite is None
 
 
 @pytest.mark.asyncio
@@ -426,8 +437,10 @@ async def test_confirmed_chat_memory_is_visible_in_owner_stories(
         user_text="Oreo ama dormire sul divano.",
         decision={
             "assistant_text": "Lo tengo presente.",
-            "memory_candidate": "Oreo ama dormire sul divano.",
-            "memory_category": "PREFERENCE",
+        },
+        memory_request={
+            "statement": "Oreo ama dormire sul divano.",
+            "category": "PREFERENCE",
         },
     )
     proposal_id = next(iter(state.store.realtime_memory_proposals))

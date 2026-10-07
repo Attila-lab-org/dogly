@@ -3,9 +3,50 @@
 from __future__ import annotations
 
 import re
+import unicodedata
+from typing import Any
 
 from app.contracts.api import OwnerReportedFact
 from app.domains.repository import new_id
+
+
+def normalized_statement(value: str) -> str:
+    """Exact-content deduplication, never semantic merging of different facts."""
+    return " ".join(unicodedata.normalize("NFKC", value).casefold().split()).rstrip(".! ")
+
+
+def clean_owner_stories(stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Clean the read projection; retain original records for owner edits/deletion.
+
+    Newest confirmed duplicate wins, with its source id. Different statements
+    (including negation/corrections) remain distinct and dated.
+    """
+    import json
+
+    seen: set[str] = set()
+    cleaned = []
+    for story in sorted(stories, key=lambda row: str(row.get("confirmed_at") or ""), reverse=True):
+        raw = story.get("facts") or story.get("facts_json") or []
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+        if not isinstance(raw, list):
+            continue
+        facts = []
+        for fact in raw:
+            if not isinstance(fact, dict) or not isinstance(fact.get("statement"), str):
+                continue
+            statement = " ".join(fact["statement"].split())
+            fingerprint = normalized_statement(statement)
+            if not is_useful_owner_statement(statement) or fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            facts.append({**fact, "statement": statement})
+        if facts:
+            cleaned.append({**story, "facts": facts})
+    return cleaned
 
 
 def _category(statement: str) -> str:
@@ -39,6 +80,8 @@ def is_useful_owner_statement(statement: str) -> bool:
     """Reject greetings and questions that do not describe the dog."""
     text = re.sub(r"\s+", " ", statement).strip()
     lowered = text.casefold()
+    if normalized_statement(text) in {"n/a", "non disponibile", "non specificato", "unknown", "null", "undefined"}:
+        return False
     if len(re.findall(r"[a-zà-ÿ]+", lowered)) < 2 or text.endswith("?"):
         return False
     return not any(

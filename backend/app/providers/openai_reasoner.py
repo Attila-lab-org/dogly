@@ -23,7 +23,7 @@ from app.contracts.interpretation import (
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import ContextBucket
 from app.domains.db import get_engine
-from app.knowledge.models import DogContextSnapshot, KnowledgeContext
+from app.knowledge.models import DogContextSnapshot
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 from app.providers.base import (
     EligiblePatternSummary,
@@ -202,7 +202,6 @@ class OpenAIReasoner:
         context_bucket: ContextBucket,
         policy_version: str,
         eligible_memory: list[EligiblePatternSummary],
-        knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
         dog_name: str = "il cane",
         owner_context_answer: OwnerContextAnswer | None = None,
@@ -231,7 +230,6 @@ class OpenAIReasoner:
             "context_bucket": context_bucket.value if hasattr(context_bucket, "value") else str(context_bucket),
             "observation": observation.model_dump(mode="json"),
             "eligible_memory": memory_payload,
-            "knowledge_context": knowledge_context.model_dump(mode="json"),
             "dog_context": dog_context.model_dump(mode="json"),
             "dog_name": dog_name,
             "owner_context_answer": (

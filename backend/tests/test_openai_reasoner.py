@@ -1,12 +1,12 @@
 import json
 
 import pytest
+
 from app.config import Settings
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import ContextBucket
 from app.knowledge.models import (
     DogContextSnapshot,
-    KnowledgeContext,
     LifeStageContext,
 )
 from app.providers.openai_reasoner import (
@@ -157,7 +157,6 @@ async def test_reasoner_usage_includes_repair_call():
         context_bucket=ContextBucket.HOME,
         policy_version="test",
         eligible_memory=[],
-        knowledge_context=KnowledgeContext(registry_version="test", coverage="LOW"),
         dog_context=DogContextSnapshot(
             dog_id="dog-1",
             name="Oreo",

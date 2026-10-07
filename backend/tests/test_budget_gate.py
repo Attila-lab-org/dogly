@@ -133,7 +133,6 @@ async def test_openai_reasoner_refuses_before_any_api_call(monkeypatch):
             context_bucket=None,
             policy_version="policy-v1",
             eligible_memory=[],
-            knowledge_context=None,
             dog_context=None,
         )
 

@@ -41,6 +41,7 @@ from app.domains.realtime_context import (
 )
 from app.domains.realtime_orchestrator import (
     deterministic_safety_interrupt,
+    explicit_memory_request,
     orchestrate_realtime_turn,
 )
 from app.domains.repository import now_utc
@@ -220,6 +221,7 @@ async def create_realtime_turn(
                 user_id=user_id,
                 dog_id=str(session["dog_id"]),
                 domains=domains,
+                user_text=body.text,
             )
             if body.event_id and body.context_source == "behavior":
                 focus_behavior_event(
@@ -265,7 +267,8 @@ async def create_realtime_turn(
             ]
         else:
             context = load_realtime_context_memory(
-                state.store, dog_id=str(session["dog_id"]), domains=domains
+                state.store, dog_id=str(session["dog_id"]), domains=domains,
+                user_text=body.text,
             )
             if body.event_id and body.context_source == "behavior":
                 focus_behavior_event(
@@ -325,6 +328,7 @@ async def create_realtime_turn(
         ) from exc
 
     decision_json = decision.model_dump(mode="json")
+    memory_request = explicit_memory_request(body.text)
     if attachment is not None:
         decision_json["attachment"] = attachment
     if state.engine is not None:
@@ -336,6 +340,7 @@ async def create_realtime_turn(
             context_version=REALTIME_CONTEXT_VERSION,
             source_refs=source_refs,
             provider_audit=provider_audit,
+            memory_request=memory_request,
         )
         await realtime_db.refresh_conversation_memory_db(
             state.engine, session_id=session_id, user_id=user_id
@@ -346,6 +351,7 @@ async def create_realtime_turn(
             session=session,
             user_text=body.text,
             decision=decision_json,
+            memory_request=memory_request,
         )
     memory = (
         RealtimeMemoryProposal(
@@ -403,23 +409,35 @@ async def decide_realtime_memory(
             proposal["status"] = result
             proposal["decided_at"] = now_utc()
             if result == "CONFIRMED":
-                observation_id = str(uuid.uuid4())
-                state.store.owner_reported_observations[observation_id] = {
-                    "id": observation_id,
-                    "dog_id": proposal["dog_id"],
-                    "user_id": user_id,
-                    "facts": [
-                        {
-                            "id": str(uuid.uuid4()),
-                            "category": proposal["category"],
-                            "statement": proposal["statement"],
-                            "provenance": "OWNER_REPORTED",
-                            "source": "REALTIME_CONFIRMATION",
-                        }
-                    ],
-                    "status": "CONFIRMED",
-                    "confirmed_at": now_utc(),
-                }
+                needle = " ".join(str(proposal["statement"]).split()).casefold()
+                duplicate = any(
+                    needle
+                    == " ".join(str(item.get("statement") or "").split()).casefold()
+                    for row in state.store.owner_reported_observations.values()
+                    if row.get("dog_id") == proposal["dog_id"]
+                    and row.get("user_id") == user_id
+                    and row.get("status") == "CONFIRMED"
+                    for item in row.get("facts", [])
+                    if isinstance(item, dict)
+                )
+                if not duplicate:
+                    observation_id = str(uuid.uuid4())
+                    state.store.owner_reported_observations[observation_id] = {
+                        "id": observation_id,
+                        "dog_id": proposal["dog_id"],
+                        "user_id": user_id,
+                        "facts": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "category": proposal["category"],
+                                "statement": proposal["statement"],
+                                "provenance": "OWNER_REPORTED",
+                                "source": "REALTIME_CONFIRMATION",
+                            }
+                        ],
+                        "status": "CONFIRMED",
+                        "confirmed_at": now_utc(),
+                    }
     if result is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Proposta non trovata o già gestita.")
     return RealtimeMemoryDecisionOut(proposal_id=proposal_id, status=result)
@@ -453,6 +471,7 @@ def _record_turn_memory(
     session: dict[str, Any],
     user_text: str,
     decision: dict[str, Any],
+    memory_request: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     turns = store.realtime_turns.setdefault(session["id"], [])
     row = {
@@ -468,15 +487,15 @@ def _record_turn_memory(
     }
     turns.append(row)
     proposal = None
-    if decision.get("memory_candidate"):
+    if memory_request:
         proposal = {
             "id": str(uuid.uuid4()),
             "session_id": session["id"],
             "source_turn_id": row["id"],
             "dog_id": session["dog_id"],
             "user_id": session["user_id"],
-            "category": decision["memory_category"],
-            "statement": decision["memory_candidate"],
+            "category": memory_request["category"],
+            "statement": memory_request["statement"],
             "status": "PROPOSED",
             "created_at": now_utc(),
         }

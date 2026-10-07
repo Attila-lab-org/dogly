@@ -11,7 +11,7 @@ from app.contracts.api import OwnerReportedFact
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import dogs_db
 from app.domains.ids import require_uuid
-from app.domains.owner_stories import is_useful_owner_statement
+from app.domains.owner_stories import clean_owner_stories, is_useful_owner_statement
 from app.domains.repository import new_id
 
 
@@ -145,7 +145,7 @@ async def list_confirmed(
                     "confirmed_at": row["confirmed_at"],
                 }
             )
-    return result
+    return clean_owner_stories(result)
 
 
 async def update_confirmed(

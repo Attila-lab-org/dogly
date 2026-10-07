@@ -21,6 +21,7 @@ from app.contracts.taxonomy import AnalysisDomain
 from app.domains import dogs_db, idempotency_db, owner_stories_db
 from app.domains.dogs import get_owned_dog
 from app.domains.owner_stories import (
+    clean_owner_stories,
     extract_owner_reported_facts,
     is_useful_owner_statement,
 )
@@ -93,7 +94,7 @@ async def list_owner_stories(
                         "confirmed_at": observation["confirmed_at"],
                     }
                 )
-        rows = filtered_rows
+        rows = clean_owner_stories(filtered_rows)
     return OwnerStoryListOut(
         items=[OwnerStoryObservationOut.model_validate(row) for row in rows]
     )

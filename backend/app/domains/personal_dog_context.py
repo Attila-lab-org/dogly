@@ -7,6 +7,8 @@ results. Does not own writes or create a parallel memory store.
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,6 +25,7 @@ from app.contracts.provenance import PROVENANCE_OWNER_LABEL, normalize_provenanc
 from app.contracts.realtime import RealtimeDomain
 from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
+from app.domains.owner_stories import clean_owner_stories, normalized_statement
 from app.domains.repository import InMemoryStore
 from app.knowledge.models import DogContextSnapshot, LifestyleFact
 from app.providers.base import EligiblePatternSummary
@@ -65,7 +68,7 @@ def merge_owner_stories_into_context(
         "recent_changes": list(context.recent_changes),
         "owner_reported": list(context.owner_reported),
     }
-    for story in stories:
+    for story in clean_owner_stories(stories):
         facts = story.get("facts") or story.get("facts_json") or []
         if isinstance(facts, str):
             facts = json.loads(facts)
@@ -101,8 +104,7 @@ def _personal_facts_from_context(
     *,
     stories: list[dict[str, Any]] | None = None,
 ) -> list[PersonalFact]:
-    facts: list[PersonalFact] = []
-    seen: set[tuple[str, str]] = set()
+    facts: dict[tuple[str, str], PersonalFact] = {}
 
     def _add(
         key: str,
@@ -113,20 +115,24 @@ def _personal_facts_from_context(
         last_confirmed_at: datetime | None = None,
         source_id: str | None = None,
     ) -> None:
-        fingerprint = (key, str(value))
-        if fingerprint in seen:
+        if value is None or value == "" or value == [] or value == {}:
             return
-        seen.add(fingerprint)
-        facts.append(
-            PersonalFact(
-                key=key,
-                value=value,
-                provenance=normalize_provenance(provenance),
-                domain=domain,
-                last_confirmed_at=last_confirmed_at,
-                source_id=source_id,
-            )
+        if isinstance(value, str):
+            value = " ".join(value.split())
+            if value.casefold() in {"n/a", "null", "none", "unknown", "undefined", "non disponibile"}:
+                return
+        # Story mirrors have generated keys, but describe the same statement.
+        fingerprint = (
+            "owner" if key.startswith("owner_") else key.casefold(),
+            normalized_statement(str(value)),
         )
+        fact = PersonalFact(
+            key=key, value=value, provenance=normalize_provenance(provenance),
+            domain=domain, last_confirmed_at=last_confirmed_at, source_id=source_id,
+        )
+        existing = facts.get(fingerprint)
+        if existing is None or (source_id and not existing.source_id):
+            facts[fingerprint] = fact
 
     for bucket_name in (
         "today_vs_usual",
@@ -161,7 +167,7 @@ def _personal_facts_from_context(
             last_confirmed_at=item.last_confirmed_at,
         )
 
-    for story in stories or []:
+    for story in clean_owner_stories(stories or []):
         story_id = str(story.get("id") or "")
         confirmed_at = _as_datetime(story.get("confirmed_at"))
         raw_facts = story.get("facts") or story.get("facts_json") or []
@@ -178,11 +184,11 @@ def _personal_facts_from_context(
                 f"owner_{category}",
                 statement,
                 "OWNER_CONFIRMED",
-                domain="PROFILE",
+                domain={"diet": "NUTRITION", "health": "CARE", "routine": "BEHAVIOR", "preference": "BEHAVIOR"}.get(category, "PROFILE"),
                 last_confirmed_at=confirmed_at,
                 source_id=story_id or None,
             )
-    return facts
+    return list(facts.values())
 
 
 def _evidence_item(
@@ -249,8 +255,9 @@ def build_personal_dog_context(
 ) -> PersonalDogContext:
     """Pure assembly from already-loaded sources (no I/O)."""
     del lifestyle_dump
-    merged = merge_owner_stories_into_context(dog_context, stories or [])
-    facts = _personal_facts_from_context(merged, stories=stories)
+    stories = clean_owner_stories(stories or [])
+    facts = _personal_facts_from_context(dog_context, stories=stories)
+    merged = merge_owner_stories_into_context(dog_context, stories)
     items = list(evidence or [])
     identity = _identity_from_dog(dog)
     return PersonalDogContext(
@@ -294,7 +301,6 @@ async def load_cross_domain_evidence_db(
                           and user_id=cast(:user_id as uuid)
                           and status='COMPLETED'
                         order by created_at desc
-                        limit 4
                         """
                     ),
                     {"dog_id": dog_id, "user_id": user_id},
@@ -334,7 +340,6 @@ async def load_cross_domain_evidence_db(
                         where dog_id=cast(:dog_id as uuid)
                           and state in ('PRELIMINARY','ESTABLISHED','STRONG')
                         order by last_seen desc
-                        limit 2
                         """
                     ),
                     {"dog_id": dog_id},
@@ -364,7 +369,6 @@ async def load_cross_domain_evidence_db(
                           and user_id=cast(:user_id as uuid)
                           and status='COMPLETED'
                         order by created_at desc
-                        limit 4
                         """
                     ),
                     {"dog_id": dog_id, "user_id": user_id},
@@ -405,7 +409,6 @@ async def load_cross_domain_evidence_db(
                           and food.archived_at is null
                           and (fp.end_at is null or fp.end_at >= now() - interval '180 days')
                         order by fp.end_at is null desc, fp.start_at desc
-                        limit 3
                         """
                     ),
                     {"dog_id": dog_id},
@@ -447,7 +450,6 @@ async def load_cross_domain_evidence_db(
                           and user_id=cast(:user_id as uuid)
                           and scheduled_at >= now() - interval '30 days'
                         order by scheduled_at desc
-                        limit 4
                         """
                     ),
                     {"dog_id": dog_id, "user_id": user_id},
@@ -474,7 +476,10 @@ async def load_cross_domain_evidence_db(
         ),
         reverse=True,
     )
-    return items[:16]
+    # Keep the complete durable evidence set available to the context builder.
+    # Realtime selection is deliberately performed after this read, using the
+    # current owner turn; this read model must not silently discard history.
+    return items
 
 
 def load_cross_domain_evidence_memory(
@@ -572,7 +577,7 @@ def load_cross_domain_evidence_memory(
         ),
         reverse=True,
     )
-    return items[:16]
+    return items
 
 
 def personal_to_realtime_items(personal: PersonalDogContext) -> list[dict[str, Any]]:
@@ -594,9 +599,55 @@ def personal_to_realtime_items(personal: PersonalDogContext) -> list[dict[str, A
     ]
 
 
-def personal_to_stable_facts(personal: PersonalDogContext) -> list[dict[str, Any]]:
+# Retrieval only: these tokens never select a response template or emotional mode.
+_STOPWORDS = {"che", "cosa", "come", "dove", "quando", "perche", "oggi", "ieri", "sono", "con", "una", "uno", "del", "della", "delle", "degli", "gli", "non", "nel", "nella", "nelle", "suo", "sua", "suoi", "sue", "mio", "mia", "questo", "questa", "quello", "quella", "lui", "lei", "per", "tra", "fra", "alla", "alle", "allo", "anche", "ancora", "sempre", "molto", "poco", "tanto", "piu", "puoi", "vorrei", "sapere", "dimmi", "raccontami", "cane", "oreo", "sta", "stai", "fai", "dice", "detto", "fatto", "solo", "bene", "tutto", "nulla", "ogni", "qual", "quale", "dopo", "prima", "tuo", "tua", "have", "with", "the", "about", "and", "this", "that"}
+
+
+def context_tokens(value: str) -> set[str]:
+    normalized = "".join(c for c in unicodedata.normalize("NFKD", value.casefold()) if not unicodedata.combining(c))
+    return {
+        token[:6] if len(token) > 6 else token
+        for token in re.findall(r"[^\W_]+", normalized)
+        if len(token) > 2 and token not in _STOPWORDS
+    }
+
+
+def personal_to_stable_facts(
+    personal: PersonalDogContext,
+    *,
+    user_text: str = "",
+    domains: list[RealtimeDomain] | None = None,
+    limit: int = 16,
+) -> list[dict[str, Any]]:
+    """Rank the complete durable read model, never its first N records.
+
+    Exact/stemmed token overlap beats domain and recency. Health constraints
+    remain available in specialist turns. Dates distinguish historical reports
+    from present facts. This is lexical retrieval, not inferred truth.
+    """
+    query = context_tokens(user_text) - context_tokens(personal.dog_name)
+    selected_domains = set(domains or []) - {"GENERAL"}
+    documents = [context_tokens(f"{fact.key} {fact.value}") for fact in personal.personal_facts]
+    frequency = {token: sum(token in doc for doc in documents) for token in query}
+
+    def score(pair: tuple[PersonalFact, set[str]]) -> tuple[float, bool, str]:
+        fact, tokens = pair
+        overlap = sum(1 / frequency[token] for token in query & tokens)
+        return (
+            overlap,
+            fact.domain in selected_domains,
+            str(fact.last_confirmed_at or ""),
+        )
+
+    ranked = sorted(zip(personal.personal_facts, documents, strict=True), key=score, reverse=True)
+    if query:
+        matches = [pair for pair in ranked if query & pair[1] or pair[0].domain in selected_domains]
+        # A generic personal question can still use a small profile overview;
+        # specialist turns never receive unrelated memories as filler.
+        ranked = matches if matches or selected_domains else ranked
+    selected = [fact for fact, _ in ranked[:limit]]
     facts: list[dict[str, Any]] = []
-    for fact in personal.personal_facts[:10]:
+    for fact in selected:
         facts.append(
             {
                 "key": fact.key,
@@ -611,6 +662,7 @@ def personal_to_stable_facts(personal: PersonalDogContext) -> list[dict[str, Any
                     else "UNCONFIRMED"
                 ),
                 "source_id": fact.source_id,
+                "last_confirmed_at": fact.last_confirmed_at.isoformat() if fact.last_confirmed_at else None,
                 "owner_label": PROVENANCE_OWNER_LABEL[fact.provenance],
             }
         )

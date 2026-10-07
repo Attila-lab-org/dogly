@@ -23,7 +23,7 @@ from app.contracts.interpretation import (
 )
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import AnalysisDomain, ContextBucket
-from app.knowledge.models import DogContextSnapshot, KnowledgeContext
+from app.knowledge.models import DogContextSnapshot
 from app.providers.base import (
     EligiblePatternSummary,
     ProviderUsage,
@@ -95,7 +95,6 @@ class MockReasoner:
         context_bucket: ContextBucket,
         policy_version: str,
         eligible_memory: list[EligiblePatternSummary],
-        knowledge_context: KnowledgeContext,
         dog_context: DogContextSnapshot,
         dog_name: str = "il cane",
         owner_context_answer: OwnerContextAnswer | None = None,
@@ -104,7 +103,7 @@ class MockReasoner:
         intelligence_context: dict | None = None,
         processing_owner_context: list[dict] | None = None,
     ) -> tuple[InterpretationContract, ProviderUsage]:
-        del eligible_memory, knowledge_context, dog_context, deterministic_safety_flags, operation, intelligence_context, processing_owner_context
+        del eligible_memory, dog_context, deterministic_safety_flags, operation, intelligence_context, processing_owner_context
         started = time.perf_counter()
         raw = load_fixture("interpretation.fixture.json")
         raw["policy_version"] = policy_version

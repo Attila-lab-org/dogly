@@ -86,10 +86,6 @@ class RealtimeDecision(BaseModel):
     domains: list[RealtimeDomain] = Field(default_factory=list, max_length=3)
     safety_flags: list[str] = Field(default_factory=list, max_length=4)
     used_source_ids: list[str] = Field(default_factory=list, max_length=12)
-    memory_candidate: str | None = Field(default=None, max_length=280)
-    memory_category: Literal[
-        "ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL"
-    ] | None = None
     question_information_gain: Literal[
         "NONE", "CHANGES_MEANING", "CHANGES_ACTION", "CHANGES_SAFETY"
     ] = "NONE"
@@ -108,8 +104,6 @@ class RealtimeDecision(BaseModel):
             self.question_options = []
         elif any(not option.strip() or len(option) > 80 for option in self.question_options):
             raise ValueError("Question options must be short and non-empty")
-        if self.memory_candidate and not self.memory_category:
-            raise ValueError("Memory candidate requires a category")
         if self.terminal_state == "SAFETY_INTERRUPT":
             self.behavior_handoff = False
             self.media_invite = None
@@ -117,8 +111,6 @@ class RealtimeDecision(BaseModel):
             self.question = None
             self.question_options = []
             self.question_information_gain = "NONE"
-            self.memory_candidate = None
-            self.memory_category = None
         elif self.behavior_handoff:
             self.terminal_state = "BEHAVIOR_VIDEO_HANDOFF"
             self.media_invite = "VIDEO"

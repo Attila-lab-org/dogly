@@ -154,7 +154,6 @@ def govern_digestive_with_core(
     """
     from app.contracts.canine_intelligence import ReasoningClaim
     from app.knowledge.claim_validation import (
-        govern_assistant_text,
         validate_claims,
     )
 
@@ -173,19 +172,8 @@ def govern_digestive_with_core(
         asserts_diagnosis=False,
     )
     decision = validate_claims([claim])
-    headline, headline_changed = govern_assistant_text(
-        result.consumer_headline, decision
-    )
-    summary, summary_changed = govern_assistant_text(
-        result.consumer_summary, decision
-    )
-    if headline_changed or summary_changed:
-        result = result.model_copy(
-            update={
-                "consumer_headline": headline,
-                "consumer_summary": summary,
-            }
-        )
+    # The deterministic digestive engine owns its grounded, safety-sensitive
+    # copy. Shared claim governance audits it but must not rewrite the result.
     return result, decision.model_dump(mode="json")
 
 

@@ -140,7 +140,10 @@ class PersonalDogContext(BaseModel):
                     **fact.model_dump(mode="json"),
                     "owner_label": PROVENANCE_OWNER_LABEL[fact.provenance],
                 }
-                for fact in self.personal_facts[:20]
+                # Durable facts are deduplicated at assembly time. Never drop
+                # them by position before a turn-specific selector can rank
+                # them.
+                for fact in self.personal_facts
             ],
             "eligible_patterns": [
                 pattern.model_dump(mode="json") for pattern in self.eligible_patterns[:8]
@@ -150,7 +153,9 @@ class PersonalDogContext(BaseModel):
                     **item.model_dump(mode="json"),
                     "owner_label": PROVENANCE_OWNER_LABEL[item.provenance],
                 }
-                for item in self.evidence[:16]
+                # Evidence is loaded completely; specialist/context builders
+                # decide what is relevant for the current operation.
+                for item in self.evidence
             ],
             "missing": self.missing,
             "rules": [

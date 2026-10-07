@@ -51,7 +51,8 @@ async def test_food_change_soft_stool_uses_cross_domain_governance() -> None:
     )
     assert "DIGESTIVE" in decision.domains
     assert "NUTRITION" in decision.domains
-    assert "non dimostra che sia quella la causa" in decision.assistant_text.lower()
+    # Governance audits the claim without appending a second writer's sentence.
+    assert "non dimostra che sia quella la causa" not in decision.assistant_text.lower()
     assert decision.claims[0].asserts_causation is False
     assert "canine_intelligence" in audit
     assert audit["canine_intelligence"]["validations"]

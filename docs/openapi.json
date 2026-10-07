@@ -10385,6 +10385,17 @@
             ],
             "title": "Owner Display Name"
           },
+          "previous_topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Topic"
+          },
           "welcome_text": {
             "type": "string",
             "title": "Welcome Text"
@@ -10540,16 +10551,8 @@
               "type": "string"
             },
             "type": "array",
-            "maxItems": 4,
-            "title": "Question Options"
-          },
-          "suggested_prompts": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
             "maxItems": 3,
-            "title": "Suggested Prompts"
+            "title": "Question Options"
           },
           "terminal_state": {
             "type": "string",

@@ -410,7 +410,6 @@ def govern_behavior_consumer_with_core(
     """Run the shared claim validator on the owner-facing Behavior reading."""
     from app.contracts.canine_intelligence import ReasoningClaim
     from app.knowledge.claim_validation import (
-        govern_assistant_text,
         validate_claims,
     )
 
@@ -439,20 +438,9 @@ def govern_behavior_consumer_with_core(
         # must not be replaced by a generic validator fallback.
         safety_blocked=False,
     )
-    governed_headline, downgraded = govern_assistant_text(
-        consumer.consumer_headline, decision
-    )
-    updates: dict = {}
-    if governed_headline != consumer.consumer_headline:
-        updates["consumer_headline"] = governed_headline
-    if decision.blocked and consumer.consumer_summary:
-        governed_summary, _ = govern_assistant_text(
-            consumer.consumer_summary, decision
-        )
-        if governed_summary != consumer.consumer_summary:
-            updates["consumer_summary"] = governed_summary
-    if updates:
-        consumer = consumer.model_copy(update=updates)
+    # Governance remains an audit record. Rewriting owner-facing copy here
+    # created a second conversational writer after GPT and could erase useful
+    # context. Safety and grounding are enforced before this audit boundary.
     audit = decision.model_dump(mode="json")
-    audit["downgraded"] = bool(decision.downgraded or downgraded)
+    audit["downgraded"] = bool(decision.downgraded)
     return consumer, audit

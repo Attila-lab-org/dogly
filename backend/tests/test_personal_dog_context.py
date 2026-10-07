@@ -145,3 +145,28 @@ def test_unlinked_catalog_food_is_not_personal_dog_context() -> None:
     )
 
     assert all(item.source_type != "FOOD_PRODUCT" for item in evidence)
+
+
+def test_stable_facts_are_ranked_for_turn_instead_of_first_ten() -> None:
+    dog = _dog()
+    base = build_dog_context(dog, {})
+    stories = [
+        {
+            "id": "s-routine",
+            "confirmed_at": datetime.now(UTC),
+            "facts": [{"statement": "Oreo dorme sul divano", "category": "ROUTINE"}],
+        },
+        {
+            "id": "s-food",
+            "confirmed_at": datetime.now(UTC),
+            "facts": [{"statement": "Oreo mangia lentamente", "category": "DIET"}],
+        },
+    ]
+    personal = build_personal_dog_context(
+        dog=dog, dog_context=base, stories=stories
+    )
+
+    selected = personal_to_stable_facts(
+        personal, user_text="Oreo mangia lentamente?", domains=["NUTRITION"]
+    )
+    assert selected[0]["statement"] == "Oreo mangia lentamente"
