@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import re
-from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
@@ -307,14 +306,6 @@ def _last_assistant_text(history: list[dict[str, Any]]) -> str | None:
     ), None)
 
 
-def _repeats_previous_answer(candidate: str, previous: str | None) -> bool:
-    if not previous or min(len(candidate.split()), len(previous.split())) < 12:
-        return False
-    return SequenceMatcher(
-        None, " ".join(candidate.casefold().split()), " ".join(previous.casefold().split())
-    ).ratio() >= 0.78
-
-
 def _recent_media_invite(history: list[dict[str, Any]]) -> bool:
     """Legacy fallback guard for sessions created before media metadata existed."""
     return any(
@@ -599,44 +590,6 @@ async def orchestrate_realtime_turn(
             "canine_intelligence": canine_audit,
         }
 
-    repaired = False
-    repair_usage: dict[str, Any] = {}
-    if not decision.safety_flags and (
-        _repeats_previous_answer(decision.assistant_text, _last_assistant_text(history))
-    ):
-        # One bounded repair, with the original context and image still present.
-        # A failed repair never recycles the old advice as a fresh response.
-        repaired = True
-        repair_body = {**body, "messages": [*body["messages"], {
-            "role": "system",
-            "content": "La risposta candidata ripete troppo il turno precedente. Rispondi al significato dell'ULTIMO messaggio: riconosci ciò che è cambiato e avanza, senza ripetere il consiglio. Restituisci lo stesso schema JSON.",
-        }]}
-        try:
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                repair_response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                    json=repair_body,
-                )
-                repair_response.raise_for_status()
-                repair_raw = repair_response.json()
-            repair_content = repair_raw["choices"][0]["message"]["content"]
-            repair_usage = repair_raw.get("usage", {})
-            replacement = _provider_decision(repair_content, domains=domains)
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
-            replacement = None
-        if replacement and not _repeats_previous_answer(
-            replacement.assistant_text, _last_assistant_text(history)
-        ):
-            decision = replacement
-            content = repair_content
-        else:
-            decision = _fallback_decision(
-                text=user_text, context=context, domains=domains, history=history,
-                image_attached=bool(image_url),
-            )
-            content = ""  # Do not apply claims from the discarded response.
-
     decision = _apply_conversation_policy(
         decision,
         context=context,
@@ -665,7 +618,5 @@ async def orchestrate_realtime_turn(
         "model": settings.realtime_reasoning_model,
         "version": REALTIME_ORCHESTRATOR_VERSION,
         "usage": raw.get("usage", {}),
-        "repetition_repair": repaired,
-        "repair_usage": repair_usage,
         "canine_intelligence": canine_audit,
     }
