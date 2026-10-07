@@ -64,17 +64,6 @@ _GREETING = re.compile(
     r"^\s*(ciao|salve|buongiorno|buonasera|ehi|hey|ciao dogly)[!.?\s]*$",
     re.IGNORECASE,
 )
-# Conservative concern hints remain only for fallback safety/abstention.
-_CONCRETE_CONCERN = re.compile(
-    r"\b(perde (?:il )?pelo|ferit\w*|prurito|prude|si gratta|dolore|zopp\w*|"
-    r"vomit\w*|diarrea|sangue|non mangia|non beve|abbattut\w*|sta male|"
-    r"preoccup\w*)\b", re.IGNORECASE,
-)
-_GRIEF = re.compile(r"\b(mi manca|morto|morta|non c'è più|scomparso|scomparsa)\b", re.IGNORECASE)
-_DECLINE_MEDIA = re.compile(
-    r"\b(non (?:voglio|posso|ho voglia di) (?:mandar\w*|inviar\w*|fare|scattar\w*)"
-    r"|niente foto|senza foto|non ora|preferisco parlare)\b", re.IGNORECASE,
-)
 def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
     for code, pattern, answer in _URGENT_RULES:
         if pattern.search(user_text):
@@ -262,18 +251,6 @@ def _provider_decision(
         return None
 
 
-def _owner_turn_signals(text: str) -> list[str]:
-    """Hints only: mixed messages and implicit emotion are interpreted by the model."""
-    signals = []
-    if _CONCRETE_CONCERN.search(text):
-        signals.append("CONCRETE_CONCERN")
-    if _GRIEF.search(text):
-        signals.append("LOSS_OR_ABSENCE")
-    if _DECLINE_MEDIA.search(text):
-        signals.append("MEDIA_DECLINED")
-    return signals
-
-
 def _last_assistant_text(history: list[dict[str, Any]]) -> str | None:
     return next((
         item["content"] for item in reversed(history)
@@ -316,16 +293,10 @@ def _fallback_decision(
 ) -> RealtimeDecision:
     name = context.dog_name
     history = history or []
-    signals = _owner_turn_signals(text)
     if image_attached:
         return RealtimeDecision(
             assistant_text="La foto è arrivata, ma ora non riesco a leggerla. Non voglio dirti di aver visto qualcosa che non ho verificato: possiamo riprovare tra poco.",
             terminal_state="ABSTAINED", domains=domains,
-        )
-    if "LOSS_OR_ABSENCE" in signals:
-        return RealtimeDecision(
-            assistant_text=f"Si sente quanto ti manca {name}. Se ti va di parlarne, ti ascolto.",
-            domains=domains,
         )
     latest = next(
         (
