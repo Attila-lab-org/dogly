@@ -18,6 +18,7 @@ from app.domains.personal_dog_context import (
     context_tokens,
     load_cross_domain_evidence_db,
     load_cross_domain_evidence_memory,
+    personal_to_core_facts,
     personal_to_realtime_items,
     personal_to_stable_facts,
 )
@@ -40,6 +41,9 @@ class RealtimeDogContext(BaseModel):
     dog_name: str
     owner_display_name: str | None = None
     identity: dict[str, Any]
+    # Core personale del cane: sempre disponibile al reasoner, senza retrieval
+    # lessicale. Le evidenze restano invece selezionate per pertinenza.
+    core_facts: list[dict[str, Any]] = Field(default_factory=list)
     stable_facts: list[dict[str, Any]] = Field(default_factory=list)
     items: list[RealtimeContextItem] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
@@ -147,8 +151,9 @@ def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
             break
     if not meaningful:
         return dog_name
-    meaningful.reverse()
-    topic = " Poi: ".join(meaningful)
+    # Keep a compact internal marker for legacy persistence only. The actual
+    # continuity is the structured turn history, never this verbatim snippet.
+    topic = meaningful[0]
     if len(topic) > 140:
         topic = topic[:137].rsplit(" ", 1)[0] + "…"
     return topic
@@ -159,14 +164,9 @@ def resume_welcome_text(
 ) -> str:
     first_name = (owner_name or "").strip().split(" ", 1)[0].capitalize()
     hello = f"Ciao {first_name}" if first_name else "Ciao"
-    if previous_topic:
-        topic = " ".join(previous_topic.split())
-        if len(topic) > 105:
-            topic = topic[:102].rsplit(" ", 1)[0] + "…"
-        return (
-            f"{hello}. Ho ancora presente l'ultima cosa che stavamo guardando: “{topic}”. "
-            f"Vuoi riprenderla oppure mi racconti com'è {dog_name} oggi?"
-        )
+    # La continuità vive nella cronologia interna inviata al reasoner; il
+    # primo messaggio non deve recitare un frammento della conversazione.
+    del previous_topic
     return f"{hello}. Sono qui con te e {dog_name}. Raccontami cosa vuoi guardare oggi."
 
 
@@ -271,6 +271,7 @@ def realtime_context_from_personal(
         dog_name=personal.dog_name,
         owner_display_name=personal.owner_display_name,
         identity=dict(personal.identity),
+        core_facts=personal_to_core_facts(personal),
         stable_facts=personal_to_stable_facts(
             personal, user_text=user_text, domains=domains, limit=16
         ),

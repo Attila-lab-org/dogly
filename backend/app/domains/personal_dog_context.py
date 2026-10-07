@@ -669,6 +669,31 @@ def personal_to_stable_facts(
     return facts
 
 
+def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]:
+    """Project the complete personal core; this path never uses query overlap."""
+    return [
+        {
+            "key": fact.key,
+            "value": fact.value,
+            "statement": fact.value if isinstance(fact.value, str) else None,
+            "origin": fact.provenance,
+            "provenance": fact.provenance,
+            "verification_status": (
+                "CONFIRMED"
+                if fact.provenance
+                in {"OWNER_CONFIRMED", "OBSERVED", "ESTABLISHED_PATTERN"}
+                else "UNCONFIRMED"
+            ),
+            "source_id": fact.source_id,
+            "last_confirmed_at": fact.last_confirmed_at.isoformat()
+            if fact.last_confirmed_at
+            else None,
+            "owner_label": PROVENANCE_OWNER_LABEL[fact.provenance],
+        }
+        for fact in personal.personal_facts
+    ]
+
+
 def assemble_behavior_dog_context(
     dog: DogRec,
     lifestyle_dump: dict[str, Any],

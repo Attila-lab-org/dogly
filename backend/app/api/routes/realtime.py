@@ -41,7 +41,7 @@ from app.domains.realtime_context import (
 )
 from app.domains.realtime_orchestrator import (
     deterministic_safety_interrupt,
-    explicit_memory_request,
+    natural_memory_candidate,
     orchestrate_realtime_turn,
 )
 from app.domains.repository import now_utc
@@ -132,11 +132,11 @@ async def create_realtime_session(
         owner_display_name=(
             str(row["display_name"]) if row.get("display_name") else None
         ),
-        previous_topic=(str(row["previous_topic"]) if row.get("previous_topic") else None),
+        previous_topic=None,
         welcome_text=_welcome_text(
             row.get("display_name"),
             str(row["dog_name"]),
-            row.get("previous_topic"),
+            None,
         ),
         status=row["status"],
         modality=row["modality"],
@@ -328,7 +328,7 @@ async def create_realtime_turn(
         ) from exc
 
     decision_json = decision.model_dump(mode="json")
-    memory_request = explicit_memory_request(body.text)
+    memory_request = natural_memory_candidate(body.text)
     if attachment is not None:
         decision_json["attachment"] = attachment
     if state.engine is not None:

@@ -101,6 +101,13 @@ _EXPLICIT_MEMORY_REQUEST = re.compile(
     re.IGNORECASE,
 )
 
+_STABLE_FACT_HINTS = re.compile(
+    r"\b(di solito|sempre|mai|ama|preferisce|gli piace|le piace|è allergic|"
+    r"non può|non deve|ha una|ha il|ha la|soffre di|segue una dieta|"
+    r"da quando era|ogni giorno)\b",
+    re.IGNORECASE,
+)
+
 
 def explicit_memory_request(user_text: str) -> dict[str, str] | None:
     """Extract one explicit owner statement outside the GPT response call."""
@@ -109,6 +116,16 @@ def explicit_memory_request(user_text: str) -> dict[str, str] | None:
         return None
     statement = " ".join((user_text or "")[match.end() :].split()).strip(" .,:;-")
     facts = extract_owner_reported_facts(statement)
+    if len(facts) != 1:
+        return None
+    return {"statement": facts[0].statement, "category": facts[0].category}
+
+
+def natural_memory_candidate(user_text: str) -> dict[str, str] | None:
+    """Suggest a stable owner fact discovered in ordinary conversation."""
+    if _EXPLICIT_MEMORY_REQUEST.match(user_text or ""):
+        return explicit_memory_request(user_text)
+    facts = [fact for fact in extract_owner_reported_facts(user_text) if _STABLE_FACT_HINTS.search(fact.statement)]
     if len(facts) != 1:
         return None
     return {"statement": facts[0].statement, "category": facts[0].category}
@@ -141,9 +158,10 @@ dichiarato e separa ciò che si vede da ciò che non si può verificare.
 
 Non diagnosticare, non affermare causalità certa e non dare istruzioni d'emergenza
 oltre il necessario. In caso di segnali urgenti, la risposta deve indirizzare subito
-al veterinario. La memoria stabile viene proposta separatamente solo su richiesta
-esplicita del proprietario e dopo una conferma separata; il modello non la crea
-dentro questa chiamata.
+al veterinario. La memoria stabile viene proposta separatamente quando emerge
+una possibile informazione duratura, oppure su richiesta esplicita del
+proprietario; serve sempre una conferma separata e il modello non la crea dentro
+questa chiamata.
 Restituisci soltanto JSON conforme allo schema richiesto.
 """
 
@@ -442,7 +460,7 @@ def _fallback_decision(
 
 def _context_ids(context: RealtimeDogContext) -> set[str]:
     ids = {item.source_id for item in context.items}
-    for fact in context.stable_facts:
+    for fact in [*context.core_facts, *context.stable_facts]:
         source_id = fact.get("source_id")
         if source_id:
             ids.add(str(source_id))
@@ -525,11 +543,12 @@ async def orchestrate_realtime_turn(
             "dog_id": context.dog_id,
             "dog_name": context.dog_name,
             "identity": context.identity,
-            "confirmed_facts": context.stable_facts,
+            "core_oreo": context.core_facts,
+            "retrieved_personal_facts": context.stable_facts,
             "relevant_evidence": [item.model_dump(mode="json") for item in context.items],
             "missing": context.missing,
         },
-        "context_contract": "personal_dog_context/v2",
+        "context_contract": "personal-dog-core-plus-evidence/v1",
         "routed_domains": domains,
         "conversation": history[-12:],
         "conversation_state": {
