@@ -758,56 +758,85 @@ async def test_realtime_reasoner_receives_real_continuity_and_core_facts(
         dog_name="Nala",
         identity={"weight_kg": 12},
         core_facts=[{"source_id": "core-1", "key": "mobility", "value": "normale"}],
-        stable_facts=[{"source_id": "fact-1", "key": "routine", "value": "passeggiate"}],
-        items=[behavior_item],
+        stable_facts=[
+            {"source_id": "fact-1", "key": "food", "value": "pollo e riso"},
+            {"source_id": "fact-2", "key": "routine", "value": "passeggiate"},
+        ],
+        items=[],
     )
 
     scenarios = [
         (
             "No, non era ansiosa: stava giocando.",
-            [{"role": "assistant", "content": "Sembra ansiosa."}],
+            ["BEHAVIOR"],
+            [behavior_item],
             ["behavior-1"],
         ),
         (
             "Oggi invece abbaia.",
-            [{"role": "user", "content": "Ieri era tranquilla."}],
-            ["behavior-1"],
+            ["BEHAVIOR"],
+            [],
+            [],
+        ),
+        (
+            "Ti ricordi che cibo mangia Nala?",
+            ["GENERAL"],
+            [],
+            [],
         ),
         (
             "Ha vomitato dopo il pasto.",
-            [{"role": "user", "content": "Prima parlavamo di comportamento."}],
+            ["DIGESTIVE"],
+            [digestive_item],
             ["digestive-1"],
         ),
-        ("Nala è la mia vita.", [], ["behavior-1"]),
+        ("Nala è la mia vita.", ["GENERAL"], [], []),
     ]
 
-    for user_text, history, expected_sources in scenarios:
+    conversation: list[dict[str, str]] = [
+        {"role": "user", "content": "Ieri era tranquilla."},
+        {"role": "assistant", "content": "Sembra ansiosa."},
+    ]
+    expected_histories: list[list[dict[str, str]]] = []
+    for user_text, domains, items, expected_sources in scenarios:
+        history = list(conversation)
+        expected_histories.append(history[-8:])
         context = base_context.model_copy(
-            update={
-                "items": (
-                    [digestive_item]
-                    if user_text.startswith("Ha vomitato")
-                    else [behavior_item]
-                )
-            }
+            update={"items": items}
         )
         await orchestrate_realtime_turn(
             settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
             user_text=user_text,
-            domains=["DIGESTIVE"] if user_text.startswith("Ha vomitato") else ["BEHAVIOR"],
+            domains=domains,
             context=context,
             history=history,
         )
+        conversation.extend(
+            [
+                {"role": "user", "content": user_text},
+                {"role": "assistant", "content": "Capito."},
+            ]
+        )
 
-    assert len(captured) == 4
-    for body, (user_text, history, expected_sources) in zip(captured, scenarios):
+    assert len(captured) == 5
+    payloads: list[dict[str, object]] = []
+    for body, (user_text, _domains, _items, expected_sources), expected_history in zip(
+        captured, scenarios, expected_histories
+    ):
         content = body["messages"][1]["content"]
         payload = json.loads(content.removeprefix("PERSONAL_DOG_CONTEXT\n"))
+        payloads.append(payload)
         assert payload["owner_turn"] == user_text
-        assert payload["conversation"] == history
+        assert payload["conversation"] == expected_history
         assert payload["personal_dog_context"]["core_facts"] == base_context.core_facts
+        assert payload["personal_dog_context"]["retrieved_personal_facts"] == base_context.stable_facts
         assert "core_dog" not in payload["personal_dog_context"]
         assert [item["source_id"] for item in payload["personal_dog_context"]["relevant_evidence"]] == expected_sources
+
+    assert payloads[1]["conversation"][0]["content"] == "Ieri era tranquilla."
+    assert payloads[2]["owner_turn"] == "Ti ricordi che cibo mangia Nala?"
+    assert payloads[2]["personal_dog_context"]["retrieved_personal_facts"] == base_context.stable_facts
+    assert payloads[4]["personal_dog_context"]["relevant_evidence"] == []
 
 
 @pytest.mark.asyncio
