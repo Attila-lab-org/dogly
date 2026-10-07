@@ -59,10 +59,16 @@ def focus_behavior_event(context: RealtimeDogContext, event: Any) -> None:
     """Put the exact owner-owned analysis in front of the conversation context."""
     if str(event.dog_id) != context.dog_id:
         raise LookupError("Behavior event does not belong to this dog")
+    source_id = str(event.id)
+    context.items = [
+        item
+        for item in context.items
+        if not (item.source_id == source_id and item.source_type == "BEHAVIOR_EVENT")
+    ]
     context.items.insert(
         0,
         RealtimeContextItem(
-            source_id=str(event.id),
+            source_id=source_id,
             source_type="BEHAVIOR_EVENT",
             occurred_at=event.completed_at or event.created_at,
             summary=str(event.summary or "Analisi comportamentale selezionata"),
@@ -80,10 +86,16 @@ def focus_digestive_event(context: RealtimeDogContext, event: Any) -> None:
     """Put the exact digestive analysis in front of the free conversation."""
     if str(event.dog_id) != context.dog_id:
         raise LookupError("Digestive event does not belong to this dog")
+    source_id = str(event.id)
+    context.items = [
+        item
+        for item in context.items
+        if not (item.source_id == source_id and item.source_type == "DIGESTIVE_EVENT")
+    ]
     context.items.insert(
         0,
         RealtimeContextItem(
-            source_id=str(event.id),
+            source_id=source_id,
             source_type="DIGESTIVE_EVENT",
             occurred_at=event.completed_at or event.created_at,
             summary=str(event.summary or "Analisi digestiva selezionata"),

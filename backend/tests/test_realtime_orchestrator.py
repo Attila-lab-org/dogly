@@ -13,12 +13,13 @@ from app.api.routes.realtime import (
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision
 from app.domains import realtime_orchestrator as realtime_orchestrator_module
-from app.domains.models import BehaviorEventRec
+from app.domains.models import BehaviorEventRec, FecalEventRec
 from app.domains.realtime_context import (
     RealtimeContextItem,
     RealtimeDogContext,
     conversation_topic,
     focus_behavior_event,
+    focus_digestive_event,
     resume_welcome_text,
     route_realtime_domains,
 )
@@ -250,6 +251,53 @@ def test_explicit_behavior_event_is_prioritized_without_question_overlap() -> No
         "source_id": "behavior-1",
         "source_type": "BEHAVIOR_EVENT",
     }
+
+
+def test_focus_deduplicates_recent_selected_behavior_and_digestive_events() -> None:
+    context = RealtimeDogContext(
+        dog_id="dog-1",
+        dog_name="Oreo",
+        identity={},
+        items=[
+            RealtimeContextItem(
+                source_id="behavior-1",
+                source_type="BEHAVIOR_EVENT",
+                summary="Copia behavior recente",
+            ),
+            RealtimeContextItem(
+                source_id="digestive-1",
+                source_type="DIGESTIVE_EVENT",
+                summary="Copia digestive recente",
+            ),
+        ],
+    )
+    behavior = BehaviorEventRec(
+        id="behavior-1",
+        capture_id="capture-1",
+        dog_id="dog-1",
+        user_id="owner-1",
+        status="COMPLETED",
+        summary="Behavior selezionato",
+        created_at=datetime(2026, 1, 3, tzinfo=UTC),
+    )
+    digestive = FecalEventRec(
+        id="digestive-1",
+        dog_id="dog-1",
+        user_id="owner-1",
+        client_request_id="request-1",
+        image_path="fecal/image.jpg",
+        status="COMPLETED",
+        summary="Digestive selezionato",
+        created_at=datetime(2026, 1, 4, tzinfo=UTC),
+    )
+
+    focus_behavior_event(context, behavior)
+    focus_digestive_event(context, digestive)
+
+    assert [item.source_id for item in context.items].count("behavior-1") == 1
+    assert [item.source_id for item in context.items].count("digestive-1") == 1
+    assert context.items[0].source_id == "digestive-1"
+    assert context.items[1].source_id == "behavior-1"
 
 
 def test_conversation_policy_does_not_rewrite_affection_or_force_media() -> None:
