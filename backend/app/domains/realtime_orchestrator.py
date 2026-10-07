@@ -81,8 +81,6 @@ _DECLINE_MEDIA = re.compile(
     r"\b(non (?:voglio|posso|ho voglia di) (?:mandar\w*|inviar\w*|fare|scattar\w*)"
     r"|niente foto|senza foto|non ora|preferisco parlare)\b", re.IGNORECASE,
 )
-
-
 def deterministic_safety_interrupt(user_text: str) -> RealtimeDecision | None:
     for code, pattern, answer in _URGENT_RULES:
         if pattern.search(user_text):
@@ -314,26 +312,6 @@ def _last_assistant_text(history: list[dict[str, Any]]) -> str | None:
     ), None)
 
 
-def _last_assistant_asked_question(history: list[dict[str, Any]]) -> bool:
-    """Use persisted decision metadata; keep punctuation only as legacy fallback."""
-    for item in reversed(history):
-        if item.get("role") != "assistant":
-            continue
-        question = item.get("question")
-        if isinstance(question, str):
-            return bool(question.strip())
-        text = item.get("content", "")
-        return "?" in text
-    return False
-
-
-def _owner_is_answering_previous_question(
-    user_text: str, history: list[dict[str, Any]]
-) -> bool:
-    """A concrete reply should normally close the information-gathering step."""
-    return _last_assistant_asked_question(history) and "?" not in user_text
-
-
 def _repeats_previous_answer(candidate: str, previous: str | None) -> bool:
     if not previous or min(len(candidate.split()), len(previous.split())) < 12:
         return False
@@ -361,24 +339,9 @@ def _apply_conversation_policy(
     if decision.safety_flags:
         data.update(media_invite=None, media_prompt=None)
         return RealtimeDecision.model_validate(data)
-    declined = bool(_DECLINE_MEDIA.search(user_text))
-    answered_previous_question = _owner_is_answering_previous_question(user_text, history)
-    if (
-        answered_previous_question
-        and decision.question
-        and decision.question_information_gain != "CHANGES_SAFETY"
-    ):
-        # The model already has the requested datum. Let it interpret and
-        # conclude instead of turning every answer into another questionnaire.
-        data.update(
-            question=None,
-            question_options=[],
-            question_information_gain="NONE",
-        )
-    if declined:
-        data.update(media_invite=None, media_prompt=None)
-        if data["terminal_state"] == "BEHAVIOR_VIDEO_HANDOFF":
-            data["terminal_state"] = "ANSWERED"
+    # Conversational meaning belongs to GPT. This hook now only preserves
+    # server-owned safety invariants; user wording and follow-up decisions pass
+    # through unchanged.
     return RealtimeDecision.model_validate(data)
 
 

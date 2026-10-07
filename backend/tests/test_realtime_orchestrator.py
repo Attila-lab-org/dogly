@@ -74,7 +74,7 @@ def test_provider_decision_keeps_contextual_media_invite() -> None:
     assert decision.media_prompt == "Fammi vedere dove perde pelo"
 
 
-def test_answer_to_previous_question_does_not_trigger_another_question() -> None:
+def test_backend_does_not_infer_an_answer_from_missing_question_mark() -> None:
     context = RealtimeDogContext(dog_id="dog-1", dog_name="Oreo", identity={})
     decision = _apply_conversation_policy(
         RealtimeDecision(
@@ -94,8 +94,8 @@ def test_answer_to_previous_question_does_not_trigger_another_question() -> None
         domains=["BEHAVIOR"],
     )
 
-    assert decision.question is None
-    assert decision.question_options == []
+    assert decision.question == "Quando succede, abbaia subito?"
+    assert decision.question_options == ["Sì", "No"]
 
 
 def test_safety_question_can_follow_an_answer_when_really_needed() -> None:
