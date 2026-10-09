@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
+import httpx
+import pytest
+from app.config import Settings
 from app.contracts.canine_intelligence import CanineEvidenceItem
 from app.contracts.provenance import normalize_provenance
+from app.domains import realtime_orchestrator
 from app.domains.dog_context import build_dog_context
-from app.domains.models import DogRec, FoodProductRec
+from app.domains.models import DogRec, FeedingPeriodRec, FoodProductRec
 from app.domains.personal_dog_context import (
     assemble_behavior_dog_context,
     build_personal_dog_context,
@@ -15,7 +20,10 @@ from app.domains.personal_dog_context import (
     merge_owner_stories_into_context,
     personal_to_stable_facts,
 )
-from app.domains.realtime_context import realtime_context_from_personal
+from app.domains.realtime_context import (
+    realtime_context_from_personal,
+    route_realtime_domains,
+)
 from app.domains.repository import InMemoryStore
 from app.knowledge.models import LifestyleFact
 
@@ -362,3 +370,58 @@ def test_realtime_context_keeps_core_but_gates_stable_facts_by_turn_domain() -> 
     assert any("pollo" in str(fact.get("value")) for fact in weather.core_facts)
     assert weather.stable_facts == []
     assert any("pollo" in str(fact.get("value")) for fact in food.core_facts)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quantity", ["200 g", None])
+async def test_saved_quantity_reaches_provider_without_old_ration(monkeypatch, quantity):
+    store = InMemoryStore()
+    dog = _dog()
+    now = datetime.now(UTC)
+    store.food_products["food"] = FoodProductRec(
+        id="food", owner_id=dog.owner_id, dog_id=dog.id,
+        client_request_id="food", name="Cibo attuale", created_at=now,
+    )
+    for period_id, amount, end in [("old", "300 g", now), ("current", quantity, None)]:
+        store.feeding_periods[period_id] = FeedingPeriodRec(
+            id=period_id, dog_id=dog.id, food_product_id="food",
+            start_at=now, end_at=end, quantity_per_day=amount,
+        )
+    question = "Quanti grammi mangia Oreo?"
+    domains = route_realtime_domains(question)
+    personal = build_personal_dog_context(
+        dog=dog, dog_context=build_dog_context(dog, {}),
+        evidence=load_cross_domain_evidence_memory(store, dog_id=dog.id, domains=domains),
+    )
+    context = realtime_context_from_personal(personal, domains=domains, user_text=question)
+    captured = []
+
+    def respond(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({
+            "assistant_text": "Risposta simulata per verificare il trasporto.",
+            "action_type": "none", "action_options": [], "action_prompt": None,
+            "used_source_ids": [],
+        })}}]})
+
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(
+        realtime_orchestrator.httpx, "AsyncClient",
+        lambda **kwargs: client_type(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    history = [{"role": "user", "content": "Oggi piove"},
+               {"role": "assistant", "content": "Giornata di pioggia, quindi."}]
+    await realtime_orchestrator.orchestrate_realtime_turn(
+        settings=Settings(realtime_enabled=True, openai_api_key="test-only",
+                          ai_kill_switch=False, realtime_kill_switch=False),
+        user_text=question, domains=domains, context=context, history=history,
+    )
+    assert len(captured) == 1
+    payload = json.loads(captured[0]["messages"][1]["content"].split("\n", 1)[1])
+    assert payload["conversation"] == history
+    assert payload["owner_turn"] == question
+    active = [fact for fact in payload["personal_dog_context"]["core_facts"]
+              if fact["key"] == "active_feeding"]
+    assert len(active) == 1
+    assert active[0]["source_id"] == "current"
+    assert active[0]["quantity_per_day"] == quantity
