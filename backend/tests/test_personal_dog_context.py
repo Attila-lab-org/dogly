@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
+
 from app.config import Settings
 from app.contracts.canine_intelligence import CanineEvidenceItem
 from app.contracts.provenance import normalize_provenance
