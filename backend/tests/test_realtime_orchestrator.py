@@ -399,6 +399,9 @@ def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
     assert "Non trasformare un comportamento normale" in _SYSTEM
     assert "Se il proprietario cambia argomento" in _SYSTEM
     assert "ieri" in _SYSTEM
+    assert "Se l'utente fa solo un'osservazione" in _SYSTEM
+    assert "Non offrire calcoli" in _SYSTEM
+    assert "solo quando manca un dato" in _SYSTEM
     assert "Oreo" not in _SYSTEM
     assert "Restituisci soltanto JSON" not in _SYSTEM
     assert "suggested_prompts" not in _SYSTEM
