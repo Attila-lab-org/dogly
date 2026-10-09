@@ -123,6 +123,36 @@ def test_cross_domain_evidence_keeps_provenance() -> None:
     assert "fp1" in personal.evidence_ids()
 
 
+def test_realtime_core_keeps_saved_feeding_quantity() -> None:
+    dog = _dog()
+    base = build_dog_context(dog, {})
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=base,
+        evidence=[
+            CanineEvidenceItem(
+                evidence_id="feeding_period:fp-quantity",
+                domain="NUTRITION",
+                source_type="FEEDING_PERIOD",
+                source_id="fp-quantity",
+                occurred_at=datetime.now(UTC),
+                provenance="OWNER_CONFIRMED",
+                verification="VERIFIED",
+                summary="Alimentazione attiva: Monge Salmon with Rice",
+                data={"quantity_per_day": "200 g", "end_at": None},
+            )
+        ],
+    )
+
+    context = realtime_context_from_personal(
+        personal, domains=["NUTRITION"], user_text="Quanti grammi mangia Oreo?"
+    )
+
+    active = next(item for item in context.core_facts if item["key"] == "active_feeding")
+    assert active["quantity_per_day"] == "200 g"
+    assert active["domain"] == "NUTRITION"
+
+
 def test_lifestyle_fact_accepts_legacy_provenance() -> None:
     fact = LifestyleFact(key="walks", value="2", provenance="SYSTEM_INFERRED")
     assert fact.provenance == "INFERRED"

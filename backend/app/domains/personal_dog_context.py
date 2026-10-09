@@ -670,14 +670,24 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
     ]
     for item in personal.evidence:
         if item.source_type == "FEEDING_PERIOD" and item.data.get("end_at") is None:
-            core.append({
-                "key": "active_feeding", "value": item.summary,
-                "statement": item.summary, "origin": item.provenance,
-                "provenance": item.provenance, "verification_status": "CONFIRMED",
-                "source_id": item.source_id,
-                "last_confirmed_at": item.occurred_at.isoformat() if item.occurred_at else None,
-                "owner_label": PROVENANCE_OWNER_LABEL[item.provenance],
-            })
+            quantity = item.data.get("quantity_per_day")
+            core.append(
+                {
+                    "key": "active_feeding",
+                    "value": item.summary,
+                    "statement": item.summary,
+                    "quantity_per_day": quantity,
+                    "domain": "NUTRITION",
+                    "origin": item.provenance,
+                    "provenance": item.provenance,
+                    "verification_status": "CONFIRMED",
+                    "source_id": item.source_id,
+                    "last_confirmed_at": item.occurred_at.isoformat()
+                    if item.occurred_at
+                    else None,
+                    "owner_label": PROVENANCE_OWNER_LABEL[item.provenance],
+                }
+            )
     return core
 
 
