@@ -281,6 +281,17 @@ def realtime_context_from_personal(
     """Keep RealtimeDogContext as a voice/UI adapter over PersonalDogContext."""
     core = personal_to_core_facts(personal)
     core_source_ids = {item["source_id"] for item in core if item.get("source_id")}
+    selected_domains = set(domains or []) - {"GENERAL"}
+    stable = personal_to_stable_facts(
+        personal, user_text=user_text, domains=domains, limit=16
+    )
+    if selected_domains:
+        stable = [fact for fact in stable if fact.get("domain") in selected_domains]
+    else:
+        # A GENERAL turn is conversational, not a request for the dog's full
+        # stable-memory set. Core facts remain available as durable constraints;
+        # stable facts wait for a clearly scoped retrieval turn.
+        stable = []
     return RealtimeDogContext(
         dog_id=personal.dog_id,
         dog_name=personal.dog_name,
@@ -288,9 +299,8 @@ def realtime_context_from_personal(
         identity=dict(personal.identity),
         core_facts=core,
         stable_facts=[
-            fact for fact in personal_to_stable_facts(
-                personal, user_text=user_text, domains=domains, limit=16
-            ) if not fact.get("source_id") or fact.get("source_id") not in core_source_ids
+            fact for fact in stable
+            if not fact.get("source_id") or fact.get("source_id") not in core_source_ids
         ],
         items=_select_realtime_items(
             personal, user_text=user_text, domains=domains or ["GENERAL"]

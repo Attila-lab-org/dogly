@@ -306,3 +306,29 @@ def test_realtime_evidence_selection_is_empty_without_relevance() -> None:
     )
 
     assert context.items == []
+
+
+def test_realtime_context_keeps_core_but_gates_stable_facts_by_turn_domain() -> None:
+    dog = _dog()
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=build_dog_context(dog, {}),
+        stories=[
+            {
+                "id": "story-food",
+                "confirmed_at": datetime.now(UTC),
+                "facts": [{"statement": "Oreo mangia pollo e riso", "category": "DIET"}],
+            }
+        ],
+    )
+
+    weather = realtime_context_from_personal(
+        personal, user_text="Oggi piove", domains=["GENERAL"]
+    )
+    food = realtime_context_from_personal(
+        personal, user_text="Che cibo mangia Oreo?", domains=["NUTRITION"]
+    )
+
+    assert any("pollo" in str(fact.get("value")) for fact in weather.core_facts)
+    assert weather.stable_facts == []
+    assert any("pollo" in str(fact.get("value")) for fact in food.core_facts)

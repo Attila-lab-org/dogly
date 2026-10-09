@@ -626,6 +626,7 @@ def personal_to_stable_facts(
                 "key": fact.key,
                 "value": fact.value,
                 "statement": fact.value if isinstance(fact.value, str) else None,
+                "domain": fact.domain,
                 "origin": fact.provenance,
                 "provenance": fact.provenance,
                 "verification_status": (
@@ -649,6 +650,7 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
             "key": fact.key,
             "value": fact.value,
             "statement": fact.value if isinstance(fact.value, str) else None,
+            "domain": fact.domain,
             "origin": fact.provenance,
             "provenance": fact.provenance,
             "verification_status": (
