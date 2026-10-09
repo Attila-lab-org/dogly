@@ -31,6 +31,8 @@ import {
   recoverAndDrainUploads,
 } from '../behavior/upload';
 import { clearCareState } from '../care/store';
+import { clearPendingBehaviorUpload } from '../behavior/pendingUpload';
+import { clearRealtimeSessionHandoff } from '../realtime/sessionBridge';
 import { isApiConfigured } from './env';
 import {
   resolveEntryRoute,
@@ -152,6 +154,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       });
     }
     await clearSession();
+    clearPendingBehaviorUpload();
+    await clearRealtimeSessionHandoff();
     await clearCareState();
     setHasDog(false);
     setPrimaryDogId(null);

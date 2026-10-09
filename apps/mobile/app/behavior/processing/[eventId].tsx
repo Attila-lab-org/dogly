@@ -35,7 +35,10 @@ export default function BehaviorProcessingScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
-  const { eventId, returnTo, sessionId } = useLocalSearchParams<{ eventId: string; returnTo?: string; sessionId?: string }>();
+  const params = useLocalSearchParams<{ eventId: string | string[]; returnTo?: string | string[]; sessionId?: string | string[] }>();
+  const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
+  const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const useApi =
     isApiConfigured() &&
     Boolean(userId) &&
@@ -98,7 +101,7 @@ export default function BehaviorProcessingScreen() {
       completionStarted.current = true;
       setFinishing(true);
       completionTimer.current = setTimeout(
-        () => returnTo === 'ask'
+        () => returnTo === 'ask' && sessionId
           ? router.replace({ pathname: '/ask', params: { eventId: query.data!.id, source: 'behavior', sessionId } } as never)
           : router.replace(`/behavior/result/${query.data!.id}`),
         850,
@@ -182,7 +185,7 @@ export default function BehaviorProcessingScreen() {
           </Text>
           <Button
             title="Registra di nuovo"
-            onPress={() => router.replace('/behavior/capture')}
+            onPress={() => router.replace({ pathname: '/behavior/capture', params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined } as never)}
           />
           <Button
             title="Torna alla Home"
@@ -209,7 +212,7 @@ export default function BehaviorProcessingScreen() {
           </Text>
           <Button
             title="Riprova"
-            onPress={() => router.replace('/behavior/capture')}
+            onPress={() => router.replace({ pathname: '/behavior/capture', params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined } as never)}
           />
           <Button
             title="Torna alla Home"
@@ -264,7 +267,7 @@ export default function BehaviorProcessingScreen() {
           </Text>
           <Button
             title="Registra un nuovo video"
-            onPress={() => router.replace('/behavior/capture')}
+            onPress={() => router.replace({ pathname: '/behavior/capture', params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined } as never)}
           />
           <Button
             title="Torna alla Home"

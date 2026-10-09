@@ -1,5 +1,10 @@
 import { api } from '../../lib/apiClient';
 
+// The realtime backend may spend up to one minute reasoning. Keep the
+// conversation request alive slightly longer than the provider timeout so a
+// slow but valid answer is not shown as a network failure in the client.
+export const REALTIME_TURN_TIMEOUT_MS = 65_000;
+
 export type RealtimeSession = {
   id: string;
   dog_id: string;
@@ -67,7 +72,7 @@ export function createRealtimeTurn(
     ...(options?.source ? { context_source: options.source } : {}),
     ...(options?.photoId ? { photo_id: options.photoId } : {}),
     ...(options?.photoContext ? { photo_context: options.photoContext } : {}),
-  });
+  }, { timeoutMs: REALTIME_TURN_TIMEOUT_MS });
 }
 
 export function decideRealtimeMemory(

@@ -53,9 +53,11 @@ export default function BehaviorCaptureScreen() {
   const { userId } = useSession();
   const { analysisContext } = useCheckIn();
   const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{ from?: string | string[]; sessionId?: string | string[] }>();
+  const returnTo = Array.isArray(params.from) ? params.from[0] : params.from;
+  const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const fromCheckIn =
-    params.from === 'checkin' || dogAnalysisContext?.concern === 'off';
+    returnTo === 'checkin' || dogAnalysisContext?.concern === 'off';
 
   const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -252,9 +254,11 @@ export default function BehaviorCaptureScreen() {
       contentType:
         Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
       dogId: dog.id,
+      returnTo: returnTo === 'ask' ? 'ask' : undefined,
+      sessionId: returnTo === 'ask' ? sessionId : undefined,
     });
     router.replace('/behavior/uploading');
-  }, [dog.id, micGranted, router, state.audioDegraded]);
+  }, [dog.id, micGranted, returnTo, router, sessionId, state.audioDegraded]);
 
   const startRecording = useCallback(async () => {
     if (recordingPromiseRef.current || startLockRef.current) return;

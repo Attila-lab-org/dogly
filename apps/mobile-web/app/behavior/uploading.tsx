@@ -28,6 +28,7 @@ import {
   peekPendingBehaviorUpload,
   type PendingBehaviorUpload,
 } from '@/features/behavior/pendingUpload';
+import { restoreWebClipBlob } from '@/lib/webClipBlob';
 
 const TITLE_COLOR = '#1A2B48';
 const MUTED_COLOR = '#64748B';
@@ -101,11 +102,17 @@ export default function BehaviorUploadingScreen() {
   const runUpload = async (pending: PendingBehaviorUpload) => {
     setError(null);
     try {
+      if (pending.localUri.startsWith('blob:')) await restoreWebClipBlob(pending.localUri);
       if (usingMockGate) {
         await new Promise((resolve) => setTimeout(resolve, 900));
         if (!mountedRef.current) return;
         clearPendingBehaviorUpload();
-        router.replace('/behavior/processing/evt-processing');
+        router.replace({
+          pathname: '/behavior/processing/evt-processing',
+          params: pending.returnTo === 'ask' && pending.sessionId
+            ? { returnTo: 'ask', sessionId: pending.sessionId }
+            : undefined,
+        } as never);
         return;
       }
       if (!userId || !pending.dogId) {
@@ -126,7 +133,12 @@ export default function BehaviorUploadingScreen() {
       });
       if (!mountedRef.current) return;
       clearPendingBehaviorUpload();
-      router.replace(`/behavior/processing/${eventId}`);
+      router.replace({
+        pathname: `/behavior/processing/${eventId}`,
+        params: pending.returnTo === 'ask' && pending.sessionId
+          ? { returnTo: 'ask', sessionId: pending.sessionId }
+          : undefined,
+      } as never);
     } catch (err) {
       console.error('Behavior upload failed', err);
       if (isQuotaExhaustedError(err) && purchasesEnabled) {
@@ -156,7 +168,12 @@ export default function BehaviorUploadingScreen() {
       void discardPendingBehaviorClip(userId, pending.localUri);
     }
     clearPendingBehaviorUpload();
-    router.replace('/behavior/capture');
+    router.replace({
+      pathname: '/behavior/capture',
+      params: pending?.returnTo === 'ask' && pending.sessionId
+        ? { from: 'ask', sessionId: pending.sessionId }
+        : undefined,
+    } as never);
   };
 
   const ringScale = pulse.interpolate({

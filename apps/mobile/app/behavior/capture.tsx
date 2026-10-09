@@ -49,9 +49,11 @@ export default function BehaviorCaptureScreen() {
   const { loading: sessionLoading, userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
-  const params = useLocalSearchParams<{ from?: string; sessionId?: string }>();
+  const params = useLocalSearchParams<{ from?: string | string[]; sessionId?: string | string[] }>();
+  const returnTo = Array.isArray(params.from) ? params.from[0] : params.from;
+  const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const fromCheckIn =
-    params.from === 'checkin' || dogAnalysisContext?.concern === 'off';
+    returnTo === 'checkin' || dogAnalysisContext?.concern === 'off';
 
   const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -321,7 +323,10 @@ export default function BehaviorCaptureScreen() {
     (async () => {
       try {
         if (usingMockGate) {
-          router.replace('/behavior/processing/evt-processing');
+          router.replace({
+            pathname: '/behavior/processing/[eventId]',
+            params: { eventId: 'evt-processing', ...(returnTo === 'ask' ? { returnTo: 'ask', sessionId } : {}) },
+          });
           return;
         }
         if (!userId || !dog.id) {
@@ -340,7 +345,7 @@ export default function BehaviorCaptureScreen() {
         });
         router.replace({
           pathname: '/behavior/processing/[eventId]',
-          params: { eventId, ...(params.from === 'ask' ? { returnTo: 'ask', sessionId: params.sessionId } : {}) },
+          params: { eventId, ...(returnTo === 'ask' ? { returnTo: 'ask', sessionId } : {}) },
         });
       } catch (err) {
         if (isQuotaExhaustedError(err) && purchasesEnabled) {
@@ -362,8 +367,8 @@ export default function BehaviorCaptureScreen() {
     userId,
     dog.id,
     micGranted,
-    params.from,
-    params.sessionId,
+    returnTo,
+    sessionId,
     router,
   ]);
 
@@ -393,7 +398,7 @@ export default function BehaviorCaptureScreen() {
       });
       router.replace({
         pathname: '/behavior/processing/[eventId]',
-        params: { eventId, ...(params.from === 'ask' ? { returnTo: 'ask', sessionId: params.sessionId } : {}) },
+        params: { eventId, ...(returnTo === 'ask' ? { returnTo: 'ask', sessionId } : {}) },
       });
     } catch (err) {
       if (isQuotaExhaustedError(err) && purchasesEnabled) {

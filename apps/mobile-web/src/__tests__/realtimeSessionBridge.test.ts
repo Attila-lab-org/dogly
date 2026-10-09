@@ -1,5 +1,6 @@
 import { rememberRealtimeSession, resetRealtimeSessionBridgeForTests, resumeRealtimeSession, setRealtimeSessionStorageForTests } from '../features/realtime/sessionBridge';
 import type { RealtimeSession } from '../features/realtime/api';
+
 const session = { id: 'chat-a', dog_id: 'dog-a', status: 'ACTIVE', expires_at: '2099-01-01T00:00:00Z' } as RealtimeSession;
 const storage = new Map<string, string>();
 const storageBackend = {
@@ -23,6 +24,7 @@ test('preserves session and history across capture and retries', async () => {
   await expect(resumeRealtimeSession('chat-a', 'dog-a')).resolves.toEqual({ session, messages });
   await expect(resumeRealtimeSession('chat-a', 'dog-a')).resolves.toBeNull();
 });
+
 test('restores a compact handoff after the in-memory bridge is unavailable', async () => {
   const messages = [{ id: 'm1', role: 'user' as const, text: 'Una frase lunga'.repeat(100), turn: { sensitive: true } }];
   await rememberRealtimeSession(session, messages);
@@ -31,6 +33,7 @@ test('restores a compact handoff after the in-memory bridge is unavailable', asy
   expect(resumed?.messages).toEqual([{ id: 'm1', role: 'user', text: 'Una frase lunga'.repeat(100).slice(0, 2000) }]);
   expect(storage.size).toBe(0);
 });
+
 test('rejects mismatched session or dog and clears the one-shot handoff', async () => {
   await rememberRealtimeSession(session, []);
   await expect(resumeRealtimeSession('chat-b', 'dog-a')).resolves.toBeNull();
@@ -38,6 +41,7 @@ test('rejects mismatched session or dog and clears the one-shot handoff', async 
   await rememberRealtimeSession(session, []);
   await expect(resumeRealtimeSession('chat-a', 'dog-b')).resolves.toBeNull();
 });
+
 test('rejects expired and ended sessions', async () => {
   await rememberRealtimeSession({ ...session, expires_at: '2000-01-01T00:00:00Z' }, []);
   await expect(resumeRealtimeSession('chat-a', 'dog-a')).resolves.toBeNull();

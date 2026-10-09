@@ -13,17 +13,20 @@ import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type M
 import { queryKeys } from '@/lib/queryClient';
 import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
 import { takeConversationPhoto } from '@/features/photos/share';
+import { removeFailedRetryPair } from '@/features/realtime/messageState';
+import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
 
-type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
 
 export default function AskScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[] }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
+  const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const behaviorSource = source === 'behavior';
   const digestiveSource = source === 'digestive';
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -46,18 +49,37 @@ export default function AskScreen() {
   useEffect(() => () => { mounted.current = false; }, []);
   const start = useCallback(async () => {
     if (!dog.id) return;
-    const key = `${dog.id}:${eventId ?? 'free'}`;
+    const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}`;
     if (startedKey.current === key) return;
     startedKey.current = key;
     setStarting(true); setError(null);
+    let resumedHandoff: { session: RealtimeSession; messages: Message[] } | null = null;
     try {
-      const next = await createRealtimeSession(dog.id);
+      const resumed = sessionId ? await resumeRealtimeSession<Message>(sessionId, dog.id) : null;
+      resumedHandoff = resumed;
+      if (sessionId && !resumed) throw new Error('Conversation unavailable');
+      const next = resumed?.session ?? await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
-      setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
-    } catch { startedKey.current = null; if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.'); }
+      if (resumed) {
+        setMessages(resumed.messages);
+        if (eventId) {
+          const text = 'Ho caricato il video richiesto.';
+          const turn = await createRealtimeTurn(next.id, text, undefined, { eventId, source: 'behavior' });
+          if (!mounted.current) return;
+          setMessages([...resumed.messages, { id: 'video-' + eventId, role: 'user', text }, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
+          setFocusedEventId(undefined);
+        }
+      } else {
+        setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
+      }
+    } catch {
+      startedKey.current = null;
+      if (resumedHandoff) await rememberRealtimeSession(resumedHandoff.session, resumedHandoff.messages);
+      if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.');
+    }
     finally { if (mounted.current) setStarting(false); }
-  }, [dog.id, eventId]);
+  }, [dog.id, dog.name, eventId, sessionId]);
   useEffect(() => { void start(); }, [start]);
   useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending]);
 
@@ -78,6 +100,12 @@ export default function AskScreen() {
           visibility: 'PRIVATE',
         });
         photoId = photo.id;
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
+          queryClient.invalidateQueries({ queryKey: ['gallery-album', album.id] }),
+          queryClient.invalidateQueries({ queryKey: ['gallery-albums', dog.id] }),
+          queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dog.id] }),
+        ]);
         setMediaPhase('analyzing');
       }
       const turn = await createRealtimeTurn(
@@ -96,7 +124,7 @@ export default function AskScreen() {
       setMessages((current) => [...current, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
     } catch {
       if (!mounted.current) return;
-      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: 'Non sono riuscito a leggere questo momento. Puoi riprovare senza perdere la foto?', failed: true, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId }]);
+      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: attachment || photoId ? 'Non sono riuscito a leggere questo momento. Puoi riprovare?' : 'Non sono riuscito a ricevere una risposta. Puoi riprovare?', failed: true, retryForId: localId, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId }]);
       setError('La risposta non è arrivata.');
     } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
   }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session]);
@@ -110,10 +138,11 @@ export default function AskScreen() {
     void send(purpose, { uri, purpose });
   }, [dog.name, latestAssistant, send, sending, session]);
 
-  const openVideoCapture = useCallback(() => {
+  const openVideoCapture = useCallback(async () => {
     if (sending || !session) return;
-    router.push('/behavior/capture' as never);
-  }, [router, sending, session]);
+    await rememberRealtimeSession(session, messages);
+    router.push({ pathname: '/behavior/capture', params: { from: 'ask', sessionId: session.id } } as never);
+  }, [messages, router, sending, session]);
 
   const toggleDictation = () => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -165,11 +194,11 @@ export default function AskScreen() {
             <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
               {message.attachmentUri ? <Image source={{ uri: message.attachmentUri }} style={styles.messageAttachment} accessibilityLabel="Foto condivisa nella conversazione" /> : null}
-              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => current.filter((item) => item.id !== message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
+              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'PHOTO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || `Mostrami ${dog.name} in una foto`} onPress={() => void sharePhoto()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="camera-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica una foto</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
-              {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'VIDEO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || 'Mostrami questo momento in un video'} onPress={openVideoCapture} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="videocam-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica un video</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
+              {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'VIDEO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || 'Mostrami questo momento in un video'} onPress={() => void openVideoCapture()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="videocam-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica un video</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
