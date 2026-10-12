@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from app.api.routes.behavior import _consumer_evidence
 from app.contracts.interpretation import EvidenceItem, InterpretationContract
 from app.contracts.observation import ObservationContract, normalize_observation_dict
@@ -232,7 +233,7 @@ def test_grounding_boundary_resolves_references_inside_ordered_observation_lists
                 ),
                 EvidenceItem(
                     source="observation",
-                    ref="body.posture",
+                    ref="observation.body.posture",
                     description="La postura è sciolta.",
                 ),
             ]
@@ -250,6 +251,34 @@ def test_grounding_boundary_rejects_missing_observation_list_item() -> None:
                     source="observation",
                     ref="salient_actions[2].description",
                     description="Azione non presente nel video.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    ref="body.posture",
+                    description="La postura è sciolta.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    ref="body.locomotion",
+                    description="Resta fermo.",
+                ),
+            ]
+        }
+    )
+
+    errors = grounding_errors(interpretation, _observation())
+    assert any(error["loc"] == ["evidence", 0, "ref"] for error in errors)
+
+
+@pytest.mark.parametrize("ref", ["", ".", "..."])
+def test_grounding_boundary_rejects_empty_observation_paths(ref: str) -> None:
+    interpretation = _interpretation(IntentCode.RELAX_REST).model_copy(
+        update={
+            "evidence": [
+                EvidenceItem(
+                    source="observation",
+                    ref=ref,
+                    description="Riferimento senza campo osservabile.",
                 ),
                 EvidenceItem(
                     source="observation",

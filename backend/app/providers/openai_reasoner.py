@@ -47,6 +47,12 @@ def _resolve_observation_ref(payload: Any, ref: str) -> Any:
     treating every list as an opaque value incorrectly rejects valid evidence.
     """
     normalized_ref = _OBSERVATION_REF_INDEX.sub(r".\1", ref).strip(".")
+    if normalized_ref == "observation":
+        return None
+    if normalized_ref.startswith("observation."):
+        normalized_ref = normalized_ref.removeprefix("observation.")
+    if not normalized_ref:
+        return None
     value = payload
     for part in normalized_ref.split(".") if normalized_ref else []:
         if isinstance(value, dict):
