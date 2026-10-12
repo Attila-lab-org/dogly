@@ -2,7 +2,7 @@
  * Profilo cane: spazio personale, visivo e orientato alle azioni.
  * Le spiegazioni tecniche e le policy restano fuori da questa schermata.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Pressable,
   ScrollView,
@@ -58,9 +58,8 @@ export default function DogProfileTabScreen() {
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
   const useDemoData = usingMockGate;
-  const [showMoreSections, setShowMoreSections] = useState(false);
   // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
-  useCareEvents(dog.id, dog.name, { enabled: showMoreSections });
+  useCareEvents(dog.id, dog.name, { enabled: true });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
 
@@ -101,7 +100,7 @@ export default function DogProfileTabScreen() {
   );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id, { enabled: showMoreSections });
+  const lifestyle = useLifestyle(dog.id, { enabled: true });
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
@@ -251,14 +250,24 @@ export default function DogProfileTabScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>I suoi momenti</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Vedi tutti i momenti di ${dog.name}`}
-            onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-            hitSlop={8}
-          >
-            <Text style={styles.seeAll}>Vedi tutti</Text>
-          </Pressable>
+          <View style={styles.sectionActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Vedi tutti i momenti di ${dog.name}`}
+              onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+              hitSlop={8}
+            >
+              <Text style={styles.seeAll}>Album</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Apri i ricordi di ${dog.name}`}
+              onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
+              hitSlop={8}
+            >
+              <Text style={styles.seeAll}>Ricordi</Text>
+            </Pressable>
+          </View>
         </View>
         {photosQuery.isLoading ? (
           <View style={styles.emptyMoments}>
@@ -310,35 +319,6 @@ export default function DogProfileTabScreen() {
           </Pressable>
         )}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: showMoreSections }}
-          onPress={() => setShowMoreSections((visible) => !visible)}
-          style={({ pressed }) => [
-            styles.detailsRow,
-            styles.moreToggle,
-            pressed && styles.pressed,
-          ]}
-        >
-          <View style={[styles.detailsIcon, styles.lifestyleIcon]}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.accent} />
-          </View>
-          <View style={styles.detailsText}>
-            <Text style={styles.detailsTitle}>
-              {showMoreSections ? 'Nascondi dettagli' : 'Vedi anche benessere e routine'}
-            </Text>
-            <Text style={styles.detailsSubtitle}>
-              Digestione, alimentazione, agenda e abitudini
-            </Text>
-          </View>
-          <Ionicons
-            name={showMoreSections ? 'chevron-up' : 'chevron-down'}
-            size={19}
-            color={colors.textMuted}
-          />
-        </Pressable>
-
-        {showMoreSections ? <>
         <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
           Benessere
         </Text>
@@ -374,6 +354,14 @@ export default function DogProfileTabScreen() {
             onPress={() => router.push('/nutrition/foods')}
           />
           <WellnessCard
+            icon="walk-outline"
+            iconColor={colors.accent}
+            iconBackground={colors.accentSoft}
+            label="Routine"
+            value={lifestyle.hasLifestyleAnswers ? 'Personalizzata' : 'Da completare'}
+            onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
+          />
+          <WellnessCard
             icon="calendar-outline"
             iconColor={colors.warning}
             iconBackground={colors.warningSoft}
@@ -386,8 +374,6 @@ export default function DogProfileTabScreen() {
             onPress={() => router.push('/care' as never)}
           />
         </View>
-
-        </> : null}
 
       </ScrollView>
     </View>
@@ -633,6 +619,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
+  sectionActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   welcomeCard: {
     flexDirection: 'row',
     alignItems: 'center',

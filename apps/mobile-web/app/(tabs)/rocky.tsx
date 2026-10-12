@@ -2,7 +2,7 @@
  * Profilo cane: spazio personale, visivo e orientato alle azioni.
  * Le spiegazioni tecniche restano fuori da questa schermata.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Pressable,
   ScrollView,
@@ -36,9 +36,6 @@ import {
   feedingPeriodsMock,
   foodProductsMock,
 } from '@/mocks/secondary';
-import {
-  fetchOwnerStories,
-} from '@/features/ownerStory/api';
 import { usePersonalPatterns } from '@/features/patterns/api';
 import {
   listFeedingPeriods,
@@ -59,8 +56,7 @@ export default function DogProfileTabScreen() {
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
   const useDemoData = usingMockGate;
-  const [showMoreSections, setShowMoreSections] = useState(false);
-  useCareEvents(dog.id, dog.name, { enabled: showMoreSections });
+  useCareEvents(dog.id, dog.name, { enabled: true });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor((contentWidth - 40 - 16) / 3);
@@ -107,18 +103,11 @@ export default function DogProfileTabScreen() {
   );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
   const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id, { enabled: showMoreSections });
+  const lifestyle = useLifestyle(dog.id, { enabled: true });
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
     .slice(0, 2);
-
-  const storiesQuery = useQuery({
-    queryKey: queryKeys.ownerStories(userId ?? 'anon', dog.id),
-    queryFn: () => fetchOwnerStories(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const storyFacts = (storiesQuery.data ?? []).flatMap((story) => story.facts);
 
   return (
     <View style={styles.root}>
@@ -263,15 +252,26 @@ export default function DogProfileTabScreen() {
           {/* Album preview */}
           <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
             <Text style={styles.secondaryTitle}>I suoi momenti</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Vedi tutti i momenti di ${dog.name}`}
-              onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-              hitSlop={8}
-              style={styles.pillButton}
-            >
-              <Text style={styles.pillButtonText}>Vedi tutti</Text>
-            </Pressable>
+            <View style={styles.sectionActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Vedi tutti i momenti di ${dog.name}`}
+                onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+                hitSlop={8}
+                style={styles.pillButton}
+              >
+                <Text style={styles.pillButtonText}>Album</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Apri i ricordi di ${dog.name}`}
+                onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
+                hitSlop={8}
+                style={styles.pillButton}
+              >
+                <Text style={styles.pillButtonText}>Ricordi</Text>
+              </Pressable>
+            </View>
           </View>
           {photosQuery.isLoading ? (
             <View style={[styles.card, styles.inlineMessage]}>
@@ -323,36 +323,6 @@ export default function DogProfileTabScreen() {
             </Pressable>
           )}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showMoreSections }}
-            onPress={() => setShowMoreSections((visible) => !visible)}
-            style={({ pressed }) => [
-              styles.moreToggle,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.linkRow}>
-              <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
-                <Ionicons name="ellipsis-horizontal" size={20} color="#0D9488" />
-              </View>
-              <View style={styles.linkBody}>
-                <Text style={styles.linkTitle}>
-                  {showMoreSections ? 'Nascondi dettagli' : 'Vedi anche benessere e routine'}
-                </Text>
-                <Text style={styles.linkSubtitle}>
-                  Digestione, alimentazione, agenda e abitudini
-                </Text>
-              </View>
-              <Ionicons
-                name={showMoreSections ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color="#94A3B8"
-              />
-            </View>
-          </Pressable>
-
-          {showMoreSections ? <>
           {/* Nutrizione / digestione */}
           <Text style={[styles.secondaryTitle, styles.sectionTitleSpaced]}>
             Benessere
@@ -382,6 +352,27 @@ export default function DogProfileTabScreen() {
                           digestiveSummaryQuery.isLoading,
                           digestiveSummaryQuery.isError,
                         )}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+            <View style={styles.divider} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Routine"
+              onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
+              style={({ pressed }) => [
+                styles.patternRow,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={[styles.patternIcon, { backgroundColor: '#CCFBF1' }]}>
+                <Ionicons name="walk-outline" size={18} color="#0D9488" />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={styles.linkTitle}>Routine</Text>
+                <Text style={styles.linkSubtitle}>
+                  {lifestyle.hasLifestyleAnswers ? 'Personalizzata' : 'Da completare'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -433,96 +424,6 @@ export default function DogProfileTabScreen() {
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </Pressable>
           </View>
-
-          </> : null}
-
-          {/* Anteprima compatta: la raccolta completa vive in una pagina dedicata. */}
-          <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
-            <Text style={styles.secondaryTitle}>Quello che ricordo</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Parla con DOGly su ${dog.name}`}
-              onPress={() => router.push('/ask' as never)}
-              hitSlop={8}
-              style={styles.pillButton}
-            >
-              <Text style={styles.pillButtonText}>Aggiungi</Text>
-            </Pressable>
-          </View>
-          {!useDemoData && storiesQuery.isLoading ? (
-            <Text style={styles.notesEmpty}>Carico i ricordi…</Text>
-          ) : null}
-          {!useDemoData && storiesQuery.isError ? (
-            <View style={styles.notesErrorRow}>
-              <Text style={styles.noteError}>
-                Non riesco a caricare i ricordi.
-              </Text>
-              <Pressable onPress={() => void storiesQuery.refetch()}>
-                <Text style={styles.noteActionPrimary}>Riprova</Text>
-              </Pressable>
-            </View>
-          ) : null}
-          {!useDemoData &&
-          !storiesQuery.isLoading &&
-          !storiesQuery.isError &&
-          (storiesQuery.data?.length ?? 0) === 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push('/ask' as never)}
-              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-            >
-              <View style={styles.linkRow}>
-                <View style={[styles.linkIcon, { backgroundColor: '#ECFDF5' }]}>
-                  <Ionicons name="heart-outline" size={20} color="#0D9488" />
-                </View>
-                <View style={styles.linkBody}>
-                  <Text style={styles.linkTitle}>Raccontami qualcosa di lui</Text>
-                  <Text style={styles.linkSubtitle}>
-                    Conserverò soltanto ciò che scegli
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-              </View>
-            </Pressable>
-          ) : null}
-          {storyFacts.length > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Apri tutti i ricordi di ${dog.name}`}
-              onPress={() =>
-                router.push(`/dogs/${dog.id}/memories` as never)
-              }
-              style={({ pressed }) => [
-                styles.card,
-                styles.noteCard,
-                pressed && styles.pressed,
-              ]}
-            >
-              {storyFacts.slice(0, 2).map((fact) => (
-                <View key={fact.id} style={styles.memoryPreviewRow}>
-                  <Ionicons name="heart-outline" size={17} color="#0D9488" />
-                  <Text style={styles.noteText} numberOfLines={2}>
-                    {fact.statement}
-                  </Text>
-                </View>
-              ))}
-              <View style={styles.memoryPreviewFooter}>
-                <Text style={styles.noteMeta}>
-                  {storyFacts.length}{' '}
-                  {storyFacts.length === 1 ? 'ricordo' : 'ricordi'}
-                </Text>
-                <View style={styles.memoryPreviewLink}>
-                  <Text style={styles.noteActionPrimary}>Vedi tutti</Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={17}
-                    color="#0284C7"
-                  />
-                </View>
-              </View>
-            </Pressable>
-          ) : null}
-
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -688,6 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  sectionActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionHeaderSpaced: {
     marginTop: 24,
   },
