@@ -552,10 +552,9 @@ export default function NewFoodScreen() {
             {previewItem?.image_url ? <Image source={{ uri: previewItem.image_url }} style={styles.previewImage} /> : null}
             <Text style={styles.previewBrand}>{previewItem?.brand}</Text>
             <Text style={styles.previewName}>{previewItem?.name}</Text>
-            {previewItem?.variant ? <Text style={styles.productMeta}>{previewItem.variant}</Text> : null}
-            {previewItem?.package_size || previewItem?.food_form ? (
+            {previewItem && uniqueProductMeta(previewItem).length > 0 ? (
               <Text style={styles.productMeta}>
-                {[previewItem.package_size, previewItem.food_form].filter(Boolean).join(' · ')}
+                {uniqueProductMeta(previewItem).join(' · ')}
               </Text>
             ) : null}
             {previewItem?.attribution ? <Text style={styles.productMeta}>Fonte: Open Pet Food Facts</Text> : null}
@@ -655,6 +654,18 @@ function CandidateCard({
   ) : (
     <View style={[styles.product, styles.productSelected]}>{content}</View>
   );
+}
+
+function uniqueProductMeta(item: ExternalFoodCandidate): string[] {
+  const seen = new Set<string>();
+  return [item.variant, item.package_size, item.food_form]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .filter((value) => {
+      const key = value.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 const styles = StyleSheet.create({
