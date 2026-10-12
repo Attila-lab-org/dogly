@@ -160,6 +160,22 @@ def test_reads_guaranteed_analysis_printed_inside_ingredients_text():
     assert candidate.image_url == "https://example.test/front.jpg"
 
 
+def test_normalizes_calories_per_kg_and_reads_crude_protein():
+    candidate = _candidate_from_product(
+        {
+            "code": "8000000000014",
+            "product_name": "Crocchette prova",
+            "brands": "Acme",
+            "ingredients_text": "Energy: 3500 kcal/kg. Proteine grezze: 26%.",
+            "nutriments": {},
+        }
+    )
+    assert candidate is not None
+    assert candidate.calories == "350 kcal/100g"
+    assert candidate.guaranteed_analysis["calories"] == "350 kcal/100g"
+    assert candidate.guaranteed_analysis["crude_protein_min"] == 26.0
+
+
 def test_recognizes_dutch_cat_food_as_cat_product():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

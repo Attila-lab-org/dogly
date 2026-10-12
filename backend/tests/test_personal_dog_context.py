@@ -19,6 +19,7 @@ from app.domains.personal_dog_context import (
     build_personal_dog_context,
     load_cross_domain_evidence_memory,
     merge_owner_stories_into_context,
+    personal_to_core_facts,
     personal_to_stable_facts,
 )
 from app.domains.realtime_context import (
@@ -426,3 +427,30 @@ async def test_saved_quantity_reaches_provider_without_old_ration(monkeypatch, q
     assert len(active) == 1
     assert active[0]["source_id"] == "current"
     assert active[0]["quantity_per_day"] == quantity
+
+
+def test_saved_food_label_reaches_shared_core_context():
+    store = InMemoryStore()
+    dog = _dog()
+    now = datetime.now(UTC)
+    store.food_products["food"] = FoodProductRec(
+        id="food", owner_id=dog.owner_id, dog_id=dog.id,
+        client_request_id="food", name="Cibo attuale", brand="Acme",
+        ingredients_raw="pollo, riso",
+        guaranteed_analysis={"crude_protein_min": 26.0, "calories": "350 kcal/100g"},
+        feeding_directions="200 g al giorno", verified_at=now, created_at=now,
+    )
+    store.feeding_periods["current"] = FeedingPeriodRec(
+        id="current", dog_id=dog.id, food_product_id="food", start_at=now,
+        quantity_per_day="200 g",
+    )
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=build_dog_context(dog, {}),
+        evidence=load_cross_domain_evidence_memory(
+            store, dog_id=dog.id, domains=["NUTRITION"]
+        ),
+    )
+    active = next(item for item in personal_to_core_facts(personal) if item["key"] == "active_feeding")
+    assert active["ingredients_raw"] == "pollo, riso"
+    assert active["guaranteed_analysis"]["calories"] == "350 kcal/100g"

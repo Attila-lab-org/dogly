@@ -204,6 +204,16 @@ def build_inmemory_digestive_context(
             period_food.id if period_food is not None else None
         ),
         has_active_food=active_period is not None,
+        active_food_ingredients=(
+            period_food.ingredients_raw
+            if period_food is not None
+            else None
+        ),
+        active_food_analysis=(
+            dict(period_food.guaranteed_analysis or {})
+            if period_food is not None
+            else {}
+        ),
         quantity_per_day=(
             active_period.quantity_per_day if active_period is not None else None
         ),

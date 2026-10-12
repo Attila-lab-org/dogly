@@ -149,7 +149,7 @@ _WET_MARKERS = (
 
 _ANALYTICAL_PATTERNS: dict[str, re.Pattern[str]] = {
     "crude_protein_min": re.compile(
-        r"(?:prot[eé]ine|proteina|protein|eiwit)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%",
+        r"(?:crude\s+protein|prot[eé]ine(?:\s+grezze)?|proteina(?:\s+grezza)?|protein|eiwit)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%",
         re.IGNORECASE,
     ),
     "crude_fat_min": re.compile(
@@ -166,9 +166,24 @@ _ANALYTICAL_PATTERNS: dict[str, re.Pattern[str]] = {
     ),
 }
 _CALORIE_TEXT_PATTERN = re.compile(
-    r"(?:energy|[ée]nergie|calorie|calories)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*kcal(?:\s*/\s*(?:100\s*)?g)?",
+    r"(?:energy|[ée]nergie|calorie|calories)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*kcal(?:\s*/\s*(kg|100\s*g|g))?",
     re.IGNORECASE,
 )
+
+
+def _calories_per_100g(value: str, unit: str | None) -> str | None:
+    """Normalize an explicitly stated calorie basis without changing its meaning."""
+    try:
+        amount = float(value.replace(",", "."))
+    except ValueError:
+        return None
+    normalized_unit = re.sub(r"\s+", "", (unit or "100g").lower())
+    if normalized_unit == "kg":
+        amount /= 10
+    elif normalized_unit == "g":
+        amount *= 100
+    rendered = f"{amount:g}"
+    return f"{rendered} kcal/100g"
 
 
 def _analysis_from_ingredients_text(text: str | None) -> dict[str, Any]:
@@ -186,7 +201,9 @@ def _analysis_from_ingredients_text(text: str | None) -> dict[str, Any]:
             continue
     calorie_match = _CALORIE_TEXT_PATTERN.search(text)
     if calorie_match:
-        values["calories"] = f"{calorie_match.group(1).replace(',', '.')} kcal/100g"
+        calories = _calories_per_100g(calorie_match.group(1), calorie_match.group(2))
+        if calories:
+            values["calories"] = calories
     return values
 
 

@@ -486,13 +486,32 @@ export default function NewFoodScreen() {
             <Text style={styles.previewBrand}>{previewItem?.brand}</Text>
             <Text style={styles.previewName}>{previewItem?.name}</Text>
             {previewItem?.variant ? <Text style={styles.productMeta}>{previewItem.variant}</Text> : null}
+            {previewItem?.package_size || previewItem?.food_form ? (
+              <Text style={styles.productMeta}>
+                {[previewItem.package_size, previewItem.food_form].filter(Boolean).join(' · ')}
+              </Text>
+            ) : null}
+            {previewItem?.attribution ? <Text style={styles.productMeta}>Fonte: Open Pet Food Facts</Text> : null}
+            {previewItem?.ingredients_raw ? (
+              <View style={styles.previewAnalysis}>
+                <Text style={styles.previewAnalysisTitle}>Ingredienti</Text>
+                <Text>{previewItem.ingredients_raw}</Text>
+              </View>
+            ) : null}
             {previewItem?.guaranteed_analysis && Object.keys(previewItem.guaranteed_analysis).length > 0 ? (
               <View style={styles.previewAnalysis}>
-                <Text style={styles.previewAnalysisTitle}>Valori rilevati dalla confezione</Text>
+                <Text style={styles.previewAnalysisTitle}>Informazioni del prodotto</Text>
                 {previewItem.guaranteed_analysis.crude_protein_min != null ? <Text>Proteine {previewItem.guaranteed_analysis.crude_protein_min}%</Text> : null}
                 {previewItem.guaranteed_analysis.crude_fat_min != null ? <Text>Grassi {previewItem.guaranteed_analysis.crude_fat_min}%</Text> : null}
                 {previewItem.guaranteed_analysis.crude_fiber_max != null ? <Text>Fibre {previewItem.guaranteed_analysis.crude_fiber_max}%</Text> : null}
                 {previewItem.guaranteed_analysis.moisture_max != null ? <Text>Umidità {previewItem.guaranteed_analysis.moisture_max}%</Text> : null}
+                {(previewItem.guaranteed_analysis.calories ?? previewItem.calories) ? <Text>Calorie {previewItem.guaranteed_analysis.calories ?? previewItem.calories}</Text> : null}
+              </View>
+            ) : null}
+            {previewItem?.guaranteed_analysis && Object.keys(previewItem.guaranteed_analysis).length === 0 && previewItem.calories ? (
+              <View style={styles.previewAnalysis}>
+                <Text style={styles.previewAnalysisTitle}>Informazioni del prodotto</Text>
+                <Text>Calorie {previewItem.calories}</Text>
               </View>
             ) : null}
             <Button title="Scegli questo alimento" onPress={() => { if (previewItem) choose(previewItem); setPreviewItem(null); }} />

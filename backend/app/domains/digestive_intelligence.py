@@ -66,6 +66,8 @@ class DigestiveContext(BaseModel):
     active_food_name: str | None = None
     active_food_product_id: str | None = None
     has_active_food: bool = False
+    active_food_ingredients: str | None = None
+    active_food_analysis: dict[str, Any] = Field(default_factory=dict)
     quantity_per_day: str | None = None
     food_started_days_ago: int | None = Field(default=None, ge=0)
     current_food_prior_scores: list[int] = Field(default_factory=list)
@@ -1926,6 +1928,13 @@ def build_digestive_intelligence(
         relevant_context.append(f"Alimento registrato: {context.active_food_name}.")
     if context.has_active_food and _has_quantity(context) and context.quantity_per_day:
         relevant_context.append(f"Quantità indicata: {context.quantity_per_day}.")
+    if context.active_food_ingredients:
+        relevant_context.append(
+            f"Ingredienti dichiarati del prodotto: {context.active_food_ingredients}."
+        )
+    calories = context.active_food_analysis.get("calories")
+    if calories:
+        relevant_context.append(f"Calorie dichiarate del prodotto: {calories}.")
 
     associations: list[str] = []
     if _recent_food_change(context):

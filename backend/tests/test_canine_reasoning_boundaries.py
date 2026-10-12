@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
 from app.api.routes.behavior import _consumer_evidence
 from app.contracts.interpretation import EvidenceItem, InterpretationContract
 from app.contracts.observation import ObservationContract, normalize_observation_dict

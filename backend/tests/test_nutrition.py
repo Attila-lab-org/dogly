@@ -338,6 +338,8 @@ def test_quantity_update_preserves_history_and_starts_new_period():
         dog_id=dog_id,
         client_request_id="food-qty",
         name="Pasto casalingo",
+        ingredients_raw="pollo, riso",
+        guaranteed_analysis={"calories": "350 kcal/100g"},
         verified_at=now - timedelta(days=20),
         created_at=now - timedelta(days=20),
     )
@@ -382,6 +384,49 @@ def test_quantity_update_preserves_history_and_starts_new_period():
     context = build_inmemory_digestive_context(store, event=event)
     assert context.food_started_days_ago is None
     assert context.quantity_per_day is None
+
+
+def test_digestive_context_keeps_active_food_label_data():
+    from datetime import UTC, datetime, timedelta
+
+    from app.contracts.api import FeedingPeriodCreate
+    from app.domains.digestive import (
+        build_inmemory_digestive_context,
+        create_feeding_period,
+    )
+    from app.domains.models import DogRec, FecalEventRec, FoodProductRec
+    from app.domains.repository import InMemoryStore
+
+    store = InMemoryStore()
+    now = datetime.now(UTC)
+    dog_id = "00000000-0000-0000-0000-000000000001"
+    user_id = "00000000-0000-0000-0000-0000000000aa"
+    store.dogs[dog_id] = DogRec(
+        id=dog_id, owner_id=user_id, name="Oreo", created_at=now - timedelta(days=40)
+    )
+    store.food_products["food-label"] = FoodProductRec(
+        id="food-label", owner_id=user_id, dog_id=dog_id,
+        client_request_id="food-label", name="Pasto casalingo",
+        ingredients_raw="pollo, riso",
+        guaranteed_analysis={"calories": "350 kcal/100g"},
+        verified_at=now - timedelta(days=20), created_at=now - timedelta(days=20),
+    )
+    create_feeding_period(
+        store,
+        user_id=user_id,
+        payload=FeedingPeriodCreate(
+            dog_id=dog_id, food_product_id="food-label",
+            start_at=now - timedelta(days=2), quantity_per_day="200 g",
+        ),
+    )
+    event = FecalEventRec(
+        id="food-event", dog_id=dog_id, user_id=user_id,
+        client_request_id="food-event", image_path="path", created_at=datetime.now(UTC),
+        status="COMPLETED", fecal_score_estimate=4, learning_eligible=True,
+    )
+    context = build_inmemory_digestive_context(store, event=event)
+    assert context.active_food_ingredients == "pollo, riso"
+    assert context.active_food_analysis["calories"] == "350 kcal/100g"
 
 
 def test_manual_food_insert_matches_partial_unique_index():

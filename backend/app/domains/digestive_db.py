@@ -646,6 +646,8 @@ async def load_digestive_context(
                     select d.name, d.age_stage, d.size, d.breed_label, d.weight_kg,
                            food.id as active_food_product_id,
                            food.name as active_food_name,
+                           food.ingredients_raw as active_food_ingredients,
+                           food.guaranteed_analysis as active_food_analysis,
                            period.food_product_id is not null as has_active_food,
                            period.quantity_per_day,
                            life.routine_json ->> 'activity' as activity_level,
@@ -754,6 +756,8 @@ async def load_digestive_context(
             else None
         ),
         has_active_food=bool(profile.get("has_active_food")),
+        active_food_ingredients=profile.get("active_food_ingredients"),
+        active_food_analysis=dict(profile.get("active_food_analysis") or {}),
         quantity_per_day=profile.get("quantity_per_day"),
         food_started_days_ago=profile["food_started_days_ago"],
         current_food_prior_scores=[

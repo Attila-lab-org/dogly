@@ -400,7 +400,8 @@ async def load_cross_domain_evidence_db(
                         """
                         select fp.id, fp.quantity_per_day, fp.start_at, fp.end_at,
                                fp.treats_notes, food.id food_id, food.name,
-                               food.brand, food.verified_at, food.feeding_directions
+                               food.brand, food.ingredients_raw, food.guaranteed_analysis,
+                               food.verified_at, food.feeding_directions
                         from public.feeding_periods fp
                         join public.food_products food on food.id=fp.food_product_id
                         where fp.dog_id=cast(:dog_id as uuid)
@@ -509,6 +510,12 @@ def load_cross_domain_evidence_memory(
                     data={
                         "quantity_per_day": period.quantity_per_day,
                         "end_at": getattr(period, "end_at", None),
+                        "food_id": food.id,
+                        "food_name": food.name,
+                        "food_brand": food.brand,
+                        "ingredients_raw": food.ingredients_raw,
+                        "guaranteed_analysis": dict(food.guaranteed_analysis or {}),
+                        "feeding_directions": food.feeding_directions,
                     },
                     provenance="OWNER_CONFIRMED",
                     verification="OWNER_CONFIRMED",
@@ -677,6 +684,14 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
                     "value": item.summary,
                     "statement": item.summary,
                     "quantity_per_day": quantity,
+                    "food_id": item.data.get("food_id"),
+                    "food_name": item.data.get("food_name"),
+                    "food_brand": item.data.get("food_brand"),
+                    "ingredients_raw": item.data.get("ingredients_raw"),
+                    "guaranteed_analysis": dict(
+                        item.data.get("guaranteed_analysis") or {}
+                    ),
+                    "feeding_directions": item.data.get("feeding_directions"),
                     "domain": "NUTRITION",
                     "origin": item.provenance,
                     "provenance": item.provenance,
