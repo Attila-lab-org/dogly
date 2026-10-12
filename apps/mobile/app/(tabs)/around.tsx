@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,10 +10,12 @@ function openMap(query: string) {
 }
 
 export default function AroundScreen() {
+  const router = useRouter();
   return (
     <View style={styles.root}><SafeAreaView edges={['top']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}><View style={styles.icon}><Ionicons name="location" size={22} color={colors.primary} /></View><Text style={styles.eyebrow}>INTORNO A TE</Text><Text style={styles.title}>Tutto ciò che serve a voi due</Text><Text style={styles.subtitle}>Cerco nella mappa luoghi utili vicino a te, senza complicare il percorso.</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Torna a Mio Cane" onPress={() => router.replace('/(tabs)/rocky')} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="arrow-back" size={22} color={colors.primary} /><Text style={{ color: colors.primary }}>Mio Cane</Text></Pressable>
+          <View style={styles.header}><View style={styles.icon}><Ionicons name="location" size={22} color={colors.primary} /></View><Text style={styles.eyebrow}>INTORNO A TE</Text><Text style={styles.title}>Tutto ciò che serve a voi due</Text><Text style={styles.subtitle}>Cerco nella mappa luoghi utili vicino a te, senza complicare il percorso.</Text></View>
         <PlaceCard icon="paw-outline" title="Aree per correre e giocare" text="Trova aree di sgambamento e parchi per cani nelle vicinanze." button="Cerca aree vicine" onPress={() => openMap('area sgambamento cani vicino a me')} />
         <PlaceCard icon="medkit-outline" tone="warm" title="Veterinari vicini" text="Trova una struttura da contattare quando hai bisogno di assistenza." button="Trova un veterinario" onPress={() => openMap('veterinario vicino a me')} />
         <View style={styles.note}><Ionicons name="shield-checkmark-outline" size={19} color={colors.accent} /><Text style={styles.noteText}>Per un’emergenza vera, chiama subito i servizi locali. La mappa ti aiuta a trovare il posto giusto.</Text></View>

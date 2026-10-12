@@ -16,6 +16,8 @@ import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realt
 import { takeConversationPhoto } from '@/features/photos/share';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
 
+import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
+
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
 
 export default function AskScreen() {
@@ -23,15 +25,16 @@ export default function AskScreen() {
   const { dog } = useDogProfile();
   const { userId } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[] }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
+  const entryId = Array.isArray(params.entryId) ? params.entryId[0] : params.entryId;
   const behaviorSource = source === 'behavior';
   const digestiveSource = source === 'digestive';
   const [session, setSession] = useState<RealtimeSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => readHomeMessage(entryId, userId, dog.id) ?? '');
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,7 @@ export default function AskScreen() {
   const mounted = useRef(true);
   const startedKey = useRef<string | null>(null);
 
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const start = useCallback(async () => {
     if (!dog.id) return;
     const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}`;
@@ -129,6 +132,13 @@ export default function AskScreen() {
     } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
   }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session, queryClient]);
 
+  // Claim only once after a session is ready; failures use the normal retry UI.
+  useEffect(() => {
+    if (starting || sending || !session || session.dog_id !== dog.id) return;
+    const text = takeHomeMessage(entryId, userId, dog.id);
+    if (text) void send(text);
+  }, [dog.id, entryId, send, sending, session, starting, userId]);
+
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
     if (!turn || turn.media_invite !== 'PHOTO' || sending || !session) return;
@@ -204,7 +214,7 @@ export default function AskScreen() {
           </View>)}
           {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>{mediaPhase === 'uploading' ? 'Preparo la foto…' : mediaPhase === 'analyzing' ? 'Guardo questo momento…' : 'DOGly sta pensando…'}</Text></View> : null}
         </ScrollView>
-        <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi una domanda su ' + dog.name} placeholder={'Cosa vuoi capire di ' + dog.name + '?'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} />{Platform.OS === 'web' ? <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta una domanda'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Invia domanda" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
+        <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi a DOGly di ' + dog.name} placeholder={'Raccontami di ' + dog.name + '…'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} />{Platform.OS === 'web' ? <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
         <Text style={styles.disclaimer}>DOGly aiuta a leggere i comportamenti. Per sintomi o urgenze, contatta un veterinario.</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,11 +1,4 @@
-/**
- * Home: il gesto centrale di DOGly.
- *
- * La prima schermata deve aiutare il proprietario a fare una sola cosa:
- * mostrare un momento e capire meglio il proprio cane. Gli strumenti
- * secondari restano nel profilo e nel Diario, senza competere con questo
- * percorso.
- */
+/** Home: conversazione, momenti da mostrare e osservazioni da ritrovare. */
 import React from 'react';
 import {
   ActivityIndicator,
@@ -20,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
-import { DogAvatar } from '@/features/core/components';
+import { HomeConversation } from '@/features/home/HomeConversation';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
@@ -62,6 +55,7 @@ export default function HomeScreen() {
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerRow}>
             <View style={styles.brand} accessible accessibilityLabel="Dogly">
@@ -94,7 +88,7 @@ export default function HomeScreen() {
             <View style={styles.statusBanner} accessibilityLiveRegion="polite">
               <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
               <Text style={styles.statusText}>
-                Sei offline. Le nuove letture richiedono connessione.
+                Sei offline. La conversazione e le nuove letture richiedono connessione.
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -131,9 +125,9 @@ export default function HomeScreen() {
 
           <View style={styles.welcomeBlock}>
             <Text style={styles.eyebrow}>IL VOSTRO SPAZIO</Text>
-            <Text style={styles.title}>Cosa sta vivendo {dog.name} oggi?</Text>
+            <Text style={styles.title}>Oggi con {dog.name}</Text>
             <Text style={styles.subtitle}>
-              Mostramelo e ti aiuterò a leggere quel momento con parole semplici.
+              Raccontami come va, oppure mostrami un momento.
             </Text>
           </View>
 
@@ -149,56 +143,33 @@ export default function HomeScreen() {
               </View>
               <View style={styles.processingCopy}>
                 <Text style={styles.processingTitle}>Sto leggendo il vostro momento</Text>
-                <Text style={styles.processingText}>Ti avviso appena la spiegazione è pronta.</Text>
+                <Text style={styles.processingText}>Puoi aprire lo stato e ritrovare il risultato nel Diario.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
             </Pressable>
           ) : null}
 
-          <View style={styles.startPanel}>
-            <View style={styles.startArt}>
-              <Ionicons name="paw" size={30} color={colors.primary} />
-              <View style={styles.startCameraBubble}>
-                <Ionicons name="videocam" size={17} color={colors.textOnPrimary} />
-              </View>
-            </View>
-            <View style={styles.startCopy}>
-              <Text style={styles.startKicker}>INIZIA DA QUI</Text>
-              <Text style={styles.startTitle}>Fammi vedere cosa sta vivendo</Text>
-              <Text style={styles.startSubtitle}>Un momento basta per capirlo meglio.</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Mostra a DOGly un momento di ${dog.name}`}
-              onPress={startVideo}
-              disabled={!dog.id || loading}
-              style={({ pressed }) => [styles.startButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="videocam" size={20} color={colors.textOnPrimary} />
-            </Pressable>
-          </View>
+          <HomeConversation key={dog.id} dogId={dog.id} dogName={dog.name} offline={network.offline} />
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Chiedi a DOGly di ${dog.name}`}
-            onPress={() => router.push('/ask' as never)}
-            disabled={!dog.id}
-            style={({ pressed }) => [styles.talkCard, pressed && styles.pressed]}
+            accessibilityLabel={`Mostra un video di ${dog.name}`}
+            onPress={startVideo}
+            disabled={!dog.id || loading || network.offline}
+            style={({ pressed }) => [styles.startPanel, (!dog.id || loading || network.offline) && styles.disabled, pressed && styles.pressed]}
           >
-            <View style={styles.talkIcon}>
-              <Ionicons name="chatbubble-ellipses-outline" size={21} color={colors.accent} />
+            <View style={styles.startArt}><Ionicons name="videocam-outline" size={25} color={colors.primary} /></View>
+            <View style={styles.startCopy}>
+              <Text style={styles.startTitle}>Mostrami un momento</Text>
+              <Text style={styles.startSubtitle}>Un breve video, da guardare insieme.</Text>
             </View>
-            <View style={styles.talkCopy}>
-              <Text style={styles.talkTitle}>Hai una domanda?</Text>
-              <Text style={styles.talkSubtitle}>Scrivimi cosa vuoi capire di {dog.name}.</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+            <Ionicons name="chevron-forward" size={19} color={colors.primary} />
           </Pressable>
 
           <View style={styles.sectionHeader}>
             <View>
-              <Text style={styles.sectionTitle}>Le vostre ultime letture</Text>
-              <Text style={styles.sectionSubtitle}>Ogni momento ci aiuta a conoscerlo meglio.</Text>
+              <Text style={styles.sectionTitle}>Da ritrovare</Text>
+              <Text style={styles.sectionSubtitle}>Le osservazioni recenti, con il loro contesto.</Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -235,8 +206,8 @@ export default function HomeScreen() {
                   <Ionicons name="sparkles-outline" size={25} color={colors.primary} />
                 </View>
                 <View style={styles.emptyCopy}>
-                  <Text style={styles.emptyTitle}>Il primo momento parte da qui</Text>
-                  <Text style={styles.emptyText}>Quando vuoi, fammelo vedere.</Text>
+                  <Text style={styles.emptyTitle}>Qui ritroverai i momenti osservati</Text>
+                  <Text style={styles.emptyText}>Se vuoi, puoi iniziare con un breve video.</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>
@@ -395,5 +366,6 @@ const styles = StyleSheet.create({
   emptyText: { color: colors.textSecondary, fontSize: typography.size.xs },
   quota: { color: colors.textMuted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.sm },
   quotaWarning: { color: colors.warning, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.sm },
+  disabled: { opacity: 0.45 },
   pressed: { opacity: 0.84 },
 });

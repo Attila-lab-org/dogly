@@ -21,26 +21,11 @@ import { PhotoThumbnail } from '@/features/photos/components';
 import { fetchDogPhotos } from '@/features/photos/api';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { sexLabel } from '@/features/dogs/map';
-import { relativeCareDate } from '@/features/care/date';
-import { nextCareEvent, useCareEvents } from '@/features/care/store';
-import { useLifestyle } from '@/features/lifestyle/api';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isPersistedId } from '@/lib/persistedId';
-import { queryKeys } from '@/lib/queryClient';
-import {
-  getDigestiveSummary,
-  type DigestiveSummary,
-} from '@/features/digestive/api';
-import {
-  digestiveBaselineMock,
-  feedingPeriodsMock,
-  foodProductsMock,
-} from '@/mocks/secondary';
 import { usePersonalPatterns } from '@/features/patterns/api';
-import {
-  listFeedingPeriods,
-  listFoods,
-} from '@/features/nutrition/api';
+
+import { DogCareOverview } from '@/features/dogs/DogCareOverview';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -54,9 +39,8 @@ const PATTERN_ICONS: Record<string, IconName> = {
 export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { usingMockGate } = useSession();
   const useDemoData = usingMockGate;
-  useCareEvents(dog.id, dog.name, { enabled: true });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
   const photoSize = Math.floor((contentWidth - 40 - 16) / 3);
@@ -66,44 +50,12 @@ export default function DogProfileTabScreen() {
   const breedLabel = dog.breedLabel;
   const genderLabel = sexLabel(dog.sex);
 
-  const activePeriod = useDemoData
-    ? feedingPeriodsMock.find((period) => period.endedAt === null)
-    : undefined;
-  const activeFood = activePeriod
-    ? foodProductsMock.find((food) => food.id === activePeriod.foodProductId)
-    : undefined;
   const photosQuery = useQuery({
     queryKey: ['gallery-dog-photos', dog.id, 3],
     queryFn: () => fetchDogPhotos(dog.id, 3),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
-  const digestiveSummaryQuery = useQuery({
-    queryKey: ['digestive-summary', dog.id],
-    queryFn: () => getDigestiveSummary(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const foodsQuery = useQuery({
-    queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
-    queryFn: () => listFoods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const feedingPeriodsQuery = useQuery({
-    queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
-    queryFn: () => listFeedingPeriods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const activeRealPeriod = feedingPeriodsQuery.data?.find(
-    (period) => period.end_at == null,
-  );
-  const activeRealFood = foodsQuery.data?.find(
-    (food) => food.id === activeRealPeriod?.food_product_id,
-  );
-  const activeFoodLabel = formatFoodLabel(
-    useDemoData ? activeFood : activeRealFood,
-  );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
-  const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id, { enabled: true });
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
@@ -166,6 +118,8 @@ export default function DogProfileTabScreen() {
               {breedLabel ? <MetaItem icon="paw" label={breedLabel} /> : null}
             </View>
           </View>
+
+          <DogCareOverview dogId={dog.id} dogName={dog.name} />
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -250,6 +204,20 @@ export default function DogProfileTabScreen() {
           </View>
 
           {/* Album preview */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Informazioni che ricordo su ${dog.name}`}
+          onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
+          style={styles.memoryLink}
+        >
+          <Ionicons name="bookmark-outline" size={20} color="#0066FF" />
+          <View style={styles.memoryCopy}>
+            <Text style={styles.memoryTitle}>Informazioni che ricordo</Text>
+            <Text style={styles.memoryHint}>Puoi rivederle, correggerle o eliminarle.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#64748B" />
+        </Pressable>
+
           <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
             <Text style={styles.secondaryTitle}>I suoi momenti</Text>
             <View style={styles.sectionActions}>
@@ -262,15 +230,7 @@ export default function DogProfileTabScreen() {
               >
                 <Text style={styles.pillButtonText}>Album</Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Apri i ricordi di ${dog.name}`}
-                onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
-                hitSlop={8}
-                style={styles.pillButton}
-              >
-                <Text style={styles.pillButtonText}>Ricordi</Text>
-              </Pressable>
+
             </View>
           </View>
           {photosQuery.isLoading ? (
@@ -323,145 +283,16 @@ export default function DogProfileTabScreen() {
             </Pressable>
           )}
 
-          {/* Nutrizione / digestione */}
-          <Text style={[styles.secondaryTitle, styles.sectionTitleSpaced]}>
-            Benessere
-          </Text>
-          <View style={styles.card}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Digestione"
-              onPress={() => router.push('/digestive' as never)}
-              style={({ pressed }) => [
-                styles.patternRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.patternIcon, { backgroundColor: '#D1FAE5' }]}>
-                <Ionicons name="leaf-outline" size={18} color="#059669" />
-              </View>
-              <View style={styles.linkBody}>
-                <Text style={styles.linkTitle}>Digestione</Text>
-                <Text style={styles.linkSubtitle}>
-                  {useDemoData && digestiveBaselineMock.variability === 'bassa'
-                    ? 'Stabile'
-                    : useDemoData
-                      ? 'Da osservare'
-                      : digestiveSummaryLabel(
-                          digestiveSummaryQuery.data,
-                          digestiveSummaryQuery.isLoading,
-                          digestiveSummaryQuery.isError,
-                        )}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </Pressable>
-            <View style={styles.divider} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Routine"
-              onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
-              style={({ pressed }) => [
-                styles.patternRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.patternIcon, { backgroundColor: '#CCFBF1' }]}>
-                <Ionicons name="walk-outline" size={18} color="#0D9488" />
-              </View>
-              <View style={styles.linkBody}>
-                <Text style={styles.linkTitle}>Routine</Text>
-                <Text style={styles.linkSubtitle}>
-                  {lifestyle.hasLifestyleAnswers ? 'Personalizzata' : 'Da completare'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </Pressable>
-            <View style={styles.divider} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Alimentazione"
-              onPress={() => router.push('/nutrition/foods')}
-              style={({ pressed }) => [
-                styles.patternRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.patternIcon, { backgroundColor: '#E0F2FE' }]}>
-                <Ionicons name="nutrition-outline" size={18} color="#0284C7" />
-              </View>
-              <View style={styles.linkBody}>
-                <Text style={styles.linkTitle}>Alimentazione</Text>
-                <Text style={styles.linkSubtitle} numberOfLines={1}>
-                  {activeFoodLabel ||
-                    lifestyle.profile?.feedingLabel ||
-                    'Aggiungi cibo'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </Pressable>
-            <View style={styles.divider} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Agenda"
-              onPress={() => router.push('/care' as never)}
-              style={({ pressed }) => [
-                styles.patternRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.patternIcon, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="calendar-outline" size={18} color="#D97706" />
-              </View>
-              <View style={styles.linkBody}>
-                <Text style={styles.linkTitle}>Agenda</Text>
-                <Text style={styles.linkSubtitle}>
-                  {nextCare
-                    ? relativeCareDate(nextCare.scheduledAt)
-                    : 'Aggiungi promemoria'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </Pressable>
-          </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Luoghi utili nelle vicinanze"
+          onPress={() => router.push('/(tabs)/around' as never)} style={styles.memoryLink}>
+          <Ionicons name="location-outline" size={20} color="#0066FF" />
+          <View style={styles.memoryCopy}><Text style={styles.memoryTitle}>Luoghi utili nelle vicinanze</Text><Text style={styles.memoryHint}>Parchi e veterinari sulla mappa</Text></View>
+          <Ionicons name="chevron-forward" size={18} color="#64748B" />
+        </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
   );
-}
-
-function formatFoodLabel(
-  food?: { brand?: string | null; name?: string | null } | null,
-): string {
-  const brand = food?.brand?.trim() ?? '';
-  const name = food?.name?.trim() ?? '';
-  if (!brand) return name;
-  if (!name) return brand;
-  if (name.toLocaleLowerCase().startsWith(brand.toLocaleLowerCase())) {
-    return name;
-  }
-  return `${brand} ${name}`;
-}
-
-function digestiveSummaryLabel(
-  summary: DigestiveSummary | undefined,
-  loading = false,
-  error = false,
-): string {
-  if (loading) return 'Sto verificando…';
-  if (error) return 'Non disponibile';
-  if (!summary || summary.data_sufficiency === 'insufficient') {
-    return 'Ancora da osservare';
-  }
-  if (summary.safety_flags.length > 0 || summary.recent_trend === 'worsening') {
-    return 'Da osservare';
-  }
-  if (summary.recent_trend === 'improving' || summary.recent_trend === 'firmer') return summary.recent_trend === 'firmer' ? 'Più formata' : 'In miglioramento';
-  if (summary.recent_trend === 'softer') return 'Più morbida';
-  if (summary.recent_trend === 'stable' || (summary.variability ?? 99) <= 1) {
-    return 'Stabile';
-  }
-  return 'Vedi andamento';
 }
 
 function MetaItem({ icon, label }: { icon: IconName; label: string }) {
@@ -474,6 +305,10 @@ function MetaItem({ icon, label }: { icon: IconName; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  memoryLink: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, marginVertical: 8 },
+  memoryCopy: { flex: 1, gap: 4 },
+  memoryTitle: { color: '#1A2B48', fontSize: 15, fontWeight: '600' },
+  memoryHint: { color: '#64748B', fontSize: 13, lineHeight: 19 },
   root: {
     flex: 1,
     backgroundColor: '#F8FAFC',

@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,10 +11,12 @@ function openMap(query: string) {
 }
 
 export default function AroundScreen() {
+  const router = useRouter();
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Torna a Mio Cane" onPress={() => router.replace('/(tabs)/rocky')} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="arrow-back" size={22} color={colors.primary} /><Text style={{ color: colors.primary }}>Mio Cane</Text></Pressable>
           <View style={styles.header}>
             <View style={styles.icon}><Ionicons name="location" size={22} color={colors.primary} /></View>
             <Text style={styles.eyebrow}>INTORNO A TE</Text>

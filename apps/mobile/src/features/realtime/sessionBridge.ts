@@ -1,3 +1,4 @@
+import { clearHomeMessage } from './homeMessage';
 import type { RealtimeSession } from './api';
 
 const STORAGE_KEY = 'dogly.realtime.handoff.v1';
@@ -55,6 +56,7 @@ export function resetRealtimeSessionBridgeForTests(): void {
 
 /** Clears a handoff when the authenticated owner signs out. */
 export async function clearRealtimeSessionHandoff(): Promise<void> {
+  clearHomeMessage();
   pending = null;
   await clearStoredHandoff();
 }

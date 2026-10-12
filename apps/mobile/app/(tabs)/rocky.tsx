@@ -24,83 +24,34 @@ import {
   spacing,
   typography,
 } from '@/theme/tokens';
-import {
-  digestiveBaselineMock,
-  feedingPeriodsMock,
-  foodProductsMock,
-} from '@/mocks/secondary';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
 import { fetchDogPhotos } from '@/features/photos/api';
 import { currentAgeLabel } from '@/features/dogs/profileDates';
 import { sexLabel } from '@/features/dogs/map';
-import { relativeCareDate } from '@/features/care/date';
-import { nextCareEvent, useCareEvents } from '@/features/care/store';
-import { useLifestyle } from '@/features/lifestyle/api';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isPersistedId } from '@/lib/persistedId';
-import { queryKeys } from '@/lib/queryClient';
-import {
-  getDigestiveSummary,
-  type DigestiveSummary,
-} from '@/features/digestive/api';
-import {
-  listFeedingPeriods,
-  listFoods,
-} from '@/features/nutrition/api';
 import { usePersonalPatterns } from '@/features/patterns/api';
+
+import { DogCareOverview } from '@/features/dogs/DogCareOverview';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function DogProfileTabScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId, usingMockGate } = useSession();
+  const { usingMockGate } = useSession();
   const useDemoData = usingMockGate;
-  // Sottoscrizione reattiva agli eventi agenda (idratamento incluso).
-  useCareEvents(dog.id, dog.name, { enabled: true });
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
 
-  const activePeriod = useDemoData
-    ? feedingPeriodsMock.find((period) => period.endedAt === null)
-    : undefined;
-  const activeFood = activePeriod
-    ? foodProductsMock.find((food) => food.id === activePeriod.foodProductId)
-    : undefined;
   const photosQuery = useQuery({
     queryKey: ['gallery-dog-photos', dog.id, 3],
     queryFn: () => fetchDogPhotos(dog.id, 3),
     enabled: !useDemoData && isPersistedId(dog.id),
   });
-  const digestiveSummaryQuery = useQuery({
-    queryKey: ['digestive-summary', dog.id],
-    queryFn: () => getDigestiveSummary(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const foodsQuery = useQuery({
-    queryKey: queryKeys.foods(userId ?? 'anon', dog.id),
-    queryFn: () => listFoods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const feedingPeriodsQuery = useQuery({
-    queryKey: [...queryKeys.foods(userId ?? 'anon', dog.id), 'periods'],
-    queryFn: () => listFeedingPeriods(dog.id),
-    enabled: !useDemoData && isPersistedId(dog.id),
-  });
-  const activeRealPeriod = feedingPeriodsQuery.data?.find(
-    (period) => period.end_at == null,
-  );
-  const activeRealFood = foodsQuery.data?.find(
-    (food) => food.id === activeRealPeriod?.food_product_id,
-  );
-  const activeFoodLabel = formatFoodLabel(
-    useDemoData ? activeFood : activeRealFood,
-  );
   const previewPhotos = (photosQuery.data ?? []).slice(0, 3);
-  const nextCare = nextCareEvent(dog.id);
-  const lifestyle = useLifestyle(dog.id, { enabled: true });
   const patternsQuery = usePersonalPatterns(dog.id);
   const learnedPatterns = patternsQuery.patterns
     .filter((pattern) => pattern.state !== 'ARCHIVED')
@@ -181,17 +132,8 @@ export default function DogProfileTabScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.welcomeCard}>
-          <View style={styles.welcomeIcon}>
-            <Ionicons name="heart" size={18} color={colors.accent} />
-          </View>
-          <View style={styles.welcomeCopy}>
-            <Text style={styles.welcomeTitle}>Il mondo di {dog.name}</Text>
-            <Text style={styles.welcomeText}>
-              I momenti che scegli di conservare, con tutto il calore della vostra storia.
-            </Text>
-          </View>
-        </View>
+        <DogCareOverview dogId={dog.id} dogName={dog.name} />
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Cosa sto imparando su {dog.name}
@@ -213,20 +155,16 @@ export default function DogProfileTabScreen() {
             </Pressable>
           </View>
         ) : learnedPatterns.length ? (
-          <View style={styles.detailsRow}>
-            <View style={styles.detailsIcon}>
-              <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.detailsText}>
-              {learnedPatterns.map((pattern) => (
-                <View key={pattern.id}>
-                  <Text style={styles.detailsTitle} numberOfLines={2}>
-                    {pattern.title}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+          <View>
+            {learnedPatterns.map((pattern) => (
+              <Pressable key={pattern.id} accessibilityRole="button" accessibilityLabel={pattern.title}
+                onPress={() => router.push(`/patterns/${pattern.id}` as never)} style={styles.detailsRow}>
+                <View style={styles.detailsIcon}><Ionicons name="sparkles-outline" size={20} color={colors.primary} /></View>
+                <View style={styles.detailsText}><Text style={styles.detailsTitle}>{pattern.title}</Text></View>
+                <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+              </Pressable>
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => router.push('/patterns')} style={styles.memoryLink}><Text style={styles.seeAll}>Vedi tutte le osservazioni</Text></Pressable>
           </View>
         ) : (
           <Pressable
@@ -248,6 +186,20 @@ export default function DogProfileTabScreen() {
           </Pressable>
         )}
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Informazioni che ricordo su ${dog.name}`}
+          onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
+          style={styles.memoryLink}
+        >
+          <Ionicons name="bookmark-outline" size={20} color="#0066FF" />
+          <View style={styles.memoryCopy}>
+            <Text style={styles.memoryTitle}>Informazioni che ricordo</Text>
+            <Text style={styles.memoryHint}>Puoi rivederle, correggerle o eliminarle.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#64748B" />
+        </Pressable>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>I suoi momenti</Text>
           <View style={styles.sectionActions}>
@@ -259,14 +211,7 @@ export default function DogProfileTabScreen() {
             >
               <Text style={styles.seeAll}>Album</Text>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Apri i ricordi di ${dog.name}`}
-              onPress={() => router.push(`/dogs/${dog.id}/memories` as never)}
-              hitSlop={8}
-            >
-              <Text style={styles.seeAll}>Ricordi</Text>
-            </Pressable>
+
           </View>
         </View>
         {photosQuery.isLoading ? (
@@ -319,99 +264,15 @@ export default function DogProfileTabScreen() {
           </Pressable>
         )}
 
-        <Text style={[styles.sectionTitle, styles.standaloneTitle]}>
-          Benessere
-        </Text>
-        <View style={styles.wellnessGrid}>
-          <WellnessCard
-            icon="leaf-outline"
-            iconColor={colors.accent}
-            iconBackground={colors.accentSoft}
-            label="Digestione"
-            value={
-              useDemoData && digestiveBaselineMock.variability === 'bassa'
-                ? 'Stabile'
-                : useDemoData
-                  ? 'Da osservare'
-                  : digestiveSummaryLabel(
-                      digestiveSummaryQuery.data,
-                      digestiveSummaryQuery.isLoading,
-                      digestiveSummaryQuery.isError,
-                    )
-            }
-              onPress={() => router.push('/digestive' as never)}
-          />
-          <WellnessCard
-            icon="nutrition-outline"
-            iconColor={colors.primary}
-            iconBackground={colors.primarySoft}
-            label="Alimentazione"
-            value={
-              activeFoodLabel ||
-              lifestyle.profile?.feedingLabel ||
-              'Aggiungi cibo'
-            }
-            onPress={() => router.push('/nutrition/foods')}
-          />
-          <WellnessCard
-            icon="walk-outline"
-            iconColor={colors.accent}
-            iconBackground={colors.accentSoft}
-            label="Routine"
-            value={lifestyle.hasLifestyleAnswers ? 'Personalizzata' : 'Da completare'}
-            onPress={() => router.push(`/dogs/${dog.id}/lifestyle` as never)}
-          />
-          <WellnessCard
-            icon="calendar-outline"
-            iconColor={colors.warning}
-            iconBackground={colors.warningSoft}
-            label="Agenda"
-            value={
-              nextCare
-                ? relativeCareDate(nextCare.scheduledAt)
-                : 'Aggiungi promemoria'
-            }
-            onPress={() => router.push('/care' as never)}
-          />
-        </View>
-
+        <Pressable accessibilityRole="button" accessibilityLabel="Luoghi utili nelle vicinanze"
+          onPress={() => router.push('/(tabs)/around' as never)} style={styles.memoryLink}>
+          <Ionicons name="location-outline" size={20} color="#0066FF" />
+          <View style={styles.memoryCopy}><Text style={styles.memoryTitle}>Luoghi utili nelle vicinanze</Text><Text style={styles.memoryHint}>Parchi e veterinari sulla mappa</Text></View>
+          <Ionicons name="chevron-forward" size={18} color="#64748B" />
+        </Pressable>
       </ScrollView>
     </View>
   );
-}
-
-function formatFoodLabel(
-  food?: { brand?: string | null; name?: string | null } | null,
-): string {
-  const brand = food?.brand?.trim() ?? '';
-  const name = food?.name?.trim() ?? '';
-  if (!brand) return name;
-  if (!name) return brand;
-  if (name.toLocaleLowerCase().startsWith(brand.toLocaleLowerCase())) {
-    return name;
-  }
-  return `${brand} ${name}`;
-}
-
-function digestiveSummaryLabel(
-  summary: DigestiveSummary | undefined,
-  loading = false,
-  error = false,
-): string {
-  if (loading) return 'Sto verificando…';
-  if (error) return 'Non disponibile';
-  if (!summary || summary.data_sufficiency === 'insufficient') {
-    return 'Ancora da osservare';
-  }
-  if (summary.safety_flags.length > 0 || summary.recent_trend === 'worsening') {
-    return 'Da osservare';
-  }
-  if (summary.recent_trend === 'improving' || summary.recent_trend === 'firmer') return summary.recent_trend === 'firmer' ? 'Più formata' : 'In miglioramento';
-  if (summary.recent_trend === 'softer') return 'Più morbida';
-  if (summary.recent_trend === 'stable' || (summary.variability ?? 99) <= 1) {
-    return 'Stabile';
-  }
-  return 'Vedi andamento';
 }
 
 function MetaPill({ icon, label }: { icon: IconName; label: string }) {
@@ -465,6 +326,10 @@ function WellnessCard({
 const AVATAR_SIZE = 128;
 
 const styles = StyleSheet.create({
+  memoryLink: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, marginVertical: 8 },
+  memoryCopy: { flex: 1, gap: 4 },
+  memoryTitle: { color: '#1A2B48', fontSize: 15, fontWeight: '600' },
+  memoryHint: { color: '#64748B', fontSize: 13, lineHeight: 19 },
   root: {
     flex: 1,
     backgroundColor: colors.background,

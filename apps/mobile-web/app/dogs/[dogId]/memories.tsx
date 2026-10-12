@@ -124,12 +124,12 @@ export default function DogMemoriesScreen() {
 
   return (
     <ScreenContainer style={styles.screen}>
-      <StackScreenHeader title={`Ricordi di ${dog.name}`} />
+      <StackScreenHeader title="Informazioni che ricordo" />
       <Text style={styles.intro}>
         Qui trovi soltanto le informazioni utili che hai scelto di conservare.
       </Text>
       <Button
-        title="Aggiungi un ricordo"
+        title="Raccontami qualcosa"
         icon={<Ionicons name="add" size={20} color={colors.textOnPrimary} />}
         onPress={() => router.push('/ask' as never)}
       />
@@ -139,7 +139,7 @@ export default function DogMemoriesScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder={`Cerca nei ricordi di ${dog.name}`}
+            placeholder={`Cerca nelle informazioni su ${dog.name}`}
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
           />

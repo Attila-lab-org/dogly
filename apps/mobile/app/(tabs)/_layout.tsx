@@ -83,6 +83,7 @@ export default function TabsLayout() {
         name="around"
         options={{
           title: 'Intorno a me',
+          href: null,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'location' : 'location-outline'}
