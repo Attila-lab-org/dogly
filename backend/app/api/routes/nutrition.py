@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
 
@@ -34,12 +34,17 @@ router = APIRouter()
 
 def _has_readable_food_label_data(product: FoodProductRec) -> bool:
     """An extraction attempt is reusable only when it produced real fields."""
+    analysis = product.guaranteed_analysis or {}
+
+    def has_value(value: Any) -> bool:
+        return value is not None and value != "" and value not in ({}, [])
+
     return bool(
         product.brand
         or product.name
         or product.ingredients_raw
         or product.feeding_directions
-        or any(value is not None for value in (product.guaranteed_analysis or {}).values())
+        or any(has_value(value) for value in analysis.values())
     )
 
 

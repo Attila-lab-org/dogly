@@ -176,6 +176,31 @@ def test_normalizes_calories_per_kg_and_reads_crude_protein():
     assert candidate.guaranteed_analysis["crude_protein_min"] == 26.0
 
 
+def test_preserves_additional_catalog_nutrition_and_additives():
+    candidate = _candidate_from_product(
+        {
+            "code": "8000000000015",
+            "product_name": "Crocchette complete",
+            "brands": "Acme",
+            "nutriments": {
+                "ash_100g": 7.0,
+                "calcium_100g": 1.4,
+                "phosphorus_100g": 1.1,
+                "vitamin-a_100g": 0.2,
+            },
+            "additives_tags": ["en:preservatives"],
+        }
+    )
+    assert candidate is not None
+    assert candidate.guaranteed_analysis["additional_nutrition"] == {
+        "ash_100g": 7.0,
+        "calcium_100g": 1.4,
+        "phosphorus_100g": 1.1,
+        "vitamin-a_100g": 0.2,
+        "additives": ["en:preservatives"],
+    }
+
+
 def test_recognizes_dutch_cat_food_as_cat_product():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

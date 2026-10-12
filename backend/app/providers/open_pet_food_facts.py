@@ -399,6 +399,7 @@ def _candidate_from_product(
     nutriments = product.get("nutriments") or {}
     calories = None
     guaranteed_analysis: dict[str, Any] = {}
+    additional_nutrition: dict[str, Any] = {}
     text_analysis = _analysis_from_ingredients_text(
         str(ingredients) if ingredients else None
     )
@@ -425,6 +426,22 @@ def _candidate_from_product(
                 continue
         if calories:
             guaranteed_analysis["calories"] = calories
+        for key, value in nutriments.items():
+            if value is None:
+                continue
+            normalized_key = str(key)
+            if (
+                normalized_key.startswith(("ash", "calcium", "phosphorus", "vitamin-"))
+                and normalized_key.endswith(("_100g", "_serving"))
+            ):
+                additional_nutrition[normalized_key] = value
+        if additional_nutrition:
+            guaranteed_analysis["additional_nutrition"] = additional_nutrition
+    additives = product.get("additives_tags") or product.get("additives_original_tags")
+    if isinstance(additives, list) and additives:
+        guaranteed_analysis.setdefault("additional_nutrition", {})["additives"] = [
+            str(value) for value in additives if value
+        ]
     for key, value in text_analysis.items():
         guaranteed_analysis.setdefault(key, value)
     if calories is None and text_analysis.get("calories"):

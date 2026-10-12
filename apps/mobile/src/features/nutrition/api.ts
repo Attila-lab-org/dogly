@@ -20,6 +20,7 @@ export type ApiFoodProduct = {
     crude_fiber_max?: number | null;
     moisture_max?: number | null;
     calories?: string | null;
+    additional_nutrition?: Record<string, unknown>;
     [key: string]: unknown;
   };
   feeding_directions?: string | null;

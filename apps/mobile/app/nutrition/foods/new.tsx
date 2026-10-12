@@ -506,6 +506,9 @@ export default function NewFoodScreen() {
                 {previewItem.guaranteed_analysis.crude_fiber_max != null ? <Text>Fibre {previewItem.guaranteed_analysis.crude_fiber_max}%</Text> : null}
                 {previewItem.guaranteed_analysis.moisture_max != null ? <Text>Umidità {previewItem.guaranteed_analysis.moisture_max}%</Text> : null}
                 {(previewItem.guaranteed_analysis.calories ?? previewItem.calories) ? <Text>Calorie {previewItem.guaranteed_analysis.calories ?? previewItem.calories}</Text> : null}
+                {Object.entries(previewItem.guaranteed_analysis.additional_nutrition ?? {}).map(([key, value]) => (
+                  <Text key={key}>{key.replace(/_/g, ' ')} {Array.isArray(value) ? value.join(', ') : String(value)}</Text>
+                ))}
               </View>
             ) : null}
             {previewItem?.guaranteed_analysis && Object.keys(previewItem.guaranteed_analysis).length === 0 && previewItem.calories ? (

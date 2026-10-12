@@ -872,6 +872,7 @@ class GuaranteedAnalysis(BaseModel):
     crude_fiber_max: float | None = Field(default=None, ge=0, le=100)
     moisture_max: float | None = Field(default=None, ge=0, le=100)
     calories: str | None = None
+    additional_nutrition: dict[str, Any] = Field(default_factory=dict)
 
 
 class FoodLabelExtraction(BaseModel):

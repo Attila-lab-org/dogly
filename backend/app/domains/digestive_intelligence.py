@@ -1935,6 +1935,12 @@ def build_digestive_intelligence(
     calories = context.active_food_analysis.get("calories")
     if calories:
         relevant_context.append(f"Calorie dichiarate del prodotto: {calories}.")
+    additional_nutrition = context.active_food_analysis.get("additional_nutrition")
+    if isinstance(additional_nutrition, dict) and additional_nutrition:
+        details = ", ".join(
+            f"{key}: {value}" for key, value in additional_nutrition.items()
+        )
+        relevant_context.append(f"Altri dati dichiarati del prodotto: {details}.")
 
     associations: list[str] = []
     if _recent_food_change(context):
