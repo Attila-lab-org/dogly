@@ -197,6 +197,78 @@ def test_grounding_boundary_rejects_invisible_tail_claim() -> None:
     assert any(error["loc"] == ["tail"] for error in errors)
 
 
+def test_grounding_boundary_resolves_references_inside_ordered_observation_lists() -> None:
+    observation = _observation(
+        salient_actions=[
+            {
+                "action": "freezes",
+                "actor": "dog",
+                "target": "person",
+                "start_ms": 0,
+                "end_ms": 1000,
+                "description": "Il cane resta immobile mentre la persona lo tocca.",
+            }
+        ],
+        transitions=[
+            {
+                "from_observation": "dog resting",
+                "to_observation": "dog freezes",
+                "at_ms": 1000,
+            }
+        ],
+    )
+    interpretation = _interpretation(IntentCode.RELAX_REST).model_copy(
+        update={
+            "evidence": [
+                EvidenceItem(
+                    source="observation",
+                    ref="salient_actions[0].description",
+                    description="Resta immobile durante il contatto.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    ref="transitions.0.to_observation",
+                    description="La sequenza mostra un congelamento.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    ref="body.posture",
+                    description="La postura è sciolta.",
+                ),
+            ]
+        }
+    )
+
+    assert grounding_errors(interpretation, observation) == []
+
+
+def test_grounding_boundary_rejects_missing_observation_list_item() -> None:
+    interpretation = _interpretation(IntentCode.RELAX_REST).model_copy(
+        update={
+            "evidence": [
+                EvidenceItem(
+                    source="observation",
+                    ref="salient_actions[2].description",
+                    description="Azione non presente nel video.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    ref="body.posture",
+                    description="La postura è sciolta.",
+                ),
+                EvidenceItem(
+                    source="observation",
+                    ref="body.locomotion",
+                    description="Resta fermo.",
+                ),
+            ]
+        }
+    )
+
+    errors = grounding_errors(interpretation, _observation())
+    assert any(error["loc"] == ["evidence", 0, "ref"] for error in errors)
+
+
 def test_internal_scientific_evidence_never_reaches_behavior_consumer() -> None:
     evidence = _consumer_evidence(
         {

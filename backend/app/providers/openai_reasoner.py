@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Any
@@ -35,6 +36,34 @@ from app.providers.budget import check_daily_budget
 logger = logging.getLogger(__name__)
 
 
+_OBSERVATION_REF_INDEX = re.compile(r"\[(\d+)\]")
+
+
+def _resolve_observation_ref(payload: Any, ref: str) -> Any:
+    """Resolve dotted observation refs across objects and bounded arrays.
+
+    The observer contract contains ordered arrays for actions, transitions and
+    vocalization candidates. The reasoner may cite an item in those arrays;
+    treating every list as an opaque value incorrectly rejects valid evidence.
+    """
+    normalized_ref = _OBSERVATION_REF_INDEX.sub(r".\1", ref).strip(".")
+    value = payload
+    for part in normalized_ref.split(".") if normalized_ref else []:
+        if isinstance(value, dict):
+            if part not in value:
+                return None
+            value = value[part]
+            continue
+        if isinstance(value, list) and part.isdigit():
+            index = int(part)
+            if index < 0 or index >= len(value):
+                return None
+            value = value[index]
+            continue
+        return None
+    return value
+
+
 def grounding_errors(
     contract: InterpretationContract,
     observation: ObservationContract,
@@ -53,12 +82,7 @@ def grounding_errors(
                 {"loc": ["evidence", index, "ref"], "msg": "observable evidence requires ref"}
             )
             continue
-        value: Any = observation_payload
-        for part in item.ref.split("."):
-            if not isinstance(value, dict) or part not in value:
-                value = None
-                break
-            value = value[part]
+        value = _resolve_observation_ref(observation_payload, item.ref)
         if value in (None, "unknown", "not_visible", [], {}):
             errors.append(
                 {
