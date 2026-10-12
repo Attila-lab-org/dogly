@@ -991,8 +991,7 @@ class ExternalFoodSearchRequest(BaseModel):
     client_request_id: str = Field(min_length=8, max_length=128)
 
 
-class ExternalFoodCandidateOut(BaseModel):
-    lookup_id: str
+class FoodCatalogItem(BaseModel):
     barcode: str
     brand: str | None = None
     name: str | None = None
@@ -1005,6 +1004,17 @@ class ExternalFoodCandidateOut(BaseModel):
     image_url: str | None = None
     attribution: str
     confirmation_required: bool = True
+
+
+class ExternalFoodCandidateOut(FoodCatalogItem):
+    lookup_id: str
+
+
+class FoodCatalogPage(BaseModel):
+    items: list[FoodCatalogItem] = Field(default_factory=list)
+    next_page: int | None = None
+    attribution: str
+    stale: bool = False
 
 
 class ExternalFoodSearchOut(BaseModel):

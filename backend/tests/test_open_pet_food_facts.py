@@ -275,6 +275,47 @@ async def test_search_returns_dog_food_list():
 
 
 @pytest.mark.asyncio
+async def test_browse_products_pages_source_and_applies_food_filters():
+    def handler(request: httpx.Request) -> httpx.Response:
+        query = dict(request.url.params)
+        assert query["tag_0"] == "en:dry-dog-food"
+        assert query["tag_1"] == "Acme"
+        assert query["page"] == "2"
+        assert query["page_size"] == "2"
+        return httpx.Response(
+            200,
+            json={
+                "count": 5,
+                "products": [
+                    {
+                        "code": "8000000000100",
+                        "product_name": "Adult pollo",
+                        "brands": "Acme",
+                        "categories_tags": ["en:dry-dog-food"],
+                    },
+                    {
+                        "code": "8000000000101",
+                        "product_name": "Adult salmone",
+                        "brands": "Acme",
+                        "categories_tags": ["en:dry-dog-food"],
+                    },
+                ],
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    items, next_page = await client.browse_products(
+        brand="Acme", food_form="crocchette", page=2, page_size=2
+    )
+    assert [item.barcode for item in items] == ["8000000000100", "8000000000101"]
+    assert next_page == 3
+
+
+@pytest.mark.asyncio
 async def test_search_keeps_brand_only_products_and_caches():
     calls = {"n": 0}
 

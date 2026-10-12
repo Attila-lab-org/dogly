@@ -5,7 +5,41 @@ import httpx
 from app.api.routes import nutrition as nutrition_routes
 from app.contracts.api import FoodLabelExtraction, GuaranteedAnalysis
 from app.providers.base import ProviderUsage
+from app.providers.open_pet_food_facts import ExternalFoodCandidate
 from tests.conftest import create_dog
+
+
+async def test_catalog_browse_is_shared_and_does_not_create_personal_lookup(
+    client: httpx.AsyncClient, auth_headers, state, monkeypatch
+):
+    dog_id = await create_dog(client, auth_headers)
+
+    class FakeCatalogClient:
+        async def browse_products(self, **kwargs):
+            assert kwargs["food_form"] == "crocchette"
+            return [
+                ExternalFoodCandidate(
+                    barcode="8000000000100",
+                    brand="Acme",
+                    name="Adult pollo",
+                    food_form="crocchette",
+                    ingredients_raw="pollo, riso",
+                    guaranteed_analysis={"crude_protein_min": 26},
+                )
+            ], 2
+
+    monkeypatch.setattr(nutrition_routes.external_food, "default_opff_client", lambda: FakeCatalogClient())
+    response = await client.get(
+        f"/v1/nutrition/catalog?dog_id={dog_id}&food_form=crocchette",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["items"][0]["barcode"] == "8000000000100"
+    assert body["items"][0]["brand"] == "Acme"
+    assert body["next_page"] == 2
+    assert body["stale"] is False
+    assert state.store.external_food_lookups == {}
 
 
 async def test_food_scan_verify_and_list(client: httpx.AsyncClient, auth_headers):

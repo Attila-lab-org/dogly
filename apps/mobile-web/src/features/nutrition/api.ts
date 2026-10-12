@@ -209,6 +209,32 @@ export type ExternalFoodCandidate = {
   confirmation_required: boolean;
 };
 
+export type FoodCatalogItem = Omit<ExternalFoodCandidate, 'lookup_id'>;
+
+export async function browseFoodCatalog(options: {
+  dogId: string;
+  query?: string;
+  brand?: string;
+  foodForm?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  items: FoodCatalogItem[];
+  next_page: number | null;
+  attribution: string;
+  stale: boolean;
+}> {
+  const params = new URLSearchParams({
+    dog_id: options.dogId,
+    q: options.query?.trim() ?? '',
+    brand: options.brand?.trim() ?? '',
+    page: String(options.page ?? 1),
+    page_size: String(options.pageSize ?? 20),
+  });
+  if (options.foodForm) params.set('food_form', options.foodForm);
+  return api.get(`/v1/nutrition/catalog?${params.toString()}`);
+}
+
 export async function searchFoodsByName(options: {
   dogId: string;
   query: string;

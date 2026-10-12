@@ -4452,6 +4452,126 @@
         }
       }
     },
+    "/v1/nutrition/catalog": {
+      "get": {
+        "tags": [
+          "nutrition"
+        ],
+        "summary": "Browse Food Catalog",
+        "operationId": "browse_food_catalog_v1_nutrition_catalog_get",
+        "parameters": [
+          {
+            "name": "dog_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dog Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "default": "",
+              "title": "Brand"
+            }
+          },
+          {
+            "name": "food_form",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Food Form"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 40,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodCatalogPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/nutrition/foods/external/search": {
       "post": {
         "tags": [
@@ -8121,10 +8241,6 @@
       },
       "ExternalFoodCandidateOut": {
         "properties": {
-          "lookup_id": {
-            "type": "string",
-            "title": "Lookup Id"
-          },
           "barcode": {
             "type": "string",
             "title": "Barcode"
@@ -8230,13 +8346,17 @@
             "type": "boolean",
             "title": "Confirmation Required",
             "default": true
+          },
+          "lookup_id": {
+            "type": "string",
+            "title": "Lookup Id"
           }
         },
         "type": "object",
         "required": [
-          "lookup_id",
           "barcode",
-          "attribution"
+          "attribution",
+          "lookup_id"
         ],
         "title": "ExternalFoodCandidateOut"
       },
@@ -8643,6 +8763,158 @@
         "title": "FeedingPeriodUpdate",
         "description": "Update the active period in place. A quantity change is not a food change."
       },
+      "FoodCatalogItem": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          },
+          "package_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Size"
+          },
+          "food_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Form"
+          },
+          "ingredients_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients Raw"
+          },
+          "guaranteed_analysis": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Guaranteed Analysis"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "attribution": {
+            "type": "string",
+            "title": "Attribution"
+          },
+          "confirmation_required": {
+            "type": "boolean",
+            "title": "Confirmation Required",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode",
+          "attribution"
+        ],
+        "title": "FoodCatalogItem"
+      },
+      "FoodCatalogPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FoodCatalogItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Page"
+          },
+          "attribution": {
+            "type": "string",
+            "title": "Attribution"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "attribution"
+        ],
+        "title": "FoodCatalogPage"
+      },
       "FoodManualCreateRequest": {
         "properties": {
           "dog_id": {
@@ -9020,6 +9292,11 @@
               }
             ],
             "title": "Calories"
+          },
+          "additional_nutrition": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Additional Nutrition"
           }
         },
         "type": "object",

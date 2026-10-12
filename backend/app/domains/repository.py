@@ -104,6 +104,8 @@ class InMemoryStore:
         self.knowledge_scores: list[dict] = []
         self.weight_events: dict[str, list] = {}
         self.external_food_lookups: dict[str, dict] = {}
+        self.food_catalog_products: dict[str, dict] = {}
+        self.food_catalog_pages: dict[str, dict] = {}
         self.realtime_sessions: dict[str, dict] = {}
         self.realtime_turns: dict[str, list[dict]] = {}
         self.realtime_memory_proposals: dict[str, dict] = {}

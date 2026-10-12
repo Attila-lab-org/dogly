@@ -601,6 +601,44 @@ class OpenPetFoodFactsClient:
         ]
         return found
 
+    async def browse_products(
+        self, *, query: str = "", brand: str = "", food_form: str | None = None,
+        page: int = 1, page_size: int = 20,
+    ) -> tuple[list[ExternalFoodCandidate], int | None]:
+        """Page the source itself, including an initial dog-food category page."""
+        category = {
+            "crocchette": "en:dry-dog-food", "umido": "en:wet-dog-food",
+        }.get(food_form, "en:dog-food")
+        params = {
+            "action": "process", "json": "1", "search_terms": query,
+            "tagtype_0": "categories", "tag_contains_0": "contains",
+            "tag_0": category, "page": str(page), "page_size": str(page_size),
+            "sort_by": "unique_scans_n",
+        }
+        if brand:
+            params.update({
+                "tagtype_1": "brands", "tag_contains_1": "contains", "tag_1": brand,
+            })
+        payload = await self._request_json(_SEARCH_URL, params=params)
+        products = payload.get("products")
+        if not isinstance(products, list):
+            raise TimeoutError("Open Pet Food Facts returned no product page")
+        # Continuation follows the raw source page even if unusable rows are removed.
+        count = payload.get("count")
+        has_more = (
+            page * page_size < int(count)
+            if str(count).isdigit()
+            else len(products) >= page_size
+        )
+        usable = [
+            item for item in products
+            if isinstance(item, dict) and _dog_preference(item) < 2
+        ]
+        return (
+            self._candidates_from_products(usable, query=query, limit=page_size),
+            page + 1 if has_more else None,
+        )
+
     async def _request_json(
         self,
         url: str,

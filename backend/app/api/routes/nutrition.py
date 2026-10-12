@@ -16,6 +16,8 @@ from app.contracts.api import (
     FeedingPeriodCreate,
     FeedingPeriodOut,
     FeedingPeriodUpdate,
+    FoodCatalogItem,
+    FoodCatalogPage,
     FoodManualCreateRequest,
     FoodProductOut,
     FoodScanInitRequest,
@@ -27,6 +29,7 @@ from app.contracts.taxonomy import AnalysisDomain
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, external_food, external_food_db, idempotency_db
 from app.domains.models import FeedingPeriodRec, FoodProductRec
+from app.providers.base import ProviderRateLimitError
 from app.providers.openai_food_label import extract_food_label
 
 router = APIRouter()
@@ -441,6 +444,66 @@ async def lookup_external_food(
     )
     await _record_guard(state, guard, response.model_dump(mode="json"))
     return response
+
+
+@router.get(
+    "/nutrition/catalog",
+    response_model=FoodCatalogPage,
+)
+async def browse_food_catalog(
+    state: StateDep,
+    user_id: UserIdDep,
+    dog_id: Annotated[str, Query()],
+    q: Annotated[str, Query(max_length=80)] = "",
+    brand: Annotated[str, Query(max_length=80)] = "",
+    food_form: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1, le=500)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=40)] = 20,
+) -> FoodCatalogPage:
+    try:
+        if state.engine is not None:
+            items, next_page, stale = await external_food_db.browse_food_catalog(
+                state.engine,
+                user_id=user_id,
+                dog_id=dog_id,
+                query=q,
+                brand=brand,
+                food_form=food_form,
+                page=page,
+                page_size=page_size,
+                enabled=state.settings.open_pet_food_facts_v1,
+            )
+        else:
+            items, next_page, stale = await external_food.browse_food_catalog(
+                state.store,
+                user_id=user_id,
+                dog_id=dog_id,
+                query=q,
+                brand=brand,
+                food_form=food_form,
+                page=page,
+                page_size=page_size,
+                enabled=state.settings.open_pet_food_facts_v1,
+            )
+    except ProviderRateLimitError as exc:
+        raise ApiError(ErrorCode.RATE_LIMITED, "Troppe richieste in questo momento.") from exc
+    except TimeoutError as exc:
+        raise ApiError(
+            ErrorCode.PROVIDER_TIMEOUT,
+            "Il catalogo alimenti non è raggiungibile.",
+        ) from exc
+    return FoodCatalogPage(
+        items=[
+            FoodCatalogItem.model_validate(item.model_dump(mode="json"))
+            for item in items
+        ],
+        next_page=next_page,
+        attribution=items[0].attribution if items else (
+            "Dati alimento da Open Pet Food Facts (ODbL). "
+            "https://world.openpetfoodfacts.org"
+        ),
+        stale=stale,
+    )
 
 
 def _candidate_out(

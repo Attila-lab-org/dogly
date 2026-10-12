@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.contracts.api import (
@@ -146,6 +148,67 @@ async def search_external_foods(
         }
         results.append((lookup_id, candidate))
     return results
+
+
+async def browse_food_catalog(
+    store: InMemoryStore,
+    *,
+    user_id: str,
+    dog_id: str,
+    query: str = "",
+    brand: str = "",
+    food_form: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    enabled: bool,
+    client: OpenPetFoodFactsClient | None = None,
+) -> tuple[list[ExternalFoodCandidate], int | None, bool]:
+    _require_feature(enabled)
+    get_owned_dog(store, user_id=user_id, dog_id=dog_id)
+    normalized = {
+        "query": " ".join(query.split()).casefold(),
+        "brand": " ".join(brand.split()).casefold(),
+        "food_form": (food_form or "").casefold(),
+        "page": page,
+        "page_size": page_size,
+    }
+    cache_key = hashlib.sha256(
+        json.dumps(normalized, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    cached = store.food_catalog_pages.get(cache_key)
+    if cached and datetime.now(UTC) - cached["fetched_at"] < timedelta(hours=24):
+        items = [
+            ExternalFoodCandidate.model_validate(store.food_catalog_products[barcode])
+            for barcode in cached["barcodes"]
+            if barcode in store.food_catalog_products
+        ]
+        if len(items) == len(cached["barcodes"]):
+            return items, cached["next_page"], False
+    try:
+        items, next_page = await (
+            client or default_opff_client()
+        ).browse_products(
+            query=query, brand=brand, food_form=food_form,
+            page=page, page_size=page_size,
+        )
+    except (ProviderRateLimitError, TimeoutError):
+        if cached:
+            items = [
+                ExternalFoodCandidate.model_validate(store.food_catalog_products[barcode])
+                for barcode in cached["barcodes"]
+                if barcode in store.food_catalog_products
+            ]
+            if items:
+                return items, cached["next_page"], True
+        raise
+    for item in items:
+        store.food_catalog_products[item.barcode] = item.model_dump(mode="json")
+    store.food_catalog_pages[cache_key] = {
+        "barcodes": [item.barcode for item in items],
+        "next_page": next_page,
+        "fetched_at": datetime.now(UTC),
+    }
+    return items, next_page, False
 
 
 def confirm_external_food(

@@ -18,6 +18,7 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   activateFeedingPeriod,
+  browseFoodCatalog,
   createNutritionOperationId,
   confirmExternalFood,
   createManualFood,
@@ -71,6 +72,9 @@ export default function NewFoodScreen() {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<ExternalFoodCandidate | null>(null);
+  const [foodForm, setFoodForm] = useState('');
+  const [catalogNextPage, setCatalogNextPage] = useState<number | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   const photoFoodQuery = useQuery({
     queryKey: ['nutrition-photo-food', photoFoodId],
@@ -82,26 +86,51 @@ export default function NewFoodScreen() {
 
   useEffect(() => {
     const cleaned = query.trim();
-    setHits([]);
     setMessage(null);
     setSearching(false);
     if (step !== 'identify' || !cleaned || !dog.id) return;
+    setHits([]);
+    setCatalogNextPage(null);
     setSearching(true);
     return scheduleCatalogSearch(
-        () => searchFoodsByName({ dogId: dog.id, query: cleaned }),
-        (result) => {
-          setHits(result.items);
-          setExactBarcode(null);
-          if (!result.items.length) {
-            setMessage(`Nessun risultato nel catalogo per “${cleaned}”. Prova con la marca completa oppure fotografa la confezione.`);
-          }
-        },
-        () => {
-          setMessage('Il catalogo non è raggiungibile adesso. Puoi usare una foto o inserire il nome.');
-        },
-        () => setSearching(false),
+      () => browseFoodCatalog({ dogId: dog.id, query: cleaned, foodForm }),
+      (result) => {
+        setHits(result.items.map((item) => ({ ...item, lookup_id: '' })));
+        setCatalogNextPage(result.next_page);
+        setExactBarcode(null);
+        if (!result.items.length) {
+          setMessage(`Nessun risultato nel catalogo per “${cleaned}”. Prova con la marca completa oppure fotografa la confezione.`);
+        }
+      },
+      () => {
+        setMessage('Il catalogo non è raggiungibile adesso. Puoi usare una foto o inserire il nome.');
+      },
+      () => setSearching(false),
     );
-  }, [dog.id, query, step]);
+  }, [dog.id, foodForm, query, step]);
+
+  useEffect(() => {
+    if (step !== 'identify' || query.trim() || !dog.id) return;
+    let active = true;
+    setCatalogLoading(true);
+    setCatalogNextPage(null);
+    void browseFoodCatalog({ dogId: dog.id, foodForm })
+      .then((result) => {
+        if (!active) return;
+        setHits(result.items.map((item) => ({ ...item, lookup_id: '' })));
+        setCatalogNextPage(result.next_page);
+        setExactBarcode(null);
+      })
+      .catch(() => {
+        if (active) setMessage('Il catalogo non è raggiungibile adesso. Puoi cercare per nome, usare una foto o inserire il nome.');
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [dog.id, foodForm, query, step]);
 
   useEffect(() => {
     if (!photoFoodId || photoStarted.current || photoFoodQuery.isLoading) return;
@@ -199,16 +228,19 @@ export default function NewFoodScreen() {
     setMessage(null);
     try {
       let food;
-      if (photoFoodId && selected) {
+      const chosen = selected && !selected.lookup_id
+        ? await lookupFoodByBarcode({ dogId: dog.id, barcode: selected.barcode })
+        : selected;
+      if (photoFoodId && chosen) {
         food = await confirmExternalFood({
           dogId: dog.id,
-          lookupId: selected.lookup_id,
+          lookupId: chosen.lookup_id,
           draftFoodId: photoFoodId,
           brand,
           name,
-          ingredientsRaw: selected.ingredients_raw ?? undefined,
-          calories: selected.calories ?? undefined,
-          guaranteedAnalysis: selected.guaranteed_analysis,
+          ingredientsRaw: chosen.ingredients_raw ?? undefined,
+          calories: chosen.calories ?? undefined,
+          guaranteedAnalysis: chosen.guaranteed_analysis,
           activate: false,
         });
       } else if (photoFoodId) {
@@ -219,23 +251,23 @@ export default function NewFoodScreen() {
           brand: brand.trim(),
           name: name.trim(),
           ingredientsRaw:
-            selected?.ingredients_raw ?? draft?.ingredients_raw ?? '',
+            chosen?.ingredients_raw ?? draft?.ingredients_raw ?? '',
           protein: analysis?.crude_protein_min?.toString() ?? '',
           fat: analysis?.crude_fat_min?.toString() ?? '',
           fiber: analysis?.crude_fiber_max?.toString() ?? '',
           moisture: analysis?.moisture_max?.toString() ?? '',
-          calories: selected?.calories ?? analysis?.calories ?? '',
+          calories: chosen?.calories ?? analysis?.calories ?? '',
           feedingDirections: draft?.feeding_directions ?? '',
         });
-      } else if (selected) {
+      } else if (chosen) {
         food = await confirmExternalFood({
           dogId: dog.id,
-          lookupId: selected.lookup_id,
+          lookupId: chosen.lookup_id,
           brand,
           name,
-          ingredientsRaw: selected.ingredients_raw ?? undefined,
-          calories: selected.calories ?? undefined,
-          guaranteedAnalysis: selected.guaranteed_analysis,
+          ingredientsRaw: chosen.ingredients_raw ?? undefined,
+          calories: chosen.calories ?? undefined,
+          guaranteedAnalysis: chosen.guaranteed_analysis,
           activate: false,
         });
       } else {
@@ -292,13 +324,48 @@ export default function NewFoodScreen() {
             />
           </View>
 
+          <View style={styles.filterRow} accessibilityLabel="Filtra per tipo di alimento">
+            {[
+              ['', 'Tutti'],
+              ['crocchette', 'Crocchette'],
+              ['umido', 'Umido'],
+            ].map(([value, label]) => (
+              <Pressable
+                key={value || 'all'}
+                accessibilityRole="button"
+                accessibilityState={{ selected: foodForm === value }}
+                onPress={() => setFoodForm(value)}
+                style={[styles.filterChip, foodForm === value && styles.filterChipActive]}
+              >
+                <Text style={[styles.filterLabel, foodForm === value && styles.filterLabelActive]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
           {searching ? <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>Cerco nel catalogo…</Text> : null}
+          {!searching && catalogLoading ? <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>Carico gli alimenti disponibili…</Text> : null}
           {hits.length > 0 ? (
             <View style={styles.results}>
-              <Text style={styles.subtitle}>Risultati del catalogo</Text>
+              <Text style={styles.subtitle}>{query.trim() ? 'Risultati del catalogo' : 'Alimenti del catalogo'}</Text>
               {hits.map((item) => (
-                <CandidateCard key={item.lookup_id} item={item} exact={false} onPress={() => choose(item)} />
+                <CandidateCard key={item.lookup_id || item.barcode} item={item} exact={false} onPress={() => choose(item)} />
               ))}
+              {!query.trim() && catalogNextPage ? (
+                <Button
+                  title="Mostra altri alimenti"
+                  loading={catalogLoading}
+                  onPress={() => {
+                    setCatalogLoading(true);
+                    void browseFoodCatalog({ dogId: dog.id, foodForm, page: catalogNextPage })
+                      .then((result) => {
+                        setHits((current) => [...current, ...result.items.map((item) => ({ ...item, lookup_id: '' }))]);
+                        setCatalogNextPage(result.next_page);
+                      })
+                      .catch(() => setMessage('Non riesco a caricare altri alimenti adesso.'))
+                      .finally(() => setCatalogLoading(false));
+                  }}
+                />
+              ) : null}
             </View>
           ) : null}
 
@@ -344,7 +411,7 @@ export default function NewFoodScreen() {
           <View style={styles.results}>
             {hits.map((item) => (
               <CandidateCard
-                key={item.lookup_id}
+                key={item.lookup_id || item.barcode}
                 item={item}
                 exact={item.barcode === exactBarcode}
                 onPress={() => choose(item)}
@@ -605,6 +672,11 @@ const styles = StyleSheet.create({
   },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   searchInput: { flex: 1, minWidth: 0 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  filterChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surface },
+  filterChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  filterLabel: { color: colors.textSecondary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold },
+  filterLabelActive: { color: colors.accent },
   input: {
     minHeight: 52,
     paddingHorizontal: spacing.md,
