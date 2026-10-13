@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated, Any
 
@@ -49,6 +50,7 @@ from app.domains.realtime_orchestrator import (
 from app.domains.repository import now_utc
 
 router = APIRouter(prefix="/realtime")
+logger = logging.getLogger(__name__)
 
 
 def _is_owned_active_voice_session(
@@ -327,38 +329,66 @@ async def create_realtime_turn(
     except LookupError as exc:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.") from exc
     except Exception as exc:
+        logger.exception(
+            "Realtime turn context/provider failed",
+            extra={
+                "session_id": session_id,
+                "dog_id": str(session.get("dog_id")),
+                "user_id": user_id,
+                "has_photo": bool(body.photo_id),
+                "message_length": len(body.text or ""),
+            },
+        )
         raise ApiError(
             ErrorCode.PROCESSING_FAILED,
             "DOGly non riesce a rispondere in questo momento. Riprova tra poco.",
             retryable=True,
         ) from exc
 
-    decision_json = decision.model_dump(mode="json")
-    memory_request = natural_memory_candidate(body.text)
-    if attachment is not None:
-        decision_json["attachment"] = attachment
-    if state.engine is not None:
-        row, proposal = await realtime_db.record_turn_db(
-            state.engine,
-            session=session,
-            user_text=body.text,
-            decision=decision_json,
-            context_version=REALTIME_CONTEXT_VERSION,
-            source_refs=source_refs,
-            provider_audit=provider_audit,
-            memory_request=memory_request,
+    try:
+        decision_json = decision.model_dump(mode="json")
+        memory_request = natural_memory_candidate(body.text)
+        if attachment is not None:
+            decision_json["attachment"] = attachment
+        if state.engine is not None:
+            row, proposal = await realtime_db.record_turn_db(
+                state.engine,
+                session=session,
+                user_text=body.text,
+                decision=decision_json,
+                context_version=REALTIME_CONTEXT_VERSION,
+                source_refs=source_refs,
+                provider_audit=provider_audit,
+                memory_request=memory_request,
+            )
+            await realtime_db.refresh_conversation_memory_db(
+                state.engine, session_id=session_id, user_id=user_id
+            )
+        else:
+            row, proposal = _record_turn_memory(
+                state.store,
+                session=session,
+                user_text=body.text,
+                decision=decision_json,
+                memory_request=memory_request,
+            )
+    except ApiError:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Realtime turn persistence failed",
+            extra={
+                "session_id": session_id,
+                "dog_id": str(session.get("dog_id")),
+                "user_id": user_id,
+                "has_photo": bool(body.photo_id),
+            },
         )
-        await realtime_db.refresh_conversation_memory_db(
-            state.engine, session_id=session_id, user_id=user_id
-        )
-    else:
-        row, proposal = _record_turn_memory(
-            state.store,
-            session=session,
-            user_text=body.text,
-            decision=decision_json,
-            memory_request=memory_request,
-        )
+        raise ApiError(
+            ErrorCode.PROCESSING_FAILED,
+            "DOGly non riesce a salvare questa risposta. Riprova tra poco.",
+            retryable=True,
+        ) from exc
     memory = (
         RealtimeMemoryProposal(
             id=str(proposal["id"]),
