@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from app.api.routes import realtime as realtime_route
@@ -253,6 +254,29 @@ def test_welcome_is_personal_and_never_technical() -> None:
     welcome = _welcome_text("attilio", "Oreo")
     assert welcome == "Ciao Attilio. Sono qui con te e Oreo. Raccontami cosa vuoi guardare oggi."
     assert "modello" not in welcome
+
+
+@pytest.mark.asyncio
+async def test_memory_refresh_failure_does_not_invalidate_saved_turn(monkeypatch) -> None:
+    refresh = AsyncMock(side_effect=RuntimeError("memory unavailable"))
+    monkeypatch.setattr(
+        realtime_route.realtime_db,
+        "refresh_conversation_memory_db",
+        refresh,
+    )
+
+    engine = object()
+    await realtime_route._refresh_conversation_memory_best_effort(
+        engine,
+        session_id="session-1",
+        user_id="user-1",
+    )
+
+    refresh.assert_awaited_once_with(
+        engine,
+        session_id="session-1",
+        user_id="user-1",
+    )
 
 
 def test_welcome_keeps_previous_conversation_internal() -> None:

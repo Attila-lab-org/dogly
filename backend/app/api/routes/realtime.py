@@ -71,6 +71,29 @@ def _welcome_text(
     return resume_welcome_text(owner_name, dog_name, previous_topic)
 
 
+async def _refresh_conversation_memory_best_effort(
+    engine: Any,
+    *,
+    session_id: str,
+    user_id: str,
+) -> None:
+    """Refresh continuity without invalidating an already persisted turn."""
+    try:
+        await realtime_db.refresh_conversation_memory_db(
+            engine,
+            session_id=session_id,
+            user_id=user_id,
+        )
+    except Exception:
+        # The turn row is the source of truth. A later turn or session close
+        # can rebuild this projection, so a transient refresh failure must not
+        # make the client retry and create a duplicate turn.
+        logger.exception(
+            "Realtime conversation memory refresh failed",
+            extra={"session_id": session_id, "user_id": user_id},
+        )
+
+
 def _resume_history(
     previous: list[dict[str, Any]] | None,
     current: list[dict[str, Any]],
@@ -361,8 +384,10 @@ async def create_realtime_turn(
                 provider_audit=provider_audit,
                 memory_request=memory_request,
             )
-            await realtime_db.refresh_conversation_memory_db(
-                state.engine, session_id=session_id, user_id=user_id
+            await _refresh_conversation_memory_best_effort(
+                state.engine,
+                session_id=session_id,
+                user_id=user_id,
             )
         else:
             row, proposal = _record_turn_memory(
