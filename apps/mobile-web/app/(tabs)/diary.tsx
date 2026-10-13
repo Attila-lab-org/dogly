@@ -32,7 +32,7 @@ import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 
-type DiaryFilter = 'ALL' | DiaryDomain;
+type DiaryFilter = 'ALL' | DiaryDomain | 'ROUTINE';
 type TimelineItem =
   | {
       kind: 'header';
@@ -61,7 +61,8 @@ type IconTone = {
 const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'ALL', label: 'Tutti' },
   { key: 'BEHAVIOR', label: 'Comportamento' },
-  { key: 'DIGESTIVE', label: 'Digestione' },
+  { key: 'DIGESTIVE', label: 'Salute' },
+  { key: 'ROUTINE', label: 'Routine' },
 ];
 
 const puppyPlaySource = require('../../assets/images/puppy-play.png');
@@ -142,16 +143,14 @@ function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }
       onPress={onPress}
       style={({ pressed }) => [styles.entryCard, pressed && styles.entryCardPressed]}
     >
-      <View style={[styles.rowIcon, { backgroundColor: icon.bg }]}>
+      <View style={[styles.mediaBlock, { backgroundColor: icon.bg }]}>
         <Ionicons name={icon.name} size={20} color={icon.fg} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{entry.title}</Text>
-        {entry.subtitle ? (
-          <Text style={styles.rowSubtitle} numberOfLines={2}>
-            {entry.subtitle}
-          </Text>
-        ) : null}
+        <Text style={styles.rowSubtitle} numberOfLines={2}>
+          {entry.subtitle ?? (entry.domain === 'BEHAVIOR' ? 'Un momento osservato insieme.' : 'Un controllo da seguire nel tempo.')}
+        </Text>
         <Text style={styles.rowTime}>{timeLabel(entry.occurredAt)}</Text>
         {chip ? (
           <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
@@ -232,14 +231,14 @@ export default function DiaryScreen() {
     queryFn: ({ pageParam }) =>
       fetchDiaryPage({
         dogId: dog.id,
-        domain: filter === 'ALL' ? undefined : filter,
+        domain: filter === 'ALL' || filter === 'ROUTINE' ? undefined : filter,
         cursor: pageParam,
         limit: 20,
         q: debouncedSearch || undefined,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    enabled: realEnabled,
+    enabled: realEnabled && filter !== 'ROUTINE',
   });
 
   const entries = useMemo<DiaryEntry[]>(() => {
@@ -286,14 +285,6 @@ export default function DiaryScreen() {
     });
     return items;
   }, [groups]);
-  const completedEntries = entries.filter(
-    (entry) => entry.status == null || entry.status === 'COMPLETED',
-  );
-  const showMemorySummary =
-    filter === 'ALL' &&
-    debouncedSearch.length === 0 &&
-    completedEntries.length > 0;
-
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
@@ -302,21 +293,6 @@ export default function DiaryScreen() {
           <Text style={styles.subtitle}>
             La storia di {dog.name}, giorno dopo giorno.
           </Text>
-          {showMemorySummary ? (
-            <View style={styles.memorySummary}>
-              <View style={styles.memorySummaryIcon}>
-                <Ionicons name="paw" size={18} color="#0D9488" />
-              </View>
-              <View style={styles.memorySummaryCopy}>
-                <Text style={styles.memorySummaryTitle}>
-                  I momenti recenti di {dog.name}
-                </Text>
-                <Text style={styles.memorySummaryText}>
-                  Qui ritrovi i momenti che ti aiutano a capirlo meglio nel tempo.
-                </Text>
-              </View>
-            </View>
-          ) : null}
 
           <View style={styles.search}>
             <Ionicons name="search" size={18} color="#94A3B8" />
@@ -390,19 +366,25 @@ export default function DiaryScreen() {
                     ? 'Il diario è ancora vuoto'
                     : filter === 'BEHAVIOR'
                       ? 'Nessun video nel diario'
-                      : 'Nessun controllo digestivo'
+                      : filter === 'DIGESTIVE'
+                        ? 'Nessun controllo digestivo'
+                        : 'La routine ha una schermata dedicata'
               }
               message={
                 debouncedSearch
                   ? 'Prova un’altra parola oppure cancella la ricerca.'
-                  : filter === 'DIGESTIVE'
+                  : filter === 'ROUTINE'
+                    ? `Apri la routine di ${dog.name} per vedere le sue abitudini.`
+                    : filter === 'DIGESTIVE'
                     ? 'Aggiungi una foto per seguire la digestione nel tempo.'
                     : `Mostra un momento di ${dog.name}: lo ritroverai qui con la sua lettura.`
               }
               actionLabel={
                 debouncedSearch
                   ? undefined
-                  : filter === 'DIGESTIVE'
+                  : filter === 'ROUTINE'
+                    ? 'Apri routine'
+                    : filter === 'DIGESTIVE'
                     ? 'Controlla la digestione'
                     : filter === 'BEHAVIOR'
                       ? 'Registra un video'
@@ -411,7 +393,9 @@ export default function DiaryScreen() {
               onAction={
                 debouncedSearch
                   ? undefined
-                  : filter === 'DIGESTIVE'
+                  : filter === 'ROUTINE'
+                    ? () => router.push(`/dogs/${dog.id}/lifestyle` as never)
+                    : filter === 'DIGESTIVE'
                     ? () => router.push('/digestive/capture')
                     : () => router.push('/behavior/capture')
               }
@@ -514,40 +498,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginBottom: 16,
   },
-  memorySummary: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    backgroundColor: '#E0F7F6',
-  },
-  memorySummaryIcon: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-  },
-  memorySummaryCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  memorySummaryTitle: {
-    color: '#1A2B48',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  memorySummaryText: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  memorySummaryLatest: {
-    marginTop: 4,
-    color: '#1A2B48',
-    fontSize: 13,
-  },
   search: {
     minHeight: 48,
     flexDirection: 'row',
@@ -610,9 +560,9 @@ const styles = StyleSheet.create({
   },
   entryCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 14,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 10,
     backgroundColor: '#FFFFFF',
@@ -629,12 +579,13 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     transform: [{ scale: 0.99 }],
   },
-  rowIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  mediaBlock: {
+    width: 88,
+    height: 78,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
   },
   rowText: {
     flex: 1,
