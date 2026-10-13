@@ -6,8 +6,8 @@ import { useSession } from '../auth/SessionProvider';
 import { prepareHomeMessage } from '../realtime/homeMessage';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 
-export function HomeConversation({ dogId, dogName, offline, onShowMoment }: {
-  dogId: string; dogName: string; offline: boolean; onShowMoment: () => void;
+export function HomeConversation({ dogId, dogName, offline }: {
+  dogId: string; dogName: string; offline: boolean;
 }) {
   const router = useRouter();
   const { userId } = useSession();
@@ -38,7 +38,7 @@ export function HomeConversation({ dogId, dogName, offline, onShowMoment }: {
       />
       <View style={styles.footer}>
         <View style={styles.tools}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Mostra un video" onPress={onShowMoment} disabled={disabled} style={styles.tool}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Apri la chat per mostrare una foto o un video" onPress={() => router.push('/ask' as never)} disabled={disabled} style={styles.tool}>
             <Ionicons name="images-outline" size={23} color={colors.text} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Apri la conversazione vocale con DOGly" onPress={() => router.push('/ask' as never)} disabled={disabled} style={styles.tool}>

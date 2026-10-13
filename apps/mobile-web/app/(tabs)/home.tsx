@@ -42,19 +42,6 @@ export default function HomeScreen() {
     : null;
   const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
 
-  const startVideo = () => {
-    if (!dog.id || loading) return;
-    if (processingEventId) {
-      router.push(`/behavior/processing/${processingEventId}`);
-      return;
-    }
-    if (quotaExhausted && purchasesEnabled) {
-      router.push('/paywall');
-      return;
-    }
-    router.push('/behavior/capture');
-  };
-
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
@@ -155,7 +142,7 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          <HomeConversation key={dog.id} dogId={dog.id} dogName={dog.name} offline={network.offline} onShowMoment={startVideo} />
+          <HomeConversation key={dog.id} dogId={dog.id} dogName={dog.name} offline={network.offline} />
 
           <DogCareOverview dogId={dog.id} dogName={dog.name} compact />
 
