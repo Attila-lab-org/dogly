@@ -1,9 +1,12 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { fetchDogPhotos } from '@/features/photos/api';
+import { useQuery } from '@tanstack/react-query';
 
 function openMap(query: string) {
   const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
@@ -12,17 +15,21 @@ function openMap(query: string) {
 
 export default function AroundScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
+  const photosQuery = useQuery({
+    queryKey: ['gallery-dog-photos', dog.id, 5],
+    queryFn: () => fetchDogPhotos(dog.id, 5),
+    enabled: Boolean(dog.id),
+  });
+  const photos = photosQuery.data ?? [];
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safe}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Pressable accessibilityRole="button" accessibilityLabel="Torna a Mio Cane" onPress={() => router.replace('/(tabs)/rocky')} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="arrow-back" size={22} color={colors.primary} /><Text style={{ color: colors.primary }}>Mio Cane</Text></Pressable>
-          <View style={styles.header}>
-            <View style={styles.icon}><Ionicons name="location" size={22} color={colors.primary} /></View>
-            <Text style={styles.eyebrow}>INTORNO A TE</Text>
-            <Text style={styles.title}>Tutto ciò che serve a voi due</Text>
-            <Text style={styles.subtitle}>Cerco nella mappa luoghi utili vicino a te, senza complicare il percorso.</Text>
-          </View>
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Momenti di {dog.name}</Text><Pressable accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album` as never)}><Text style={styles.link}>Apri album</Text></Pressable></View>
+          {photos.length > 0 ? <View style={styles.gallery}><Pressable accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photos[0].id}?albumId=${photos[0].albumId}` as never)} style={styles.galleryLarge}><Image source={{ uri: photos[0].thumbnailUri }} style={styles.galleryImage} /></Pressable><View style={styles.gallerySide}>{photos.slice(1, 3).map((photo) => <Pressable key={photo.id} accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never)} style={styles.gallerySmall}><Image source={{ uri: photo.thumbnailUri }} style={styles.galleryImage} /></Pressable>)}</View></View> : <View style={styles.galleryEmpty}><Ionicons name="images-outline" size={24} color={colors.accent} /><Text style={styles.emptyText}>Aggiungi i primi momenti di {dog.name} all’album.</Text></View>}
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Luoghi utili nelle vicinanze</Text><Ionicons name="location-outline" size={22} color={colors.accent} /></View>
           <PlaceCard
             icon="paw-outline"
             title="Aree per correre e giocare"
@@ -64,11 +71,16 @@ function PlaceCard({ icon, tone, title, text, button, onPress }: { icon: keyof t
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background }, safe: { flex: 1 },
   content: { width: '100%', maxWidth: 620, alignSelf: 'center', padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.md },
-  header: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
-  icon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
-  eyebrow: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold, letterSpacing: 1 },
-  title: { color: colors.text, fontSize: typography.size.xxl, lineHeight: 31, fontWeight: typography.weight.bold, textAlign: 'center' },
-  subtitle: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22, textAlign: 'center' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.sm },
+  sectionTitle: { flex: 1, color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
+  link: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
+  gallery: { flexDirection: 'row', gap: spacing.sm, height: 190 },
+  galleryLarge: { flex: 1, borderRadius: 18, overflow: 'hidden' },
+  gallerySide: { flex: 1, gap: spacing.sm },
+  gallerySmall: { flex: 1, borderRadius: 18, overflow: 'hidden' },
+  galleryImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  galleryEmpty: { minHeight: 100, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: 18, backgroundColor: colors.accentSoft },
+  emptyText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm },
   cardIcon: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   cardIconWarm: { backgroundColor: '#FEF3C7' }, cardTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },

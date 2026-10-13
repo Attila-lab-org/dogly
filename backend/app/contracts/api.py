@@ -626,6 +626,10 @@ class DiaryItem(BaseModel):
     confidence_band: ConfidenceBand | None = None
     feedback: FeedbackValue | None = None
     retention_state: RetentionState = RetentionState.TEMPORARY
+    # Signed, short-lived media reference for the event card. Raw storage
+    # paths never cross the public API boundary.
+    media_url: str | None = None
+    media_kind: Literal["PHOTO", "VIDEO"] | None = None
     created_at: datetime
 
 

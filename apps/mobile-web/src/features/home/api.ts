@@ -30,6 +30,8 @@ export interface ApiDiaryItem {
   title: string;
   summary: string | null;
   retention_state?: 'TEMPORARY' | 'USER_KEPT' | 'RESEARCH_OPT_IN' | 'DELETE_PENDING' | 'DELETED';
+  media_url?: string | null;
+  media_kind?: 'PHOTO' | 'VIDEO' | null;
   created_at: string;
 }
 
@@ -149,6 +151,8 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
     status: item.status,
     occurredAt: item.created_at,
     mediaDeleted,
+    mediaUri: item.media_url ?? null,
+    mediaKind: item.media_kind ?? null,
     refId: item.id,
   };
 }

@@ -143,9 +143,20 @@ function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }
       onPress={onPress}
       style={({ pressed }) => [styles.entryCard, pressed && styles.entryCardPressed]}
     >
-      <View style={[styles.mediaBlock, { backgroundColor: icon.bg }]}>
-        <Ionicons name={icon.name} size={20} color={icon.fg} />
-      </View>
+      {entry.mediaUri ? (
+        <View style={styles.mediaBlock}>
+          <Image
+            source={{ uri: entry.mediaUri }}
+            style={styles.mediaImage}
+            accessibilityLabel={entry.mediaKind === 'VIDEO' ? 'Video del momento' : 'Foto del momento'}
+          />
+          {entry.mediaKind === 'VIDEO' ? <View style={styles.playBadge}><Ionicons name="play" size={13} color="#FFFFFF" /></View> : null}
+        </View>
+      ) : (
+        <View style={[styles.mediaBlock, { backgroundColor: icon.bg }]}>
+          <Ionicons name={icon.name} size={28} color={icon.fg} />
+        </View>
+      )}
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{entry.title}</Text>
         <Text style={styles.rowSubtitle} numberOfLines={2}>
@@ -586,7 +597,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
+    overflow: 'hidden',
   },
+  mediaImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  playBadge: { position: 'absolute', right: 7, bottom: 7, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(14,42,71,0.82)' },
   rowText: {
     flex: 1,
   },

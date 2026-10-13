@@ -40,6 +40,8 @@ class _TimelineEntry:
         retention_state: RetentionState,
         confidence_band: ConfidenceBand | None = None,
         feedback: FeedbackValue | None = None,
+        media_path: str | None = None,
+        media_kind: str | None = None,
     ) -> None:
         self.id = rec.id
         self.dog_id = rec.dog_id
@@ -51,6 +53,8 @@ class _TimelineEntry:
         self.retention_state = retention_state
         self.confidence_band = confidence_band
         self.feedback = feedback
+        self.media_path = media_path
+        self.media_kind = media_kind
 
 
 @router.get("/diary", response_model=DiaryPage)
@@ -72,6 +76,7 @@ async def get_diary(
             domain=domain,
             dog_id=dog_id,
             q=q,
+            storage=state.storage,
         )
 
     store = state.store
@@ -105,6 +110,14 @@ async def get_diary(
                         if e.id in store.behavior_feedback
                         else None
                     ),
+                    media_path=(
+                        capture.storage_path
+                        if capture is not None
+                        and capture.storage_path
+                        and retention != RetentionState.DELETED
+                        else None
+                    ),
+                    media_kind="VIDEO",
                 )
             )
     if domain in (None, AnalysisDomain.DIGESTIVE):
@@ -125,6 +138,12 @@ async def get_diary(
                     _public_digestive_diary_status(e.status),
                     e.retention_state,
                     e.confidence_band,
+                    media_path=(
+                        e.image_path
+                        if e.image_path and e.retention_state != RetentionState.DELETED
+                        else None
+                    ),
+                    media_kind="PHOTO",
                 )
             )
 
@@ -137,6 +156,20 @@ async def get_diary(
         ]
 
     page, next_cursor = paginate_desc(entries, cursor=cursor, limit=limit)
+    signed: dict[tuple[str, str], str] = {}
+    for kind, bucket in (("VIDEO", "behavior-raw"), ("PHOTO", "digestive-raw")):
+        paths = [
+            entry.media_path
+            for entry in page
+            if entry.media_kind == kind and entry.media_path
+        ]
+        if paths:
+            urls = await state.storage.create_signed_read_urls(
+                bucket=bucket,
+                paths=paths,
+                ttl_seconds=600,
+            )
+            signed.update({(kind, path): url for path, url in urls.items()})
     return DiaryPage(
         items=[
             DiaryItem(
@@ -149,6 +182,12 @@ async def get_diary(
                 confidence_band=entry.confidence_band,
                 feedback=entry.feedback,
                 retention_state=entry.retention_state,
+                media_url=(
+                    signed.get((entry.media_kind, entry.media_path))
+                    if entry.media_kind and entry.media_path
+                    else None
+                ),
+                media_kind=entry.media_kind,
                 created_at=entry.created_at,
             )
             for entry in page

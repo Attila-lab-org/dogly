@@ -114,11 +114,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="around"
         options={{
-          title: 'Intorno a me',
-          href: null,
+          title: 'Cerca',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'location' : 'location-outline'}
+              name={focused ? 'search' : 'search-outline'}
               size={size}
               color={color as string}
             />

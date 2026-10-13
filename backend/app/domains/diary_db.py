@@ -22,6 +22,7 @@ from app.contracts.taxonomy import (
     FeedbackValue,
     RetentionState,
 )
+from app.providers.base import StorageProvider
 
 
 class _TimelineEntry:
@@ -43,6 +44,8 @@ class _TimelineEntry:
         )
         raw_retention = row.get("retention_state") or RetentionState.TEMPORARY.value
         self.retention_state = RetentionState(str(raw_retention))
+        self.media_path = row.get("media_path")
+        self.media_kind = row.get("media_kind")
 
 
 async def list_diary_page(
@@ -54,6 +57,7 @@ async def list_diary_page(
     domain: AnalysisDomain | None,
     dog_id: str | None,
     q: str | None = None,
+    storage: StorageProvider | None = None,
 ) -> DiaryPage:
     params: dict[str, Any] = {
         "user_id": user_id,
@@ -114,7 +118,9 @@ async def list_diary_page(
                              e.status::text as status,
                              coalesce(c.retention_state::text, 'TEMPORARY') as retention_state,
                              e.confidence_band::text as confidence_band,
-                             bf.value::text as feedback
+                             bf.value::text as feedback,
+                             case when c.retention_state::text = 'DELETED' then null else c.storage_path end as media_path,
+                             'VIDEO'::text as media_kind
                       from public.behavior_events e
                       left join public.behavior_captures c on c.id = e.capture_id
                       left join public.behavior_feedback bf on bf.event_id = e.id
@@ -138,7 +144,9 @@ async def list_diary_page(
                              end as status,
                              coalesce(f.retention_state::text, 'TEMPORARY') as retention_state,
                              f.confidence_band::text as confidence_band,
-                             null::text as feedback
+                             null::text as feedback,
+                             case when f.retention_state::text = 'DELETED' then null else f.image_path end as media_path,
+                             'PHOTO'::text as media_kind
                       from public.fecal_events f
                       where f.user_id = cast(:user_id as uuid)
                     ) timeline
@@ -160,6 +168,22 @@ async def list_diary_page(
     next_cursor = None
     if has_more and page_rows:
         next_cursor = encode_cursor(_TimelineEntry(page_rows[-1]))
+
+    signed: dict[tuple[str, str], str] = {}
+    if storage:
+        for kind, bucket in (("VIDEO", "behavior-raw"), ("PHOTO", "digestive-raw")):
+            paths = [
+                str(row["media_path"])
+                for row in page_rows
+                if row.get("media_kind") == kind and row.get("media_path")
+            ]
+            if paths:
+                urls = await storage.create_signed_read_urls(
+                    bucket=bucket,
+                    paths=paths,
+                    ttl_seconds=600,
+                )
+                signed.update({(kind, path): url for path, url in urls.items()})
 
     return DiaryPage(
         items=[
@@ -183,6 +207,12 @@ async def list_diary_page(
                 retention_state=RetentionState(
                     str(row.get("retention_state") or RetentionState.TEMPORARY.value)
                 ),
+                media_url=(
+                    signed.get((row.get("media_kind"), row.get("media_path")))
+                    if row.get("media_kind") and row.get("media_path")
+                    else None
+                ),
+                media_kind=row.get("media_kind"),
                 created_at=row["created_at"],
             )
             for row in page_rows
