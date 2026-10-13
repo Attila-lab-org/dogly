@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { PhotoThumbnail } from '@/features/photos/components';
 import { fetchDogPhotos } from '@/features/photos/api';
@@ -39,7 +38,6 @@ export default function DogProfileTabScreen() {
         </View>
         <View style={styles.sheet}>
           <View style={styles.identity}>
-            <DogAvatar size={58} photoUri={dog.photoUri} dogName={dog.name} />
             <View style={styles.identityCopy}><Text style={styles.name}>{dog.name || 'Il tuo cane'}</Text>{meta ? <Text style={styles.meta}>{meta}</Text> : null}</View>
             <Pressable accessibilityRole="button" accessibilityLabel={`Modifica profilo di ${dog.name}`} onPress={() => router.push(`/dogs/${dog.id}/edit` as never)} style={styles.pill}><Text style={styles.pillText}>Modifica</Text></Pressable>
           </View>
