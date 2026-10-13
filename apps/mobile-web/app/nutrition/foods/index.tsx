@@ -7,7 +7,7 @@ import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
+import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -17,9 +17,8 @@ import { isPersistedId } from '@/lib/persistedId';
 import { deleteFood, listFeedingPeriods, listFoods, type ApiFoodProduct } from '@/features/nutrition/api';
 
 function FoodRow({ food, active, onOpen, onRemove }: { food: ApiFoodProduct; active: boolean; onOpen: () => void; onRemove: () => void }) {
-  const verified = food.verified_at !== null;
   return (
-    <Card style={[styles.foodCard, ...(active ? [styles.activeCard] : []), ...(!verified ? [styles.pendingCard] : [])]}>
+    <Card style={[styles.foodCard, ...(active ? [styles.activeCard] : [])]}>
       <Pressable accessibilityRole="button" onPress={onOpen} style={styles.cardPressArea}>
         <View style={styles.foodHeader}>
           {food.catalog_image_url || food.label_image_url ? (
@@ -29,9 +28,6 @@ function FoodRow({ food, active, onOpen, onRemove }: { food: ApiFoodProduct; act
               accessibilityLabel={`Foto di ${food.name || 'questo alimento'}`}
             />
           ) : null}
-          <View style={styles.foodIconWrap}>
-            <Ionicons name={verified ? 'nutrition' : 'alert-circle-outline'} size={20} color={verified ? colors.accent : colors.warning} />
-          </View>
           <View style={styles.foodTextWrap}>
             <Text style={styles.foodBrand}>{food.brand || 'Marca da inserire'}</Text>
             <Text style={styles.foodName}>{food.name || 'Prodotto da verificare'}</Text>
@@ -39,8 +35,8 @@ function FoodRow({ food, active, onOpen, onRemove }: { food: ApiFoodProduct; act
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </View>
         <View style={styles.chipsRow}>
-          {active ? <Chip label="Cibo attivo" tone="accent" /> : null}
-          <Chip label={verified ? 'Verificato' : 'Da completare'} tone={verified ? 'success' : 'warning'} />
+          {active ? <View style={styles.activePill}><Text style={styles.activePillText}>Lo mangia adesso</Text></View> : null}
+          {food.verified_at === null ? <View style={styles.pendingPill}><Text style={styles.pendingPillText}>Da completare</Text></View> : null}
         </View>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`Rimuovi ${food.name || 'questo alimento'}`} onPress={onRemove} style={styles.removeAction}>
@@ -105,14 +101,13 @@ export default function FoodsScreen() {
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title={`Cibo di ${dog.name}`} />
-      <Text style={styles.intro}>Qui trovi il cibo attuale di {dog.name} e quelli salvati in precedenza.</Text>
       <Button title="Aggiungi alimento" icon={<Ionicons name="add" size={18} color={colors.textOnPrimary} />} onPress={() => router.push('/nutrition/foods/new' as never)} />
 
       {activeFood ? <>
         <Text style={styles.sectionTitle}>Alimento attuale</Text>
         <FoodRow food={activeFood} active onOpen={() => openFood(activeFood)} onRemove={() => { setRemoveError(null); setPendingId(activeFood.id); }} />
       </> : null}
-      {otherFoods.length ? <Text style={styles.sectionTitle}>Altri alimenti</Text> : null}
+      {otherFoods.length ? <Text style={styles.sectionTitle}>Alimenti salvati</Text> : null}
       {otherFoods.map((food) => <FoodRow key={food.id} food={food} active={false} onOpen={() => openFood(food)} onRemove={() => { setRemoveError(null); setPendingId(food.id); }} />)}
       {!foods.length ? <Text style={styles.emptyCopy}>Non hai ancora salvato alimenti.</Text> : null}
 
@@ -132,22 +127,23 @@ export default function FoodsScreen() {
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: typography.size.sm, color: colors.textSecondary, lineHeight: typography.size.sm * typography.lineHeight.relaxed, marginBottom: spacing.lg },
   sectionTitle: { marginTop: spacing.lg, marginBottom: spacing.sm, color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
   emptyCopy: { color: colors.textSecondary, fontSize: typography.size.sm, marginTop: spacing.lg },
   foodCard: { marginBottom: spacing.md, padding: spacing.md },
   foodImage: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.surfaceMuted, },
   activeCard: { borderWidth: 2, borderColor: colors.accent },
-  pendingCard: { backgroundColor: colors.warningSoft },
   cardPressArea: { gap: spacing.sm },
   removeAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md, alignSelf: 'flex-start', paddingVertical: spacing.xs },
   removeLabel: { color: colors.danger, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
   foodHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  foodIconWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   foodTextWrap: { flex: 1 },
   foodBrand: { fontSize: typography.size.xs, color: colors.textSecondary },
   foodName: { fontSize: typography.size.md, fontWeight: typography.weight.bold, color: colors.text },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  activePill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.accentSoft },
+  activePillText: { color: colors.accent, fontSize: 11, fontWeight: typography.weight.bold },
+  pendingPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.warningSoft },
+  pendingPillText: { color: colors.warning, fontSize: 11, fontWeight: typography.weight.bold },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(15,35,65,0.48)' },
   modalCard: { width: '100%', maxWidth: 380, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface },
   modalTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold, marginBottom: spacing.sm },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,7 @@ const CARE = {
 export default function CareAgendaScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const [view, setView] = useState<'upcoming' | 'completed'>('upcoming');
   const events = useCareEvents(dog.id, dog.name);
   // "Prossimo" = solo eventi SCHEDULED futuri (nextCareEvent): un evento
   // passato non completato non deve mai apparire come prossimo; resta però
@@ -43,7 +44,7 @@ export default function CareAgendaScreen() {
     <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title={`Agenda di ${dog.name}`} />
 
-      {next && nextDate ? (
+      {view === 'upcoming' && next && nextDate ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push(`/care/${next.id}` as never)}
@@ -148,7 +149,16 @@ export default function CareAgendaScreen() {
         style={styles.addButton}
       />
 
-      {upcoming.length > 0 ? (
+      <View style={styles.segmented} accessibilityRole="tablist">
+        <Pressable accessibilityRole="tab" accessibilityState={{ selected: view === 'upcoming' }} onPress={() => setView('upcoming')} style={[styles.segment, view === 'upcoming' && styles.segmentActive]}>
+          <Text style={[styles.segmentText, view === 'upcoming' && styles.segmentTextActive]}>Prossimi ({upcoming.length + (next ? 1 : 0)})</Text>
+        </Pressable>
+        <Pressable accessibilityRole="tab" accessibilityState={{ selected: view === 'completed' }} onPress={() => setView('completed')} style={[styles.segment, view === 'completed' && styles.segmentActive]}>
+          <Text style={[styles.segmentText, view === 'completed' && styles.segmentTextActive]}>Completati ({history.length})</Text>
+        </Pressable>
+      </View>
+
+      {view === 'upcoming' && upcoming.length > 0 ? (
         <>
           <Text style={styles.sectionTitle}>In programma</Text>
           <View style={styles.list}>
@@ -163,7 +173,7 @@ export default function CareAgendaScreen() {
         </>
       ) : null}
 
-      {history.length > 0 ? (
+      {view === 'completed' && history.length > 0 ? (
         <>
           <Text style={styles.sectionTitle}>Già fatti</Text>
           <View style={styles.list}>
@@ -300,6 +310,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.xl,
   },
+  segmented: { flexDirection: 'row', padding: 4, borderRadius: 9999, backgroundColor: '#EEF2F5', marginBottom: spacing.xl },
+  segment: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 9999 },
+  segmentActive: { backgroundColor: CARE.teal },
+  segmentText: { color: CARE.muted, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
+  segmentTextActive: { color: '#FFFFFF' },
   sectionTitle: {
     marginBottom: spacing.md,
     color: CARE.text,

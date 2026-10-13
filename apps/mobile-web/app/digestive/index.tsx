@@ -45,11 +45,11 @@ export default function DigestiveOverviewScreen() {
         <>
           <View style={styles.hero}>
             <View style={styles.icon}><Ionicons name="leaf-outline" size={26} color={colors.success} /></View>
-            <Text style={styles.title}>{copy.title}</Text>
-            <Text style={styles.body}>{copy.body}</Text>
+            <Text style={styles.title}>Controlliamo le feci di {dog.name}</Text>
+            <Text style={styles.body}>Scatta una foto per confrontarle con le precedenti.</Text>
             {query.data?.safety_flags.length ? <Text style={styles.notice}>Ho trovato un segnale da osservare con più attenzione.</Text> : null}
           </View>
-          <Button title="Osserva un nuovo momento" onPress={() => router.push('/digestive/capture' as never)} />
+          <Button title="Scatta la foto" onPress={() => router.push('/digestive/capture' as never)} />
           <Button title="Torna al profilo" variant="outline" onPress={() => router.back()} />
           <Text style={styles.footnote}>Una foto è un’osservazione, non una diagnosi. Se qualcosa ti preoccupa, chiedi al veterinario.</Text>
         </>

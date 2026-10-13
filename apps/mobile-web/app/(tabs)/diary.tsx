@@ -300,7 +300,7 @@ export default function DiaryScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Il diario di {dog.name}</Text>
           <Text style={styles.subtitle}>
-            I momenti che aiutano a comprendere come cambia nel tempo
+            La storia di {dog.name}, giorno dopo giorno.
           </Text>
           {showMemorySummary ? (
             <View style={styles.memorySummary}>

@@ -306,7 +306,7 @@ export default function NewFoodScreen() {
 
       {step === 'identify' ? (
         <>
-          <Text style={styles.title}>Quale alimento mangia?</Text>
+          <Text style={styles.title}>Cibo di {dog.name}</Text>
           <Text style={styles.subtitle}>
             Cerca per nome oppure fotografa la confezione. Prima di salvare
             sceglierai sempre tu il prodotto giusto.
@@ -346,7 +346,7 @@ export default function NewFoodScreen() {
           {!searching && catalogLoading ? <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>Carico gli alimenti disponibili…</Text> : null}
           {hits.length > 0 ? (
             <View style={styles.results}>
-              <Text style={styles.subtitle}>{query.trim() ? 'Risultati del catalogo' : 'Alimenti del catalogo'}</Text>
+              <View style={styles.resultsHeader}><Text style={styles.resultsTitle}>Risultati ({hits.length})</Text><Text style={styles.sortLabel}>Ordina ↑</Text></View>
               {hits.map((item) => (
                 <CandidateCard key={item.lookup_id || item.barcode} item={item} exact={false} onPress={() => choose(item)} />
               ))}
@@ -641,7 +641,7 @@ function CandidateCard({
         {onPress ? <Text style={styles.productAction}>Tocca per verificare questo alimento</Text> : null}
       </View>
       {onPress ? (
-        <Ionicons name="chevron-forward" size={20} color={colors.iconMuted} />
+        <View style={styles.addCircle}><Ionicons name="add" size={22} color="#FFFFFF" /></View>
       ) : (
         <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
       )}
@@ -741,6 +741,9 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
   },
   results: { gap: spacing.sm },
+  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  resultsTitle: { color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
+  sortLabel: { color: colors.textSecondary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold },
   searchStatus: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
   previewBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(15,35,65,0.48)' },
   previewCard: { width: '100%', maxWidth: 360, padding: spacing.lg, gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface },
@@ -802,6 +805,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   productAction: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold, marginTop: spacing.xs },
+  addCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   manualFields: { gap: spacing.sm },
   fieldLabel: {
     color: colors.text,

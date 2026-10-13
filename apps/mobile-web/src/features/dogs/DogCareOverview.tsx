@@ -15,7 +15,7 @@ import { feedingPeriodsMock, foodProductsMock } from '../../mocks/secondary';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { digestiveSummaryLabel, foodSummary, routineSummary } from './profileSummary';
 
-export function DogCareOverview({ dogId, dogName }: { dogId: string; dogName: string }) {
+export function DogCareOverview({ dogId, dogName, compact = false }: { dogId: string; dogName: string; compact?: boolean }) {
   const router = useRouter();
   const { userId, usingMockGate } = useSession();
   const enabled = !usingMockGate && isPersistedId(dogId);
@@ -42,39 +42,42 @@ export function DogCareOverview({ dogId, dogName }: { dogId: string; dogName: st
       : routineSummary(lifestyle.profile);
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>Ogni giorno con {dogName}</Text>
       <View style={styles.card}>
-        <CareRow icon="nutrition-outline" title="Alimentazione" detail={feeding} onPress={() => router.push('/nutrition/foods')} />
-        <CareRow icon="leaf-outline" title="Benessere" detail={digestiveSummaryLabel(digestive.data, enabled && digestive.isLoading, enabled && digestive.isError)} onPress={() => router.push('/digestive' as never)} />
-        <CareRow icon="walk-outline" title="Routine" detail={routine} onPress={() => router.push(`/dogs/${dogId}/lifestyle` as never)} />
-        <CareRow icon="calendar-outline" title="Agenda" detail={careLoading ? 'Carico gli appuntamenti…' : nextCare ? nextCare.title + ' · ' + relativeCareDate(nextCare.scheduledAt) : 'Apri appuntamenti e promemoria'} onPress={() => router.push('/care' as never)} last />
+        <CareRow compact={compact} tone="food" icon="nutrition-outline" title="Alimentazione" detail={feeding} onPress={() => router.push('/nutrition/foods')} />
+        <CareRow compact={compact} tone="wellness" icon="heart-outline" title="Digestione" detail={digestiveSummaryLabel(digestive.data, enabled && digestive.isLoading, enabled && digestive.isError)} onPress={() => router.push('/digestive' as never)} />
+        <CareRow compact={compact} tone="routine" icon="walk-outline" title="Routine" detail={routine} onPress={() => router.push(`/dogs/${dogId}/lifestyle` as never)} />
+        <CareRow compact={compact} tone="agenda" icon="calendar-outline" title="Agenda" detail={careLoading ? 'Carico gli appuntamenti…' : nextCare ? nextCare.title + ' · ' + relativeCareDate(nextCare.scheduledAt) : 'Appuntamenti e promemoria'} onPress={() => router.push('/care' as never)} />
       </View>
     </View>
   );
 }
 
-function CareRow({ icon, title, detail, onPress, last }: {
-  icon: keyof typeof Ionicons.glyphMap; title: string; detail: string; onPress: () => void; last?: boolean;
+const tones = {
+  food: { background: '#FFF5F1', icon: '#ED752B', soft: '#FFEBDD' },
+  wellness: { background: '#F0FAF6', icon: '#079D78', soft: '#DDF6EA' },
+  routine: { background: '#F1F8FF', icon: '#0077D8', soft: '#E1F1FF' },
+  agenda: { background: '#F6F3FF', icon: '#8650CC', soft: '#EEE5FF' },
+};
+
+function CareRow({ icon, title, detail, onPress, compact, tone }: {
+  icon: keyof typeof Ionicons.glyphMap; title: string; detail: string; onPress: () => void; compact: boolean; tone: keyof typeof tones;
 }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={title + ': ' + detail}
-      onPress={onPress} style={({ pressed }) => [styles.row, !last && styles.border, pressed && styles.pressed]}>
-      <View style={styles.icon}><Ionicons name={icon} size={22} color={colors.primary} /></View>
-      <View style={styles.copy}><Text style={styles.title}>{title}</Text><Text style={styles.detail}>{detail}</Text></View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      onPress={onPress} style={({ pressed }) => [styles.row, compact && { backgroundColor: tones[tone].background, minHeight: 76 }, pressed && styles.pressed]}>
+      <View style={[styles.icon, { backgroundColor: tones[tone].soft }]}><Ionicons name={icon} size={24} color={tones[tone].icon} /></View>
+      <View style={styles.copy}><Text style={styles.title}>{title}</Text>{!compact ? <Text style={styles.detail} numberOfLines={2}>{detail}</Text> : null}</View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: spacing.xl },
-  heading: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold, marginBottom: spacing.md },
-  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: 'hidden' },
-  row: { minHeight: 86, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  border: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  icon: { width: 42, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  section: { marginBottom: spacing.sm },
+  card: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  row: { width: '48%', flexGrow: 1, minHeight: 92, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  icon: { width: 42, height: 42, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, gap: 4 },
-  title: { color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.semibold },
-  detail: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
+  title: { color: colors.text, fontSize: 13, fontWeight: typography.weight.semibold },
+  detail: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
   pressed: { opacity: 0.75 },
 });
