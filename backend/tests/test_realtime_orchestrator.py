@@ -5,7 +5,6 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-
 from app.api.routes import realtime as realtime_route
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
@@ -17,6 +16,7 @@ from app.contracts.realtime import RealtimeDecision
 from app.domains import realtime_orchestrator as realtime_orchestrator_module
 from app.domains.models import BehaviorEventRec, FecalEventRec
 from app.domains.realtime_context import (
+    CONVERSATION_MESSAGE_LIMIT,
     RealtimeContextItem,
     RealtimeDogContext,
     conversation_topic,
@@ -34,6 +34,7 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
+
 from tests.conftest import create_dog
 
 
@@ -830,7 +831,7 @@ async def test_realtime_reasoner_receives_real_continuity_and_core_facts(
     expected_histories: list[list[dict[str, str]]] = []
     for user_text, domains, items, expected_sources in scenarios:
         history = list(conversation)
-        expected_histories.append(history[-8:])
+        expected_histories.append(history[-CONVERSATION_MESSAGE_LIMIT:])
         context = base_context.model_copy(
             update={"items": items}
         )
@@ -929,8 +930,7 @@ async def test_realtime_payload_keeps_only_recent_conversation_window(monkeypatc
     body = captured["body"]
     payload = body["messages"][1]["content"]
     parsed = json.loads(payload.removeprefix("PERSONAL_DOG_CONTEXT\n"))
-    assert "vecchio-0" not in payload
-    assert "vecchio-1" not in payload
+    assert len(parsed["conversation"]) <= CONVERSATION_MESSAGE_LIMIT
     assert "recente-4" in payload
     assert body["reasoning_effort"] == "low"
     assert parsed["conversation_state"]["recent_media_invite"] is True

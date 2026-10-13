@@ -7,6 +7,7 @@ results. Does not own writes or create a parallel memory store.
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,12 +24,16 @@ from app.contracts.provenance import PROVENANCE_OWNER_LABEL, normalize_provenanc
 from app.contracts.realtime import RealtimeDomain
 from app.domains.dog_context import build_dog_context
 from app.domains.models import DogRec
-from app.domains.owner_stories import clean_owner_stories, normalized_statement
+from app.domains.owner_stories import (
+    clean_owner_stories,
+    is_persistent_owner_fact,
+    normalized_statement,
+)
 from app.domains.repository import InMemoryStore
 from app.knowledge.models import DogContextSnapshot, LifestyleFact
 from app.providers.base import EligiblePatternSummary
 
-PERSONAL_DOG_CONTEXT_VERSION = "personal-dog-context/v2"
+PERSONAL_DOG_CONTEXT_VERSION = "personal-dog-context/v3"
 
 _SOURCE_DOMAIN: dict[str, CanineDomain] = {
     "BEHAVIOR_EVENT": "BEHAVIOR",
@@ -39,6 +44,47 @@ _SOURCE_DOMAIN: dict[str, CanineDomain] = {
     "CARE_EVENT": "CARE",
     "WEIGHT": "CARE",
 }
+
+# Historical catalog rows can be linked to a feeding period even when the
+# label was a test scan or a product for another species. Keep those records
+# intact for audit/history, but do not let them become the dog's active diet in
+# the model context. This is deliberately a small conservative gate: an
+# unknown product remains usable, while an explicitly contradictory label is
+# ignored until the owner corrects it.
+_FOOD_CONTEXT_EXCLUSION_TERMS = (
+    "cat food",
+    "cat-food",
+    "for cats",
+    "per gatti",
+    "gatto",
+    "gatti",
+    "kattenvoer",
+    "felix",
+    "whiskas",
+    "sheba",
+    "purina gourmet",
+    "pond's",
+    "dreamlower",
+    "oral care",
+    "whitening",
+    "kumur",
+    "shampoo",
+    "test food",
+    "dummy",
+    "placeholder",
+    "mock product",
+    "fixture",
+)
+
+
+def _food_context_allowed(*values: Any) -> bool:
+    searchable = " ".join(
+        str(value or "") for value in values if value is not None
+    ).casefold()
+    return not any(
+        re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", searchable)
+        for term in _FOOD_CONTEXT_EXCLUSION_TERMS
+    )
 
 
 def _as_datetime(value: Any) -> datetime | None:
@@ -112,6 +158,7 @@ def _personal_facts_from_context(
         domain: CanineDomain = "PROFILE",
         last_confirmed_at: datetime | None = None,
         source_id: str | None = None,
+        episodic: bool = False,
     ) -> None:
         if value is None or value == "" or value == [] or value == {}:
             return
@@ -127,6 +174,7 @@ def _personal_facts_from_context(
         fact = PersonalFact(
             key=key, value=value, provenance=normalize_provenance(provenance),
             domain=domain, last_confirmed_at=last_confirmed_at, source_id=source_id,
+            scope="EPISODIC" if episodic else "PERSISTENT",
         )
         existing = facts.get(fingerprint)
         if existing is None or (source_id and not existing.source_id):
@@ -153,6 +201,8 @@ def _personal_facts_from_context(
                 item.provenance,
                 domain=domain,
                 last_confirmed_at=item.last_confirmed_at,
+                episodic=bucket_name in {"today_vs_usual", "recent_changes"}
+                or (bucket_name == "health_context" and not is_persistent_owner_fact(str(item.value), "HEALTH")),
             )
     for key, item in context.routine.items():
         if item is None:
@@ -178,13 +228,18 @@ def _personal_facts_from_context(
             if not statement:
                 continue
             category = str(fact.get("category") or "GENERAL").lower()
+            fact_source_id = str(
+                fact.get("id")
+                or f"{story_id}:{normalized_statement(statement)}"
+            )
             _add(
                 f"owner_{category}",
                 statement,
                 "OWNER_CONFIRMED",
                 domain={"diet": "NUTRITION", "health": "CARE", "routine": "BEHAVIOR", "preference": "BEHAVIOR"}.get(category, "PROFILE"),
                 last_confirmed_at=confirmed_at,
-                source_id=story_id or None,
+                source_id=fact_source_id or None,
+                episodic=not is_persistent_owner_fact(statement, category),
             )
     return list(facts.values())
 
@@ -336,7 +391,7 @@ async def load_cross_domain_evidence_db(
                                last_seen
                         from public.personal_patterns
                         where dog_id=cast(:dog_id as uuid)
-                          and state in ('PRELIMINARY','ESTABLISHED','STRONG')
+                          and state in ('CANDIDATE','PRELIMINARY','ESTABLISHED','STRONG')
                         order by last_seen desc
                         """
                     ),
@@ -344,6 +399,8 @@ async def load_cross_domain_evidence_db(
                 )
             ).mappings().all()
             for row in patterns:
+                state = str(row.get("state") or "CANDIDATE")
+                mature = state in {"ESTABLISHED", "STRONG"}
                 items.append(
                     _evidence_item(
                         source_id=str(row["id"]),
@@ -351,11 +408,12 @@ async def load_cross_domain_evidence_db(
                         occurred_at=row.get("last_seen"),
                         summary=str(row["title"]),
                         data=dict(row),
-                        provenance="ESTABLISHED_PATTERN",
+                        provenance="ESTABLISHED_PATTERN" if mature else "INFERRED",
+                        verification="VERIFIED" if mature else "INFERRED",
                     )
                 )
 
-        if want_all or "DIGESTIVE" in selected or "NUTRITION" in selected:
+        if want_all or "DIGESTIVE" in selected:
             rows = (
                 await conn.execute(
                     text(
@@ -414,6 +472,12 @@ async def load_cross_domain_evidence_db(
                 )
             ).mappings().all()
             for feeding in feedings:
+                if not _food_context_allowed(
+                    feeding.get("name"),
+                    feeding.get("brand"),
+                    feeding.get("ingredients_raw"),
+                ):
+                    continue
                 active = feeding["end_at"] is None
                 name = feeding["name"] or feeding["brand"] or "cibo"
                 verified = feeding["verified_at"] is not None
@@ -498,6 +562,12 @@ def load_cross_domain_evidence_memory(
             food = store.food_products.get(period.food_product_id)
             if food is None or food.archived_at is not None:
                 continue
+            if not _food_context_allowed(
+                getattr(food, "name", None),
+                getattr(food, "brand", None),
+                getattr(food, "ingredients_raw", None),
+            ):
+                continue
             items.append(
                 _evidence_item(
                     source_id=period.id,
@@ -547,6 +617,32 @@ def load_cross_domain_evidence_memory(
                         or consumer.get("consumer_headline"),
                         "intent": event.primary_intent,
                     },
+                )
+            )
+        for pattern in store.patterns.values():
+            if pattern.dog_id != dog_id:
+                continue
+            state = getattr(pattern.state, "value", pattern.state)
+            state = str(state or "CANDIDATE")
+            if state not in {"CANDIDATE", "PRELIMINARY", "ESTABLISHED", "STRONG"}:
+                continue
+            mature = state in {"ESTABLISHED", "STRONG"}
+            items.append(
+                _evidence_item(
+                    source_id=pattern.id,
+                    source_type="PERSONAL_PATTERN",
+                    occurred_at=pattern.last_seen,
+                    summary=pattern.title,
+                    data={
+                        "state": state,
+                        "reliability_band": pattern.reliability_band,
+                        "intent_code": pattern.intent_code,
+                        "context_bucket": pattern.context_bucket,
+                        "support_count": pattern.support_count,
+                        "confirm_count": pattern.confirm_count,
+                    },
+                    provenance="ESTABLISHED_PATTERN" if mature else "INFERRED",
+                    verification="VERIFIED" if mature else "INFERRED",
                 )
             )
 
@@ -634,6 +730,7 @@ def personal_to_stable_facts(
                 "value": fact.value,
                 "statement": fact.value if isinstance(fact.value, str) else None,
                 "domain": fact.domain,
+                "scope": fact.scope,
                 "origin": fact.provenance,
                 "provenance": fact.provenance,
                 "verification_status": (
@@ -658,6 +755,7 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
             "value": fact.value,
             "statement": fact.value if isinstance(fact.value, str) else None,
             "domain": fact.domain,
+            "scope": fact.scope,
             "origin": fact.provenance,
             "provenance": fact.provenance,
             "verification_status": (
@@ -674,6 +772,7 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
         }
         for fact in personal.personal_facts
         if fact.domain in {"CARE", "NUTRITION"}
+        and fact.scope == "PERSISTENT"
     ]
     for item in personal.evidence:
         if item.source_type == "FEEDING_PERIOD" and item.data.get("end_at") is None:
@@ -693,6 +792,7 @@ def personal_to_core_facts(personal: PersonalDogContext) -> list[dict[str, Any]]
                     ),
                     "feeding_directions": item.data.get("feeding_directions"),
                     "domain": "NUTRITION",
+                    "scope": "PERSISTENT",
                     "origin": item.provenance,
                     "provenance": item.provenance,
                     "verification_status": "CONFIRMED",

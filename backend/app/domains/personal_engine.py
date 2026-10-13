@@ -232,14 +232,29 @@ def is_behavior_learning_eligible(event: BehaviorEventRec) -> bool:
 
 
 async def on_behavior_completed(state: AppState, event: BehaviorEventRec) -> None:
-    """Best-effort: analysis success must not fail because scoring failed."""
+    """Refresh behavioral knowledge after every completed analysis.
+
+    Only eligible observations can create or update a permanent pattern, but
+    the score timestamp must still advance for a completed low-quality or
+    ambiguous analysis. Otherwise the UI presents an old score as if nothing
+    had been processed. The score remains intentionally behavior-only;
+    digestive and nutrition evidence are represented by PersonalDogContext.
+    """
     intent = event.primary_intent
-    if intent is None:
-        return
-    intent_value = intent.value if hasattr(intent, "value") else str(intent)
-    if not is_behavior_learning_eligible(event):
-        return
     try:
+        if intent is None:
+            if state.engine is not None:
+                await recalculate_knowledge_score_db(state.engine, dog_id=event.dog_id)
+            else:
+                recalculate_knowledge_score_memory(state.store, dog_id=event.dog_id)
+            return
+        intent_value = intent.value if hasattr(intent, "value") else str(intent)
+        if not is_behavior_learning_eligible(event):
+            if state.engine is not None:
+                await recalculate_knowledge_score_db(state.engine, dog_id=event.dog_id)
+            else:
+                recalculate_knowledge_score_memory(state.store, dog_id=event.dog_id)
+            return
         if state.engine is not None:
             await upsert_intent_pattern_db(
                 state.engine,

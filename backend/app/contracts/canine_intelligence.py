@@ -100,6 +100,7 @@ class PersonalFact(BaseModel):
     domain: CanineDomain = "PROFILE"
     last_confirmed_at: datetime | None = None
     source_id: str | None = None
+    scope: Literal["PERSISTENT", "EPISODIC"] = "PERSISTENT"
 
 
 class PersonalDogContext(BaseModel):
@@ -107,7 +108,7 @@ class PersonalDogContext(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: str = "personal-dog-context/v2"
+    version: str = "personal-dog-context/v3"
     dog_id: str
     dog_name: str
     owner_display_name: str | None = None

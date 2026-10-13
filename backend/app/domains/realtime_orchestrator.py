@@ -16,7 +16,10 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.contracts.realtime import RealtimeDecision, RealtimeDomain
 from app.domains.owner_stories import extract_owner_reported_facts
-from app.domains.realtime_context import RealtimeDogContext
+from app.domains.realtime_context import (
+    CONVERSATION_MESSAGE_LIMIT,
+    RealtimeDogContext,
+)
 from app.knowledge.claim_validation import (
     extract_claims_from_provider_payload,
     infer_claims_from_answer,
@@ -25,7 +28,7 @@ from app.knowledge.claim_validation import (
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v5"
-REALTIME_HISTORY_LIMIT = 8
+REALTIME_HISTORY_LIMIT = CONVERSATION_MESSAGE_LIMIT
 
 _URGENT_RULES: tuple[tuple[str, str, str], ...] = (
     (

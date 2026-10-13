@@ -15,6 +15,36 @@ def normalized_statement(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).casefold().split()).rstrip(".! ")
 
 
+def is_persistent_owner_fact(statement: str, category: str = "GENERAL") -> bool:
+    """A confirmed episode is remembered, but is not a permanent constraint.
+
+    Use a conservative read projection, never rewrite the owner's record.
+    Durable health constraints stay available for any recommendation; ordinary
+    routine/preferences are retrieved when relevant instead of filling the core.
+    """
+    value = normalized_statement(statement)
+    if re.search(
+        r"\b(oggi|ieri|stamattina|stasera|recentemente|poco fa|"
+        r"questa settimana|in questi giorni|ho cambiato|ha cambiato)\b",
+        value,
+    ):
+        return False
+    if re.search(
+        r"amput|allergic|allergi[ae]|intolleran|ciec|sord|disabil|"
+        r"diabet|epiless|cronico|cronica|cronici|croniche|"
+        r"(?:assume|prende|terapia|farmaco).*(?:sempre|ogni giorno|quotidian|continu)",
+        value,
+    ):
+        return True
+    if re.search(
+        r"vomit|rigurgit|diarrea|dolore|febbre|zopp|prurit|tosse|"
+        r"sangue|letarg|non mangia|feci|cacca",
+        value,
+    ):
+        return False
+    return category.upper() in {"DIET", "ROUTINE", "PREFERENCE"}
+
+
 def clean_owner_stories(stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Clean the read projection; retain original records for owner edits/deletion.
 

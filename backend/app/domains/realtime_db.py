@@ -9,7 +9,10 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.domains.realtime_context import conversation_topic
+from app.domains.realtime_context import (
+    CONVERSATION_TURN_LIMIT,
+    conversation_topic,
+)
 from app.domains.repository import InMemoryStore, now_utc
 
 
@@ -45,7 +48,7 @@ async def upsert_conversation_memory_db(
         return None
     topic = conversation_topic(user_texts, dog_name=dog_name)
     history: list[dict[str, Any]] = []
-    for turn in turns[-4:]:
+    for turn in turns[-CONVERSATION_TURN_LIMIT:]:
         history.append({"role": "proprietario", "content": turn["user_transcript"]})
         decision = dict(turn.get("decision_json") or {})
         history.append(
@@ -173,7 +176,7 @@ async def create_session_db(
                     dog_name=str(old["dog_name"]),
                 )
                 history = []
-                for turn in list(turns)[-4:]:
+                for turn in list(turns)[-CONVERSATION_TURN_LIMIT:]:
                     history.append(
                         {"role": "proprietario", "content": turn["user_transcript"]}
                     )
@@ -311,10 +314,14 @@ async def load_history_db(
                     where session_id=cast(:session_id as uuid)
                       and user_id=cast(:user_id as uuid)
                     order by ordinal desc
-                    limit 6
+                    limit :history_turn_limit
                     """
                 ),
-                {"session_id": session_id, "user_id": user_id},
+                {
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "history_turn_limit": CONVERSATION_TURN_LIMIT,
+                },
             )
         ).mappings().all()
     history: list[dict[str, Any]] = []

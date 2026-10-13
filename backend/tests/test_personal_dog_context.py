@@ -7,13 +7,17 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
-
 from app.config import Settings
 from app.contracts.canine_intelligence import CanineEvidenceItem
 from app.contracts.provenance import normalize_provenance
 from app.domains import realtime_orchestrator
 from app.domains.dog_context import build_dog_context
-from app.domains.models import DogRec, FeedingPeriodRec, FoodProductRec
+from app.domains.models import (
+    DogRec,
+    FeedingPeriodRec,
+    FoodProductRec,
+    PersonalPatternRec,
+)
 from app.domains.personal_dog_context import (
     assemble_behavior_dog_context,
     build_personal_dog_context,
@@ -23,6 +27,7 @@ from app.domains.personal_dog_context import (
     personal_to_stable_facts,
 )
 from app.domains.realtime_context import (
+    load_realtime_context_memory,
     realtime_context_from_personal,
     route_realtime_domains,
 )
@@ -186,6 +191,120 @@ def test_unlinked_catalog_food_is_not_personal_dog_context() -> None:
     )
 
     assert all(item.source_type != "FOOD_PRODUCT" for item in evidence)
+
+
+def test_linked_non_dog_food_is_excluded_without_deleting_history() -> None:
+    store = InMemoryStore()
+    dog = _dog()
+    store.dogs[dog.id] = dog
+    now = datetime.now(UTC)
+    store.food_products["cat-food"] = FoodProductRec(
+        id="cat-food",
+        owner_id=dog.owner_id,
+        dog_id=dog.id,
+        client_request_id="cat-food",
+        name="Felix Soup",
+        created_at=now,
+    )
+    store.food_products["dog-food"] = FoodProductRec(
+        id="dog-food",
+        owner_id=dog.owner_id,
+        dog_id=dog.id,
+        client_request_id="dog-food",
+        name="Monge Natural Superpremium",
+        created_at=now,
+    )
+    store.feeding_periods["cat-period"] = FeedingPeriodRec(
+        id="cat-period", dog_id=dog.id, food_product_id="cat-food", start_at=now
+    )
+    store.feeding_periods["dog-period"] = FeedingPeriodRec(
+        id="dog-period", dog_id=dog.id, food_product_id="dog-food", start_at=now
+    )
+
+    evidence = load_cross_domain_evidence_memory(
+        store, dog_id=dog.id, domains=["NUTRITION"]
+    )
+
+    assert [item.source_id for item in evidence] == ["dog-period"]
+    assert "cat-food" in store.food_products
+    assert "cat-period" in store.feeding_periods
+
+
+def test_candidate_pattern_reaches_context_as_inferred_evidence() -> None:
+    store = InMemoryStore()
+    dog = _dog()
+    store.dogs[dog.id] = dog
+    store.patterns["pattern-1"] = PersonalPatternRec(
+        id="pattern-1",
+        dog_id=dog.id,
+        title="Cerca spesso il tuo coinvolgimento",
+        last_seen=datetime.now(UTC),
+    )
+
+    evidence = load_cross_domain_evidence_memory(
+        store, dog_id=dog.id, domains=["BEHAVIOR"]
+    )
+
+    pattern = next(item for item in evidence if item.source_type == "PERSONAL_PATTERN")
+    assert pattern.source_id == "pattern-1"
+    assert pattern.provenance == "INFERRED"
+    assert pattern.verification == "INFERRED"
+
+
+def test_episodic_owner_health_stays_retrievable_but_out_of_core() -> None:
+    dog = _dog()
+    personal = build_personal_dog_context(
+        dog=dog,
+        dog_context=build_dog_context(dog, {}),
+        stories=[
+            {
+                "id": "story-stool",
+                "confirmed_at": datetime.now(UTC),
+                "facts": [
+                    {"statement": "Oreo ha feci formate", "category": "HEALTH"},
+                    {"statement": "Oreo ha una zampa amputata", "category": "HEALTH"},
+                ],
+            }
+        ],
+    )
+
+    stable = personal_to_stable_facts(personal, domains=["DIGESTIVE"])
+    core = personal_to_core_facts(personal)
+    realtime = realtime_context_from_personal(
+        personal,
+        domains=["DIGESTIVE"],
+        user_text="Come vanno le feci di Oreo?",
+    )
+
+    assert any("feci formate" in str(item["value"]) for item in stable)
+    assert not any("feci formate" in str(item["value"]) for item in core)
+    assert any("amputata" in str(item["value"]) for item in core)
+    assert any("feci formate" in str(item["value"]) for item in realtime.stable_facts)
+
+
+def test_active_feeding_is_core_even_on_general_turn() -> None:
+    store = InMemoryStore()
+    dog = _dog()
+    store.dogs[dog.id] = dog
+    now = datetime.now(UTC)
+    store.food_products["food"] = FoodProductRec(
+        id="food",
+        owner_id=dog.owner_id,
+        dog_id=dog.id,
+        client_request_id="food",
+        name="Monge Natural",
+        created_at=now,
+        verified_at=now,
+    )
+    store.feeding_periods["period"] = FeedingPeriodRec(
+        id="period", dog_id=dog.id, food_product_id="food", start_at=now
+    )
+
+    context = load_realtime_context_memory(
+        store, dog_id=dog.id, domains=["GENERAL"], user_text="Ciao"
+    )
+
+    assert any(item["key"] == "active_feeding" for item in context.core_facts)
 
 
 def test_stable_facts_are_independent_of_turn_wording() -> None:

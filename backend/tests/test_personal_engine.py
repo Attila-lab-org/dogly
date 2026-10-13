@@ -11,6 +11,7 @@ from app.domains.personal_engine import (
     semantic_pattern_similarity,
 )
 from app.domains.repository import new_id, now_utc
+
 from tests.conftest import create_dog
 
 
@@ -55,6 +56,7 @@ async def test_low_confidence_event_does_not_write_pattern_signature(state):
     state.store.behavior_events[event.id] = event
     await on_behavior_completed(state, event)
     assert event.id not in state.store.behavior_pattern_signatures
+    assert state.store.knowledge_scores[-1]["dog_id"] == event.dog_id
 
 
 async def test_good_medium_event_can_write_pattern_signature(state):

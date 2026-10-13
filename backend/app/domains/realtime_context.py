@@ -23,14 +23,26 @@ from app.domains.personal_dog_context import (
 )
 from app.domains.repository import InMemoryStore
 
-REALTIME_CONTEXT_VERSION = "personal-dog-context/v2"
+REALTIME_CONTEXT_VERSION = "personal-dog-context/v3"
 REALTIME_EVIDENCE_LIMIT = 16
+# Keep a useful conversational window across sessions without turning the
+# provider payload into an unbounded transcript. Twelve turns is enough to
+# resolve references such as "quello di ieri" while durable dog facts remain
+# in PersonalDogContext.
+CONVERSATION_TURN_LIMIT = 12
+CONVERSATION_MESSAGE_LIMIT = CONVERSATION_TURN_LIMIT * 2
 _EVIDENCE_DOMAINS = {
     "BEHAVIOR_EVENT": "BEHAVIOR",
     "PERSONAL_PATTERN": "BEHAVIOR",
     "DIGESTIVE_EVENT": "DIGESTIVE",
     "FEEDING_PERIOD": "NUTRITION",
     "CARE_EVENT": "CARE",
+}
+_STABLE_DOMAIN_ALIASES = {
+    "DIGESTIVE": {"DIGESTIVE", "CARE", "NUTRITION"},
+    "NUTRITION": {"NUTRITION", "DIGESTIVE", "CARE"},
+    "BEHAVIOR": {"BEHAVIOR", "PROFILE"},
+    "CARE": {"CARE", "PROFILE"},
 }
 _CONTEXT_STOPWORDS = {
     "cosa", "come", "quale", "quali", "perché", "perche", "posso", "devo",
@@ -286,7 +298,15 @@ def realtime_context_from_personal(
         personal, user_text=user_text, domains=domains, limit=16
     )
     if selected_domains:
-        stable = [fact for fact in stable if fact.get("domain") in selected_domains]
+        allowed_stable_domains = set().union(
+            *(
+                _STABLE_DOMAIN_ALIASES.get(domain, {domain})
+                for domain in selected_domains
+            )
+        )
+        stable = [
+            fact for fact in stable if fact.get("domain") in allowed_stable_domains
+        ]
     else:
         # A GENERAL turn is conversational, not a request for the dog's full
         # stable-memory set. Core facts remain available as durable constraints;
@@ -368,7 +388,12 @@ async def load_realtime_context_db(
         ).mappings().all()
 
     evidence = await load_cross_domain_evidence_db(
-        engine, user_id=user_id, dog_id=dog_id, domains=domains
+        engine,
+        user_id=user_id,
+        dog_id=dog_id,
+        # Active feeding is a recommendation-critical core fact and must be
+        # available even when the current message has no nutrition keywords.
+        domains=list({*domains, "NUTRITION"}),
     )
     dog_rec = DogRec(
         id=str(dog["id"]),
@@ -425,7 +450,7 @@ def load_realtime_context_memory(
 ) -> RealtimeDogContext:
     dog = store.dogs[dog_id]
     evidence = load_cross_domain_evidence_memory(
-        store, dog_id=dog_id, domains=domains
+        store, dog_id=dog_id, domains=list({*domains, "NUTRITION"})
     )
     lifestyle = store.dog_lifestyle_profiles.get((dog.owner_id, dog_id)) or {}
     if hasattr(lifestyle, "model_dump"):

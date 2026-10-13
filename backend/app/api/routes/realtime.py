@@ -30,6 +30,8 @@ from app.domains import (
 )
 from app.domains.gallery_db import GALLERY_BUCKET
 from app.domains.realtime_context import (
+    CONVERSATION_MESSAGE_LIMIT,
+    CONVERSATION_TURN_LIMIT,
     REALTIME_CONTEXT_VERSION,
     conversation_topic,
     focus_behavior_event,
@@ -92,7 +94,7 @@ def _resume_history(
     for size in range(1, min(len(resumed), len(current)) + 1):
         if resumed[-size:] == current[:size]:
             overlap = size
-    return (resumed + current[overlap:])[-12:]
+    return (resumed + current[overlap:])[-CONVERSATION_MESSAGE_LIMIT:]
 
 
 @router.post("/sessions", response_model=RealtimeSessionOut, status_code=201)
@@ -289,7 +291,9 @@ async def create_realtime_turn(
                     ),
                 )
             history = []
-            for turn in state.store.realtime_turns.get(session_id, [])[-6:]:
+            for turn in state.store.realtime_turns.get(session_id, [])[
+                -CONVERSATION_TURN_LIMIT:
+            ]:
                 history.extend(
                     [
                         {"role": "user", "content": turn["user_transcript"]},
@@ -517,7 +521,7 @@ def _store_conversation_memory(store: Any, session: dict[str, Any]) -> None:
         dog_name=getattr(dog, "name", "il cane"),
     )
     history = []
-    for turn in turns[-4:]:
+    for turn in turns[-CONVERSATION_TURN_LIMIT:]:
         history.append({"role": "proprietario", "content": turn["user_transcript"]})
         decision = turn.get("decision_json") or {}
         history.append(
