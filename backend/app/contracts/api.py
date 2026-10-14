@@ -23,6 +23,7 @@ from app.contracts.taxonomy import (
     CareEventStatus,
     CareEventType,
     ConfidenceBand,
+    DailyActivityKind,
     ContextBucket,
     FeedbackValue,
     IntentCode,
@@ -391,6 +392,63 @@ class CareEventOut(BaseModel):
 
 class CareEventListResponse(CursorPage):
     items: list[CareEventOut]
+
+
+# ---------------------------------------------------------------------------
+# Daily routine activities
+# ---------------------------------------------------------------------------
+
+
+class DailyActivityCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    activity_kind: DailyActivityKind = DailyActivityKind.OTHER
+    local_time_minutes: int = Field(ge=0, le=1439)
+    duration_minutes: int | None = Field(default=None, ge=1, le=480)
+    weekday_mask: int = Field(default=127, ge=1, le=127)
+    notes: str | None = Field(default=None, max_length=240)
+
+
+class DailyActivityUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=80)
+    activity_kind: DailyActivityKind | None = None
+    local_time_minutes: int | None = Field(default=None, ge=0, le=1439)
+    duration_minutes: int | None = Field(default=None, ge=1, le=480)
+    weekday_mask: int | None = Field(default=None, ge=1, le=127)
+    notes: str | None = Field(default=None, max_length=240)
+    active: bool | None = None
+
+
+class DailyActivityOut(BaseModel):
+    id: str
+    dog_id: str
+    title: str
+    activity_kind: DailyActivityKind
+    local_time_minutes: int
+    duration_minutes: int | None = None
+    weekday_mask: int
+    notes: str | None = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class DailyActivityListResponse(BaseModel):
+    items: list[DailyActivityOut]
+
+
+class NearbyPlaceOut(BaseModel):
+    id: str
+    name: str
+    kind: Literal["PARK", "VET"]
+    distance_m: int | None = None
+    lat: float
+    lng: float
+    maps_url: str
+
+
+class NearbyPlacesResponse(BaseModel):
+    items: list[NearbyPlaceOut]
+    location_label: str | None = None
 
 
 # ---------------------------------------------------------------------------

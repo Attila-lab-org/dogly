@@ -35,20 +35,27 @@ Elenco corrente (percorsi relativi a `app/` o `src/` condivisi):
 - `app/(tabs)/rocky.tsx`
 - `app/(tabs)/around.tsx`
 - `app/care/index.tsx`
+- `app/digestive/index.tsx`
+- `app/nutrition/foods/catalog.tsx`
+- `app/nutrition/foods/index.tsx`
+- `app/nutrition/foods/new.tsx`
 - `app/dogs/[dogId]/memories.tsx`
+- `app/dogs/[dogId]/routine.tsx`
 - `src/features/home/HomeConversation.tsx`
 - `src/features/home/api.ts`
 - `src/features/dogs/DogCareOverview.tsx`
 - `src/features/care/CareEventCard.tsx`
 - `src/features/core/types.ts`
+- `src/features/places/api.ts`
+- `src/features/routine/api.ts`
 
 ## Scope prodotto (produzione 1)
 
 | Area | Stato |
 | --- | --- |
 | Home conversazione + tile + momenti | In scope; parity obbligatoria |
-| Diario | In scope |
-| Profilo / alimenti / digestione / agenda | In scope |
-| Tab Cerca = luoghi utili (Maps) | In scope (non social) |
-| Routine giornata oraria | **Post-P1** |
+| Diario | In scope (tag contestuali + filtro Routine) |
+| Profilo / alimenti / digestione / agenda | In scope (catalogo, Scaduti, intro digestione) |
+| Tab Cerca = momenti + luoghi utili | In scope (non social) |
+| Routine giornata oraria | In scope (DB + API + UI) |
 | Ricerca cani / social | **Post-P1** |

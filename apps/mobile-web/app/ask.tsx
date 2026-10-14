@@ -27,11 +27,12 @@ export default function AskScreen() {
   const { dog } = useDogProfile();
   const { userId } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[] }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[]; intent?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const entryId = Array.isArray(params.entryId) ? params.entryId[0] : params.entryId;
+  const intent = Array.isArray(params.intent) ? params.intent[0] : params.intent;
   const behaviorSource = source === 'behavior';
   const digestiveSource = source === 'digestive';
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -143,6 +144,38 @@ export default function AskScreen() {
     const text = takeHomeMessage(entryId, userId, dog.id);
     if (text) void send(text);
   }, [dog.id, entryId, send, sending, session, starting, userId]);
+
+  const intentHandled = useRef(false);
+  useEffect(() => {
+    if (starting || !session || intentHandled.current) return;
+    if (intent === 'photo') {
+      intentHandled.current = true;
+      void pickAlbumPhoto().then((uri) => {
+        if (!uri) return;
+        void send('Ti mostro questo momento', { uri, purpose: 'Ti mostro questo momento' });
+      });
+    } else if (intent === 'voice') {
+      intentHandled.current = true;
+      if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+      // Kick dictation once the composer is ready.
+      setTimeout(() => {
+        const browserWindow = window as unknown as {
+          SpeechRecognition?: new () => any;
+          webkitSpeechRecognition?: new () => any;
+        };
+        const SpeechRecognition =
+          browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'it-IT';
+        recognition.onresult = (event: any) =>
+          setDraft((current) =>
+            `${current}${current ? ' ' : ''}${event.results[0][0].transcript}`.slice(0, 4000),
+          );
+        recognition.start();
+      }, 400);
+    }
+  }, [intent, send, session, starting]);
 
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;

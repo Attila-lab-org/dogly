@@ -17,6 +17,7 @@ from app.contracts.taxonomy import (
     CareEventStatus,
     CareEventType,
     ConfidenceBand,
+    DailyActivityKind,
     ContextBucket,
     FeedbackValue,
     IntentCode,
@@ -69,6 +70,21 @@ class CareEventRec(BaseModel):
     status: CareEventStatus = CareEventStatus.SCHEDULED
     completed_at: datetime | None = None
     reminder_sent_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DailyActivityRec(BaseModel):
+    id: str
+    dog_id: str
+    user_id: str
+    title: str
+    activity_kind: DailyActivityKind
+    local_time_minutes: int
+    duration_minutes: int | None = None
+    weekday_mask: int = 127
+    notes: str | None = None
+    active: bool = True
     created_at: datetime
     updated_at: datetime
 

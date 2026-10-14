@@ -607,7 +607,9 @@ class OpenPetFoodFactsClient:
     ) -> tuple[list[ExternalFoodCandidate], int | None]:
         """Page the source itself, including an initial dog-food category page."""
         category = {
-            "crocchette": "en:dry-dog-food", "umido": "en:wet-dog-food",
+            "crocchette": "en:dry-dog-food",
+            "umido": "en:wet-dog-food",
+            "snack": "en:dog-treats",
         }.get(food_form, "en:dog-food")
         params = {
             "action": "process", "json": "1", "search_terms": query,

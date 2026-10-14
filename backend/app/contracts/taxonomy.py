@@ -99,6 +99,16 @@ class CareEventStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class DailyActivityKind(StrEnum):
+    WALK = "WALK"
+    MEAL = "MEAL"
+    PLAY = "PLAY"
+    REST = "REST"
+    TRAINING = "TRAINING"
+    MEDS = "MEDS"
+    OTHER = "OTHER"
+
+
 class SignalCategory(StrEnum):
     """Consumer-safe acoustic signal categories for Dogly Signals."""
 

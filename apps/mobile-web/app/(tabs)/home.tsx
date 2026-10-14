@@ -168,7 +168,9 @@ export default function HomeScreen() {
                 <Pressable key={photo.id} accessibilityRole="button" accessibilityLabel={photo.caption || 'Apri momento'}
                   onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never)} style={styles.moment}>
                   <Image source={{ uri: photo.thumbnailUri }} style={styles.momentPhoto} />
-                  <Text style={styles.insightTime} numberOfLines={1}>{photo.caption || new Date(photo.takenAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</Text>
+                  <Text style={styles.insightTime} numberOfLines={1}>
+                    {photo.caption || formatMomentStamp(photo.takenAt)}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -194,6 +196,20 @@ export default function HomeScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+function formatMomentStamp(iso: string): string {
+  const date = new Date(iso);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const startOf = (value: Date) =>
+    Date.parse(
+      `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`,
+    );
+  const diff = Math.round((startOf(new Date()) - startOf(date)) / dayMs);
+  const time = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  if (diff <= 0) return `Oggi ${time}`;
+  if (diff === 1) return `Ieri ${time}`;
+  return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 }
 
 function InsightCard({

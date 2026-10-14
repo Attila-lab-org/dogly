@@ -102,6 +102,7 @@ export default function FoodsScreen() {
     <ScreenContainer scroll>
       <StackScreenHeader title={`Cibo di ${dog.name}`} />
       <Button title="Aggiungi alimento" icon={<Ionicons name="add" size={18} color={colors.textOnPrimary} />} onPress={() => router.push('/nutrition/foods/new' as never)} />
+      <Button title="Esplora il catalogo" variant="outline" icon={<Ionicons name="search-outline" size={18} color={colors.primary} />} onPress={() => router.push('/nutrition/foods/catalog' as never)} />
 
       {activeFood ? <>
         <Text style={styles.sectionTitle}>Alimento attuale</Text>

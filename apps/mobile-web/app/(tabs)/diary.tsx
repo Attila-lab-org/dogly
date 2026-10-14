@@ -93,22 +93,19 @@ function entryStatusChip(entry: DiaryEntry): StatusChip | null {
   const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
 
   if (entry.domain === 'DIGESTIVE') {
-    if (/morbid|variazion|flag|controll|attenzione/i.test(haystack)) {
-      return { label: 'Attenzione', bg: '#FFF1EE', fg: '#EA580C' };
+    if (/morbid|variazion|flag|controll|attenzione|osservare|peggior/i.test(haystack)) {
+      return { label: 'Da osservare', bg: '#FFF1EE', fg: '#EA580C' };
     }
     return { label: 'Confermato', bg: '#DCFCE7', fg: '#16A34A' };
   }
-  if (/rilass|ripos|relax/i.test(haystack)) {
-    return { label: 'Relax', bg: '#E0F7F6', fg: '#0D9488' };
+  if (/attenzion|ambig|ipotes|contesto|incerto|watch/i.test(haystack)) {
+    return { label: 'Da osservare', bg: '#FFF1EE', fg: '#EA580C' };
   }
-  if (/gioc|play|interazion/i.test(haystack)) {
-    return { label: 'Gioco', bg: '#EEF2FF', fg: '#4F46E5' };
+  if (/gioc|play|rilass|ripos|relax|affetto|insieme|passeggi/i.test(haystack)) {
+    return { label: 'Momenti insieme', bg: '#E8F1FF', fg: '#2563EB' };
   }
-  if (/attenzion|ambig|ipotes|contesto/i.test(haystack)) {
-    return { label: 'Attenzione', bg: '#FFF1EE', fg: '#EA580C' };
-  }
-  if (/confermato/i.test(haystack)) {
-    return { label: 'Confermato', bg: '#E0F7F6', fg: '#0D9488' };
+  if (entry.status === 'COMPLETED') {
+    return { label: 'Momenti insieme', bg: '#E8F1FF', fg: '#2563EB' };
   }
   return null;
 }
@@ -405,7 +402,7 @@ export default function DiaryScreen() {
                 debouncedSearch
                   ? undefined
                   : filter === 'ROUTINE'
-                    ? () => router.push(`/dogs/${dog.id}/lifestyle` as never)
+                    ? () => router.push(`/dogs/${dog.id}/routine` as never)
                     : filter === 'DIGESTIVE'
                     ? () => router.push('/digestive/capture')
                     : () => router.push('/behavior/capture')

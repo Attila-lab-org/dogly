@@ -13,7 +13,7 @@ import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type M
 import { queryKeys } from '@/lib/queryClient';
 import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
 import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
-import { takeConversationPhoto } from '@/features/photos/share';
+import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
@@ -25,11 +25,12 @@ export default function AskScreen() {
   const { dog } = useDogProfile();
   const { userId } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[] }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[]; intent?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const entryId = Array.isArray(params.entryId) ? params.entryId[0] : params.entryId;
+  const intent = Array.isArray(params.intent) ? params.intent[0] : params.intent;
   const behaviorSource = source === 'behavior';
   const digestiveSource = source === 'digestive';
   const [session, setSession] = useState<RealtimeSession | null>(null);
@@ -172,6 +173,23 @@ export default function AskScreen() {
     dictationRef.current = recognition;
     recognition.start();
   };
+
+  const intentHandled = useRef(false);
+  useEffect(() => {
+    if (starting || !session || intentHandled.current) return;
+    if (intent === 'photo') {
+      intentHandled.current = true;
+      void pickAlbumPhoto().then((uri) => {
+        if (!uri) return;
+        void send('Ti mostro questo momento', { uri, purpose: 'Ti mostro questo momento' });
+      });
+    } else if (intent === 'voice') {
+      intentHandled.current = true;
+      if (Platform.OS === 'web') {
+        setTimeout(() => toggleDictation(), 400);
+      }
+    }
+  }, [intent, send, session, starting]);
 
   const decideMemory = async (proposal: MemoryProposal, action: 'CONFIRM' | 'REJECT') => {
     setMemoryBusy(proposal.id);

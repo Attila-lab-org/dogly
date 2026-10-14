@@ -18,6 +18,7 @@ from app.domains.models import (
     BehaviorEventRec,
     BehaviorFeedbackRec,
     CareEventRec,
+    DailyActivityRec,
     DeviceInstallationRec,
     DogAlbumRec,
     DogPhotoRec,
@@ -76,6 +77,7 @@ class InMemoryStore:
         self.digestive_feedback: dict[str, dict[str, str]] = {}
         self.processing_context_answers: dict[str, ProcessingContextAnswerRec] = {}
         self.care_events: dict[str, CareEventRec] = {}
+        self.daily_activities: dict[str, DailyActivityRec] = {}
         self.signal_experiments: dict[str, SignalExperimentRec] = {}
         self.signal_map_entries: dict[tuple[str, str], SignalMapEntryRec] = {}
         self.patterns: dict[str, PersonalPatternRec] = {}

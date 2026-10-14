@@ -32,8 +32,17 @@ export default function CareAgendaScreen() {
   // in "In programma" finché non viene completato o eliminato.
   const next = nextCareEvent(dog.id);
   const upcoming = events.filter(
-    (event) => event.status === 'SCHEDULED' && event.id !== next?.id,
+    (event) =>
+      event.status === 'SCHEDULED' &&
+      event.id !== next?.id &&
+      dayDistance(event.scheduledAt) >= 0,
   );
+  const overdue = events
+    .filter(
+      (event) =>
+        event.status === 'SCHEDULED' && dayDistance(event.scheduledAt) < 0,
+    )
+    .sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt));
   const history = events
     .filter((event) => event.status !== 'SCHEDULED')
     .sort((a, b) => Date.parse(b.scheduledAt) - Date.parse(a.scheduledAt));
@@ -157,6 +166,30 @@ export default function CareAgendaScreen() {
           <Text style={[styles.segmentText, view === 'completed' && styles.segmentTextActive]}>Completati ({history.length})</Text>
         </Pressable>
       </View>
+
+      {view === 'upcoming' && overdue.length > 0 ? (
+        <>
+          <Text style={[styles.sectionTitle, styles.overdueTitle]}>Scaduti</Text>
+          <View style={styles.list}>
+            {overdue.map((event) => (
+              <View key={event.id} style={styles.overdueWrap}>
+                <View style={styles.overdueBadge}>
+                  <Text style={styles.overdueBadgeText}>
+                    {Math.abs(dayDistance(event.scheduledAt))}{' '}
+                    {Math.abs(dayDistance(event.scheduledAt)) === 1
+                      ? 'giorno fa'
+                      : 'giorni fa'}
+                  </Text>
+                </View>
+                <CareEventCard
+                  event={event}
+                  onPress={() => router.push(`/care/${event.id}` as never)}
+                />
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       {view === 'upcoming' && upcoming.length > 0 ? (
         <>
@@ -319,6 +352,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     color: CARE.text,
     fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  overdueTitle: {
+    color: CARE.coral,
+  },
+  overdueWrap: {
+    gap: spacing.xs,
+  },
+  overdueBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: CARE.peach,
+  },
+  overdueBadgeText: {
+    color: CARE.coral,
+    fontSize: 11,
     fontWeight: typography.weight.bold,
   },
   list: {

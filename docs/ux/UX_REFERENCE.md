@@ -23,7 +23,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 | Album | Privati di default; condivisione esterna via share sheet OS |
 | Profilo pubblico | Opt-in esplicito |
 | Home | Conversazione in primo piano + accessi rapidi + momenti recenti (mock Oreo) |
-| Routine giornata | Timeline oraria del mock = **post-produzione 1**; fino ad allora lifestyle statico |
+| Routine giornata | Timeline oraria del mock = **in scope** (`/dogs/{id}/routine` + `dog_daily_activities`) |
 | Digestione / nutrizione | In V1, wording osservativo |
 | Dogly Signals | Posticipato; nessun ingresso visibile nella UX corrente |
 | Storie | Non MVP consumer corrente; album/momenti sì |

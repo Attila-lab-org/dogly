@@ -329,6 +329,7 @@ export default function NewFoodScreen() {
               ['', 'Tutti'],
               ['crocchette', 'Crocchette'],
               ['umido', 'Umido'],
+              ['snack', 'Snack'],
             ].map(([value, label]) => (
               <Pressable
                 key={value || 'all'}
