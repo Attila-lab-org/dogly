@@ -19,7 +19,9 @@ import { fetchDogPhotos } from '@/features/photos/api';
 import {
   fetchNearbyPlaces,
   formatDistance,
-  readDeviceLocation,
+  locationFailureCopy,
+  readDeviceLocationResult,
+  type LocationFailureReason,
   type NearbyPlace,
 } from '@/features/places/api';
 
@@ -28,22 +30,24 @@ export default function AroundScreen() {
   const { dog } = useDogProfile();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(true);
-  const [locationDenied, setLocationDenied] = useState(false);
+  const [locationFailure, setLocationFailure] = useState<LocationFailureReason | null>(null);
   const [locationTick, setLocationTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
     setLocating(true);
-    setLocationDenied(false);
-    void readDeviceLocation().then((value) => {
+    setLocationFailure(null);
+    setCoords(null);
+    void readDeviceLocationResult().then((result) => {
       if (!alive) return;
       setLocating(false);
-      if (!value) {
+      if (!result.ok) {
         setCoords(null);
-        setLocationDenied(true);
+        setLocationFailure(result.reason);
         return;
       }
-      setCoords(value);
+      setLocationFailure(null);
+      setCoords({ lat: result.lat, lng: result.lng });
     });
     return () => {
       alive = false;
@@ -141,15 +145,22 @@ export default function AroundScreen() {
             <Ionicons name="location-outline" size={22} color={colors.accent} />
           </View>
 
-          {locating || (Boolean(coords) && placesQuery.isLoading) ? (
+          {locating ? (
+            <View style={styles.loading}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.emptyText}>Chiedo la posizione…</Text>
+            </View>
+          ) : Boolean(coords) && placesQuery.isLoading ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.emptyText}>Cerco posti vicini…</Text>
             </View>
-          ) : locationDenied || !coords ? (
+          ) : locationFailure || !coords ? (
             <View style={styles.fallback}>
               <Text style={styles.emptyText}>
-                Attiva la posizione per vedere distanze e posti vicini. Puoi comunque aprire la mappa.
+                {locationFailure
+                  ? locationFailureCopy(locationFailure)
+                  : 'Attiva la posizione per vedere distanze e posti vicini. Puoi comunque aprire la mappa.'}
               </Text>
               <PlaceFallback
                 title="Riprova la posizione"

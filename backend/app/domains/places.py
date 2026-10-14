@@ -57,7 +57,7 @@ def _overpass_query(lat: float, lng: float, radius_m: int, kinds: list[Kind]) ->
         )
     body = "\n  ".join(parts)
     return f"""
-[out:json][timeout:18];
+[out:json][timeout:10];
 (
   {body}
 );
@@ -91,7 +91,8 @@ async def _fetch_overpass(query: str) -> list[dict[str, Any]]:
         "User-Agent": "Dogly/1.0 (nearby places)",
     }
     last_error: Exception | None = None
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    # Short per-mirror budget so the client never waits on a 60s cascade.
+    async with httpx.AsyncClient(timeout=8.0) as client:
         for endpoint in OVERPASS_ENDPOINTS:
             try:
                 response = await client.post(endpoint, content=body, headers=headers)
