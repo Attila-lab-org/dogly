@@ -52,7 +52,6 @@ export default function AskLiveScreen() {
   const [secondsLeft, setSecondsLeft] = useState(240);
   const [welcome, setWelcome] = useState('');
   const [voiceLabel, setVoiceLabel] = useState('');
-  const [barkListening, setBarkListening] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
   const startingRef = useRef(false);
@@ -181,22 +180,8 @@ export default function AskLiveScreen() {
     transform: [{ scale: breath.value }],
   }));
 
-  const listenToDog = useCallback(async () => {
-    if (!handleRef.current || barkListening || conn === 'connecting') return;
-    setBarkListening(true);
-    setError(null);
-    try {
-      await handleRef.current.listenForBark(dog.name, 6500);
-    } catch {
-      setError('Non riesco ad ascoltare il vocalizzo. Riprova avvicinando il telefono.');
-    } finally {
-      setBarkListening(false);
-    }
-  }, [barkListening, conn, dog.name]);
-
-  const statusCopy = barkListening
-    ? `Avvicina il telefono a ${dog.name}… ascolto`
-    : conn === 'connecting'
+  const statusCopy =
+    conn === 'connecting'
       ? 'Sto entrando…'
       : conn === 'speaking'
         ? 'DOGly parla'
@@ -279,26 +264,6 @@ export default function AskLiveScreen() {
             {secondsLeft <= 30 && secondsLeft > 0 ? (
               <Text style={styles.warnNote}>Quasi finiti</Text>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Fai ascoltare l’abbaio di ${dog.name}`}
-              disabled={barkListening || conn === 'connecting' || conn === 'error'}
-              onPress={() => void listenToDog()}
-              style={({ pressed }) => [
-                styles.barkBtn,
-                barkListening && styles.barkBtnActive,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons
-                name={barkListening ? 'ear' : 'ear-outline'}
-                size={18}
-                color={barkListening ? '#FFFFFF' : colors.primary}
-              />
-              <Text style={[styles.barkText, barkListening && styles.barkTextActive]}>
-                {barkListening ? 'Ascolto…' : `Ascolta ${dog.name}`}
-              </Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Termina conversazione"
@@ -449,32 +414,8 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontWeight: typography.weight.bold,
   },
-  barkBtn: {
-    marginTop: spacing.xl,
-    minHeight: 48,
-    minWidth: 200,
-    borderRadius: radius.full,
-    borderWidth: 1.5,
-    borderColor: 'rgba(37,99,235,0.35)',
-    backgroundColor: '#E6F1FF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  barkBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  barkText: {
-    color: colors.primary,
-    fontWeight: typography.weight.bold,
-    fontSize: typography.size.md,
-  },
-  barkTextActive: { color: '#FFFFFF' },
   endBtn: {
-    marginTop: spacing.md,
+    marginTop: spacing.xxl,
     minHeight: 52,
     minWidth: 160,
     borderRadius: radius.full,
