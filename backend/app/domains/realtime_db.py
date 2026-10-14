@@ -170,25 +170,40 @@ async def create_session_db(
                     {"session_id": str(old["id"])},
                 )
             ).mappings().all()
-            if turns:
-                topic = conversation_topic(
-                    [str(turn["user_transcript"]) for turn in turns],
-                    dog_name=str(old["dog_name"]),
+            # Always end the prior session first. Continuity memory is best-effort:
+            # a bad topic must never block opening a new Ask chat (422 on /sessions).
+            await conn.execute(
+                text(
+                    """
+                    update public.realtime_sessions
+                    set status='ENDED', ended_at=now()
+                    where id=cast(:session_id as uuid)
+                    """
+                ),
+                {"session_id": str(old["id"])},
+            )
+            if not turns:
+                continue
+            topic = conversation_topic(
+                [str(turn["user_transcript"]) for turn in turns],
+                dog_name=str(old["dog_name"]),
+            )
+            history = []
+            for turn in list(turns)[-CONVERSATION_TURN_LIMIT:]:
+                history.append(
+                    {"role": "proprietario", "content": turn["user_transcript"]}
                 )
-                history = []
-                for turn in list(turns)[-CONVERSATION_TURN_LIMIT:]:
-                    history.append(
-                        {"role": "proprietario", "content": turn["user_transcript"]}
-                    )
-                    decision = dict(turn.get("decision_json") or {})
-                    history.append(
-                        {
-                            "role": "DOGly",
-                            "content": turn["assistant_text"],
-                            "question": decision.get("question"),
-                            "media_invite": decision.get("media_invite"),
-                        }
-                    )
+                decision = dict(turn.get("decision_json") or {})
+                history.append(
+                    {
+                        "role": "DOGly",
+                        "content": turn["assistant_text"],
+                        "question": decision.get("question"),
+                        "media_invite": decision.get("media_invite"),
+                    }
+                )
+            await conn.execute(text("SAVEPOINT archive_conversation_memory"))
+            try:
                 await conn.execute(
                     text(
                         """
@@ -213,16 +228,11 @@ async def create_session_db(
                         "turns": _json(history),
                     },
                 )
-            await conn.execute(
-                text(
-                    """
-                    update public.realtime_sessions
-                    set status='ENDED', ended_at=now()
-                    where id=cast(:session_id as uuid)
-                    """
-                ),
-                {"session_id": str(old["id"])},
-            )
+                await conn.execute(text("RELEASE SAVEPOINT archive_conversation_memory"))
+            except Exception:
+                await conn.execute(
+                    text("ROLLBACK TO SAVEPOINT archive_conversation_memory")
+                )
         await conn.execute(
             text(
                 """

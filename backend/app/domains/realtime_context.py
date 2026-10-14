@@ -223,11 +223,26 @@ _TRIVIAL_CONTINUITY = re.compile(
 )
 
 
+def _persistable_topic(raw: str, *, dog_name: str) -> str:
+    """Match DB check realtime_conversation_memories_topic_check (2..180)."""
+    topic = " ".join((raw or "").split())
+    if len(topic) < 2:
+        topic = " ".join((dog_name or "").split())
+    if len(topic) < 2:
+        topic = "Chat"
+    if len(topic) > 180:
+        topic = topic[:177].rsplit(" ", 1)[0] + "…"
+    return topic
+
+
 def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
     meaningful: list[str] = []
     for line in reversed(user_texts):
         cleaned = " ".join((line or "").split())
-        if not cleaned or _RESUME_GREETING.fullmatch(cleaned):
+        # One-char noise ("n", "ok" is fine) must not become a topic: the
+        # memories table rejects topics shorter than 2 chars and that used to
+        # block opening a new Ask session while archiving the previous one.
+        if len(cleaned) < 2 or _RESUME_GREETING.fullmatch(cleaned):
             continue
         if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
             continue
@@ -237,13 +252,13 @@ def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
         if len(meaningful) == 2:
             break
     if not meaningful:
-        return dog_name
+        return _persistable_topic(dog_name, dog_name=dog_name)
     # Keep a compact internal marker for legacy persistence only. The actual
     # continuity is the structured turn history, never this verbatim snippet.
     topic = meaningful[0]
     if len(topic) > 140:
         topic = topic[:137].rsplit(" ", 1)[0] + "…"
-    return topic
+    return _persistable_topic(topic, dog_name=dog_name)
 
 
 _CONCERN_MARKERS = {

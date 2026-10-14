@@ -391,6 +391,14 @@ def test_conversation_topic_ignores_rotating_starter_questions() -> None:
     ) == "Oreo"
 
 
+def test_conversation_topic_rejects_one_char_noise() -> None:
+    # Production: topic "n" violated realtime_conversation_memories_topic_check
+    # and blocked POST /v1/realtime/sessions while archiving the prior chat.
+    assert conversation_topic(["n"], dog_name="Oreo") == "Oreo"
+    assert conversation_topic(["", "n", "  "], dog_name="Oreo") == "Oreo"
+    assert 2 <= len(conversation_topic(["ok"], dog_name="Oreo")) <= 180
+
+
 def test_new_text_session_resumes_previous_conversation_turns() -> None:
     history = _resume_history(
         [
