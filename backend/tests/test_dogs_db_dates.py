@@ -49,6 +49,27 @@ def test_row_to_dog_serializes_database_date() -> None:
     assert dog.birth_date == "2022-09-01"
 
 
+def test_realtime_context_dog_rec_accepts_postgres_date() -> None:
+    from app.domains.realtime_context import dog_rec_from_db_row
+
+    dog = dog_rec_from_db_row(
+        {
+            "id": uuid4(),
+            "name": "Oreo",
+            "birth_date": date(2021, 10, 15),
+            "age_stage": "ADULT",
+            "size": "MEDIUM",
+            "breed_label": "Akita Americano",
+            "is_mix": False,
+            "sex": "MALE",
+            "weight_kg": 32.5,
+        },
+        owner_id=str(uuid4()),
+    )
+    assert dog.birth_date == "2021-10-15"
+    assert dog.weight_kg == 32.5
+
+
 async def test_get_owned_dog_rejects_non_uuid_without_hitting_database() -> None:
     with pytest.raises(ApiError) as exc:
         await get_owned_dog(None, user_id=str(uuid4()), dog_id="dog-rocky")  # type: ignore[arg-type]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -51,6 +51,34 @@ _CONTEXT_STOPWORDS = {
     "oggi", "questo", "questa", "modo", "fare", "mi", "ti", "il", "la", "lo",
     "un", "una", "di", "del", "della", "per", "con", "che", "ha", "è", "e",
 }
+
+
+def dog_rec_from_db_row(dog: Any, *, owner_id: str) -> DogRec:
+    """Build DogRec from a SQLAlchemy dog row used by realtime context.
+
+    Postgres returns DATE as datetime.date; DogRec stores ISO strings
+    (same coercion as dogs_db._row_to_dog). Without this, chat turns for dogs
+    with a birth_date fail as PROCESSING_FAILED / 500.
+    """
+    birth_date = dog.get("birth_date")
+    if isinstance(birth_date, date):
+        birth_date = birth_date.isoformat()
+    weight_kg = dog.get("weight_kg")
+    if weight_kg is not None:
+        weight_kg = float(weight_kg)
+    return DogRec(
+        id=str(dog["id"]),
+        owner_id=owner_id,
+        name=str(dog["name"]),
+        birth_date=birth_date,
+        age_stage=dog.get("age_stage"),
+        size=dog.get("size"),
+        breed_label=dog.get("breed_label"),
+        is_mix=bool(dog.get("is_mix") or False),
+        sex=dog.get("sex"),
+        weight_kg=weight_kg,
+        created_at=datetime.now(UTC),
+    )
 
 
 class RealtimeContextItem(BaseModel):
@@ -542,19 +570,7 @@ async def load_realtime_context_db(
         # applied later in _select_realtime_items (lexical + recent fallback).
         domains=list({*domains, "NUTRITION", "BEHAVIOR", "DIGESTIVE", "CARE"}),
     )
-    dog_rec = DogRec(
-        id=str(dog["id"]),
-        owner_id=user_id,
-        name=str(dog["name"]),
-        birth_date=dog.get("birth_date"),
-        age_stage=dog.get("age_stage"),
-        size=dog.get("size"),
-        breed_label=dog.get("breed_label"),
-        is_mix=bool(dog.get("is_mix") or False),
-        sex=dog.get("sex"),
-        weight_kg=dog.get("weight_kg"),
-        created_at=datetime.now(UTC),
-    )
+    dog_rec = dog_rec_from_db_row(dog, owner_id=user_id)
     lifestyle_dump = {
         "routine": dict((lifestyle or {}).get("routine_json") or {}),
         "preferences": dict((lifestyle or {}).get("preferences_json") or {}),
