@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
@@ -146,6 +147,54 @@ function StatusBadgeView({ badge }: { badge: StatusBadge }) {
   );
 }
 
+/**
+ * Copertina 16:9 della card. I video BEHAVIOR arrivano come mp4 raw
+ * (signed URL, TTL breve): un mp4 non è un'immagine, quindi mai passarlo
+ * a <Image> — placeholder brandizzato con play. Le foto possono avere la
+ * signed URL scaduta: onError → placeholder con zampa (stato per-item).
+ */
+function MediaCover({ entry }: { entry: DiaryEntry }) {
+  const [failed, setFailed] = useState(false);
+
+  if (entry.mediaKind === 'VIDEO') {
+    return (
+      <LinearGradient
+        colors={[colors.accentSoft, colors.surface]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.mediaPlaceholder}
+        accessibilityRole="image"
+        accessibilityLabel="Video del momento"
+      >
+        <View style={styles.mediaPlayCircle}>
+          <CuteIcon name="play" size={32} color={colors.accent} secondary={colors.text} />
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (failed) {
+    return (
+      <View
+        style={[styles.mediaPlaceholder, { backgroundColor: colors.accentSoft }]}
+        accessibilityRole="image"
+        accessibilityLabel="Foto del momento"
+      >
+        <CuteIcon name="paw" size={32} color={colors.accent} secondary={colors.text} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: entry.mediaUri as string }}
+      style={styles.mediaImage}
+      accessibilityLabel="Foto del momento"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
   const badge = entryStatusBadge(entry);
   const icon = entryIconTone(entry);
@@ -177,16 +226,7 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
         style={({ pressed }) => [styles.mediaCard, pressed && styles.entryCardPressed]}
       >
         <View style={styles.mediaTop}>
-          <Image
-            source={{ uri: entry.mediaUri }}
-            style={styles.mediaImage}
-            accessibilityLabel={entry.mediaKind === 'VIDEO' ? 'Video del momento' : 'Foto del momento'}
-          />
-          {entry.mediaKind === 'VIDEO' ? (
-            <View style={styles.playBadge}>
-              <Ionicons name="play" size={14} color={colors.textOnPrimary} />
-            </View>
-          ) : null}
+          <MediaCover entry={entry} />
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.rowTitle}>{entry.title}</Text>
@@ -636,16 +676,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   mediaImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  playBadge: {
-    position: 'absolute',
-    right: spacing.md,
-    bottom: spacing.md,
-    width: 30,
-    height: 30,
+  mediaPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaPlayCircle: {
+    width: 64,
+    height: 64,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.overlayDark,
+    backgroundColor: colors.surface,
+    ...shadows.card,
   },
   cardBody: {
     padding: spacing.lg,
