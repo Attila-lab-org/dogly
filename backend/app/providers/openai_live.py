@@ -120,7 +120,12 @@ async def mint_realtime_client_secret(
                     "instructions": instructions,
                     "modalities": ["audio", "text"],
                     "input_audio_transcription": {"model": "gpt-4o-mini-transcribe"},
-                    "turn_detection": {"type": "server_vad"},
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.55,
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": 700,
+                    },
                 },
             )
             if legacy.status_code >= 400:
