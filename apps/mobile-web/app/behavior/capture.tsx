@@ -56,8 +56,16 @@ export default function BehaviorCaptureScreen() {
   const params = useLocalSearchParams<{ from?: string | string[]; sessionId?: string | string[] }>();
   const returnTo = Array.isArray(params.from) ? params.from[0] : params.from;
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
+  const fromAsk = returnTo === 'ask';
   const fromCheckIn =
     returnTo === 'checkin' || dogAnalysisContext?.concern === 'off';
+
+  // Chat-first: capture solo da Ask (o check-in legacy).
+  useEffect(() => {
+    if (!fromAsk && !fromCheckIn) {
+      router.replace('/ask' as never);
+    }
+  }, [fromAsk, fromCheckIn, router]);
 
   const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();

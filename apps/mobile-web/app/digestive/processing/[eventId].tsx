@@ -34,11 +34,28 @@ import {
 const STEP_DURATION_MS = 1100;
 
 export default function DigestiveProcessingScreen() {
-  const params = useLocalSearchParams<{ eventId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    eventId?: string | string[];
+    returnTo?: string | string[];
+    sessionId?: string | string[];
+  }>();
   const eventId = Array.isArray(params.eventId)
     ? params.eventId[0] ?? ''
     : params.eventId ?? '';
+  const sessionId = Array.isArray(params.sessionId)
+    ? params.sessionId[0]
+    : params.sessionId;
   const router = useRouter();
+
+  const goAskWithEvent = (id: string) =>
+    router.replace({
+      pathname: '/ask',
+      params: {
+        eventId: id,
+        source: 'digestive',
+        ...(sessionId ? { sessionId } : {}),
+      },
+    } as never);
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
   const { usingMockGate } = useSession();
@@ -99,7 +116,7 @@ export default function DigestiveProcessingScreen() {
   useEffect(() => {
     if (!eventId) return undefined;
     if (stepIndex >= steps.length) {
-      if (!useApi) router.replace(`/digestive/result/${eventId}`);
+      if (!useApi && eventId) goAskWithEvent(eventId);
       return undefined;
     }
     const timer = setTimeout(
@@ -130,9 +147,9 @@ export default function DigestiveProcessingScreen() {
       query.data.status === 'REJECTED_QUALITY'
     ) {
       markDigestiveUploadCompletedForEvent(query.data.id);
-      router.replace(`/digestive/result/${query.data.id}`);
+      goAskWithEvent(query.data.id);
     }
-  }, [useApi, query.data, router]);
+  }, [useApi, query.data, router, sessionId]);
 
   if (!eventId && !usingMockGate) {
     return (
@@ -181,8 +198,13 @@ export default function DigestiveProcessingScreen() {
             foto: l'analisi non è stata conteggiata.
           </Text>
           <Button
-            title="Riprova"
-            onPress={() => router.replace('/digestive/capture')}
+            title="Riprova in chat"
+            onPress={() =>
+              router.replace({
+                pathname: '/ask',
+                params: sessionId ? { sessionId } : {},
+              } as never)
+            }
           />
           <Button
             title="Torna alla Home"

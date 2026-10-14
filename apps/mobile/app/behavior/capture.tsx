@@ -3,6 +3,8 @@
  */
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
   AppState,
   type AppStateStatus,
   Linking,
@@ -19,8 +21,9 @@ import {
   useCameraPermissions,
   useMicrophonePermissions,
 } from 'expo-camera';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import {
   CAPTURE_MAX_SECONDS,
   CAPTURE_MIN_SECONDS,
@@ -31,29 +34,38 @@ import {
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCheckIn } from '@/features/checkin/store';
 import { useSession } from '@/features/auth/SessionProvider';
-import {
-  discardPendingBehaviorClip,
-  enqueueAndUploadBehaviorClip,
-} from '@/features/behavior/upload';
-import { isQuotaExhaustedError } from '@/features/behavior/api';
-import { purchasesEnabled } from '@/mocks/entitlements';
+import { discardPendingBehaviorClip } from '@/features/behavior/upload';
+import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
 import {
   startWebVideoRecording,
   type WebVideoRecording,
 } from '@/features/behavior/webRecord';
 import { wakeIosCameraPreview } from '@/features/behavior/iosCameraPreview';
 
+const TITLE_COLOR = '#1A2B48';
+const HINT_COLOR = '#64748B';
+const CARD_BORDER = '#EDF2F7';
+const RING_GRADIENT = ['#0050D8', '#01AEC5'] as const;
+
 export default function BehaviorCaptureScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { loading: sessionLoading, userId, usingMockGate } = useSession();
+  const { userId } = useSession();
   const { analysisContext } = useCheckIn();
   const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
   const params = useLocalSearchParams<{ from?: string | string[]; sessionId?: string | string[] }>();
   const returnTo = Array.isArray(params.from) ? params.from[0] : params.from;
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
+  const fromAsk = returnTo === 'ask';
   const fromCheckIn =
     returnTo === 'checkin' || dogAnalysisContext?.concern === 'off';
+
+  // Chat-first: capture solo da Ask (o check-in legacy).
+  useEffect(() => {
+    if (!fromAsk && !fromCheckIn) {
+      router.replace('/ask' as never);
+    }
+  }, [fromAsk, fromCheckIn, router]);
 
   const [state, dispatch] = useReducer(captureReducer, initialCaptureState);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -61,14 +73,16 @@ export default function BehaviorCaptureScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [canStop, setCanStop] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [handedOff, setHandedOff] = useState(false);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [torchOn, setTorchOn] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [webPreviewArmed, setWebPreviewArmed] = useState(Platform.OS !== 'web');
 
   const cameraRef = useRef<CameraView | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
   const pendingUriRef = useRef<string | null>(null);
-  const uploadStartedRef = useRef(false);
   const mountedRef = useRef(true);
   const permissionReadyRef = useRef(false);
   const recordingPromiseRef = useRef<Promise<{ uri?: string } | undefined> | null>(
@@ -77,8 +91,13 @@ export default function BehaviorCaptureScreen() {
   const canStopRef = useRef(false);
   const allowStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webRecordingRef = useRef<WebVideoRecording | null>(null);
+  const webHasAudioRef = useRef(false);
+  const webMimeTypeRef = useRef<string | null>(null);
+  const startLockRef = useRef(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const micGranted = Boolean(micPermission?.granted);
+  const isRecording = state.phase === 'recording';
 
   const clearTimer = () => {
     if (timerRef.current) {
@@ -113,6 +132,39 @@ export default function BehaviorCaptureScreen() {
   }, []);
 
   useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!isRecording || reduceMotion) {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.35,
+          duration: 550,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 550,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isRecording, pulseAnim, reduceMotion]);
+
+  useEffect(() => {
     if (permissionReadyRef.current) return;
     (async () => {
       if (!cameraPermission) return;
@@ -145,6 +197,8 @@ export default function BehaviorCaptureScreen() {
       setCameraReady(false);
       return;
     }
+    // Safari iOS: dopo lo stop dei track del permesso la camera
+    // resta nera se si riapre troppo in fretta.
     setWebPreviewArmed(false);
     setCameraReady(false);
     const arm = window.setTimeout(() => setWebPreviewArmed(true), 280);
@@ -175,7 +229,15 @@ export default function BehaviorCaptureScreen() {
 
   const finishWithUri = useCallback((uri: string | null, seconds: number) => {
     clearTimer();
-    if (!uri || seconds < CAPTURE_MIN_SECONDS) {
+    if (!uri) {
+      pendingUriRef.current = null;
+      dispatch({ type: 'RESET' });
+      setUploadError(
+        'La registrazione non ha prodotto un video. Riprova e tieni premuto Stop fino alla fine.',
+      );
+      return;
+    }
+    if (seconds < CAPTURE_MIN_SECONDS) {
       pendingUriRef.current = null;
       dispatch({ type: 'RESET' });
       // Force too_short UI
@@ -186,28 +248,36 @@ export default function BehaviorCaptureScreen() {
       dispatch({ type: 'STOP' });
       return;
     }
-    pendingUriRef.current = uri;
-    uploadStartedRef.current = false;
-    dispatch({ type: 'RESET' });
-    dispatch({ type: 'START' });
-    for (let i = 0; i < Math.min(seconds, CAPTURE_MAX_SECONDS); i += 1) {
-      dispatch({ type: 'TICK' });
-    }
-    if (seconds < CAPTURE_MAX_SECONDS) {
-      dispatch({ type: 'STOP' });
-    }
-  }, []);
+    setHandedOff(true);
+    setPendingBehaviorUpload({
+      localUri: uri,
+      durationMs: Math.max(
+        CAPTURE_MIN_SECONDS * 1000,
+        Math.min(CAPTURE_MAX_SECONDS * 1000, seconds * 1000),
+      ),
+      hasAudio:
+        Platform.OS === 'web'
+          ? webHasAudioRef.current
+          : micGranted && !state.audioDegraded,
+      contentType:
+        Platform.OS === 'web' ? webMimeTypeRef.current ?? undefined : undefined,
+      dogId: dog.id,
+      returnTo: returnTo === 'ask' ? 'ask' : undefined,
+      sessionId: returnTo === 'ask' ? sessionId : undefined,
+    });
+    router.replace('/behavior/uploading');
+  }, [dog.id, micGranted, returnTo, router, sessionId, state.audioDegraded]);
 
   const startRecording = useCallback(async () => {
-    if (recordingPromiseRef.current) return;
+    if (recordingPromiseRef.current || startLockRef.current) return;
     if (!cameraReady || (Platform.OS !== 'web' && !cameraRef.current)) {
       setUploadError('Fotocamera non pronta. Aspetta un attimo e riprova.');
       return;
     }
+    startLockRef.current = true;
 
     setUploadError(null);
     pendingUriRef.current = null;
-    uploadStartedRef.current = false;
     canStopRef.current = false;
     setCanStop(false);
     elapsedRef.current = 0;
@@ -217,12 +287,20 @@ export default function BehaviorCaptureScreen() {
     let recording: Promise<{ uri?: string } | undefined>;
     if (Platform.OS === 'web') {
       try {
-        const session = startWebVideoRecording();
+        const session = await startWebVideoRecording({
+          includeAudio: !state.audioDegraded,
+        });
         webRecordingRef.current = session;
+        webHasAudioRef.current = session.hasAudio;
+        webMimeTypeRef.current = session.mimeType;
+        if (!session.hasAudio && !state.audioDegraded) {
+          dispatch({ type: 'PERMISSION_GRANTED', micGranted: false });
+        }
         recording = session.finished.then((uri) =>
           uri ? { uri } : { uri: undefined },
         );
       } catch (error) {
+        startLockRef.current = false;
         setUploadError(
           error instanceof Error
             ? error.message
@@ -241,8 +319,7 @@ export default function BehaviorCaptureScreen() {
 
     timerRef.current = setInterval(() => {
       elapsedRef.current += 1;
-      dispatch({ type: 'TICK' });
-      if (elapsedRef.current >= CAPTURE_MAX_SECONDS && canStopRef.current) {
+      if (elapsedRef.current >= CAPTURE_MAX_SECONDS) {
         if (Platform.OS === 'web') {
           webRecordingRef.current?.stop();
         } else {
@@ -252,7 +329,10 @@ export default function BehaviorCaptureScreen() {
             // noop
           }
         }
+        clearTimer();
+        return;
       }
+      dispatch({ type: 'TICK' });
     }, 1000);
 
     allowStopTimerRef.current = setTimeout(() => {
@@ -273,20 +353,24 @@ export default function BehaviorCaptureScreen() {
         dispatch({ type: 'RESET' });
       }
     } finally {
+      startLockRef.current = false;
       recordingPromiseRef.current = null;
       webRecordingRef.current = null;
       canStopRef.current = false;
       clearAllowStopTimer();
       if (mountedRef.current) setCanStop(false);
     }
-  }, [cameraReady, finishWithUri]);
+  }, [cameraReady, finishWithUri, state.audioDegraded]);
 
   const stopRecording = useCallback(() => {
-    if (!canStopRef.current || !recordingPromiseRef.current) return;
+    if (!canStopRef.current) return;
     if (Platform.OS === 'web') {
-      webRecordingRef.current?.stop();
+      const session = webRecordingRef.current;
+      if (!session) return;
+      session.stop();
       return;
     }
+    if (!recordingPromiseRef.current) return;
     try {
       cameraRef.current?.stopRecording();
     } catch {
@@ -297,9 +381,8 @@ export default function BehaviorCaptureScreen() {
   const retake = useCallback(() => {
     const discardedUri = pendingUriRef.current;
     pendingUriRef.current = null;
-    uploadStartedRef.current = false;
     setUploadError(null);
-    setUploading(false);
+    setHandedOff(false);
     dispatch({ type: 'RESET' });
     // Il video scartato non deve restare in coda SQLite: il drain lo
     // riproverebbe a ogni resume anche se l'utente lo ha buttato.
@@ -308,110 +391,8 @@ export default function BehaviorCaptureScreen() {
     }
   }, [userId]);
 
-  // Upload dopo clip valida
-  useEffect(() => {
-    if (state.phase !== 'completed') return;
-    if (uploadStartedRef.current) return;
-    const uri = pendingUriRef.current;
-    if (!uri) return;
-    if (!usingMockGate && sessionLoading) return;
-
-    uploadStartedRef.current = true;
-    setUploading(true);
-    setUploadError(null);
-
-    (async () => {
-      try {
-        if (usingMockGate) {
-          router.replace({
-            pathname: '/behavior/processing/[eventId]',
-            params: { eventId: 'evt-processing', ...(returnTo === 'ask' ? { returnTo: 'ask', sessionId } : {}) },
-          });
-          return;
-        }
-        if (!userId || !dog.id) {
-          throw new Error('Sessione non pronta');
-        }
-        const durationMs = Math.max(
-          CAPTURE_MIN_SECONDS * 1000,
-          Math.min(CAPTURE_MAX_SECONDS * 1000, elapsedRef.current * 1000),
-        );
-        const { eventId } = await enqueueAndUploadBehaviorClip({
-          userId,
-          dogId: dog.id,
-          localUri: uri,
-          durationMs,
-          hasAudio: micGranted && !state.audioDegraded,
-        });
-        router.replace({
-          pathname: '/behavior/processing/[eventId]',
-          params: { eventId, ...(returnTo === 'ask' ? { returnTo: 'ask', sessionId } : {}) },
-        });
-      } catch (err) {
-        if (isQuotaExhaustedError(err) && purchasesEnabled) {
-          router.replace('/paywall');
-          return;
-        }
-        uploadStartedRef.current = false;
-        setUploading(false);
-        setUploadError(
-          'Upload non riuscito. Il video resta in coda: puoi riprovare.',
-        );
-      }
-    })();
-  }, [
-    state.phase,
-    state.audioDegraded,
-    usingMockGate,
-    sessionLoading,
-    userId,
-    dog.id,
-    micGranted,
-    returnTo,
-    sessionId,
-    router,
-  ]);
-
-  const retryUpload = async () => {
-    const uri = pendingUriRef.current;
-    if (!uri) {
-      retake();
-      return;
-    }
-    if (!userId || !dog.id) {
-      setUploadError('Sessione non disponibile. Attendi e riprova.');
-      return;
-    }
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const durationMs = Math.max(
-        CAPTURE_MIN_SECONDS * 1000,
-        Math.min(CAPTURE_MAX_SECONDS * 1000, elapsedRef.current * 1000),
-      );
-      const { eventId } = await enqueueAndUploadBehaviorClip({
-        userId,
-        dogId: dog.id,
-        localUri: uri,
-        durationMs,
-        hasAudio: micGranted && !state.audioDegraded,
-      });
-      router.replace({
-        pathname: '/behavior/processing/[eventId]',
-        params: { eventId, ...(returnTo === 'ask' ? { returnTo: 'ask', sessionId } : {}) },
-      });
-    } catch (err) {
-      if (isQuotaExhaustedError(err) && purchasesEnabled) {
-        router.replace('/paywall');
-        return;
-      }
-      setUploading(false);
-      setUploadError('Upload non riuscito. Riprova.');
-    }
-  };
-
-  const progress = state.elapsedSeconds / CAPTURE_MAX_SECONDS;
   const showCamera =
+    !handedOff &&
     state.phase !== 'permission_denied' &&
     Boolean(cameraPermission?.granted) &&
     webPreviewArmed;
@@ -425,26 +406,73 @@ export default function BehaviorCaptureScreen() {
       window.clearInterval(tick);
       window.clearTimeout(stop);
     };
-  }, [showCamera]);
+  }, [showCamera, facing]);
+
+  const timerLabel =
+    state.phase === 'recording'
+      ? `${formatCaptureTimer(state.elapsedSeconds)} / ${formatCaptureTimer(CAPTURE_MAX_SECONDS)}`
+      : cameraReady
+        ? 'Pronto'
+        : 'Apro la fotocamera…';
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer
+      padded={false}
+      style={styles.screen}
+      contentStyle={styles.screenContent}
+    >
       <View style={styles.container}>
         <View style={styles.topBar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Chiudi"
+            accessibilityLabel="Indietro"
             onPress={() => router.back()}
             hitSlop={12}
+            style={styles.iconButton}
           >
-            <Ionicons name="close" size={26} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={TITLE_COLOR} />
           </Pressable>
-          <Text style={styles.topTitle}>
-            {fromCheckIn
-              ? `Guardiamo ${dog.name}`
-              : `I segnali di ${dog.name}`}
+          <Text style={styles.topTitle} numberOfLines={1}>
+            Osserva {dog.name}
           </Text>
-          <View style={styles.topSpacer} />
+          <View style={styles.topActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={torchOn ? 'Spegni flash' : 'Accendi flash'}
+              onPress={() => setTorchOn((v) => !v)}
+              hitSlop={10}
+              style={styles.iconButton}
+              disabled={facing === 'front' || !showCamera}
+            >
+              <Ionicons
+                name={torchOn ? 'flash' : 'flash-outline'}
+                size={22}
+                color={
+                  facing === 'front' || !showCamera
+                    ? colors.iconMuted
+                    : TITLE_COLOR
+                }
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Inverti fotocamera"
+              onPress={() => {
+                setTorchOn(false);
+                setCameraReady(false);
+                setFacing((f) => (f === 'back' ? 'front' : 'back'));
+              }}
+              hitSlop={10}
+              style={styles.iconButton}
+              disabled={!showCamera || isRecording}
+            >
+              <Ionicons
+                name="camera-reverse-outline"
+                size={22}
+                color={!showCamera || isRecording ? colors.iconMuted : TITLE_COLOR}
+              />
+            </Pressable>
+          </View>
         </View>
 
         {fromCheckIn && dogAnalysisContext?.note ? (
@@ -453,12 +481,10 @@ export default function BehaviorCaptureScreen() {
 
         <View style={styles.preview}>
           {state.phase === 'permission_denied' ? (
-            <View style={styles.previewCenter}>
-              <Ionicons
-                name="videocam-off-outline"
-                size={48}
-                color={colors.textMuted}
-              />
+            <View style={styles.permissionCard}>
+              <View style={styles.permissionIconWrap}>
+                <Ionicons name="videocam-off-outline" size={28} color={colors.teal} />
+              </View>
               <Text style={styles.permissionTitle}>Serve la fotocamera</Text>
               <Text style={styles.permissionText}>
                 Per osservare un breve momento di {dog.name}. Il suono è
@@ -480,13 +506,15 @@ export default function BehaviorCaptureScreen() {
             <>
               {showCamera ? (
                 <CameraView
+                  key={facing}
                   ref={cameraRef}
                   style={styles.camera}
-                  facing="back"
+                  facing={facing}
                   mode="video"
                   mute={!micGranted}
                   videoQuality="720p"
-                  active
+                  enableTorch={torchOn && facing === 'back'}
+                  active={state.phase === 'ready' || state.phase === 'recording'}
                   onCameraReady={() => {
                     setCameraReady(true);
                     wakeIosCameraPreview();
@@ -500,49 +528,47 @@ export default function BehaviorCaptureScreen() {
                 />
               ) : (
                 <View style={styles.previewCenter}>
-                  <Ionicons name="paw" size={64} color={colors.textMuted} />
+                  <Ionicons name="paw" size={56} color={colors.iconMuted} />
                 </View>
               )}
-              {state.phase === 'recording' && (
-                <View style={styles.recordingChip}>
-                  <View style={styles.recordingDot} />
-                  <Text style={styles.recordingChipText}>
-                    {formatCaptureTimer(state.elapsedSeconds)} /{' '}
-                    {formatCaptureTimer(CAPTURE_MAX_SECONDS)}
-                  </Text>
-                </View>
-              )}
+              <View
+                style={[
+                  styles.timerPill,
+                  isRecording ? styles.timerPillRecording : styles.timerPillReady,
+                ]}
+              >
+                {isRecording ? (
+                  <Animated.View
+                    style={[styles.recordingDot, { opacity: pulseAnim }]}
+                  />
+                ) : (
+                  <View style={styles.readyDot} />
+                )}
+                <Text
+                  style={[
+                    styles.timerPillText,
+                    isRecording && styles.timerPillTextRecording,
+                  ]}
+                >
+                  {timerLabel}
+                </Text>
+              </View>
             </>
           )}
         </View>
 
         <View style={styles.controls}>
           {uploadError ? (
-            <Text style={styles.audioNote}>{uploadError}</Text>
+            <View style={styles.fallbackCard}>
+              <Text style={styles.fallbackText}>{uploadError}</Text>
+            </View>
           ) : null}
 
-          {(state.phase === 'ready' || state.phase === 'recording') &&
-            !uploading && (
+          {(state.phase === 'ready' || state.phase === 'recording') && (
             <>
-              {state.phase === 'recording' ? (
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${Math.min(100, progress * 100)}%` },
-                    ]}
-                  />
-                </View>
-              ) : (
-                <Text style={styles.hint}>
-                  {cameraReady
-                    ? `Tieni inquadrato ${dog.name} per ${CAPTURE_MIN_SECONDS}-${CAPTURE_MAX_SECONDS} secondi`
-                    : 'Attendi, sto aprendo la fotocamera…'}
-                </Text>
-              )}
-              {state.phase === 'ready' && state.audioDegraded && (
-                <>
-                  <Text style={styles.audioNote}>
+              {state.phase === 'ready' && state.audioDegraded ? (
+                <View style={styles.fallbackCard}>
+                  <Text style={styles.fallbackText}>
                     Il suono non è disponibile. Posso osservare comunque il
                     video.
                   </Text>
@@ -560,9 +586,11 @@ export default function BehaviorCaptureScreen() {
                         await Linking.openSettings();
                       }
                     }}
+                    style={styles.micButton}
                   />
-                </>
-              )}
+                </View>
+              ) : null}
+
               {state.phase === 'ready' ? (
                 <Pressable
                   accessibilityRole="button"
@@ -571,13 +599,22 @@ export default function BehaviorCaptureScreen() {
                   onPress={() => void startRecording()}
                   hitSlop={16}
                   style={({ pressed }) => [
-                    styles.recordButton,
-                    !cameraReady && styles.recordButtonDisabled,
-                    pressed && styles.recordButtonPressed,
+                    styles.captureOuter,
+                    !cameraReady && styles.captureDisabled,
+                    pressed && styles.capturePressed,
                   ]}
                   testID="capture-start"
                 >
-                  <View style={styles.recordButtonInner} />
+                  <LinearGradient
+                    colors={[...RING_GRADIENT]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.captureRing}
+                  >
+                    <View style={styles.captureInner}>
+                      <View style={styles.captureLens} />
+                    </View>
+                  </LinearGradient>
                 </Pressable>
               ) : (
                 <Pressable
@@ -587,30 +624,43 @@ export default function BehaviorCaptureScreen() {
                   onPress={stopRecording}
                   hitSlop={16}
                   style={[
-                    styles.recordButton,
-                    styles.recordButtonActive,
-                    !canStop && styles.recordButtonDisabled,
+                    styles.captureOuter,
+                    !canStop && styles.captureDisabled,
                   ]}
                   testID="capture-stop"
                 >
-                  <View style={styles.stopButtonInner} />
+                  <LinearGradient
+                    colors={[...RING_GRADIENT]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.captureRing}
+                  >
+                    <View style={styles.captureInner}>
+                      <View style={styles.stopSquare} />
+                    </View>
+                  </LinearGradient>
                 </Pressable>
               )}
-              {state.phase === 'recording' ? (
-                <Text style={styles.hintSmall}>
-                  {canStop
-                    ? 'Tocca il quadratino quando hai ripreso il momento.'
-                    : 'Attendi: sto avviando la registrazione…'}
-                </Text>
-              ) : null}
+
+              <Text style={styles.hint}>
+                {state.phase === 'recording'
+                  ? canStop
+                    ? `Sto registrando. Tocca per fermare dopo almeno ${CAPTURE_MIN_SECONDS} secondi.`
+                    : 'Attendi: sto avviando la registrazione…'
+                  : cameraReady
+                    ? `Tieni inquadrato ${dog.name} per 5-20 secondi`
+                    : 'Attendi, sto aprendo la fotocamera…'}
+              </Text>
             </>
           )}
 
           {state.phase === 'too_short' && (
-            <>
-              <View style={styles.tooShortCard}>
-                <Ionicons name="time-outline" size={22} color={colors.warning} />
-                <Text style={styles.tooShortText}>
+            <View style={styles.fallbackCard}>
+              <View style={styles.tooShortRow}>
+                <View style={styles.tooShortIcon}>
+                  <Ionicons name="time-outline" size={20} color={colors.coral} />
+                </View>
+                <Text style={styles.fallbackText}>
                   Il video è troppo breve per capire il momento. Riprova
                   tenendo {dog.name} inquadrato per almeno {CAPTURE_MIN_SECONDS}{' '}
                   secondi.
@@ -620,18 +670,21 @@ export default function BehaviorCaptureScreen() {
                 title="Registra di nuovo"
                 onPress={retake}
                 testID="capture-retry"
+                style={styles.fullButton}
               />
-            </>
+            </View>
           )}
 
-          {(state.phase === 'completed' || uploading) && !uploadError && (
-            <Text style={styles.hint}>Video pronto: lo sto inviando…</Text>
-          )}
-
-          {uploadError ? (
-            <View style={{ gap: spacing.md, alignSelf: 'stretch' }}>
-              <Button title="Riprova invio" onPress={() => void retryUpload()} />
-              <Button title="Registra di nuovo" variant="outline" onPress={retake} />
+          {uploadError &&
+          state.phase !== 'too_short' &&
+          state.phase !== 'recording' ? (
+            <View style={styles.uploadActions}>
+              <Button
+                title="Registra di nuovo"
+                variant="outline"
+                onPress={retake}
+                style={styles.fullButton}
+              />
             </View>
           ) : null}
         </View>
@@ -641,37 +694,60 @@ export default function BehaviorCaptureScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
+  screenContent: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    paddingTop: spacing.xs,
   },
   topTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-    color: colors.text,
+    fontWeight: typography.weight.bold,
+    color: TITLE_COLOR,
+    marginHorizontal: spacing.sm,
   },
-  topSpacer: {
-    width: 26,
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   careBanner: {
     marginBottom: spacing.md,
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: HINT_COLOR,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 18,
   },
   preview: {
     flex: 1,
     minHeight: 240,
-    borderRadius: radius.lg,
-    backgroundColor: colors.text,
+    borderRadius: 24,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    // overflow+radius spegne il <video> su Safari iOS (layer nera).
   },
   camera: {
     position: 'absolute',
@@ -688,17 +764,36 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
+  permissionCard: {
+    margin: spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    ...shadows.card,
+  },
+  permissionIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.tealSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   permissionTitle: {
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
-    color: colors.textOnPrimary,
+    color: TITLE_COLOR,
     textAlign: 'center',
   },
   permissionText: {
-    fontSize: typography.size.sm,
-    color: colors.textMuted,
+    fontSize: 13,
+    color: HINT_COLOR,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 20,
   },
   permissionButton: {
     alignSelf: 'stretch',
@@ -706,109 +801,135 @@ const styles = StyleSheet.create({
   permissionLink: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.primaryBright,
+    color: colors.teal,
   },
-  recordingChip: {
+  timerPill: {
     position: 'absolute',
     top: spacing.lg,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.overlayDark,
     borderRadius: radius.full,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  timerPillReady: {
+    backgroundColor: '#E0F7F6',
+  },
+  timerPillRecording: {
+    backgroundColor: '#FFF1EE',
+  },
+  readyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.teal,
   },
   recordingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.danger,
+    backgroundColor: '#EF4444',
   },
-  recordingChipText: {
-    fontSize: typography.size.sm,
+  timerPillText: {
+    fontSize: 13,
     fontWeight: typography.weight.semibold,
-    color: colors.textOnPrimary,
+    color: TITLE_COLOR,
+  },
+  timerPillTextRecording: {
+    color: '#C2410C',
   },
   controls: {
-    paddingVertical: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
     alignItems: 'center',
-    gap: spacing.lg,
-    minHeight: 180,
+    gap: spacing.md,
+    minHeight: 168,
   },
   hint: {
-    fontSize: typography.size.sm,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: HINT_COLOR,
     textAlign: 'center',
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
+    lineHeight: 18,
+    paddingHorizontal: spacing.md,
   },
-  hintSmall: {
-    fontSize: typography.size.xs,
-    color: colors.textMuted,
-    textAlign: 'center',
+  captureOuter: {
+    ...shadows.raised,
   },
-  audioNote: {
-    fontSize: typography.size.xs,
-    color: colors.warning,
-    textAlign: 'center',
-  },
-  recordButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 5,
-    borderColor: colors.danger,
+  captureRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    padding: 5,
   },
-  recordButtonPressed: {
-    opacity: 0.85,
+  captureInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 37,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  recordButtonActive: {
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 6,
-    transform: [{ scale: 1.04 }],
-  },
-  recordButtonDisabled: {
-    opacity: 0.45,
-  },
-  recordButtonInner: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: colors.danger,
-  },
-  stopButtonInner: {
+  captureLens: {
     width: 28,
     height: 28,
-    borderRadius: radius.sm,
-    backgroundColor: colors.danger,
+    borderRadius: 14,
+    backgroundColor: colors.teal,
   },
-  progressTrack: {
+  stopSquare: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: colors.coral,
+  },
+  capturePressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+  },
+  captureDisabled: {
+    opacity: 0.45,
+  },
+  fallbackCard: {
     alignSelf: 'stretch',
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadows.card,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.danger,
+  fallbackText: {
+    flex: 1,
+    fontSize: 13,
+    color: HINT_COLOR,
+    lineHeight: 19,
+    textAlign: 'center',
   },
-  tooShortCard: {
+  tooShortRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
   },
-  tooShortText: {
-    flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.text,
-    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  tooShortIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.coralSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButton: {
+    alignSelf: 'stretch',
+  },
+  uploadActions: {
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+  },
+  fullButton: {
+    alignSelf: 'stretch',
   },
 });

@@ -421,26 +421,27 @@ export default function DiaryScreen() {
                 debouncedSearch
                   ? 'Prova con un’altra parola, oppure cancella la ricerca.'
                   : filter === 'DIGESTIVE'
-                    ? 'Una foto ogni tanto ci aiuta a seguire la sua salute con calma.'
+                    ? `In chat possiamo guardare insieme la digestione di ${dog.name}: qui resterà il riassunto.`
                     : filter === 'BEHAVIOR'
-                      ? `Registra un video di ${dog.name}: ti racconto cosa ho visto.`
-                      : `Mostrami un momento con ${dog.name}: lo custodirò qui, con la sua lettura.`
+                      ? `In chat mandami un video di ${dog.name}: qui resterà il momento, in parole semplici.`
+                      : `Parliamone in chat: i momenti di ${dog.name} resteranno qui, leggeri.`
               }
               actionLabel={
                 debouncedSearch
                   ? undefined
                   : filter === 'DIGESTIVE'
-                    ? 'Controlla la digestione'
-                    : filter === 'BEHAVIOR'
-                      ? 'Registra un video'
-                      : 'Registra un momento'
+                    ? 'Apri la chat'
+                    : 'Apri la chat'
               }
               onAction={
                 debouncedSearch
                   ? undefined
-                  : filter === 'DIGESTIVE'
-                    ? () => router.push('/digestive/capture')
-                    : () => router.push('/behavior/capture')
+                  : () =>
+                      router.push({
+                        pathname: '/ask',
+                        params:
+                          filter === 'DIGESTIVE' ? { intent: 'digest' } : {},
+                      } as never)
               }
             />
           ) : (
@@ -492,14 +493,14 @@ export default function DiaryScreen() {
                       entry={entry}
                       onPress={() =>
                         router.push({
-                          pathname: '/diary/event/[eventId]',
+                          pathname: '/ask',
                           params: {
                             eventId: entry.id,
-                            domain: entry.domain,
-                            occurredAt: entry.occurredAt,
-                            deleted: entry.mediaDeleted ? '1' : '0',
-                            title: entry.title,
-                            subtitle: entry.subtitle ?? '',
+                            source:
+                              entry.domain === 'DIGESTIVE'
+                                ? 'digestive'
+                                : 'behavior',
+                            intent: 'revisit',
                           },
                         } as never)
                       }

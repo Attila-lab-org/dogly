@@ -153,9 +153,15 @@ export default function BehaviorProcessingScreen() {
       completionStarted.current = true;
       setFinishing(true);
       completionTimer.current = setTimeout(
-        () => returnTo === 'ask' && sessionId
-          ? router.replace({ pathname: '/ask', params: { eventId: query.data!.id, source: 'behavior', sessionId } } as never)
-          : router.replace(`/behavior/result/${query.data!.id}`),
+        () =>
+          router.replace({
+            pathname: '/ask',
+            params: {
+              eventId: query.data!.id,
+              source: 'behavior',
+              ...(sessionId ? { sessionId } : {}),
+            },
+          } as never),
         850,
       );
     }
@@ -176,10 +182,11 @@ export default function BehaviorProcessingScreen() {
   }, [eventId, dog.name]);
 
   const goHome = () => router.replace('/(tabs)/home');
-  const retryCapture = () => router.replace({
-    pathname: '/behavior/capture',
-    params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined,
-  } as never);
+  const retryCapture = () =>
+    router.replace({
+      pathname: '/ask',
+      params: sessionId ? { sessionId } : {},
+    } as never);
 
   if (useApi && query.isError) {
     return (

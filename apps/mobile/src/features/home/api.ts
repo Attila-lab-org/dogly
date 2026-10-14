@@ -123,6 +123,15 @@ const NON_COMPLETED_LABELS: Record<string, string> = {
   CANCELLED: 'Annullata',
 };
 
+/** Riassunto diario: una frase corta, tono app, niente pappardella. */
+function diaryWowSnippet(value: string, maxChars = 110): string {
+  const cleaned = value.trim();
+  if (!cleaned) return cleaned;
+  const first = cleaned.split(/(?<=[.!?])\s+/).find(Boolean) ?? cleaned;
+  if (first.length <= maxChars) return first;
+  return `${first.slice(0, maxChars - 1).replace(/\s+\S*$/, '').replace(/[,;:]+$/, '')}…`;
+}
+
 /**
  * DiaryItem API → DiaryEntry UI. FOOD_LABEL non è un dominio del Diario
  * (sez. 5.1: solo behavior + digestive) → restituisce null.
@@ -134,12 +143,14 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
   const subtitle =
     item.status === 'COMPLETED'
       ? item.summary
-        ? item.domain === 'DIGESTIVE'
-          ? simplifyDigestiveOwnerCopy(item.summary, {
-              maxChars: 180,
-              maxSentences: 2,
-            })
-          : sanitizeOwnerCopy(item.summary)
+        ? diaryWowSnippet(
+            item.domain === 'DIGESTIVE'
+              ? simplifyDigestiveOwnerCopy(item.summary, {
+                  maxChars: 110,
+                  maxSentences: 1,
+                })
+              : sanitizeOwnerCopy(item.summary),
+          )
         : null
       : (NON_COMPLETED_LABELS[item.status] ?? item.summary);
   const title =

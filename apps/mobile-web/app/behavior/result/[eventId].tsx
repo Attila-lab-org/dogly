@@ -1,304 +1,42 @@
 /**
- * Behavior result — GET evento reale + POST feedback.
- * Layout Screen 2: nav Risultato, hero circolare, Perché?, feedback pills.
+ * Legacy result URL → chat-first: Apri Ask sull'episodio.
  */
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
-import { Button, Card, ErrorState, ScreenContainer } from '@/components';
-import { colors, spacing, typography } from '@/theme/tokens';
-import type { FeedbackValue } from '@/contracts/types';
-import { BehaviorResultView } from '@/features/core/components';
-import { saveBehaviorFeedback } from '@/features/core/feedback';
-import { shareBehaviorResult } from '@/features/behavior/share';
-import { useDogProfile } from '@/features/core/useDogProfile';
-import { useCheckIn } from '@/features/checkin/store';
-import {
-  getBehaviorEvent,
-  mapApiEventToResult,
-  postBehaviorContext,
-} from '@/features/behavior/api';
-import { isApiConfigured } from '@/features/auth/env';
-import { AdviceCard } from '@/features/advice/AdviceCard';
-import { mapApiAdviceItem } from '@/features/advice/map';
-import { selectAdvice } from '@/features/advice/logic';
-import { useSession } from '@/features/auth/SessionProvider';
-import { queryKeys } from '@/lib/queryClient';
-import { isPersistedId } from '@/lib/persistedId';
-import { useMeProfile } from '@/features/me/api';
-import { sanitizeOwnerCopy } from '@/features/core/copy';
-import { usefulQuestionKicker } from '@/features/core/conversationCopy';
-
-const NAVY = '#1A2B48';
+import { colors } from '@/theme/tokens';
 
 export default function BehaviorResultScreen() {
   const router = useRouter();
-  const { dog } = useDogProfile();
-  const { userId } = useSession();
-  const meQuery = useMeProfile();
-  const ownerDisplayName = meQuery.data?.display_name;
-  const { analysisContext } = useCheckIn();
-  const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const useApi =
-    isApiConfigured() &&
-    Boolean(userId) &&
-    isPersistedId(eventId);
-
-  const query = useQuery({
-    queryKey: queryKeys.behaviorEvent(
-      userId ?? 'anon',
-      dog.id,
-      eventId ?? '',
-    ),
-    queryFn: () => getBehaviorEvent(eventId!),
-    enabled: useApi,
-  });
-
-  const result = query.data ? mapApiEventToResult(query.data) : undefined;
-  const advice = result
-    ? selectAdvice(result, {
-        apiAdvice: mapApiAdviceItem(query.data?.advice),
-      })
-    : null;
-
-  const [feedback, setFeedback] = useState<FeedbackValue | null>(
-    result?.feedback ?? null,
-  );
-  const [savingFeedback, setSavingFeedback] = useState(false);
-  const [feedbackError, setFeedbackError] = useState<string | null>(null);
-  const [refiningAnswerId, setRefiningAnswerId] = useState<string | null>(null);
-  const [contextError, setContextError] = useState<string | null>(null);
-  const contextAnswers = result?.context_options ?? [];
 
   useEffect(() => {
-    if (result?.feedback) setFeedback(result.feedback);
-  }, [result?.feedback]);
-
-  const notCompleted = result !== undefined && result.status !== 'COMPLETED';
-  useEffect(() => {
-    if (notCompleted && result) {
-      router.replace(`/behavior/processing/${result.eventId}`);
+    if (!eventId) {
+      router.replace('/(tabs)/diary' as never);
+      return;
     }
-  }, [notCompleted, result, router]);
-
-  if (useApi && query.isLoading) {
-    return (
-      <ScreenContainer style={styles.whiteScreen}>
-        <ErrorState title="Caricamento" message="Sto aprendo il risultato…" />
-      </ScreenContainer>
-    );
-  }
-
-  if (!result) {
-    return (
-      <ScreenContainer style={styles.whiteScreen}>
-        <ErrorState
-          title="Risultato non trovato"
-          message="Non riesco ad aprire questa analisi. Controlla il Diario."
-        />
-        <Button
-          title="Apri il Diario"
-          onPress={() => router.replace('/(tabs)/diary')}
-        />
-      </ScreenContainer>
-    );
-  }
-
-  if (notCompleted) {
-    return (
-      <ScreenContainer style={styles.whiteScreen}>
-        <ErrorState
-          title="Analisi in corso"
-          message="Ti porto allo stato dell'analisi…"
-        />
-      </ScreenContainer>
-    );
-  }
-
-  const handleFeedback = async (value: FeedbackValue) => {
-    setSavingFeedback(true);
-    setFeedbackError(null);
-    try {
-      const saved = await saveBehaviorFeedback(
-        result.eventId,
-        value,
-      );
-      setFeedback(saved);
-    } catch {
-      // Mai finto "Salvato": badge errore onesto, l'utente può riprovare.
-      setFeedback(null);
-      setFeedbackError('Non salvato — riprova');
-    } finally {
-      setSavingFeedback(false);
-    }
-  };
-  const handleContext = async (answerId: string) => {
-    if (!useApi || refiningAnswerId) return;
-    setRefiningAnswerId(answerId);
-    setContextError(null);
-    try {
-      await postBehaviorContext(result.eventId, answerId);
-      await query.refetch();
-    } catch {
-      setContextError('Non sono riuscito ad aggiornare la lettura. Riprova.');
-    } finally {
-      setRefiningAnswerId(null);
-    }
-  };
+    router.replace({
+      pathname: '/ask',
+      params: {
+        eventId,
+        source: 'behavior',
+        intent: 'revisit',
+      },
+    } as never);
+  }, [eventId, router]);
 
   return (
-    <ScreenContainer padded={false} style={styles.whiteScreen}>
-      <View style={styles.topBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Indietro"
-          onPress={() => router.back()}
-          hitSlop={12}
-          style={styles.topSide}
-        >
-          <Ionicons name="chevron-back" size={24} color={NAVY} />
-        </Pressable>
-        <Text style={styles.topTitle}>Risultato</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Condividi"
-          onPress={() =>
-            void shareBehaviorResult(result, dog.name, dog.photoUri)
-          }
-          hitSlop={12}
-          style={styles.topSide}
-          testID="share-result"
-        >
-          <Ionicons name="share-outline" size={22} color={NAVY} />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <BehaviorResultView
-          key={result.eventId}
-          result={result}
-          dogName={dog.name}
-          feedback={feedback}
-          feedbackError={feedbackError}
-          onFeedback={(v) => {
-            if (!savingFeedback) void handleFeedback(v);
-          }}
-          careNote={
-            !result.baseline_note && dogAnalysisContext?.concern === 'off'
-              ? dogAnalysisContext.note
-              : null
-          }
-          photoUri={dog.photoUri}
-          onDiscuss={() => router.push({ pathname: '/ask', params: { eventId: result.eventId, source: 'behavior' } } as never)}
-          contextPrompt={
-            result.needs_context &&
-            result.context_question &&
-            contextAnswers.length > 0 &&
-            !result.context_effect ? (
-              <Card style={styles.contextCard} testID="behavior-context-question">
-                <Text style={styles.contextKicker}>
-                  {usefulQuestionKicker(ownerDisplayName)}
-                </Text>
-                <Text style={styles.contextQuestion}>
-                  {sanitizeOwnerCopy(result.context_question)}
-                </Text>
-                <View style={styles.contextAnswers}>
-                  {contextAnswers.map((answer) => (
-                    <Button
-                      key={answer.id}
-                      title={answer.label}
-                      variant="secondary"
-                      disabled={refiningAnswerId !== null}
-                      loading={refiningAnswerId === answer.id}
-                      onPress={() => void handleContext(answer.id)}
-                      style={styles.contextAnswer}
-                    />
-                  ))}
-                </View>
-                {contextError ? (
-                  <Text style={styles.contextError}>{contextError}</Text>
-                ) : null}
-              </Card>
-            ) : result.context_effect ? (
-              <Card style={styles.contextCard} testID="behavior-context-effect">
-                <Text style={styles.contextKicker}>
-                  Ok, ora ho un quadro migliore
-                </Text>
-                <Text style={styles.contextQuestion}>
-                  {sanitizeOwnerCopy(result.context_effect)}
-                </Text>
-              </Card>
-            ) : null
-          }
-          adviceRationale={advice?.whyText}
-          primaryAdvice={
-            advice ? <AdviceCard advice={advice} dogName={dog.name} compact /> : null
-          }
-        />
-      </ScrollView>
-    </ScreenContainer>
+    <View style={styles.root}>
+      <ActivityIndicator color={colors.primary} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  whiteScreen: {
-    backgroundColor: '#FFFFFF',
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: '#FFFFFF',
-  },
-  topSide: {
-    width: 32,
-    height: 32,
+  root: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  topTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: NAVY,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
-    backgroundColor: '#FFFFFF',
-  },
-  contextCard: {
-    marginTop: spacing.md,
-  },
-  contextKicker: {
-    color: colors.accent,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.bold,
-    textTransform: 'uppercase',
-  },
-  contextQuestion: {
-    marginTop: spacing.xs,
-    color: colors.text,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.semibold,
-  },
-  contextAnswers: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  contextAnswer: {
-    alignSelf: 'stretch',
-  },
-  contextError: {
-    marginTop: spacing.sm,
-    color: colors.danger,
-    fontSize: typography.size.xs,
+    backgroundColor: colors.background,
   },
 });

@@ -190,7 +190,22 @@ export default function HomeScreen() {
 
           {recentInsights.length > 0 ? <>
             <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Le ultime osservazioni</Text><Pressable onPress={() => router.push('/(tabs)/diary')} accessibilityRole="button"><Text style={styles.seeAll}>Diario</Text></Pressable></View>
-            {recentInsights.map((insight) => <InsightCard key={insight.eventId} insight={insight} onPress={() => router.push(`/behavior/result/${insight.eventId}`)} />)}
+            {recentInsights.map((insight) => (
+              <InsightCard
+                key={insight.eventId}
+                insight={insight}
+                onPress={() =>
+                  router.push({
+                    pathname: '/ask',
+                    params: {
+                      eventId: insight.eventId,
+                      source: 'behavior',
+                      intent: 'revisit',
+                    },
+                  } as never)
+                }
+              />
+            ))}
           </> : null}
 
           {behaviorRemaining !== null && behaviorRemaining <= 2 ? (

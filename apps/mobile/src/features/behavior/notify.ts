@@ -23,7 +23,7 @@ export function buildResultReadyContent(
   return {
     title: `Il risultato di ${dogName} è pronto`,
     body: `Ho finito di osservare ${dogName}: apri per scoprire cosa ti sta comunicando.`,
-    data: { href: `/behavior/result/${eventId}` },
+    data: { href: `/ask?eventId=${encodeURIComponent(eventId)}&source=behavior&intent=revisit` },
   };
 }
 

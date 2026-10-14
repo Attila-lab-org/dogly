@@ -7,7 +7,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import type { ButtonVariant } from '@/components/Button';
+import { colors, spacing, typography } from '@/theme/tokens';
 import type { BehaviorEventStatus } from '@/contracts/types';
 import {
   getBehaviorEvent,
@@ -30,6 +31,57 @@ import {
   ANALYSIS_POLL_TIMEOUT_MS,
   analysisPollIntervalMs,
 } from '@/features/core/processingTimeout';
+
+const TITLE_COLOR = '#1A2B48';
+const MUTED_COLOR = '#64748B';
+const CARD_BORDER = '#EDF2F7';
+const PAGE_BG = '#F8FAFC';
+
+function StatePage({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  message,
+  primaryTitle,
+  onPrimary,
+  primaryVariant = 'danger',
+  secondaryTitle = 'Torna alla Home',
+  onSecondary,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  message: string;
+  primaryTitle: string;
+  onPrimary: () => void;
+  primaryVariant?: ButtonVariant;
+  secondaryTitle?: string;
+  onSecondary: () => void;
+}) {
+  return (
+    <View style={styles.statePage}>
+      <View style={[styles.stateIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={36} color={iconColor} />
+      </View>
+      <Text style={styles.stateTitle}>{title}</Text>
+      <Text style={styles.stateText}>{message}</Text>
+      <Button
+        title={primaryTitle}
+        variant={primaryVariant}
+        onPress={onPrimary}
+        style={styles.stateButton}
+      />
+      <Button
+        title={secondaryTitle}
+        variant="outline"
+        onPress={onSecondary}
+        style={styles.stateButton}
+      />
+    </View>
+  );
+}
 
 export default function BehaviorProcessingScreen() {
   const router = useRouter();
@@ -101,13 +153,19 @@ export default function BehaviorProcessingScreen() {
       completionStarted.current = true;
       setFinishing(true);
       completionTimer.current = setTimeout(
-        () => returnTo === 'ask' && sessionId
-          ? router.replace({ pathname: '/ask', params: { eventId: query.data!.id, source: 'behavior', sessionId } } as never)
-          : router.replace(`/behavior/result/${query.data!.id}`),
+        () =>
+          router.replace({
+            pathname: '/ask',
+            params: {
+              eventId: query.data!.id,
+              source: 'behavior',
+              ...(sessionId ? { sessionId } : {}),
+            },
+          } as never),
         850,
       );
     }
-  }, [useApi, query.data, router, returnTo, sessionId]);
+  }, [returnTo, sessionId, useApi, query.data, router]);
 
   // "Ti avviso quando il risultato è pronto": se l'utente lascia la
   // schermata prima dello stato terminale, schedula la notifica locale.
@@ -123,103 +181,87 @@ export default function BehaviorProcessingScreen() {
     };
   }, [eventId, dog.name]);
 
+  const goHome = () => router.replace('/(tabs)/home');
+  const retryCapture = () =>
+    router.replace({
+      pathname: '/ask',
+      params: sessionId ? { sessionId } : {},
+    } as never);
+
   if (useApi && query.isError) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <ErrorState
           title="Non riesco ad aprire l’analisi"
           message="Controlla la connessione e riprova. Se l’elaborazione è partita, ritroverai il risultato nel Diario."
           onRetry={() => void query.refetch()}
         />
-        <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
+        <Button title="Torna alla Home" variant="danger" onPress={goHome} />
       </ScreenContainer>
     );
   }
 
   if (!useApi) {
     return (
-      <ScreenContainer>
+      <ScreenContainer style={styles.screen}>
         <ErrorState
           title="Analisi non trovata"
           message="Non riesco a trovare questa analisi. Torna alla Home e riprova."
         />
-        <Button title="Torna alla Home" onPress={() => router.replace('/(tabs)/home')} />
+        <Button title="Torna alla Home" variant="danger" onPress={goHome} />
       </ScreenContainer>
     );
   }
 
   if (status === 'DRAFT' || status === 'UPLOADING') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.primarySoft }]}>
-            <Ionicons name="cloud-upload-outline" size={36} color={colors.primary} />
-          </View>
-          <Text style={styles.stateTitle}>Sto completando l’invio</Text>
-          <Text style={styles.stateText}>
-            Conserva la connessione per qualche momento. Il video rimane sul
-            telefono finché l’invio non è verificato.
-          </Text>
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="cloud-upload-outline"
+          iconBg={colors.tealSoft}
+          iconColor={colors.teal}
+          title="Sto completando l’invio"
+          message="Conserva la connessione per qualche momento. Il video rimane sul telefono finché l’invio non è verificato."
+          primaryTitle="Torna alla Home"
+          primaryVariant="primary"
+          onPrimary={goHome}
+          secondaryTitle="Vai al Diario"
+          onSecondary={() => router.replace('/(tabs)/diary')}
+        />
       </ScreenContainer>
     );
   }
 
   if (status === 'REJECTED_QUALITY') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.warningSoft }]}>
-            <Ionicons name="videocam-off-outline" size={36} color={colors.warning} />
-          </View>
-          <Text style={styles.stateTitle}>Il video non è abbastanza chiaro</Text>
-          <Text style={styles.stateText}>
-            Non riesco a vedere abbastanza bene {dog.name} per darti una lettura
-            affidabile. Riproviamo con una ripresa più chiara. Questa prova non
-            viene conteggiata.
-          </Text>
-          <Button
-            title="Registra di nuovo"
-            onPress={() => router.replace({ pathname: '/behavior/capture', params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined } as never)}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="videocam-off-outline"
+          iconBg={colors.coralSoft}
+          iconColor={colors.coral}
+          title="Il video non è abbastanza chiaro"
+          message={`Non riesco a vedere abbastanza bene ${dog.name} per darti una lettura affidabile. Riproviamo con una ripresa più chiara. Questa prova non viene conteggiata.`}
+          primaryTitle="Registra di nuovo"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
 
   if (status === 'FAILED_TERMINAL') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.dangerSoft }]}>
-            <Ionicons name="cloud-offline-outline" size={36} color={colors.danger} />
-          </View>
-          <Text style={styles.stateTitle}>Qualcosa non ha funzionato</Text>
-          <Text style={styles.stateText}>
-            C'è stato un problema tecnico dall'altra parte. Non è colpa del
-            video: l'analisi non è stata conteggiata e il problema è già stato
-            segnalato.
-          </Text>
-          <Button
-            title="Riprova"
-            onPress={() => router.replace({ pathname: '/behavior/capture', params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined } as never)}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="cloud-offline-outline"
+          iconBg={colors.coralSoft}
+          iconColor={colors.coral}
+          title="Qualcosa non ha funzionato"
+          message="C'è stato un problema tecnico dall'altra parte. Non è colpa del video: l'analisi non è stata conteggiata e il problema è già stato segnalato."
+          primaryTitle="Riprova"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
@@ -230,51 +272,34 @@ export default function BehaviorProcessingScreen() {
     (!status || !isTerminalBehaviorStatus(status))
   ) {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.warningSoft }]}>
-            <Ionicons name="time-outline" size={36} color={colors.warning} />
-          </View>
-          <Text style={styles.stateTitle}>L’analisi sta impiegando troppo</Text>
-          <Text style={styles.stateText}>
-            Puoi ricontrollare questa analisi o ritrovarla più tardi nel Diario.
-            Non serve inviare un altro video.
-          </Text>
-          <Button
-            title="Ricontrolla"
-            onPress={() => { void query.refetch(); }}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="time-outline"
+          iconBg={colors.coralSoft}
+          iconColor={colors.coral}
+          title="L’analisi sta impiegando troppo"
+          message="Puoi ricontrollare questa analisi o ritrovarla più tardi nel Diario. Non serve inviare un altro video."
+          primaryTitle="Ricontrolla"
+          onPrimary={() => { void query.refetch(); }}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
 
   if (status === 'CANCELLED') {
     return (
-      <ScreenContainer>
-        <View style={styles.statePage}>
-          <View style={[styles.stateIcon, { backgroundColor: colors.surfaceMuted }]}>
-            <Ionicons name="close-circle-outline" size={36} color={colors.textMuted} />
-          </View>
-          <Text style={styles.stateTitle}>Analisi annullata</Text>
-          <Text style={styles.stateText}>
-            Questa analisi non è stata completata e non verrà conteggiata.
-          </Text>
-          <Button
-            title="Registra un nuovo video"
-            onPress={() => router.replace({ pathname: '/behavior/capture', params: returnTo === 'ask' && sessionId ? { from: 'ask', sessionId } : undefined } as never)}
-          />
-          <Button
-            title="Torna alla Home"
-            variant="outline"
-            onPress={() => router.replace('/(tabs)/home')}
-          />
-        </View>
+      <ScreenContainer style={styles.screen}>
+        <StatePage
+          icon="close-circle-outline"
+          iconBg={colors.surfaceMuted}
+          iconColor={MUTED_COLOR}
+          title="Analisi annullata"
+          message="Questa analisi non è stata completata e non verrà conteggiata."
+          primaryTitle="Registra un nuovo video"
+          onPrimary={retryCapture}
+          onSecondary={goHome}
+        />
       </ScreenContainer>
     );
   }
@@ -291,15 +316,16 @@ export default function BehaviorProcessingScreen() {
   const isRetrying = displayStatus === 'FAILED_RETRYABLE';
 
   return (
-    <ScreenContainer>
+    <ScreenContainer style={styles.screen} contentStyle={styles.content}>
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Torna alla Home"
-          onPress={() => router.replace('/(tabs)/home')}
+          onPress={goHome}
           hitSlop={12}
+          style={styles.backButton}
         >
-          <Ionicons name="close" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={TITLE_COLOR} />
         </Pressable>
         <View style={styles.topSpacer} />
       </View>
@@ -325,10 +351,10 @@ export default function BehaviorProcessingScreen() {
 
       {isRetrying && (
         <View style={styles.retryBanner}>
-          <Ionicons name="refresh" size={16} color={colors.warning} />
+          <Ionicons name="refresh" size={16} color={colors.coral} />
           <Text style={styles.retryText}>
-            Connessione instabile: ci riprovo automaticamente, senza usare
-            altre analisi.
+            Sto facendo un altro tentativo. Il video è già arrivato e non uso
+            un’altra analisi.
           </Text>
         </View>
       )}
@@ -337,14 +363,27 @@ export default function BehaviorProcessingScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: PAGE_BG,
+  },
+  content: {
+    paddingBottom: spacing.xl,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   topSpacer: {
-    width: 26,
+    width: 40,
   },
   experience: {
     flex: 1,
@@ -355,15 +394,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
+    backgroundColor: colors.coralSoft,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   retryText: {
     flex: 1,
-    fontSize: typography.size.sm,
-    color: colors.text,
+    fontSize: 13,
+    color: TITLE_COLOR,
+    lineHeight: 18,
   },
   statePage: {
     flex: 1,
@@ -373,22 +415,26 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   stateIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#E0F2F7',
   },
   stateTitle: {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    color: colors.text,
+    color: TITLE_COLOR,
     textAlign: 'center',
   },
   stateText: {
     fontSize: typography.size.md,
-    color: colors.textSecondary,
+    color: MUTED_COLOR,
     textAlign: 'center',
     lineHeight: typography.size.md * typography.lineHeight.relaxed,
+  },
+  stateButton: {
+    alignSelf: 'stretch',
   },
 });

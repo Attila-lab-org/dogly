@@ -128,9 +128,14 @@ export default function NotificationsScreen() {
               key={item.id}
               accessibilityRole="button"
               onPress={() =>
-                realEnabled
-                  ? router.push(`/behavior/result/${item.id}`)
-                  : router.push(`/diary/event/${item.id}`)
+                router.push({
+                  pathname: '/ask',
+                  params: {
+                    eventId: item.id,
+                    source: 'behavior',
+                    intent: 'revisit',
+                  },
+                } as never)
               }
               style={({ pressed }) => [
                 styles.item,

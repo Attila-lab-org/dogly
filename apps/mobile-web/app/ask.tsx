@@ -63,7 +63,7 @@ export default function AskScreen() {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const start = useCallback(async () => {
     if (!dog.id) return;
-    const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}`;
+    const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}:${intent ?? ''}:${source ?? ''}`;
     if (startedKey.current === key) return;
     startedKey.current = key;
     setStarting(true); setError(null);
@@ -75,18 +75,35 @@ export default function AskScreen() {
       const next = resumed?.session ?? await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
-      if (resumed) {
+      if (eventId) {
+        const digestiveHandoff = source === 'digestive';
+        const isRevisit = intent === 'revisit';
+        const text = isRevisit
+          ? digestiveHandoff
+            ? 'Torniamo su questo controllo.'
+            : 'Torniamo su questo momento.'
+          : digestiveHandoff
+            ? 'Ho caricato la foto richiesta.'
+            : 'Ho caricato il video richiesto.';
+        const turn = await createRealtimeTurn(next.id, text, undefined, {
+          eventId,
+          source: digestiveHandoff ? 'digestive' : 'behavior',
+        });
+        if (!mounted.current) return;
+        setMessages([
+          ...(resumed?.messages ?? []),
+          { id: 'video-' + eventId, role: 'user', text },
+          { id: turn.id, role: 'assistant', text: turn.assistant_text, turn },
+        ]);
+        setFocusedEventId(undefined);
+      } else if (resumed) {
         setMessages(resumed.messages);
-        if (eventId) {
-          const digestiveHandoff = source === 'digestive';
-          const text = digestiveHandoff ? 'Ho caricato la foto richiesta.' : 'Ho caricato il video richiesto.';
-          const turn = await createRealtimeTurn(next.id, text, undefined, { eventId, source: digestiveHandoff ? 'digestive' : 'behavior' });
-          if (!mounted.current) return;
-          setMessages([...resumed.messages, { id: 'video-' + eventId, role: 'user', text }, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
-          setFocusedEventId(undefined);
-        }
       } else {
-        setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
+        const welcome =
+          intent === 'digest'
+            ? `Se vuoi controllare la digestione di ${dog.name}, mandami una foto chiara delle feci e ne parliamo qui.`
+            : next.welcome_text;
+        setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: welcome }]);
       }
     } catch {
       startedKey.current = null;
@@ -94,7 +111,7 @@ export default function AskScreen() {
       if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.');
     }
     finally { if (mounted.current) setStarting(false); }
-  }, [dog.id, dog.name, eventId, sessionId]);
+  }, [dog.id, dog.name, eventId, intent, sessionId, source]);
   useEffect(() => { void start(); }, [start]);
   useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending]);
 
@@ -158,11 +175,24 @@ export default function AskScreen() {
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
     if (sending || !session) return;
+    const digestivePhoto =
+      turn?.domains?.includes('DIGESTIVE') ||
+      /feci|cacca|digest|pup[uù]|diarrea|escrement/i.test(
+        `${turn?.media_prompt ?? ''} ${turn?.assistant_text ?? ''}`,
+      );
+    if (digestivePhoto) {
+      await rememberRealtimeSession(session, messages);
+      router.push({
+        pathname: '/digestive/capture',
+        params: { from: 'ask', sessionId: session.id },
+      } as never);
+      return;
+    }
     const uri = await takeConversationPhoto();
     if (!uri) return;
     const purpose = turn?.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
-  }, [dog.name, latestAssistant, send, sending, session]);
+  }, [latestAssistant, messages, router, send, sending, session]);
 
   const pickPhoto = useCallback(async () => {
     if (sending || !session) return;

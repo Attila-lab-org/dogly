@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,12 +30,27 @@ export default function DigestiveCaptureScreen() {
   const { loading: sessionLoading, userId, usingMockGate } = useSession();
   const { analysisContext } = useCheckIn();
   const dogAnalysisContext = analysisContext?.dogId === dog.id ? analysisContext : null;
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{
+    from?: string | string[];
+    sessionId?: string | string[];
+  }>();
+  const from = Array.isArray(params.from) ? params.from[0] : params.from;
+  const sessionId = Array.isArray(params.sessionId)
+    ? params.sessionId[0]
+    : params.sessionId;
+  const fromAsk = from === 'ask';
   const fromCheckIn =
-    params.from === 'checkin' || dogAnalysisContext?.concern === 'off';
+    from === 'checkin' || dogAnalysisContext?.concern === 'off';
   const [phase, setPhase] = useState<Phase>('ready');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
+
+  // Chat-first: capture solo da Ask (o check-in legacy).
+  useEffect(() => {
+    if (!fromAsk && !fromCheckIn) {
+      router.replace('/ask' as never);
+    }
+  }, [fromAsk, fromCheckIn, router]);
 
   const takePhoto = async () => {
     // "Rifai la foto": la foto scartata non resta in coda upload.
@@ -62,7 +77,13 @@ export default function DigestiveCaptureScreen() {
       if (usingMockGate) {
         // Mock gate dev: pipeline finta solo in demo.
         await new Promise((resolve) => setTimeout(resolve, 800));
-        router.replace('/digestive/processing/fecal-ok-1');
+        router.replace({
+          pathname: '/digestive/processing/fecal-ok-1',
+          params: {
+            ...(fromAsk ? { returnTo: 'ask' } : {}),
+            ...(sessionId ? { sessionId } : {}),
+          },
+        } as never);
         return;
       }
       if (sessionLoading || !userId || !dog.id) {
@@ -74,7 +95,13 @@ export default function DigestiveCaptureScreen() {
         dogId: dog.id,
         localUri: photoUri,
       });
-      router.replace(`/digestive/processing/${eventId}`);
+      router.replace({
+        pathname: `/digestive/processing/${eventId}`,
+        params: {
+          ...(fromAsk ? { returnTo: 'ask' } : {}),
+          ...(sessionId ? { sessionId } : {}),
+        },
+      } as never);
     } catch (err) {
       if (isQuotaExhaustedError(err) && purchasesEnabled) {
         router.replace('/paywall');

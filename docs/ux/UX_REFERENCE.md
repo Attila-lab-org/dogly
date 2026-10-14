@@ -111,43 +111,44 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 ## Daily Check-in (principi)
 
 1. Solo modal all’apertura, non un blocco in Home.
-2. Una domanda; se “non come al solito” → offerta video o digestione.
-3. L’analisi eredita il motivo (feed personalizzato, tono premuroso).
-4. Risultato: headline + band + perché (evidence) + feedback tre vie — come Spec/UX_REFERENCE.
+2. Una domanda; se “non come al solito” → invita ad aprire la chat (video o digestione).
+3. Nessun ingresso diretto a capture/result: la lettura nasce in conversazione.
 
-## Risultato — esperienza AI (decisione 2026-09-20)
+## Media chat-first (decisione 2026-10-15)
 
-DOGly ragiona in profondità e parla come qualcuno che conosce il cane.
-La stessa gerarchia vale su mobile, web e nel risultato riaperto dal Diario:
+Video e digestione **non** sono analisi secche con schermata risultato come fine esperienza.
 
-1. Interpretazione immediata e probabilistica: «Oreo sembra volerti coinvolgere nel gioco».
-2. Frase breve sotto «In parole umane», accompagnata da «Una possibile lettura del momento».
-   È una parafrasi dell'intero momento, mai una traduzione letterale dell'abbaio.
-   Assente se manca una lettura sufficiente, restano letture incompatibili o serve priorità alla sicurezza.
-3. Una sola azione quando fornita dal consiglio validato; nessun consiglio aggiunto per riempire.
-   Le indicazioni di sicurezza restano sempre visibili e hanno precedenza.
-4. «Perché?» sempre disponibile quando esistono dettagli, chiuso all'apertura anche per letture chiare.
-   Contiene spiegazione, video, audio, contesto del proprietario, ricordi utilizzati,
-   motivazione del consiglio e cosa osservare. La prudenza è espressa in parole, mai percentuali.
-5. Una sola domanda di contesto quando cambia realmente la lettura. Nessun questionario aggiunto.
+1. **Ingresso** — solo da Ask (CTA «Carica un video» / «Carica una foto»).
+   Capture e fotocamera digestiva restano passaggi tecnici, non destinazioni prodotto.
+   Landing «Controllo digestione» con tips → redirect ad Ask.
+2. **Durante** — processing breve, poi ritorno in Ask.
+3. **Lettura** — in chat, conversazionale: si discute il momento, non un referto.
+4. **Diario** — cronologia wow: titolo leggero + **una frase** di riassunto.
+   Tap sulla card → Ask sull’episodio (`intent=revisit`), non result screen.
+5. Home insights e notifiche «risultato pronto» → stesso handoff Ask.
+6. Live resta voce; se serve video/foto, invita Ask Testo.
 
-La personalizzazione cambia la lettura solo quando segnali attuali e ricordi pertinenti
-la sostengono. Episodi preliminari o contestati non diventano abitudini confermate;
-il numero di interazioni o il livello di conoscenza da solo non prova un'abitudine.
-Nella spiegazione si conserva il significato memorizzato, mai contatori interni.
+Pipeline AI invariata (Gemini observer + reasoner / digestive vision).
+Cambia solo **dove** l’umano vive la lettura.
 
-La chat Ask è Astra con prompt da amico esperto: conosce già i cani; noi le diamo
-solo il dossier di questo cane (razza, età, peso, cibo, ricordi, storia) più
-situazione (stagione, meteo locale se la posizione è disponibile). Ragiona su
-condizioni ottimali senza cataloghi RAG né blindature extra. Al rientro riprende
-fili aperti (belli o difficili). Azioni soft opzionali (ricorda, Momenti, alimento)
-con conferma umana. Video solo se serve; niente finta osservazione in diretta.
+## Risultato — esperienza AI (aggiornato)
 
-- Feedback a tre vie; "Non lo so" senza penalità.
-- Condividi card sanitizzata (niente raw video).
-- I test controllano il contenuto effettivamente reso e il passaggio dei dati dal
-  ragionamento al risultato. La qualità delle risposte generate va verificata anche
-  su nuovi casi reali: i test automatici non misurano da soli la qualità conversazionale.
+DOGly ragiona in profondità e parla come amica esperta che vuole bene al cane.
+La lettura primaria è **in Ask**. Il Diario conserva memoria, non ripete il referto.
+
+In chat, dopo un media:
+1. Interpretazione immediata e naturale («Oreo ti sta cercando nel gioco»).
+2. Se serve, una sola domanda che cambia la lettura.
+3. Sicurezza sempre in cima quando c’è urgenza.
+4. Sugli abbai: traduttrice realista; sul resto: tono caldo da amica.
+
+Nel Diario:
+- Headline consumer + snippet corto (niente jargon, niente pappardella).
+- Tap = continua la conversazione su quel momento.
+
+La chat Ask conosce già i cani; noi diamo il dossier di questo cane più situazione.
+Azioni soft opzionali (ricorda, Momenti, alimento) con conferma umana.
+Niente finta osservazione video in diretta in Live.
 
 ## Profilo / Album
 

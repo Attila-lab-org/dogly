@@ -68,9 +68,12 @@ export function CheckInModal({
     setStep('cta');
   };
 
-  const goCapture = (path: '/behavior/capture' | '/digestive/capture') => {
+  const goAsk = (intent?: string) => {
     dismissWelcomeCheckIn();
-    router.push(`${path}?from=checkin` as never);
+    router.push({
+      pathname: '/ask',
+      params: intent ? { intent } : {},
+    } as never);
   };
 
   return (
@@ -101,18 +104,18 @@ export function CheckInModal({
                 Hai notato che {dogName} non è come al solito
               </Text>
               <Text style={styles.subtitle}>
-                Un breve video o uno sguardo alla digestione aiutano Dogly a
-                leggere questo momento, non un giorno qualunque.
+                Parliamone in chat: un breve video o una foto della digestione
+                bastano, e ne discutiamo insieme.
               </Text>
               <Button
-                title="Fai un video"
-                onPress={() => goCapture('/behavior/capture')}
+                title="Apri la chat"
+                onPress={() => goAsk()}
                 testID="checkin-video"
               />
               <Button
-                title="Guarda la digestione"
+                title="Parliamo della digestione"
                 variant="outline"
-                onPress={() => goCapture('/digestive/capture')}
+                onPress={() => goAsk('digest')}
                 style={styles.second}
                 testID="checkin-digestive"
               />

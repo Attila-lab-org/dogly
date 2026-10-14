@@ -194,7 +194,9 @@ describe('fix 4 — "Registra di nuovo" scarta la riga pending dalla coda', () =
 describe('fix 3 — notifica "risultato pronto" (payload e deep link)', () => {
   it('porta data.href al risultato e personalizza col nome del cane', () => {
     const content = buildResultReadyContent('evt-123', 'Luna');
-    expect(content.data.href).toBe('/behavior/result/evt-123');
+    expect(content.data.href).toBe(
+      '/ask?eventId=evt-123&source=behavior&intent=revisit',
+    );
     expect(content.title).toContain('Luna');
     expect(content.body).toContain('Luna');
   });

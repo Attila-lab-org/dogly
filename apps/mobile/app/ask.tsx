@@ -12,10 +12,13 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type MemoryProposal, type RealtimeSession, type RealtimeTurn } from '@/features/realtime/api';
 import { queryKeys } from '@/lib/queryClient';
 import { getOrCreateChatAttachmentsAlbum, getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
-import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
 import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
 import { readDeviceLocation } from '@/features/places/api';
+import { pickConversationVideo } from '@/features/behavior/videoPicker';
+import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
+import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
+
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
 import {
   startNativeDictation,
@@ -23,7 +26,7 @@ import {
   type DictationHandle,
 } from '@/features/realtime/voiceDictation';
 
-type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; attachmentUri?: string };
+type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; retryRequestId?: string; attachmentUri?: string };
 
 export default function AskScreen() {
   const router = useRouter();
@@ -60,7 +63,7 @@ export default function AskScreen() {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const start = useCallback(async () => {
     if (!dog.id) return;
-    const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}`;
+    const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}:${intent ?? ''}:${source ?? ''}`;
     if (startedKey.current === key) return;
     startedKey.current = key;
     setStarting(true); setError(null);
@@ -72,18 +75,35 @@ export default function AskScreen() {
       const next = resumed?.session ?? await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
-      if (resumed) {
+      if (eventId) {
+        const digestiveHandoff = source === 'digestive';
+        const isRevisit = intent === 'revisit';
+        const text = isRevisit
+          ? digestiveHandoff
+            ? 'Torniamo su questo controllo.'
+            : 'Torniamo su questo momento.'
+          : digestiveHandoff
+            ? 'Ho caricato la foto richiesta.'
+            : 'Ho caricato il video richiesto.';
+        const turn = await createRealtimeTurn(next.id, text, undefined, {
+          eventId,
+          source: digestiveHandoff ? 'digestive' : 'behavior',
+        });
+        if (!mounted.current) return;
+        setMessages([
+          ...(resumed?.messages ?? []),
+          { id: 'video-' + eventId, role: 'user', text },
+          { id: turn.id, role: 'assistant', text: turn.assistant_text, turn },
+        ]);
+        setFocusedEventId(undefined);
+      } else if (resumed) {
         setMessages(resumed.messages);
-        if (eventId) {
-          const digestiveHandoff = source === 'digestive';
-          const text = digestiveHandoff ? 'Ho caricato la foto richiesta.' : 'Ho caricato il video richiesto.';
-          const turn = await createRealtimeTurn(next.id, text, undefined, { eventId, source: digestiveHandoff ? 'digestive' : 'behavior' });
-          if (!mounted.current) return;
-          setMessages([...resumed.messages, { id: 'video-' + eventId, role: 'user', text }, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
-          setFocusedEventId(undefined);
-        }
       } else {
-      setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: eventId ? 'Ho davanti il risultato appena visto. Possiamo approfondirlo oppure parlare di qualsiasi cosa su ' + dog.name + '.' : next.welcome_text }]);
+        const welcome =
+          intent === 'digest'
+            ? `Se vuoi controllare la digestione di ${dog.name}, mandami una foto chiara delle feci e ne parliamo qui.`
+            : next.welcome_text;
+        setMessages([{ id: 'welcome-' + next.id, role: 'assistant', text: welcome }]);
       }
     } catch {
       startedKey.current = null;
@@ -91,18 +111,16 @@ export default function AskScreen() {
       if (mounted.current) setError('Non riesco ad aprire la conversazione. Riprova tra poco.');
     }
     finally { if (mounted.current) setStarting(false); }
-  }, [dog.id, dog.name, eventId, sessionId]);
+  }, [dog.id, dog.name, eventId, intent, sessionId, source]);
   useEffect(() => { void start(); }, [start]);
   useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending]);
 
-  const send = useCallback(async (value: string, attachment?: { uri: string; purpose: string }, existingPhotoId?: string) => {
+  const send = useCallback(async (value: string, attachment?: { uri: string; purpose: string }, existingPhotoId?: string, existingRequestId?: string) => {
     const text = value.trim();
     if (!text || sending || !session) return;
     setDraft(''); setError(null);
     const localId = 'question-' + Date.now();
-    // Always mint a fresh key per attempt. Reusing the failed key after a
-    // location re-read produced IDEMPOTENCY_CONFLICT 409 (same key, different body).
-    const requestId = `${localId}-${Math.random().toString(36).slice(2)}`;
+    const requestId = existingRequestId ?? `${localId}-${Math.random().toString(36).slice(2)}`;
     setMessages((current) => [...current, { id: localId, role: 'user', text, attachmentUri: attachment?.uri }]);
     setSending(true);
     setMediaPhase(existingPhotoId ? 'analyzing' : attachment ? 'uploading' : null);
@@ -142,7 +160,7 @@ export default function AskScreen() {
       setMessages((current) => [...current, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
     } catch {
       if (!mounted.current) return;
-      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: attachment || photoId ? 'Non sono riuscito a leggere questo momento. Puoi riprovare?' : 'Non sono riuscito a ricevere una risposta. Puoi riprovare?', failed: true, retryForId: localId, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId }]);
+      setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: attachment || photoId ? 'Non sono riuscito a leggere questo momento. Puoi riprovare?' : 'Non sono riuscito a ricevere una risposta. Puoi riprovare?', failed: true, retryForId: localId, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId, retryRequestId: requestId }]);
       setError('La risposta non è arrivata.');
     } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
   }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session, queryClient]);
@@ -156,18 +174,56 @@ export default function AskScreen() {
 
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
-    if (!turn || turn.media_invite !== 'PHOTO' || sending || !session) return;
+    if (sending || !session) return;
+    const digestivePhoto =
+      turn?.domains?.includes('DIGESTIVE') ||
+      /feci|cacca|digest|pup[uù]|diarrea|escrement/i.test(
+        `${turn?.media_prompt ?? ''} ${turn?.assistant_text ?? ''}`,
+      );
+    if (digestivePhoto) {
+      await rememberRealtimeSession(session, messages);
+      router.push({
+        pathname: '/digestive/capture',
+        params: { from: 'ask', sessionId: session.id },
+      } as never);
+      return;
+    }
     const uri = await takeConversationPhoto();
     if (!uri) return;
-    const purpose = turn.media_prompt || 'Ti mostro questo momento';
+    const purpose = turn?.media_prompt || 'Ti mostro questo momento';
+    void send(purpose, { uri, purpose });
+  }, [latestAssistant, messages, router, send, sending, session]);
+
+  const pickPhoto = useCallback(async () => {
+    if (sending || !session) return;
+    const uri = await pickAlbumPhoto();
+    if (!uri) return;
+    const purpose = latestAssistant?.turn?.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
   }, [dog.name, latestAssistant, send, sending, session]);
+
+  const pickVideo = useCallback(async () => {
+    if (sending || !session) return;
+    const picked = await pickConversationVideo();
+    if (!picked) return;
+    await rememberRealtimeSession(session, messages);
+    setPendingBehaviorUpload({
+      localUri: picked.uri,
+      durationMs: picked.durationMs,
+      hasAudio: picked.hasAudio,
+      contentType: picked.contentType,
+      dogId: dog.id,
+      returnTo: 'ask',
+      sessionId: session.id,
+    });
+    router.replace('/behavior/uploading');
+  }, [dog.id, messages, router, sending, session]);
 
   const openVideoCapture = useCallback(async () => {
     if (sending || !session) return;
     await rememberRealtimeSession(session, messages);
     router.push({ pathname: '/behavior/capture', params: { from: 'ask', sessionId: session.id } } as never);
-  }, [router, sending, session, messages]);
+  }, [messages, router, sending, session]);
 
   const appendTranscript = useCallback((text: string) => {
     setDraft((current) => `${current}${current ? ' ' : ''}${text}`.slice(0, 4000));
@@ -302,7 +358,7 @@ export default function AskScreen() {
             <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
               {message.attachmentUri ? <Image source={{ uri: message.attachmentUri }} style={styles.messageAttachment} accessibilityLabel="Foto condivisa nella conversazione" /> : null}
-              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
+              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId, message.retryRequestId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
               {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'PHOTO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || `Mostrami ${dog.name} in una foto`} onPress={() => void sharePhoto()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="camera-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica una foto</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
@@ -329,9 +385,17 @@ export default function AskScreen() {
             onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }}
           />
           <View style={styles.composerTools}>
-            <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}>
-              <Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} />
-            </Pressable>
+            <View style={styles.composerActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Scegli una foto dalla galleria" onPress={() => void pickPhoto()} disabled={sending || !session} style={({ pressed }) => [styles.mediaButton, pressed && styles.pressed]}>
+                <Ionicons name="images-outline" size={20} color={colors.primary} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Scegli un video dalla galleria" onPress={() => void pickVideo()} disabled={sending || !session} style={({ pressed }) => [styles.mediaButton, pressed && styles.pressed]}>
+                <Ionicons name="videocam-outline" size={20} color={colors.primary} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}>
+                <Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} />
+              </Pressable>
+            </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
               <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
             </Pressable>
@@ -369,15 +433,17 @@ const styles = StyleSheet.create({
   composerTools: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  composerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   mic: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E6F1FF' },
   micActive: { backgroundColor: colors.primary },
   send: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
   sendDisabled: { backgroundColor: '#B7C7DB' },
   pressed: { opacity: 0.82 },
   disclaimer: { width: '100%', maxWidth: 560, alignSelf: 'center', color: colors.textMuted, fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+  mediaButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E6F1FF' },
   questionOptions: { marginTop: spacing.md, gap: spacing.xs }, questionOption: { minHeight: 38, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#D7E6F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, questionOptionText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm },
   messageAttachment: { width: 220, height: 160, borderRadius: radius.md, marginBottom: spacing.sm, resizeMode: 'cover' }, mediaCta: { marginTop: spacing.sm, minHeight: 42, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.full, backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#C9E2FF', flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, mediaIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }, mediaTitle: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
   savedNote: { marginTop: spacing.sm, color: colors.textMuted, fontSize: typography.size.sm },
