@@ -425,12 +425,16 @@ export function DogHero({
     enabled: realEnabled && coords !== null,
     staleTime: 30 * 60 * 1000,
   });
-  const weather: HeroWeather | null = weatherQuery.data
-    ? {
-        temperatureC: weatherQuery.data.temperature_c,
-        weatherCode: weatherQuery.data.weather_code,
-      }
-    : null;
+  const weather: HeroWeather | null = useMemo(
+    () =>
+      weatherQuery.data
+        ? {
+            temperatureC: weatherQuery.data.temperature_c,
+            weatherCode: weatherQuery.data.weather_code,
+          }
+        : null,
+    [weatherQuery.data],
+  );
 
   // Alimento attivo: stesse queryKeys di DogCareOverview → cache condivisa.
   const foodsQuery = useQuery({
@@ -546,9 +550,15 @@ export function DogHero({
     return [...urgent, ...rest];
   }, [baseTips, round]);
 
+  // Reset solo se la composizione del mazzo cambia davvero (nuovo giorno,
+  // nuova urgenza): l'identità dell'array può cambiare ad ogni refetch.
+  const baseTipIds = baseTips.map((tip) => tip.id).join('|');
+  const lastTipIds = useRef(baseTipIds);
   useEffect(() => {
+    if (lastTipIds.current === baseTipIds) return;
+    lastTipIds.current = baseTipIds;
     setTipIndex(0);
-  }, [baseTips]);
+  }, [baseTipIds]);
 
   const tip = tips[Math.min(tipIndex, tips.length - 1)];
 
@@ -714,8 +724,8 @@ export function DogHero({
               <CuteIcon
                 name="paw"
                 size={12}
-                color={colors.accent}
-                secondary={colors.accent}
+                color={colors.accentPressed}
+                secondary={colors.accentPressed}
               />
               <Text style={styles.adviceText}>{adviceText}</Text>
             </View>
@@ -969,9 +979,10 @@ const styles = StyleSheet.create({
   },
   adviceText: {
     flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
   tail: {
     position: 'absolute',
