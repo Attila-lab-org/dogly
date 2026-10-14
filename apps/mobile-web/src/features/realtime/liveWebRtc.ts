@@ -1,7 +1,9 @@
 /**
  * Browser WebRTC bridge for OpenAI Realtime (ephemeral client secret).
- * Tuned against echo (speakers → mic) which makes Live feel “double”
- * and appear not to listen.
+ *
+ * Talk mode: echo-safe for human conversation.
+ * Dog mode: open the mic to ambient vocalizations (barks) — Realtime VAD and
+ * near_field NR otherwise treat them as noise and only “hear” the owner.
  */
 
 export type LiveConnectionState =
@@ -12,9 +14,14 @@ export type LiveConnectionState =
   | 'ended'
   | 'error';
 
+export type LiveListenMode = 'talk' | 'dog';
+
 export type LiveWebRtcHandle = {
   stop: () => void;
   getAnalyserLevel: () => number;
+  setListenMode: (mode: LiveListenMode) => void;
+  /** Capture ~windowMs of ambient audio, then ask DOGly to read any bark. */
+  listenForBark: (dogName: string, windowMs?: number) => Promise<void>;
 };
 
 type ConnectOptions = {
@@ -22,15 +29,72 @@ type ConnectOptions = {
   onState: (state: LiveConnectionState) => void;
   onRemoteTrack?: (stream: MediaStream) => void;
   onError?: (message: string) => void;
+  onListenMode?: (mode: LiveListenMode) => void;
 };
 
 function peerSupported(): boolean {
   return typeof RTCPeerConnection !== 'undefined' && typeof navigator !== 'undefined';
 }
 
-function sendEvent(channel: RTCDataChannel, payload: Record<string, unknown>) {
-  if (channel.readyState !== 'open') return;
+function sendEvent(channel: RTCDataChannel | null, payload: Record<string, unknown>) {
+  if (!channel || channel.readyState !== 'open') return;
   channel.send(JSON.stringify(payload));
+}
+
+function talkSessionUpdate() {
+  return {
+    type: 'session.update',
+    session: {
+      turn_detection: {
+        type: 'server_vad',
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 700,
+        create_response: true,
+        interrupt_response: true,
+      },
+      // far_field keeps room sound; near_field was killing dog barks.
+      input_audio_noise_reduction: { type: 'far_field' },
+    },
+  };
+}
+
+function dogSessionUpdate() {
+  return {
+    type: 'session.update',
+    session: {
+      turn_detection: {
+        type: 'server_vad',
+        // Lower bar so loud barks can enter the buffer (still volume-based).
+        threshold: 0.28,
+        prefix_padding_ms: 400,
+        silence_duration_ms: 900,
+        create_response: false,
+        interrupt_response: false,
+      },
+      // Off: NR treats non-speech vocalizations as noise.
+      input_audio_noise_reduction: null,
+    },
+  };
+}
+
+async function applyTrackMode(
+  stream: MediaStream | null,
+  mode: LiveListenMode,
+) {
+  if (!stream) return;
+  for (const track of stream.getAudioTracks()) {
+    try {
+      await track.applyConstraints({
+        echoCancellation: true,
+        // Browser NS also strips barks — off in dog mode.
+        noiseSuppression: mode === 'talk',
+        autoGainControl: true,
+      });
+    } catch {
+      /* older browsers */
+    }
+  }
 }
 
 export async function connectLiveWebRtc(
@@ -43,15 +107,12 @@ export async function connectLiveWebRtc(
   options.onState('connecting');
   const pc = new RTCPeerConnection();
 
-  // Single remote playback element — never attach the local mic stream here
-  // or the user hears themselves (“mi sento doppio”).
   const audioEl =
     typeof document !== 'undefined' ? document.createElement('audio') : null;
   if (audioEl) {
     audioEl.autoplay = true;
     audioEl.setAttribute('playsinline', 'true');
     audioEl.setAttribute('webkit-playsinline', 'true');
-    // Keep remote only; hide from layout.
     audioEl.style.display = 'none';
     document.body.appendChild(audioEl);
   }
@@ -62,10 +123,13 @@ export async function connectLiveWebRtc(
   let dataChannel: RTCDataChannel | null = null;
   let closed = false;
   let remoteStreamId: string | null = null;
+  let listenMode: LiveListenMode = 'talk';
+  let barkTimer: ReturnType<typeof setTimeout> | null = null;
 
   const cleanup = () => {
     if (closed) return;
     closed = true;
+    if (barkTimer) clearTimeout(barkTimer);
     try {
       dataChannel?.close();
     } catch {
@@ -85,10 +149,51 @@ export async function connectLiveWebRtc(
     options.onState('ended');
   };
 
+  const setListenMode = (mode: LiveListenMode) => {
+    listenMode = mode;
+    options.onListenMode?.(mode);
+    void applyTrackMode(localStream, mode);
+    sendEvent(
+      dataChannel,
+      mode === 'dog' ? dogSessionUpdate() : talkSessionUpdate(),
+    );
+  };
+
+  const listenForBark = async (dogName: string, windowMs = 6500) => {
+    if (closed || !dataChannel) return;
+    setListenMode('dog');
+    options.onState('listening');
+    await new Promise<void>((resolve) => {
+      if (barkTimer) clearTimeout(barkTimer);
+      barkTimer = setTimeout(() => resolve(), windowMs);
+    });
+    if (closed) return;
+    // Ask the model to interpret whatever canine audio just entered the buffer.
+    sendEvent(dataChannel, {
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text:
+              `Ho avvicinato il microfono a ${dogName} per circa ${Math.round(windowMs / 1000)} secondi. ` +
+              `Se nell'audio c'è un abbaio o un vocalizzo del cane, fallo sentire nella lettura: ` +
+              `di' cosa comunica in parole umane, ancorandoti a questo cane e al momento. ` +
+              `Se l'audio è troppo debole o confuso, dillo in una frase e chiedi un dettaglio. ` +
+              `Non dire che non puoi interpretare gli abbai.`,
+          },
+        ],
+      },
+    });
+    sendEvent(dataChannel, { type: 'response.create' });
+    setListenMode('talk');
+  };
+
   pc.ontrack = (event) => {
     const [stream] = event.streams;
     if (!stream || !audioEl) return;
-    // Only bind once — duplicate ontrack makes the voice feel doubled.
     if (remoteStreamId && remoteStreamId === stream.id) return;
     remoteStreamId = stream.id;
     audioEl.srcObject = stream;
@@ -102,22 +207,11 @@ export async function connectLiveWebRtc(
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
-        // Prefer voice-tuned constraints when the browser supports them.
         channelCount: 1,
       },
       video: false,
     });
     for (const track of localStream.getAudioTracks()) {
-      // Soften echo on Chromium when available.
-      try {
-        await track.applyConstraints({
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        });
-      } catch {
-        /* older browsers */
-      }
       pc.addTrack(track, localStream);
     }
     try {
@@ -125,7 +219,6 @@ export async function connectLiveWebRtc(
       const source = audioCtx.createMediaStreamSource(localStream);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-      // Analyser only — never connect to destination (that would play the mic).
       source.connect(analyser);
     } catch {
       analyser = null;
@@ -137,28 +230,11 @@ export async function connectLiveWebRtc(
 
   dataChannel = pc.createDataChannel('oai-events');
   dataChannel.addEventListener('open', () => {
-    // Near-field + slightly longer silence so DOGly waits for you to finish
-    // instead of interrupting / looping on speaker bleed.
-    sendEvent(dataChannel!, {
-      type: 'session.update',
-      session: {
-        turn_detection: {
-          type: 'server_vad',
-          threshold: 0.55,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 700,
-          create_response: true,
-          interrupt_response: true,
-        },
-        input_audio_noise_reduction: { type: 'near_field' },
-      },
-    });
+    sendEvent(dataChannel, talkSessionUpdate());
   });
   dataChannel.onmessage = (event) => {
     try {
-      const payload = JSON.parse(String(event.data)) as {
-        type?: string;
-      };
+      const payload = JSON.parse(String(event.data)) as { type?: string };
       const type = payload.type ?? '';
       if (
         type === 'response.audio_transcript.delta' ||
@@ -235,5 +311,7 @@ export async function connectLiveWebRtc(
       for (const value of data) sum += value;
       return Math.min(1, sum / (data.length * 180));
     },
+    setListenMode,
+    listenForBark,
   };
 }

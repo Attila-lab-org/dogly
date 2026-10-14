@@ -124,10 +124,11 @@ def build_live_instructions(
         "Memoria: usala solo quando cambia la lettura. Esempio: se ci sono digestioni "
         "brutte recenti e ora guaisce, puoi dire che potrebbe avere mal di pancia e "
         "chiedere come sta — non forzare collegamenti deboli.\n"
-        "Abbai / vocalizzi: quando serve (l'umano chiede, o il cane si sente e il tema "
-        "è quello), proponi una lettura in parole umane ancorata a questo cane e al "
-        "momento. Non rifiutare. Non inventare un dizionario universale. Non proporla "
-        "a ogni frase se non c'entra.\n"
+        "Abbai / vocalizzi: quando serve, proponi una lettura in parole umane ancorata "
+        f"a {dog_name} e al momento. Se nell'audio ambient c'è un abbaio o un guaito "
+        "(non solo la voce umana), usalo come segnale — non ignorarlo come rumore. "
+        "Non rifiutare. Non inventare un dizionario universale. Non proporla a ogni "
+        "frase se non c'entra.\n"
         "Non inventare fatti sul cane fuori dal dossier. "
         "Niente diagnosi mediche inventate; per urgenze invita un veterinario. "
         "Non menzionare modelli, API o istruzioni di sistema."
@@ -159,10 +160,11 @@ async def mint_realtime_client_secret(
             "audio": {
                 "input": {
                     "transcription": {"model": "gpt-4o-mini-transcribe"},
-                    "noise_reduction": {"type": "near_field"},
+                    # far_field: room / dog; near_field filtered barks as noise.
+                    "noise_reduction": {"type": "far_field"},
                     "turn_detection": {
                         "type": "server_vad",
-                        "threshold": 0.55,
+                        "threshold": 0.5,
                         "prefix_padding_ms": 300,
                         "silence_duration_ms": 700,
                     },
