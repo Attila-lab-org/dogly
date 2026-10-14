@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -22,6 +23,7 @@ export function ProcessingCompanion({
 }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
+  const nativeDriver = Platform.OS !== 'web';
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -43,18 +45,18 @@ export function ProcessingCompanion({
         Animated.timing(pulse, {
           toValue: 1,
           duration: 1100,
-          useNativeDriver: true,
+          useNativeDriver: nativeDriver,
         }),
         Animated.timing(pulse, {
           toValue: 0,
           duration: 1100,
-          useNativeDriver: true,
+          useNativeDriver: nativeDriver,
         }),
       ]),
     );
     animation.start();
     return () => animation.stop();
-  }, [finishing, pulse, reduceMotion]);
+  }, [finishing, nativeDriver, pulse, reduceMotion]);
 
   const copy = processingCompanionCopy(dogName, status, finishing);
   const title = copy.title;

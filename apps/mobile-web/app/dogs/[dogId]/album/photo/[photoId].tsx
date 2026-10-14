@@ -129,7 +129,12 @@ export default function PhotoViewerScreen() {
           style={styles.image}
           resizeMode="contain"
           onLoad={(event) => {
-            const { width, height } = event.nativeEvent.source;
+            // On web, `nativeEvent.source` is often missing; never destructure it.
+            const source = event.nativeEvent?.source as
+              | { width?: number; height?: number }
+              | undefined;
+            const width = source?.width;
+            const height = source?.height;
             if (width && height) {
               setImageRatio(Math.max(0.72, Math.min(1.5, width / height)));
             }

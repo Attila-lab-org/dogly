@@ -5,7 +5,7 @@
  * con 👍/👎. Stile vincolante: docs/ux/UX_REFERENCE.md + mockup ufficiali.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { AccessibilityInfo, Animated, Image, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Chip, ProgressBar, SectionHeader } from '../../components';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
@@ -335,9 +335,10 @@ export function BehaviorResultView({
       if (!active || !onDiscuss) return;
       if (reduced) { discussOpacity.setValue(1); discussOffset.setValue(0); return; }
       if (!animatedDiscuss) return;
+      const useNativeDriver = Platform.OS !== 'web';
       Animated.parallel([
-        Animated.timing(discussOpacity, { toValue: 1, duration: 360, useNativeDriver: true }),
-        Animated.timing(discussOffset, { toValue: 0, duration: 360, useNativeDriver: true }),
+        Animated.timing(discussOpacity, { toValue: 1, duration: 360, useNativeDriver }),
+        Animated.timing(discussOffset, { toValue: 0, duration: 360, useNativeDriver }),
       ]).start();
     });
     return () => { active = false; };
