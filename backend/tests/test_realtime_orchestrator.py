@@ -314,6 +314,22 @@ def test_welcome_stays_generic_without_open_concern() -> None:
     assert "Come sta oggi" not in welcome
 
 
+def test_weather_trivia_does_not_become_resume_thread() -> None:
+    from app.domains.realtime_context import build_open_threads
+
+    threads = build_open_threads(
+        dog_name="Oreo",
+        previous_turns=[
+            {"role": "user", "content": "che tempo fa?"},
+            {"role": "assistant", "content": "A Milano oggi è sereno."},
+        ],
+    )
+    assert threads == []
+    welcome = resume_welcome_text("attilio", "Oreo", "che tempo fa?", open_thread=None)
+    assert "che tempo fa" not in welcome.casefold()
+    assert "Raccontami cosa vuoi guardare oggi" in welcome
+
+
 def test_welcome_checks_in_when_open_concern_exists() -> None:
     from app.domains.realtime_context import build_open_threads
 

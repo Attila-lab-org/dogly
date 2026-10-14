@@ -201,7 +201,26 @@ _GENERIC_STARTER_QUESTIONS = {
     "riprendiamo da lì",
     "riprendiamo da li",
     "parliamo di oggi",
+    # Weather / ambient trivia must not become the resume welcome thread.
+    "che tempo fa",
+    "che tempo fa?",
+    "che tempo fa oggi",
+    "che tempo fa oggi?",
+    "com'è il tempo",
+    "com'è il tempo?",
+    "come e il tempo",
+    "come e il tempo?",
+    "fa caldo",
+    "fa caldo?",
+    "fa freddo",
+    "fa freddo?",
 }
+
+_TRIVIAL_CONTINUITY = re.compile(
+    r"^\s*(che\s+tempo\s+fa(?:\s+oggi)?|com'?è\s+il\s+tempo|fa\s+(caldo|freddo)|"
+    r"meteo(?:\s+oggi)?|weather)[?.!\s]*$",
+    re.IGNORECASE,
+)
 
 
 def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
@@ -211,6 +230,8 @@ def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
         if not cleaned or _RESUME_GREETING.fullmatch(cleaned):
             continue
         if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
+            continue
+        if _TRIVIAL_CONTINUITY.fullmatch(cleaned):
             continue
         meaningful.append(cleaned)
         if len(meaningful) == 2:
@@ -263,6 +284,8 @@ def _is_substantive_owner_line(text: str) -> bool:
     if _RESUME_GREETING.fullmatch(cleaned):
         return False
     if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
+        return False
+    if _TRIVIAL_CONTINUITY.fullmatch(cleaned):
         return False
     return True
 

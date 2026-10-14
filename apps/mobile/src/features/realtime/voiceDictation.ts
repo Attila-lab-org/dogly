@@ -119,10 +119,17 @@ export function startWebDictation(options: {
   recognition.start();
   return {
     stop: () => {
+      // Always clear UI state immediately. Chrome sometimes never fires
+      // onend after recognition.stop() (permission race / already-ended).
+      options.onStateChange?.(false);
       try {
-        recognition.stop();
+        recognition.abort();
       } catch {
-        // already stopped
+        try {
+          recognition.stop();
+        } catch {
+          // already stopped
+        }
       }
     },
   };

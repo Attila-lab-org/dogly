@@ -202,21 +202,38 @@ export default function AskScreen() {
   const toggleDictation = useCallback(() => {
     if (dictating) {
       dictationRef.current?.stop();
+      dictationRef.current = null;
+      setDictating(false);
       return;
     }
     const handlers = {
       onTranscript: appendTranscript,
-      onError: (message: string) => setError(message),
+      onError: (message: string) => {
+        setDictating(false);
+        dictationRef.current = null;
+        setError(message);
+      },
       onStateChange: (recording: boolean) => {
         setDictating(recording);
         if (!recording) dictationRef.current = null;
       },
     };
     if (Platform.OS === 'web') {
-      dictationRef.current = startWebDictation(handlers);
+      const handle = startWebDictation(handlers);
+      if (!handle) {
+        setDictating(false);
+        return;
+      }
+      dictationRef.current = handle;
+      setDictating(true);
       return;
     }
+    setDictating(true);
     void startNativeDictation(handlers).then((handle) => {
+      if (!handle) {
+        setDictating(false);
+        return;
+      }
       dictationRef.current = handle;
     });
   }, [appendTranscript, dictating]);

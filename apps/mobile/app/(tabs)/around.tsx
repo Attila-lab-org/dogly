@@ -73,7 +73,7 @@ export default function AroundScreen() {
       setPlacesTimedOut(false);
       return;
     }
-    const timer = setTimeout(() => setPlacesTimedOut(true), 12_000);
+    const timer = setTimeout(() => setPlacesTimedOut(true), 8_000);
     return () => clearTimeout(timer);
   }, [coords, placesQuery.isFetching]);
 
