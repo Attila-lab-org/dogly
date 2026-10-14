@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { HomeConversation } from '@/features/home/HomeConversation';
+import { DogHero } from '@/features/home/DogHero';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
@@ -117,12 +118,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <View style={styles.welcomeBlock}>
-            <Text style={styles.title}>Ciao!{'\n'}Come sta {dog.name} oggi?</Text>
-            <Text style={styles.subtitle}>
-              Raccontami qualcosa, fammi una domanda oppure mostrami un momento.
-            </Text>
-          </View>
+          <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
 
           {processingEventId ? (
             <Pressable
@@ -292,9 +288,6 @@ const styles = StyleSheet.create({
   },
   statusText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.xs },
   statusRetry: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
-  welcomeBlock: { paddingTop: spacing.xs, gap: spacing.sm },
-  title: { color: colors.text, fontSize: typography.size.xxl, lineHeight: typography.size.xxl * 1.15, fontWeight: typography.weight.bold },
-  subtitle: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: typography.size.md * typography.lineHeight.relaxed },
   processingBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
   processingIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.surface },
   processingCopy: { flex: 1, gap: 2 },

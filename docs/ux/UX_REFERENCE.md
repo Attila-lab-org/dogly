@@ -77,7 +77,12 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 
 ## Home
 
-- Header: badge logo Dogly + saluto + slogan; campana e accesso Diario a destra.
+- Header: badge logo Dogly; campana e accesso Diario a destra.
+- Hero vivente in cima ("il cane ti parla"): fumetto in prima persona con il
+  saluto integrato, altrimenti — solo con dati reali — promemoria agenda entro
+  7 giorni, abitudine recente o controllo digestione da rifare; sfondo con
+  gradiente legato al momento della giornata; nessuna animazione con
+  riduzione del movimento attiva.
 - Riga Storie orizzontale + aggiunta rapida.
 - Dog card senza Knowledge Score.
 - Nessun check-in fisso in pagina.
