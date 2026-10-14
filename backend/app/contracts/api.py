@@ -444,6 +444,7 @@ class NearbyPlaceOut(BaseModel):
     lat: float
     lng: float
     maps_url: str
+    phone: str | None = None
 
 
 class NearbyPlacesResponse(BaseModel):

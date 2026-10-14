@@ -252,30 +252,55 @@ export default function AroundScreen() {
 
 function PlaceCard({ place }: { place: NearbyPlace }) {
   const tone = place.kind === 'VET' ? 'warm' : 'cool';
+  const phoneHref = place.phone ? `tel:${place.phone}` : null;
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => void Linking.openURL(place.maps_url)}
-      style={({ pressed }) => [styles.placeCard, pressed && styles.pressed]}
-    >
-      <View style={[styles.placeIcon, tone === 'warm' && styles.placeIconWarm]}>
-        <Ionicons
-          name={place.kind === 'VET' ? 'medkit-outline' : 'paw-outline'}
-          size={22}
-          color={tone === 'warm' ? '#B45309' : colors.primary}
-        />
-      </View>
-      <View style={styles.placeCopy}>
-        <Text style={styles.placeTitle} numberOfLines={1}>
-          {place.name}
-        </Text>
-        <Text style={styles.placeMeta}>
-          {place.kind === 'VET' ? 'Veterinario' : 'Parco / area cani'} ·{' '}
-          {formatDistance(place.distance_m)}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-    </Pressable>
+    <View style={styles.placeCard}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Apri ${place.name} sulla mappa`}
+        onPress={() => void Linking.openURL(place.maps_url)}
+        style={({ pressed }) => [styles.placeMain, pressed && styles.pressed]}
+      >
+        <View style={[styles.placeIcon, tone === 'warm' && styles.placeIconWarm]}>
+          <Ionicons
+            name={place.kind === 'VET' ? 'medkit-outline' : 'paw-outline'}
+            size={22}
+            color={tone === 'warm' ? '#B45309' : colors.primary}
+          />
+        </View>
+        <View style={styles.placeCopy}>
+          <Text style={styles.placeTitle} numberOfLines={1}>
+            {place.name}
+          </Text>
+          <Text style={styles.placeMeta}>
+            {place.kind === 'VET' ? 'Veterinario' : 'Parco / area cani'} ·{' '}
+            {formatDistance(place.distance_m)}
+          </Text>
+        </View>
+        <Ionicons name="map-outline" size={18} color={colors.textMuted} />
+      </Pressable>
+      {phoneHref ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Chiama ora ${place.name}`}
+          onPress={() => void Linking.openURL(phoneHref)}
+          style={({ pressed }) => [styles.callButton, pressed && styles.pressed]}
+        >
+          <Ionicons name="call" size={16} color="#FFFFFF" />
+          <Text style={styles.callButtonText}>Chiama ora</Text>
+        </Pressable>
+      ) : place.kind === 'VET' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Apri ${place.name} sulla mappa per chiamare`}
+          onPress={() => void Linking.openURL(place.maps_url)}
+          style={({ pressed }) => [styles.callButtonSecondary, pressed && styles.pressed]}
+        >
+          <Ionicons name="call-outline" size={16} color={colors.primary} />
+          <Text style={styles.callButtonSecondaryText}>Apri per chiamare</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -357,14 +382,17 @@ const styles = StyleSheet.create({
   loading: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
   placeList: { gap: spacing.sm },
   placeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     padding: spacing.md,
     borderRadius: 18,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  placeMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   placeIcon: {
     width: 46,
@@ -378,6 +406,34 @@ const styles = StyleSheet.create({
   placeCopy: { flex: 1, gap: 2 },
   placeTitle: { color: colors.text, fontWeight: '700', fontSize: typography.size.md },
   placeMeta: { color: colors.textSecondary, fontSize: 12 },
+  callButton: {
+    alignSelf: 'stretch',
+    minHeight: 42,
+    borderRadius: 999,
+    backgroundColor: '#B45309',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  callButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: typography.size.sm },
+  callButtonSecondary: {
+    alignSelf: 'stretch',
+    minHeight: 42,
+    borderRadius: 999,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  callButtonSecondaryText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: typography.size.sm,
+  },
   fallback: { gap: spacing.sm },
   fallbackCard: {
     padding: spacing.lg,

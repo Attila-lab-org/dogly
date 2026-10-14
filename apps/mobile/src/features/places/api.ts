@@ -9,6 +9,7 @@ export type NearbyPlace = {
   lat: number;
   lng: number;
   maps_url: string;
+  phone?: string | null;
 };
 
 export type LocationFailureReason = 'denied' | 'timeout' | 'unavailable';
