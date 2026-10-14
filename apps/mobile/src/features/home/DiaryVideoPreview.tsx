@@ -22,7 +22,7 @@ export function DiaryVideoPreview({
     let alive = true;
     setFrame(null);
     setFailed(false);
-    VideoThumbnails.getThumbnailAsync(uri, { time: 500 })
+    VideoThumbnails.getThumbnailAsync(uri, { time: 1800 })
       .then(({ uri: thumbnailUri }) => {
         if (alive) setFrame(thumbnailUri);
       })
