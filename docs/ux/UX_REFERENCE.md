@@ -1,30 +1,33 @@
 # UX Reference — Dogly V1
 
-Fonte visuale vincolante per la direzione grafica, insieme alla Spec V1 sez. 5–7
-per struttura/contenuti e alle decisioni prodotto approvate (brand **Dogly**,
-album privati, messaggio quotidiano interattivo, confidenza a bande).
+Fonte visuale vincolante per la direzione grafica: **mock Oreo a 10 schermi**
+(ADR-017), insieme alla Spec V1 sez. 5–7 per struttura/contenuti e alle
+decisioni prodotto approvate (brand **Dogly**, album privati, confidenza a
+bande).
 
-In caso di conflitto tra mockup storici HIGGS/ChatGPT e Spec/decisioni V1,
-**vincono Spec + decisioni** (es. confidenza: mockup HIGGS mostrava "87%" ma
-O-07 vieta percentuali → usare Low/Medium/High mantenendo lo stile pill).
+In caso di conflitto tra mockup Rocky storici (HIGGS/ChatGPT con “CAPISCI
+ROCKY”, audio+video come modalità equivalenti, confidenza “87%”) e
+decisioni vigenti, **vincono ADR-017 + Spec** (O-07: niente percentuali di
+confidenza → Low/Medium/High). Web e app nativa devono restare lo stesso
+prodotto (`docs/PRODUCT_PARITY.md`).
 
 ## Decisioni UX V1 (approvate)
 
 | Tema | Decisione |
 | --- | --- |
 | Brand | **Dogly** (non CANINE / CBI in UI) |
-| Tab | Max 3: Home / Fotocamera / {Nome cane}; Diario dalla Home |
+| Tab | **4:** Home / Diario / {Nome cane} / Cerca (luoghi utili; social cani post-P1) — ADR-017 |
 | Confidenza AI | Solo bande bassa/media/alta |
-| Knowledge Score | % prodotto ammessa (sez. 18), formula versionata |
+| Knowledge Score | Indicatori di ricchezza dati; niente % di confidenza AI |
 | Raw video analisi | TTL **24h** dal completamento; non entra in album |
 | Album | Privati di default; condivisione esterna via share sheet OS |
 | Profilo pubblico | Opt-in esplicito |
-| Messaggio quotidiano | Non in Home. Eventuale tono “voce cane” solo come output di un’analisi, non card giornaliera |
-| Daily Check-in | Modal all’apertura (poi sparisce): “Come ti sembra {nome}?” → Sereno / Non come al solito → CTA video o digestione. Contesto passato all’analisi |
+| Home | Conversazione in primo piano + accessi rapidi + momenti recenti (mock Oreo) |
+| Routine giornata | Timeline oraria del mock = **post-produzione 1**; fino ad allora lifestyle statico |
 | Digestione / nutrizione | In V1, wording osservativo |
 | Dogly Signals | Posticipato; nessun ingresso visibile nella UX corrente |
-| Storie | Cerchi in Home; foto da fotocamera/galleria; viewer sequenziale; durata 24h |
-| Admin | Post-V1 |
+| Storie | Non MVP consumer corrente; album/momenti sì |
+| Admin | Post-V1 (demo distinta da produzione) |
 
 ## Design language
 

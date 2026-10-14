@@ -81,6 +81,9 @@ export interface DiaryEntry {
   occurredAt: string;
   /** Media cancellato dalla retention (sez. 6 Diario: "deleted media") */
   mediaDeleted: boolean;
+  /** Signed event media URL when the backend retains the original capture. */
+  mediaUri?: string | null;
+  mediaKind?: 'PHOTO' | 'VIDEO' | null;
   /** Per behavior: id del risultato; per digestive: id evento fecale */
   refId: string;
 }

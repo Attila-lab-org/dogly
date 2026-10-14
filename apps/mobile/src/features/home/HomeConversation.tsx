@@ -26,16 +26,9 @@ export function HomeConversation({ dogId, dogName, offline }: {
   };
   return (
     <View style={styles.card}>
-      <View style={styles.heading}>
-        <View style={styles.icon}><Ionicons name="chatbubble-ellipses-outline" size={21} color={colors.primary} /></View>
-        <View style={styles.headingText}>
-          <Text style={styles.title}>Parliamo di {dogName}</Text>
-          <Text style={styles.subtitle}>Una domanda, un cambiamento, un momento insieme.</Text>
-        </View>
-      </View>
       <TextInput
         accessibilityLabel={'Scrivi a DOGly di ' + dogName}
-        placeholder="Da cosa vuoi partire?"
+        placeholder={`Come sta ${dogName} oggi?`}
         placeholderTextColor={colors.textMuted}
         value={draft}
         onChangeText={setDraft}
@@ -44,33 +37,30 @@ export function HomeConversation({ dogId, dogName, offline }: {
         style={styles.input}
       />
       <View style={styles.footer}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Apri la conversazione con DOGly"
-          onPress={() => router.push('/ask' as never)} disabled={disabled}
-          style={({ pressed }) => [styles.open, disabled && styles.disabled, pressed && styles.pressed]}>
-          <Text style={styles.openText}>Apri la conversazione</Text>
-          <Ionicons name="arrow-forward" size={16} color={colors.primary} />
-        </Pressable>
+        <View style={styles.tools}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Apri la chat per mostrare una foto o un video" onPress={() => router.push('/ask' as never)} disabled={disabled} style={styles.tool}>
+            <Ionicons name="images-outline" size={23} color={colors.text} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Apri la conversazione vocale con DOGly" onPress={() => router.push('/ask' as never)} disabled={disabled} style={styles.tool}>
+            <Ionicons name="mic-outline" size={23} color={colors.text} />
+          </Pressable>
+        </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio a DOGly"
           accessibilityState={{ disabled: disabled || !draft.trim() }}
           onPress={send} disabled={disabled || !draft.trim()}
           style={({ pressed }) => [styles.send, (disabled || !draft.trim()) && styles.disabled, pressed && styles.pressed]}>
-          <Ionicons name="arrow-up" size={21} color={colors.textOnPrimary} />
+          <Ionicons name="arrow-forward" size={21} color={colors.textOnPrimary} />
         </Pressable>
       </View>
     </View>
   );
 }
 const styles = StyleSheet.create({
-  card: { padding: spacing.lg, gap: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#BED7F2' },
-  heading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  headingText: { flex: 1, gap: 4 },
-  icon: { width: 42, height: 42, borderRadius: radius.full, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  title: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
-  subtitle: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
-  input: { minHeight: 88, maxHeight: 160, textAlignVertical: 'top', color: colors.text, fontSize: typography.size.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.background },
+  card: { padding: spacing.md, gap: spacing.xs, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  input: { minHeight: 58, maxHeight: 160, textAlignVertical: 'top', color: colors.text, fontSize: typography.size.sm, padding: spacing.xs },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  open: { minHeight: 44, flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  openText: { flexShrink: 1, color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
-  send: { width: 48, height: 48, borderRadius: radius.full, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  tools: { flexDirection: 'row', gap: 6 },
+  tool: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.45 }, pressed: { opacity: 0.8 },
 });

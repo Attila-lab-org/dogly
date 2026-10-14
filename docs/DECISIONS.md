@@ -241,6 +241,7 @@ analisi. Profilo → Pattern/Knowledge è memoria imparata da DOGly, distinta da
 ### ADR-014 — Enterprise UX V5.1 e navigazione consumer
 
 - **Data:** 2026-09-07 • **Autorità:** Product Owner • **Stato:** LOCKED
+  (tab count **superseded** by ADR-017: 4 tab Home/Diario/Profilo/Cerca)
 - **Decisione:**
   - Tab primarie: Home / Diario / Profilo.
   - Fotocamera Storie raggiungibile dalla `StoriesRail`; capture behavior dalla
@@ -289,6 +290,46 @@ analisi. Profilo → Pattern/Knowledge è memoria imparata da DOGly, distinta da
   dichiarazione del proprietario con un’osservazione AI o una verità
   scientifica.
 - **Riferimento:** `docs/ux/DOGLY_UX_V5_1_DECISIONS.md`.
+
+### ADR-017 — Un solo Dogly (web = app) e mock Oreo
+
+- **Data:** 2026-10-14 • **Autorità:** Product Owner • **Stato:** LOCKED
+- **Supersede parziale:** ADR-014 (max 3 tab) e `docs/ux/UX_REFERENCE.md`
+  dove contraddice il mock Oreo 2026.
+- **Decisione — prodotto unico:**
+  - Web (`apps/mobile-web`) e app nativa (`apps/mobile`) sono **lo stesso
+    prodotto**. Stesse schermate, stessi testi, stessi percorsi.
+  - Responsive = layout che si adatta allo schermo, non funzioni diverse.
+  - Differenze ammesse solo sotto il cofano: fotocamera, IAP/store,
+    push, microfono nativo.
+  - Ownership: ogni schermata consumer ha **una sola fonte**. Oggi la
+    parity UI segue `mobile-web` (più vicina al mock Oreo); le modifiche
+    si applicano a entrambe le app nella stessa modifica. Obiettivo
+    successivo: package condiviso / una sola app Expo con adapter
+    piattaforma (vedi `docs/PRODUCT_PARITY.md`).
+- **Decisione — fonte visiva:**
+  - Fonte vincolante: mock Oreo a 10 schermi (Home conversazione + tile,
+    Diario, Profilo, catalogo/alimenti, routine, digestione, agenda,
+    momenti/luoghi, ricerca).
+  - I mock Rocky storici con “CAPISCI ROCKY”, microfono+video come
+    modalità equivalenti, e percentuali di confidenza (es. 87%) **non**
+    sono più fonte di implementazione.
+- **Decisione — tab bar (4):**
+  - Tab visibili: **Home / Diario / {Nome cane} / Cerca**.
+  - Tab **Cerca** apre luoghi utili (`around`): scorciatoie mappa
+    (parchi/veterinari). **Non** è la ricerca cani social.
+  - Ricerca cani / social: **post-produzione 1** (resta
+    `dog_profile_visibility` opt-in senza discovery).
+- **Decisione — routine giornaliera:**
+  - La giornata oraria del mock (strip settimanale + timeline
+    07:15 passeggiata…) richiede dominio nuovo (DB+API+UI) ed è
+    **post-produzione 1**.
+  - Fino ad allora: profilo abitudini statico
+    (`dogs/[id]/lifestyle`); nel Diario il filtro “Routine” porta
+    lì con empty state onesto, senza inventare eventi giornalieri.
+- **Rationale:** due copie divergenti hanno già prodotto facce diverse
+  dello stesso cane; in produzione l’utente non deve notare web vs app.
+- **Riferimento:** `docs/PRODUCT_PARITY.md`, mock Oreo in workspace UX.
 
 ## Decisioni aperte (Spec V1 sez. 32) — NON inventare risoluzioni
 

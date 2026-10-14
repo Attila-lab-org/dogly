@@ -19,6 +19,11 @@ import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { insightToneLabel } from '@/features/home/api';
 import type { InsightTone, LastInsight } from '@/features/core/types';
+import { DogCareOverview } from '@/features/dogs/DogCareOverview';
+import { useQuery } from '@tanstack/react-query';
+import { fetchDogPhotos } from '@/features/photos/api';
+import { isPersistedId } from '@/lib/persistedId';
+import { useSession } from '@/features/auth/SessionProvider';
 import { purchasesEnabled } from '@/mocks/entitlements';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
@@ -29,24 +34,13 @@ export default function HomeScreen() {
   const { usage, recentInsights, processingEventId, loading, error, refetch } =
     useHomeData(dog.id);
   const network = useNetworkStatus();
+  const { usingMockGate } = useSession();
+  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id) });
 
   const behaviorRemaining = usage
     ? usage.behaviorLimit - usage.behaviorUsed
     : null;
   const quotaExhausted = behaviorRemaining !== null && behaviorRemaining <= 0;
-
-  const startVideo = () => {
-    if (!dog.id || loading) return;
-    if (processingEventId) {
-      router.push(`/behavior/processing/${processingEventId}`);
-      return;
-    }
-    if (quotaExhausted && purchasesEnabled) {
-      router.push('/paywall');
-      return;
-    }
-    router.push('/behavior/capture');
-  };
 
   return (
     <View style={styles.root}>
@@ -65,12 +59,12 @@ export default function HomeScreen() {
             <View style={styles.headerActions}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Apri il Diario"
-                onPress={() => router.push('/(tabs)/diary')}
+                accessibilityLabel="Cerca luoghi utili"
+                onPress={() => router.push('/(tabs)/around' as never)}
                 hitSlop={12}
                 style={styles.headerIcon}
               >
-                <Ionicons name="book-outline" size={22} color={colors.primary} />
+                <Ionicons name="search-outline" size={22} color={colors.primary} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -79,7 +73,7 @@ export default function HomeScreen() {
                 hitSlop={12}
                 style={styles.headerIcon}
               >
-                <Ionicons name="paw-outline" size={22} color={colors.primary} />
+                {dog.photoUri ? <Image source={{ uri: dog.photoUri }} style={styles.headerAvatar} /> : <Ionicons name="paw-outline" size={22} color={colors.text} />}
               </Pressable>
             </View>
           </View>
@@ -124,10 +118,9 @@ export default function HomeScreen() {
           ) : null}
 
           <View style={styles.welcomeBlock}>
-            <Text style={styles.eyebrow}>IL VOSTRO SPAZIO</Text>
-            <Text style={styles.title}>Oggi con {dog.name}</Text>
+            <Text style={styles.title}>Ciao!{'\n'}Come sta {dog.name} oggi?</Text>
             <Text style={styles.subtitle}>
-              Raccontami come va, oppure mostrami un momento.
+              Raccontami qualcosa, fammi una domanda oppure mostrami un momento.
             </Text>
           </View>
 
@@ -151,68 +144,42 @@ export default function HomeScreen() {
 
           <HomeConversation key={dog.id} dogId={dog.id} dogName={dog.name} offline={network.offline} />
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Mostra un video di ${dog.name}`}
-            onPress={startVideo}
-            disabled={!dog.id || loading || network.offline}
-            style={({ pressed }) => [styles.startPanel, (!dog.id || loading || network.offline) && styles.disabled, pressed && styles.pressed]}
-          >
-            <View style={styles.startArt}><Ionicons name="videocam-outline" size={25} color={colors.primary} /></View>
-            <View style={styles.startCopy}>
-              <Text style={styles.startTitle}>Mostrami un momento</Text>
-              <Text style={styles.startSubtitle}>Un breve video, da guardare insieme.</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={19} color={colors.primary} />
-          </Pressable>
+          <DogCareOverview dogId={dog.id} dogName={dog.name} compact />
 
           <View style={styles.sectionHeader}>
             <View>
-              <Text style={styles.sectionTitle}>Da ritrovare</Text>
-              <Text style={styles.sectionSubtitle}>Le osservazioni recenti, con il loro contesto.</Text>
+              <Text style={styles.sectionTitle}>Momenti recenti</Text>
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Apri tutte le letture nel Diario"
-              onPress={() => router.push('/(tabs)/diary')}
+              accessibilityLabel="Apri album"
+              onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
               hitSlop={8}
             >
-              <Text style={styles.seeAll}>Diario</Text>
+              <Text style={styles.seeAll}>Vedi tutti</Text>
             </Pressable>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.insightRow}
-          >
-            {recentInsights.length > 0 ? (
-              recentInsights.map((insight) => (
-                <InsightCard
-                  key={insight.eventId}
-                  insight={insight}
-                  photoUri={dog.photoUri}
-                  onPress={() => router.push(`/behavior/result/${insight.eventId}`)}
-                />
-              ))
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Registra il primo momento di ${dog.name}`}
-                onPress={startVideo}
-                style={({ pressed }) => [styles.emptyInsight, pressed && styles.pressed]}
-              >
-                <View style={styles.emptyIcon}>
-                  <Ionicons name="sparkles-outline" size={25} color={colors.primary} />
-                </View>
-                <View style={styles.emptyCopy}>
-                  <Text style={styles.emptyTitle}>Qui ritroverai i momenti osservati</Text>
-                  <Text style={styles.emptyText}>Se vuoi, puoi iniziare con un breve video.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
-            )}
-          </ScrollView>
+          {photos.isLoading ? <Text style={styles.quota}>Carico i momenti…</Text> : photos.isError ? (
+            <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.seeAll}>Non riesco a caricare le foto · Riprova</Text></Pressable>
+          ) : (photos.data ?? []).length > 0 ? (
+            <View style={styles.momentsRow}>
+              {(photos.data ?? []).slice(0, 3).map((photo) => (
+                <Pressable key={photo.id} accessibilityRole="button" accessibilityLabel={photo.caption || 'Apri momento'}
+                  onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never)} style={styles.moment}>
+                  <Image source={{ uri: photo.thumbnailUri }} style={styles.momentPhoto} />
+                  <Text style={styles.insightTime} numberOfLines={1}>{photo.caption || new Date(photo.takenAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : <Pressable accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} style={styles.emptyInsight}>
+            <Ionicons name="images-outline" size={24} color={colors.primary} /><Text style={styles.emptyText}>Aggiungi i vostri momenti all’album</Text>
+          </Pressable>}
+
+          {recentInsights.length > 0 ? <>
+            <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Le ultime osservazioni</Text><Pressable onPress={() => router.push('/(tabs)/diary')} accessibilityRole="button"><Text style={styles.seeAll}>Diario</Text></Pressable></View>
+            {recentInsights.map((insight) => <InsightCard key={insight.eventId} insight={insight} onPress={() => router.push(`/behavior/result/${insight.eventId}`)} />)}
+          </> : null}
 
           {behaviorRemaining !== null && behaviorRemaining <= 2 ? (
             <Text style={behaviorRemaining <= 0 ? styles.quotaWarning : styles.quota}>
@@ -231,11 +198,9 @@ export default function HomeScreen() {
 
 function InsightCard({
   insight,
-  photoUri,
   onPress,
 }: {
   insight: LastInsight;
-  photoUri: string | null;
   onPress: () => void;
 }) {
   return (
@@ -245,13 +210,6 @@ function InsightCard({
       onPress={onPress}
       style={({ pressed }) => [styles.insightCard, pressed && styles.pressed]}
     >
-      {photoUri ? (
-        <Image source={{ uri: photoUri }} style={styles.insightPhoto} />
-      ) : (
-        <View style={styles.insightPhotoPlaceholder}>
-          <Ionicons name="paw-outline" size={25} color={colors.primary} />
-        </View>
-      )}
       <Text style={styles.insightTitle} numberOfLines={2}>{insight.label}</Text>
       <Text style={styles.insightTime}>{insight.timestampLabel}</Text>
       <TonePill tone={insight.tone} />
@@ -273,10 +231,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: {
     width: '100%',
-    maxWidth: 620,
+    maxWidth: 560,
     alignSelf: 'center',
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingBottom: spacing.xl,
     gap: spacing.md,
   },
   headerRow: {
@@ -300,10 +258,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
+  headerAvatar: { width: 34, height: 34, borderRadius: 17 },
+  momentsRow: { flexDirection: 'row', gap: 10 },
+  moment: { flex: 1, minWidth: 0, gap: 6 },
+  momentPhoto: { width: '100%', aspectRatio: 1, borderRadius: 14 },
   statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -316,8 +276,7 @@ const styles = StyleSheet.create({
   },
   statusText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.xs },
   statusRetry: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
-  welcomeBlock: { paddingTop: spacing.xl, gap: spacing.sm },
-  eyebrow: { color: colors.accentPressed, fontSize: typography.size.xs, fontWeight: typography.weight.bold, letterSpacing: 1.2 },
+  welcomeBlock: { paddingTop: spacing.xs, gap: spacing.sm },
   title: { color: colors.text, fontSize: typography.size.xxl, lineHeight: typography.size.xxl * 1.15, fontWeight: typography.weight.bold },
   subtitle: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: typography.size.md * typography.lineHeight.relaxed },
   processingBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
@@ -325,34 +284,11 @@ const styles = StyleSheet.create({
   processingCopy: { flex: 1, gap: 2 },
   processingTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
   processingText: { color: colors.textSecondary, fontSize: typography.size.xs },
-  startPanel: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  startArt: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.primarySoft, position: 'relative' },
-  startCameraBubble: { position: 'absolute', right: -5, bottom: -5, width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.surface },
-  startCopy: { flex: 1, gap: 2 },
-  startKicker: { color: colors.accentPressed, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.8 },
-  startTitle: { color: colors.text, fontSize: typography.size.md, lineHeight: typography.size.md * 1.2, fontWeight: typography.weight.bold },
-  startSubtitle: { color: colors.textSecondary, fontSize: typography.size.xs },
-  startButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.primary },
-  primaryCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primary, minHeight: 142 },
-  primaryIcon: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: 'rgba(255,255,255,0.18)' },
-  primaryCopy: { flex: 1, gap: spacing.xs },
-  primaryKicker: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.8 },
-  primaryTitle: { color: colors.textOnPrimary, fontSize: typography.size.xl, fontWeight: typography.weight.bold },
-  primarySubtitle: { color: 'rgba(255,255,255,0.86)', fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed },
-  talkCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  talkIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.accentSoft },
-  talkCopy: { flex: 1, gap: 2 },
-  talkTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
-  talkSubtitle: { color: colors.textSecondary, fontSize: typography.size.xs },
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.lg },
   sectionTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
-  sectionSubtitle: { marginTop: 3, color: colors.textSecondary, fontSize: typography.size.xs },
   seeAll: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
-  insightRow: { gap: spacing.md, paddingVertical: spacing.xs },
-  insightCard: { width: 176, padding: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
-  insightPhoto: { width: '100%', height: 112, borderRadius: radius.md, backgroundColor: colors.primarySoft },
-  insightPhotoPlaceholder: { width: '100%', height: 112, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.primarySoft },
-  insightTitle: { minHeight: 40, color: colors.text, fontSize: typography.size.sm, lineHeight: typography.size.sm * 1.25, fontWeight: typography.weight.bold },
+  insightCard: { width: '100%', padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
+  insightTitle: { color: colors.text, fontSize: typography.size.sm, lineHeight: typography.size.sm * 1.25, fontWeight: typography.weight.bold },
   insightTime: { color: colors.textMuted, fontSize: typography.size.xs },
   tonePill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginTop: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.accentSoft },
   tonePillWatch: { backgroundColor: colors.warningSoft },
@@ -360,12 +296,8 @@ const styles = StyleSheet.create({
   toneDotWatch: { backgroundColor: colors.warning },
   toneText: { color: colors.textSecondary, fontSize: 10, fontWeight: typography.weight.bold },
   emptyInsight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, width: '100%', padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  emptyIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.primarySoft },
-  emptyCopy: { flex: 1, gap: 3 },
-  emptyTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
   emptyText: { color: colors.textSecondary, fontSize: typography.size.xs },
   quota: { color: colors.textMuted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.sm },
   quotaWarning: { color: colors.warning, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.sm },
-  disabled: { opacity: 0.45 },
   pressed: { opacity: 0.84 },
 });

@@ -6,7 +6,7 @@ import { useSession } from '../../src/features/auth/SessionProvider';
 import { useDogProfile } from '../../src/features/core/useDogProfile';
 
 /**
- * Tab V5.2: Home / Diario / Oreo / Intorno a me.
+ * Tab ADR-017: Home / Diario / {cane} / Cerca (luoghi utili).
  * Protetto: senza sessione → welcome.
  */
 export default function TabsLayout() {
