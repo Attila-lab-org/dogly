@@ -16,6 +16,9 @@ export const colors = {
   accent: '#14B8A6',
   accentPressed: '#0D9488',
   accentSoft: '#CCFBF1',
+  // Alias teal usati da alcune schermate (come nei token web).
+  teal: '#14B8A6',
+  tealSoft: '#CCFBF1',
 
   text: '#0E2A47',
   textSecondary: '#64748B',

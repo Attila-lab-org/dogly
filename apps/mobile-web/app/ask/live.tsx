@@ -131,7 +131,8 @@ export default function AskLiveScreen() {
         return;
       }
       // Tear down any leftover peer before opening a new one (Strict Mode / retry).
-      handleRef.current?.stop();
+      const leftover = handleRef.current as LiveWebRtcHandle | null;
+      leftover?.stop();
       const handle = await connectLiveWebRtc({
         clientSecret: session.client_secret,
         onState: setConn,
