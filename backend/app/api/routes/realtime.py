@@ -27,6 +27,7 @@ from app.domains import profiles_db
 from app.providers.openai_live import (
     DEFAULT_LIVE_SECONDS,
     build_live_instructions,
+    compact_live_dossier,
     mint_realtime_client_secret,
     openai_voice_for_gender,
 )
@@ -252,10 +253,36 @@ async def create_live_session(
     )
     owner_name = str(row["display_name"]) if row.get("display_name") else None
     dog_name = str(row["dog_name"])
+    # Light personal dossier so Live can connect recent analyses naturally
+    # (e.g. bad stools + whimpering) without scripting the whole chat.
+    dossier = ""
+    try:
+        if state.engine is not None:
+            live_context = await load_realtime_context_db(
+                state.engine,
+                user_id=user_id,
+                dog_id=body.dog_id,
+                domains=["GENERAL", "BEHAVIOR", "DIGESTIVE", "CARE", "NUTRITION"],
+                user_text="",
+            )
+        else:
+            live_context = load_realtime_context_memory(
+                state.store,
+                dog_id=body.dog_id,
+                domains=["GENERAL", "BEHAVIOR", "DIGESTIVE", "CARE", "NUTRITION"],
+                user_text="",
+            )
+        dossier = compact_live_dossier(live_context)
+    except Exception:
+        logger.exception(
+            "Live dossier load failed; continuing with open conversation",
+            extra={"dog_id": body.dog_id, "user_id": user_id},
+        )
     instructions = build_live_instructions(
         dog_name=dog_name,
         owner_name=owner_name,
         previous_topic=previous_topic,
+        dossier=dossier,
     )
     try:
         minted = await mint_realtime_client_secret(

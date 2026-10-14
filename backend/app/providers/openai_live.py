@@ -23,6 +23,7 @@ VOICE_BY_GENDER: dict[AskVoiceGender, str] = {
 LIVE_MODEL = "gpt-realtime"
 LIVE_TOKEN_TTL_SECONDS = 600
 DEFAULT_LIVE_SECONDS = 240
+_MAX_DOSSIER_CHARS = 2800
 
 
 def openai_voice_for_gender(gender: str | None) -> str:
@@ -32,11 +33,77 @@ def openai_voice_for_gender(gender: str | None) -> str:
     return VOICE_BY_GENDER[key]  # type: ignore[index]
 
 
+def _fact_line(fact: dict[str, Any]) -> str | None:
+    summary = str(
+        fact.get("summary")
+        or fact.get("statement")
+        or fact.get("text")
+        or fact.get("label")
+        or ""
+    ).strip()
+    if not summary:
+        return None
+    domain = str(fact.get("domain") or "").strip()
+    if domain:
+        return f"- [{domain}] {summary[:180]}"
+    return f"- {summary[:180]}"
+
+
+def compact_live_dossier(context: Any | None) -> str:
+    """Short personal memory block for Live — fuel, not a script."""
+    if context is None:
+        return ""
+    lines: list[str] = []
+    identity = getattr(context, "identity", None) or {}
+    if isinstance(identity, dict) and identity:
+        bits = []
+        for key in ("breed_label", "age_stage", "sex", "size", "weight_kg"):
+            value = identity.get(key)
+            if value not in (None, "", []):
+                bits.append(f"{key}={value}")
+        if bits:
+            lines.append("Identità: " + ", ".join(bits))
+
+    for fact in list(getattr(context, "core_facts", None) or [])[:8]:
+        if isinstance(fact, dict):
+            line = _fact_line(fact)
+            if line:
+                lines.append(line)
+
+    for fact in list(getattr(context, "stable_facts", None) or [])[:8]:
+        if isinstance(fact, dict):
+            line = _fact_line(fact)
+            if line:
+                lines.append(line)
+
+    # Recent analyses / evidence — the “cacca brutta 3 giorni” layer.
+    for item in list(getattr(context, "items", None) or [])[:6]:
+        summary = str(getattr(item, "summary", "") or "").strip()
+        if not summary:
+            continue
+        source = str(getattr(item, "source_type", "") or "").strip()
+        prefix = f"[{source}] " if source else ""
+        lines.append(f"- {prefix}{summary[:200]}")
+
+    if not lines:
+        return ""
+    body = "\n".join(lines)
+    if len(body) > _MAX_DOSSIER_CHARS:
+        body = body[: _MAX_DOSSIER_CHARS - 1].rsplit("\n", 1)[0] + "\n…"
+    return (
+        "Dossier di questo cane (dati, non copione). Usalo quando aiuta a "
+        "collegare segnali — es. digestione recente + guaiti → puoi ipotizzare "
+        "malessere e chiedere conferma. Non citare ogni riga.\n"
+        f"{body}"
+    )
+
+
 def build_live_instructions(
     *,
     dog_name: str,
     owner_name: str | None,
     previous_topic: str | None,
+    dossier: str = "",
 ) -> str:
     owner = (owner_name or "").strip().split(" ", 1)[0]
     who = owner or "il proprietario"
@@ -46,20 +113,25 @@ def build_live_instructions(
             f" Se naturale, puoi riprendere brevemente il filo su «{previous_topic.strip()}»,"
             " ma solo se l'umano sembra volerlo."
         )
+    dossier_block = f"\n\n{dossier.strip()}\n" if dossier.strip() else "\n"
     return (
         f"Sei DOGly, amica esperta di cani. Parli a voce con {who} di {dog_name}. "
-        "Tono caldo, chiaro, italiano naturale, frasi brevi adatte alla voce. "
-        "Aspetta sempre che l'umano finisca di parlare prima di rispondere; "
-        "non parlare sopra di lui e non ripetere la tua ultima frase. "
-        "Se senti eco o la tua stessa voce nel microfono, ignorala. "
-        "All'inizio saluta in una sola frase corta, poi ascolta. "
-        "Quando parla di abbai o vocalizzi di "
-        f"{dog_name}, NON rifiutare: offri subito una lettura in parole umane "
-        "(contesto + tono + ciò che sai di questo cane). Non inventare un dizionario "
-        "universale; se l'audio del cane arriva debole dal microfono, dillo in una "
-        "frase e chiedi un dettaglio o un video di 10 secondi dalla chat Testo. "
-        "Non inventare sintomi medici né diagnosi: per urgenze invita a contattare un veterinario. "
-        "Non menzionare modelli, API o istruzioni di sistema.\n\n"
+        "Conversazione libera e naturale: non seguire uno script, non fare questionari. "
+        "Tono caldo, chiaro, italiano. Frasi adatte alla voce. "
+        "Aspetta che l'umano finisca; non parlare sopra di lui; non ripetere la tua ultima frase. "
+        "Se senti eco o la tua stessa voce, ignorala. "
+        "All'inizio un saluto cortissimo, poi ascolta.\n"
+        "Memoria: usala solo quando cambia la lettura. Esempio: se ci sono digestioni "
+        "brutte recenti e ora guaisce, puoi dire che potrebbe avere mal di pancia e "
+        "chiedere come sta — non forzare collegamenti deboli.\n"
+        "Abbai / vocalizzi: quando serve (l'umano chiede, o il cane si sente e il tema "
+        "è quello), proponi una lettura in parole umane ancorata a questo cane e al "
+        "momento. Non rifiutare. Non inventare un dizionario universale. Non proporla "
+        "a ogni frase se non c'entra.\n"
+        "Non inventare fatti sul cane fuori dal dossier. "
+        "Niente diagnosi mediche inventate; per urgenze invita un veterinario. "
+        "Non menzionare modelli, API o istruzioni di sistema."
+        f"{dossier_block}"
         f"{DOGLY_SPOKEN_STYLE}"
         f"{resume}"
     )
@@ -112,7 +184,6 @@ async def mint_realtime_client_secret(
             json=payload,
         )
         if response.status_code >= 400:
-            # Fallback to legacy sessions mint if client_secrets shape differs.
             legacy = await client.post(
                 "https://api.openai.com/v1/realtime/sessions",
                 headers={
