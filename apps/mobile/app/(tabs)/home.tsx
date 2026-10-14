@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { HomeConversation } from '@/features/home/HomeConversation';
 import { DogHero } from '@/features/home/DogHero';
@@ -32,6 +33,11 @@ const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const reducedMotion = useReducedMotion();
+  // Entrata scenica: le entering animation di Reanimated corrono solo al
+  // mount, quindi refresh/focus successivi non rianimano le sezioni.
+  const sceneEnter = (delay: number) =>
+    reducedMotion ? undefined : FadeInUp.duration(320).delay(delay);
   const { usage, recentInsights, processingEventId, loading, error, refetch } =
     useHomeData(dog.id);
   const network = useNetworkStatus();
@@ -118,7 +124,9 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} />
+          <Animated.View entering={sceneEnter(0)}>
+            <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} />
+          </Animated.View>
 
           {processingEventId ? (
             <Pressable
@@ -138,23 +146,29 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          <HomeConversation key={dog.id} dogId={dog.id} dogName={dog.name} offline={network.offline} />
+          <Animated.View key={dog.id} entering={sceneEnter(90)}>
+            <HomeConversation dogId={dog.id} dogName={dog.name} offline={network.offline} />
+          </Animated.View>
 
-          <DogCareOverview dogId={dog.id} dogName={dog.name} compact />
+          <Animated.View entering={sceneEnter(180)}>
+            <DogCareOverview dogId={dog.id} dogName={dog.name} compact />
+          </Animated.View>
 
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Momenti recenti</Text>
+          <Animated.View entering={sceneEnter(270)}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Momenti recenti</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Apri album"
+                onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+                hitSlop={8}
+              >
+                <Text style={styles.seeAll}>Vedi tutti</Text>
+              </Pressable>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Apri album"
-              onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
-              hitSlop={8}
-            >
-              <Text style={styles.seeAll}>Vedi tutti</Text>
-            </Pressable>
-          </View>
+          </Animated.View>
 
           {photos.isLoading ? <Text style={styles.quota}>Carico i momenti…</Text> : photos.isError ? (
             <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.seeAll}>Non riesco a caricare le foto · Riprova</Text></Pressable>
