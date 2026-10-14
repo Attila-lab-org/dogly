@@ -56,6 +56,27 @@ export default function AskScreen() {
   const [savedToMoments, setSavedToMoments] = useState<Record<string, boolean>>({});
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+  const digestPhotoHint = /feci|cacca|digest|pup[uù]|diarrea|escrement|foto chiara/i.test(
+    `${latestAssistant?.turn?.media_prompt ?? ''} ${latestAssistant?.text ?? ''}`,
+  );
+  const needsDigestivePhoto =
+    intent === 'digest' ||
+    Boolean(latestAssistant?.turn?.domains?.includes('DIGESTIVE')) ||
+    digestPhotoHint;
+  const videoHint = /breve video|mandami un video|fammi vedere|videocamera|carica un video/i.test(
+    latestAssistant?.text ?? '',
+  );
+  const neededMedia: 'PHOTO' | 'VIDEO' | null =
+    latestAssistant?.turn?.media_invite === 'PHOTO' ||
+    latestAssistant?.turn?.media_invite === 'VIDEO'
+      ? latestAssistant.turn.media_invite
+      : intent === 'digest' && !sending && messages.length > 0 && !starting
+        ? 'PHOTO'
+        : digestPhotoHint && !sending
+          ? 'PHOTO'
+          : videoHint && !sending
+            ? 'VIDEO'
+            : null;
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
   const startedKey = useRef<string | null>(null);
@@ -175,12 +196,7 @@ export default function AskScreen() {
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
     if (sending || !session) return;
-    const digestivePhoto =
-      turn?.domains?.includes('DIGESTIVE') ||
-      /feci|cacca|digest|pup[uù]|diarrea|escrement/i.test(
-        `${turn?.media_prompt ?? ''} ${turn?.assistant_text ?? ''}`,
-      );
-    if (digestivePhoto) {
+    if (needsDigestivePhoto) {
       await rememberRealtimeSession(session, messages);
       router.push({
         pathname: '/digestive/capture',
@@ -192,15 +208,23 @@ export default function AskScreen() {
     if (!uri) return;
     const purpose = turn?.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
-  }, [latestAssistant, messages, router, send, sending, session]);
+  }, [latestAssistant, messages, needsDigestivePhoto, router, send, sending, session]);
 
   const pickPhoto = useCallback(async () => {
     if (sending || !session) return;
+    if (needsDigestivePhoto) {
+      await rememberRealtimeSession(session, messages);
+      router.push({
+        pathname: '/digestive/capture',
+        params: { from: 'ask', sessionId: session.id },
+      } as never);
+      return;
+    }
     const uri = await pickAlbumPhoto();
     if (!uri) return;
     const purpose = latestAssistant?.turn?.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
-  }, [dog.name, latestAssistant, send, sending, session]);
+  }, [latestAssistant, messages, needsDigestivePhoto, router, send, sending, session]);
 
   const pickVideo = useCallback(async () => {
     if (sending || !session) return;
@@ -361,8 +385,43 @@ export default function AskScreen() {
               {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId, message.retryRequestId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
-              {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'PHOTO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || `Mostrami ${dog.name} in una foto`} onPress={() => void sharePhoto()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="camera-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica una foto</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
-              {!sending && message.id === latestAssistantId && message.turn?.media_invite === 'VIDEO' ? <Pressable accessibilityRole="button" accessibilityLabel={message.turn.media_prompt || 'Mostrami questo momento in un video'} onPress={() => void openVideoCapture()} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="videocam-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Carica un video</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
+              {!sending && message.id === latestAssistantId && neededMedia === 'PHOTO' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    message.turn?.media_prompt ||
+                    (needsDigestivePhoto
+                      ? `Scatta una foto per la digestione di ${dog.name}`
+                      : `Mostrami ${dog.name} in una foto`)
+                  }
+                  onPress={() => void sharePhoto()}
+                  style={({ pressed }) => [styles.mediaCta, styles.mediaCtaPulse, pressed && styles.pressed]}
+                >
+                  <View style={styles.mediaIcon}>
+                    <Ionicons name="camera" size={17} color={colors.primary} />
+                  </View>
+                  <Text style={styles.mediaTitle}>
+                    {needsDigestivePhoto ? 'Scatta la foto' : 'Apri la fotocamera'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                </Pressable>
+              ) : null}
+              {!sending && message.id === latestAssistantId && neededMedia === 'VIDEO' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    message.turn?.media_prompt || 'Mostrami questo momento in un video'
+                  }
+                  onPress={() => void openVideoCapture()}
+                  style={({ pressed }) => [styles.mediaCta, styles.mediaCtaPulse, pressed && styles.pressed]}
+                >
+                  <View style={styles.mediaIcon}>
+                    <Ionicons name="videocam" size={17} color={colors.primary} />
+                  </View>
+                  <Text style={styles.mediaTitle}>Apri la videocamera</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                </Pressable>
+              ) : null}
               {!sending && message.id === latestAssistantId && message.turn?.food_review_href ? <Pressable accessibilityRole="button" accessibilityLabel="Apri alimentazione" onPress={() => router.push('/nutrition/foods' as never)} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="nutrition-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Rivedi l’alimento</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
               {!sending && message.id === latestAssistantId && message.turn?.save_to_moments_suggested && !savedToMoments[message.id] ? (() => { const uri = priorUserAttachmentUri(messageIndex); return uri ? <Pressable accessibilityRole="button" accessibilityLabel="Salva nei Momenti" disabled={momentsBusy === message.id} onPress={() => void saveAttachmentToMoments(message.id, uri)} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="images-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>{momentsBusy === message.id ? 'Salvo…' : 'Salva nei Momenti'}</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null; })() : null}
               {savedToMoments[message.id] ? <Text style={styles.savedNote}>Salvata nei Momenti</Text> : null}
@@ -386,11 +445,51 @@ export default function AskScreen() {
           />
           <View style={styles.composerTools}>
             <View style={styles.composerActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Scegli una foto dalla galleria" onPress={() => void pickPhoto()} disabled={sending || !session} style={({ pressed }) => [styles.mediaButton, pressed && styles.pressed]}>
-                <Ionicons name="images-outline" size={20} color={colors.primary} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  neededMedia === 'PHOTO'
+                    ? 'Apri la fotocamera'
+                    : 'Scegli una foto dalla galleria'
+                }
+                onPress={() =>
+                  void (neededMedia === 'PHOTO' ? sharePhoto() : pickPhoto())
+                }
+                disabled={sending || !session}
+                style={({ pressed }) => [
+                  styles.mediaButton,
+                  neededMedia === 'PHOTO' && styles.mediaButtonLit,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name={neededMedia === 'PHOTO' ? 'camera' : 'images-outline'}
+                  size={20}
+                  color={neededMedia === 'PHOTO' ? '#FFFFFF' : colors.primary}
+                />
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Scegli un video dalla galleria" onPress={() => void pickVideo()} disabled={sending || !session} style={({ pressed }) => [styles.mediaButton, pressed && styles.pressed]}>
-                <Ionicons name="videocam-outline" size={20} color={colors.primary} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  neededMedia === 'VIDEO'
+                    ? 'Apri la videocamera'
+                    : 'Scegli un video dalla galleria'
+                }
+                onPress={() =>
+                  void (neededMedia === 'VIDEO' ? openVideoCapture() : pickVideo())
+                }
+                disabled={sending || !session}
+                style={({ pressed }) => [
+                  styles.mediaButton,
+                  neededMedia === 'VIDEO' && styles.mediaButtonLit,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name={neededMedia === 'VIDEO' ? 'videocam' : 'videocam-outline'}
+                  size={20}
+                  color={neededMedia === 'VIDEO' ? '#FFFFFF' : colors.primary}
+                />
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}>
                 <Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} />
@@ -443,8 +542,51 @@ const styles = StyleSheet.create({
   sendDisabled: { backgroundColor: '#B7C7DB' },
   pressed: { opacity: 0.82 },
   disclaimer: { width: '100%', maxWidth: 560, alignSelf: 'center', color: colors.textMuted, fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
-  mediaButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E6F1FF' },
+  mediaButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E6F1FF',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  mediaButtonLit: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
   questionOptions: { marginTop: spacing.md, gap: spacing.xs }, questionOption: { minHeight: 38, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#D7E6F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, questionOptionText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm },
-  messageAttachment: { width: 220, height: 160, borderRadius: radius.md, marginBottom: spacing.sm, resizeMode: 'cover' }, mediaCta: { marginTop: spacing.sm, minHeight: 42, alignSelf: 'flex-start', paddingHorizontal: spacing.sm, borderRadius: radius.full, backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#C9E2FF', flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, mediaIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }, mediaTitle: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
+  messageAttachment: { width: 220, height: 160, borderRadius: radius.md, marginBottom: spacing.sm, resizeMode: 'cover' },
+  mediaCta: {
+    marginTop: spacing.md,
+    minHeight: 48,
+    alignSelf: 'stretch',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: '#E6F1FF',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  mediaCtaPulse: {
+    backgroundColor: '#D7EBFF',
+  },
+  mediaIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaTitle: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
   savedNote: { marginTop: spacing.sm, color: colors.textMuted, fontSize: typography.size.sm },
 });
