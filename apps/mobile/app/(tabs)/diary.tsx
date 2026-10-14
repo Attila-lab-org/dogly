@@ -1,13 +1,12 @@
 /**
- * Tab Diario (Spec V1 sez. 5.1, 6) — timeline unificata cursor-paginata.
- * Con API attiva: GET /v1/diary?cursor=…&domain=… (sez. 9), paginazione
- * cursore vera ("Mostra eventi precedenti" carica davvero la pagina
- * successiva; a fine lista un testo onesto la sostituisce).
- * In mock gate dev: dati mock, nessuna paginazione simulata.
- * Filtri: Tutti / Comportamento / Salute. Stati obbligatori: empty,
- * filter, mixed behavior/digestive, deleted media (badge sulle righe).
- * Visual language: anchor diary — #F8FAFC, card bianche radius 20,
- * pill filtri teal, status chip come Screen 3 (Relax / Gioco / Attenzione).
+ * Tab Diario (Spec V1 sez. 5.1, 6) — "la storia delle sue giornate".
+ * Timeline unificata cursor-paginata reale (GET /v1/diary, sez. 9),
+ * ricerca con debounce, filtri Tutti / Comportamento / Salute.
+ * Visual: header di giornata editoriali, card foto-first (media 16:9 in
+ * cima), badge illustrati CuteIcon (stessa euristica di prima), ingresso
+ * scaglionato delle prime card — reduce-motion → tutto statico.
+ * Stati onesti: empty/error/loading senza dati inventati; in mock gate
+ * dev i dati mock restano, senza paginazione simulata.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -25,12 +24,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import type { DiaryDomain, DiaryEntry } from '@/features/core/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
+import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
+import { DogIllustration } from '@/components/DogIllustration';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 
 type DiaryFilter = 'ALL' | DiaryDomain;
 type TimelineItem =
@@ -46,14 +49,15 @@ type TimelineItem =
       entry: DiaryEntry;
     };
 
-type StatusChip = {
+type StatusBadge = {
   label: string;
+  icon: CuteIconName;
   bg: string;
   fg: string;
 };
 
 type IconTone = {
-  name: keyof typeof Ionicons.glyphMap;
+  name: CuteIconName;
   bg: string;
   fg: string;
 };
@@ -64,7 +68,8 @@ const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'DIGESTIVE', label: 'Salute' },
 ];
 
-const puppyPlaySource = require('../../assets/images/puppy-play.png');
+/** Solo le prime card della prima pagina entrano animate. */
+const ENTRANCE_ITEMS = 8;
 
 function dayLabel(iso: string): string {
   const date = new Date(iso);
@@ -76,9 +81,12 @@ function dayLabel(iso: string): string {
   const diffDays = Math.round((startOf(new Date()) - startOf(date)) / dayMs);
   if (diffDays <= 0) return 'Oggi';
   if (diffDays === 1) return 'Ieri';
-  const day = date.getDate();
-  const month = date.toLocaleDateString('it-IT', { month: 'long' });
-  return `${day} ${month.charAt(0).toLocaleUpperCase('it-IT')}${month.slice(1)}`;
+  const label = date.toLocaleDateString('it-IT', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  return `${label.charAt(0).toLocaleUpperCase('it-IT')}${label.slice(1)}`;
 }
 
 function timeLabel(iso: string): string {
@@ -88,23 +96,23 @@ function timeLabel(iso: string): string {
   });
 }
 
-function entryStatusChip(entry: DiaryEntry): StatusChip | null {
+function entryStatusBadge(entry: DiaryEntry): StatusBadge | null {
   const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
 
   if (entry.domain === 'DIGESTIVE') {
     if (/morbid|variazion|flag|controll|attenzione|osservare|peggior/i.test(haystack)) {
-      return { label: 'Da osservare', bg: '#FFF1EE', fg: '#EA580C' };
+      return { label: 'Da osservare', icon: 'attention', bg: '#FFF1EE', fg: '#EA580C' };
     }
-    return { label: 'Confermato', bg: '#DCFCE7', fg: '#16A34A' };
+    return { label: 'Confermato', icon: 'paw', bg: '#DCFCE7', fg: '#16A34A' };
   }
   if (/attenzion|ambig|ipotes|contesto|incerto|watch/i.test(haystack)) {
-    return { label: 'Da osservare', bg: '#FFF1EE', fg: '#EA580C' };
+    return { label: 'Da osservare', icon: 'attention', bg: '#FFF1EE', fg: '#EA580C' };
   }
   if (/gioc|play|rilass|ripos|relax|affetto|insieme|passeggi/i.test(haystack)) {
-    return { label: 'Momenti insieme', bg: '#E8F1FF', fg: '#2563EB' };
+    return { label: 'Momenti insieme', icon: 'play', bg: '#E8F1FF', fg: '#2563EB' };
   }
   if (entry.status === 'COMPLETED') {
-    return { label: 'Momenti insieme', bg: '#E8F1FF', fg: '#2563EB' };
+    return { label: 'Momenti insieme', icon: 'play', bg: '#E8F1FF', fg: '#2563EB' };
   }
   return null;
 }
@@ -113,65 +121,103 @@ function entryIconTone(entry: DiaryEntry): IconTone {
   const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
   if (entry.domain === 'DIGESTIVE') {
     if (/morbid|variazion|flag|controll|attenzione/i.test(haystack)) {
-      return { name: 'alert-circle-outline', bg: '#FFF1EE', fg: '#EA580C' };
+      return { name: 'alert', bg: '#FFF1EE', fg: '#EA580C' };
     }
-    return { name: 'leaf-outline', bg: '#DCFCE7', fg: '#16A34A' };
+    return { name: 'paw', bg: '#DCFCE7', fg: '#16A34A' };
   }
   if (/gioc|play|interazion/i.test(haystack)) {
-    return { name: 'tennisball-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+    return { name: 'play', bg: colors.accentSoft, fg: colors.accentPressed };
   }
   if (/attenzion|ambig|ipotes|contesto/i.test(haystack)) {
-    return { name: 'eye-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+    return { name: 'attention', bg: colors.accentSoft, fg: colors.accentPressed };
   }
   if (/rilass|ripos|relax/i.test(haystack)) {
-    return { name: 'happy-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+    return { name: 'moon', bg: colors.accentSoft, fg: colors.accentPressed };
   }
-  return { name: 'paw-outline', bg: '#E0F7F6', fg: '#2DAAAB' };
+  return { name: 'paw', bg: colors.accentSoft, fg: colors.accentPressed };
 }
 
-function DiaryRow({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
-  const chip = entryStatusChip(entry);
+function StatusBadgeView({ badge }: { badge: StatusBadge }) {
+  return (
+    <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+      <CuteIcon name={badge.icon} size={14} color={badge.fg} secondary={badge.bg} />
+      <Text style={[styles.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+    </View>
+  );
+}
+
+function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
+  const badge = entryStatusBadge(entry);
   const icon = entryIconTone(entry);
 
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.entryCard, pressed && styles.entryCardPressed]}
-    >
-      {entry.mediaUri ? (
-        <View style={styles.mediaBlock}>
+  const meta = (
+    <View style={styles.metaRow}>
+      <Text style={styles.rowTime}>{timeLabel(entry.occurredAt)}</Text>
+      <View style={styles.metaSpacer} />
+      {badge ? <StatusBadgeView badge={badge} /> : null}
+      <Ionicons name="chevron-forward" size={16} color={colors.iconMuted} />
+    </View>
+  );
+
+  const deleted = entry.mediaDeleted ? (
+    <View style={styles.deletedRow}>
+      <Ionicons name="trash-bin-outline" size={12} color={colors.iconMuted} />
+      <Text style={styles.deletedText}>Video non più disponibile</Text>
+    </View>
+  ) : null;
+
+  const cardAccessibilityLabel = `${entry.title}, ${timeLabel(entry.occurredAt)}`;
+
+  if (entry.mediaUri) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={cardAccessibilityLabel}
+        onPress={onPress}
+        style={({ pressed }) => [styles.mediaCard, pressed && styles.entryCardPressed]}
+      >
+        <View style={styles.mediaTop}>
           <Image
             source={{ uri: entry.mediaUri }}
             style={styles.mediaImage}
             accessibilityLabel={entry.mediaKind === 'VIDEO' ? 'Video del momento' : 'Foto del momento'}
           />
-          {entry.mediaKind === 'VIDEO' ? <View style={styles.playBadge}><Ionicons name="play" size={13} color="#FFFFFF" /></View> : null}
+          {entry.mediaKind === 'VIDEO' ? (
+            <View style={styles.playBadge}>
+              <Ionicons name="play" size={14} color={colors.textOnPrimary} />
+            </View>
+          ) : null}
         </View>
-      ) : (
-        <View style={[styles.mediaBlock, { backgroundColor: icon.bg }]}>
-          <Ionicons name={icon.name} size={28} color={icon.fg} />
+        <View style={styles.cardBody}>
+          <Text style={styles.rowTitle}>{entry.title}</Text>
+          <Text style={styles.rowSubtitle} numberOfLines={2}>
+            {entry.subtitle ?? (entry.domain === 'BEHAVIOR' ? 'Un momento osservato insieme.' : 'Un controllo da seguire nel tempo.')}
+          </Text>
+          {meta}
+          {deleted}
         </View>
-      )}
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={cardAccessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [styles.plainCard, pressed && styles.entryCardPressed]}
+    >
+      <View style={[styles.iconBlock, { backgroundColor: icon.bg }]}>
+        <CuteIcon name={icon.name} size={26} color={icon.fg} secondary={colors.text} />
+      </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{entry.title}</Text>
         <Text style={styles.rowSubtitle} numberOfLines={2}>
           {entry.subtitle ?? (entry.domain === 'BEHAVIOR' ? 'Un momento osservato insieme.' : 'Un controllo da seguire nel tempo.')}
         </Text>
-        <Text style={styles.rowTime}>{timeLabel(entry.occurredAt)}</Text>
-        {chip ? (
-          <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
-            <Text style={[styles.statusChipText, { color: chip.fg }]}>{chip.label}</Text>
-          </View>
-        ) : null}
-        {entry.mediaDeleted ? (
-          <View style={styles.deletedRow}>
-            <Ionicons name="trash-bin-outline" size={12} color="#94A3B8" />
-            <Text style={styles.deletedText}>Video non più disponibile</Text>
-          </View>
-        ) : null}
+        {meta}
+        {deleted}
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
     </Pressable>
   );
 }
@@ -182,27 +228,24 @@ function SoftState({
   actionLabel,
   onAction,
   loading,
+  mood = 'welcome',
 }: {
   title: string;
   message: string;
   actionLabel?: string;
   onAction?: () => void;
   loading?: boolean;
+  mood?: 'welcome' | 'thinking' | 'resting';
 }) {
   return (
     <View style={styles.stateWrap}>
-      <View style={styles.stateCircle}>
-        {loading ? (
-          <ActivityIndicator size="large" color="#2DAAAB" />
-        ) : (
-          <Image
-            source={puppyPlaySource}
-            style={styles.statePuppy}
-            resizeMode="contain"
-            accessibilityLabel="Cucciolo illustrato"
-          />
-        )}
-      </View>
+      {loading ? (
+        <View style={styles.stateCircle}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      ) : (
+        <DogIllustration size={150} mood={mood} />
+      )}
       <Text style={styles.stateTitle}>{title}</Text>
       <Text style={styles.stateMessage}>{message}</Text>
       {actionLabel && onAction ? (
@@ -222,6 +265,7 @@ export default function DiaryScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
+  const reducedMotion = useReducedMotion();
   const [filter, setFilter] = useState<DiaryFilter>('ALL');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -298,17 +342,17 @@ export default function DiaryScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Il diario di {dog.name}</Text>
           <Text style={styles.subtitle}>
-            La storia di {dog.name}, giorno dopo giorno.
+            La storia delle sue giornate, una pagina alla volta.
           </Text>
 
           <View style={styles.search}>
-            <Ionicons name="search" size={18} color="#94A3B8" />
+            <Ionicons name="search" size={18} color={colors.iconMuted} />
             <TextInput
               accessibilityLabel="Cerca nel diario"
               value={search}
               onChangeText={setSearch}
-              placeholder="Cerca un momento…"
-              placeholderTextColor="#94A3B8"
+              placeholder="Cerca una storia, un momento…"
+              placeholderTextColor={colors.iconMuted}
               style={styles.searchInput}
               returnKeyType="search"
             />
@@ -319,7 +363,7 @@ export default function DiaryScreen() {
                 onPress={() => setSearch('')}
                 hitSlop={8}
               >
-                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                <Ionicons name="close-circle" size={18} color={colors.iconMuted} />
               </Pressable>
             ) : null}
           </View>
@@ -354,33 +398,37 @@ export default function DiaryScreen() {
           {realEnabled && query.isLoading ? (
             <SoftState
               loading
-              title="Carico il diario…"
-              message={`Sto recuperando i momenti di ${dog.name}.`}
+              title="Sfoglio il diario…"
+              message={`Sto raccogliendo le giornate di ${dog.name}.`}
             />
           ) : realEnabled && query.isError ? (
             <SoftState
-              title="Non riesco a caricare il diario"
-              message="Controlla la connessione e riprova."
+              mood="thinking"
+              title="Ops, mi sono perso un attimo"
+              message="Non trovo le pagine del diario. Controlla la connessione e riprovo."
               actionLabel="Riprova"
               onAction={() => void query.refetch()}
             />
           ) : groups.length === 0 ? (
             <SoftState
+              mood={debouncedSearch ? 'thinking' : 'welcome'}
               title={
                 debouncedSearch
-                  ? 'Nessun risultato'
+                  ? 'Nessuna storia trovata'
                   : filter === 'ALL'
-                    ? 'Il diario è ancora vuoto'
+                    ? `Il diario di ${dog.name} aspetta la prima storia`
                     : filter === 'BEHAVIOR'
-                      ? 'Nessun video nel diario'
-                      : 'Nessun controllo digestivo'
+                      ? 'Nessun momento osservato, per ora'
+                      : 'Nessun controllo digestione nel diario'
               }
               message={
                 debouncedSearch
-                  ? 'Prova un’altra parola oppure cancella la ricerca.'
+                  ? 'Prova con un’altra parola, oppure cancella la ricerca.'
                   : filter === 'DIGESTIVE'
-                    ? 'Aggiungi una foto per seguire la digestione nel tempo.'
-                    : `Mostra un momento di ${dog.name}: lo ritroverai qui con la sua lettura.`
+                    ? 'Una foto ogni tanto ci aiuta a seguire la sua salute con calma.'
+                    : filter === 'BEHAVIOR'
+                      ? `Registra un video di ${dog.name}: ti racconto cosa ho visto.`
+                      : `Mostrami un momento con ${dog.name}: lo custodirò qui, con la sua lettura.`
               }
               actionLabel={
                 debouncedSearch
@@ -419,43 +467,57 @@ export default function DiaryScreen() {
                   void query.fetchNextPage();
                 }
               }}
-              renderItem={({ item }) => {
+              renderItem={({ item, index }) => {
+                const entering =
+                  reducedMotion || index >= ENTRANCE_ITEMS
+                    ? undefined
+                    : FadeInDown.duration(300).delay(index * 60);
                 if (item.kind === 'header') {
                   return (
-                    <View style={styles.groupHeader}>
-                      <Text style={styles.groupLabel}>
-                        {dayLabel(item.current)}
-                      </Text>
-                    </View>
+                    <Animated.View entering={entering}>
+                      <View style={styles.groupHeader} accessibilityRole="header">
+                        <Text style={styles.groupLabel}>
+                          {dayLabel(item.current)}
+                        </Text>
+                        <CuteIcon
+                          name="paw"
+                          size={15}
+                          color={colors.accent}
+                          secondary={colors.accentSoft}
+                        />
+                      </View>
+                    </Animated.View>
                   );
                 }
                 const { entry } = item;
                 return (
-                  <DiaryRow
-                    entry={entry}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/diary/event/[eventId]',
-                        params: {
-                          eventId: entry.id,
-                          domain: entry.domain,
-                          occurredAt: entry.occurredAt,
-                          deleted: entry.mediaDeleted ? '1' : '0',
-                          title: entry.title,
-                          subtitle: entry.subtitle ?? '',
-                        },
-                      } as never)
-                    }
-                  />
+                  <Animated.View entering={entering}>
+                    <DiaryCard
+                      entry={entry}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/diary/event/[eventId]',
+                          params: {
+                            eventId: entry.id,
+                            domain: entry.domain,
+                            occurredAt: entry.occurredAt,
+                            deleted: entry.mediaDeleted ? '1' : '0',
+                            title: entry.title,
+                            subtitle: entry.subtitle ?? '',
+                          },
+                        } as never)
+                      }
+                    />
+                  </Animated.View>
                 );
               }}
               ListFooterComponent={
                 realEnabled ? (
                   query.isFetchingNextPage ? (
-                    <Text style={styles.endNote}>Carico altri eventi…</Text>
+                    <Text style={styles.endNote}>Sfoglio altre pagine…</Text>
                   ) : !query.hasNextPage ? (
                     <Text style={styles.endNote}>
-                      Stai vedendo gli eventi più recenti.
+                      Hai ripercorso tutta la sua storia.
                     </Text>
                   ) : null
                 ) : null
@@ -471,7 +533,7 @@ export default function DiaryScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   safe: {
     flex: 1,
@@ -482,63 +544,63 @@ const styles = StyleSheet.create({
     maxWidth: 440,
     alignSelf: 'center',
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: spacing.sm,
   },
   title: {
-    marginTop: 8,
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A2B48',
+    marginTop: spacing.sm,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
   },
   subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748B',
-    marginBottom: 16,
+    marginTop: spacing.xs,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.regular,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   search: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
     paddingHorizontal: 14,
     marginBottom: 14,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#EDF2F7',
+    borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
-    color: '#1A2B48',
-    fontSize: 14,
+    color: colors.text,
+    fontSize: typography.size.sm,
   },
   filtersScroll: {
     flexGrow: 0,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   filters: {
     flexDirection: 'row',
-    gap: 8,
-    paddingBottom: 8,
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   filterPill: {
-    borderRadius: 9999,
-    paddingVertical: 8,
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
     paddingHorizontal: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.surfaceMuted,
   },
   filterPillActive: {
-    backgroundColor: '#2DAAAB',
+    backgroundColor: colors.accent,
   },
   filterLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#64748B',
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+    color: colors.textSecondary,
   },
   filterLabelActive: {
-    color: '#FFFFFF',
+    color: colors.textOnPrimary,
   },
   timeline: {
     flex: 1,
@@ -549,142 +611,171 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   groupHeader: {
-    marginTop: 16,
-    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
   },
   groupLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A2B48',
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
+    letterSpacing: 0.2,
   },
-  entryCard: {
+  mediaCard: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    ...shadows.card,
+  },
+  mediaTop: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: colors.surfaceMuted,
+  },
+  mediaImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  playBadge: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.md,
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.overlayDark,
+  },
+  cardBody: {
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  plainCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    shadowColor: '#0E2A47',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    ...shadows.card,
+  },
+  iconBlock: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
   },
   entryCardPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.99 }],
   },
-  mediaBlock: {
-    width: 88,
-    height: 78,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-    overflow: 'hidden',
-  },
-  mediaImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  playBadge: { position: 'absolute', right: 7, bottom: 7, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(14,42,71,0.82)' },
   rowText: {
     flex: 1,
+    gap: spacing.xs,
   },
   rowTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A2B48',
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
   },
   rowSubtitle: {
-    marginTop: 3,
     fontSize: 13,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: typography.weight.medium,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  metaSpacer: {
+    flex: 1,
   },
   rowTime: {
-    marginTop: 4,
-    fontSize: 11,
-    fontWeight: '400',
-    color: '#94A3B8',
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.regular,
+    color: colors.textMuted,
   },
-  statusChip: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    borderRadius: 9999,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.full,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
-  statusChipText: {
-    fontSize: 13,
-    fontWeight: '700',
+  statusBadgeText: {
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
   },
   deletedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   deletedText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.iconMuted,
     fontStyle: 'italic',
   },
   endNote: {
     alignSelf: 'center',
-    marginTop: 8,
-    fontSize: 12,
-    color: '#94A3B8',
+    marginTop: spacing.sm,
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
   },
   stateWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingBottom: 40,
-    gap: 12,
+    gap: spacing.md,
   },
   stateCircle: {
     width: 120,
     height: 120,
-    borderRadius: 60,
-    backgroundColor: '#E0F2F7',
+    borderRadius: radius.full,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
-  },
-  statePuppy: {
-    width: 88,
-    height: 88,
+    marginBottom: spacing.xs,
   },
   stateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A2B48',
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+    color: colors.text,
     textAlign: 'center',
   },
   stateMessage: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748B',
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.regular,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   stateAction: {
-    marginTop: 8,
-    borderRadius: 9999,
-    paddingVertical: 12,
+    marginTop: spacing.sm,
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
     paddingHorizontal: 22,
-    backgroundColor: '#2DAAAB',
+    backgroundColor: colors.accent,
   },
   stateActionPressed: {
     opacity: 0.9,
     transform: [{ scale: 0.98 }],
   },
   stateActionLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    color: colors.textOnPrimary,
   },
 });
