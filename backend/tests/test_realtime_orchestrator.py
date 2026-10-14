@@ -760,6 +760,61 @@ async def test_realtime_payload_does_not_expose_keyword_domains_to_gpt(
 
 
 @pytest.mark.asyncio
+async def test_realtime_payload_encodes_uuid_context_for_media_turn(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [{"message": {"content": (
+                    '{"assistant_text":"Vedo la foto.","action_type":"none",'
+                    '"action_options":[],"action_prompt":null,"used_source_ids":[]}'
+                )}}]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, url, *, headers, json):
+            captured["body"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        realtime_orchestrator_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: FakeClient(),
+    )
+    food_id = uuid.uuid4()
+    await orchestrate_realtime_turn(
+        settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
+        user_text="Cosa noti in questa foto?",
+        domains=["GENERAL"],
+        context=RealtimeDogContext(
+            dog_id="dog-1",
+            dog_name="Oreo",
+            identity={"birth_date": datetime(2020, 1, 1, tzinfo=UTC)},
+            core_facts=[{"key": "food_id", "value": food_id}],
+        ),
+        history=[],
+        image_url="https://storage.example/photo.jpg",
+        media_context="Ti mostro Oreo in questo momento",
+    )
+
+    body = captured["body"]
+    content = body["messages"][1]["content"]
+    context_text = content[0]["text"]
+    assert str(food_id) in context_text
+    assert "2020-01-01T00:00:00+00:00" in context_text
+
+
+@pytest.mark.asyncio
 async def test_realtime_reasoner_receives_real_continuity_and_core_facts(
     monkeypatch,
 ) -> None:

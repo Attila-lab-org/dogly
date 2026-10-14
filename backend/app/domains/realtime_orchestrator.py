@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 import httpx
+from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 
 from app.config import Settings
@@ -492,6 +493,10 @@ async def orchestrate_realtime_turn(
         "owner_turn": user_text,
         "owner_media_context": media_context,
     }
+    # SQLAlchemy returns UUID/date values from the dog context. Normalize the
+    # complete provider payload before serializing it so media turns cannot
+    # fail with a server-side JSON encoding error.
+    payload = jsonable_encoder(payload)
     user_content: str | list[dict[str, Any]] = (
         "PERSONAL_DOG_CONTEXT\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
