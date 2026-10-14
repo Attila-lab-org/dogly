@@ -11,6 +11,7 @@
  */
 import type { BehaviorEventStatus } from '../../contracts/types';
 import { BEHAVIOR_INTENT_LABELS } from '../../contracts/types';
+import { simplifyDigestiveOwnerCopy } from '../core/conversationCopy';
 import { directResultHeadline, sanitizeOwnerCopy } from '../core/copy';
 import type {
   DiaryDomain,
@@ -133,7 +134,12 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
   const subtitle =
     item.status === 'COMPLETED'
       ? item.summary
-        ? sanitizeOwnerCopy(item.summary)
+        ? item.domain === 'DIGESTIVE'
+          ? simplifyDigestiveOwnerCopy(item.summary, {
+              maxChars: 180,
+              maxSentences: 2,
+            })
+          : sanitizeOwnerCopy(item.summary)
         : null
       : (NON_COMPLETED_LABELS[item.status] ?? item.summary);
   const title =
@@ -143,7 +149,10 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
         : 'Momento video'
       : item.title === 'Controllo digestione'
         ? 'Osservazione digestiva'
-        : item.title;
+        : simplifyDigestiveOwnerCopy(item.title, {
+            maxChars: 88,
+            maxSentences: 1,
+          });
   return {
     id: item.id,
     domain: item.domain,

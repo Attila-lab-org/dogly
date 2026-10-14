@@ -23,6 +23,7 @@ import {
   SAFETY_COPY,
 } from '@/features/secondary/safetyCopy';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { simplifyDigestiveOwnerCopy } from '@/features/core/conversationCopy';
 import { sanitizeOwnerCopy } from '@/features/core/copy';
 import {
   getDigestiveEvent,
@@ -195,17 +196,19 @@ export default function DigestiveResultScreen() {
   }
 
   const status = statusOrientation(event.overallState);
-  const headline = sanitizeOwnerCopy(
+  const headline = simplifyDigestiveOwnerCopy(
     (event.consumerHeadline ?? 'Il risultato di oggi').replace(
       /Rocky/g,
       dog.name,
     ),
+    { maxChars: 88, maxSentences: 1 },
   );
-  const summary = sanitizeOwnerCopy(
+  const summary = simplifyDigestiveOwnerCopy(
     (event.consumerSummary ?? 'Guarda cosa emerge dalla foto.').replace(
       /Rocky/g,
       dog.name,
     ),
+    { maxChars: 220, maxSentences: 2 },
   );
   const advice = event.recommendedNextStep
     ? sanitizeOwnerCopy(event.recommendedNextStep.replace(/Rocky/g, dog.name))
@@ -626,14 +629,16 @@ const styles = StyleSheet.create({
     color: '#1A2B48',
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-    textAlign: 'center',
+    textAlign: 'left',
+    alignSelf: 'stretch',
   },
   resultSummary: {
     marginTop: spacing.sm,
     color: '#64748B',
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-    textAlign: 'center',
+    textAlign: 'left',
+    alignSelf: 'stretch',
   },
   resultAdvice: {
     marginTop: spacing.xs,

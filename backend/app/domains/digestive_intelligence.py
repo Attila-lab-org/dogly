@@ -145,6 +145,69 @@ class DigestiveIntelligenceResult(BaseModel):
     baseline_version: str = DIGESTIVE_BASELINE_VERSION
 
 
+_OWNER_JARGON = (
+    (re.compile(r"\bsalsicciotto\b(?:\s*\([^)]*\))?", re.I), "ben formate"),
+    (re.compile(r"\(~?\s*[1-7]\s*\)"), ""),
+    (re.compile(r"\bbristol\b[^.,;]*", re.I), ""),
+    (re.compile(r"\bdel\s+tratto\s+finale\s*\(retto\s*/\s*ano\)", re.I), "della parte finale"),
+    (re.compile(r"\btratto\s+finale\s*\(retto\s*/\s*ano\)", re.I), "parte finale"),
+    (re.compile(r"\bretto\s*/\s*ano\b", re.I), "parte finale"),
+    (re.compile(r"\bdel\s+retto\b", re.I), "della parte finale"),
+    (re.compile(r"\bretto\b", re.I), "parte finale"),
+    (re.compile(r"\bdell['’]?ano\b", re.I), "dell’uscita"),
+    (re.compile(r"\bano\b", re.I), "uscita"),
+    (re.compile(r"\bmicrofessur[ae]\b", re.I), "piccola irritazione"),
+    (re.compile(r"\bvolume nella norma\b", re.I), "quantità normale"),
+    (re.compile(r"\bquadro regolare\b", re.I), "quadro normale"),
+    (re.compile(r"\btratto finale\b", re.I), "parte finale"),
+    (re.compile(r"\bstriature rosso vivo\b", re.I), "tracce di sangue rosso"),
+)
+
+
+def _plain_owner_sentence(text: str) -> str:
+    cleaned = " ".join((text or "").split())
+    for pattern, replacement in _OWNER_JARGON:
+        cleaned = pattern.sub(replacement, cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    return cleaned.strip(" ;,")
+
+
+def _clip_owner_text(text: str, *, max_chars: int, max_sentences: int) -> str:
+    cleaned = _plain_owner_sentence(text)
+    if not cleaned:
+        return cleaned
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
+    kept: list[str] = []
+    total = 0
+    for part in parts:
+        candidate = part.strip()
+        if not candidate:
+            continue
+        next_len = total + len(candidate) + (1 if kept else 0)
+        if kept and (len(kept) >= max_sentences or next_len > max_chars):
+            break
+        kept.append(candidate)
+        total = next_len
+        if len(kept) >= max_sentences:
+            break
+    clipped = " ".join(kept) if kept else cleaned
+    if len(clipped) > max_chars:
+        clipped = clipped[: max_chars - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return clipped
+
+
+def clamp_digestive_owner_copy(headline: str, summary: str) -> tuple[str, str]:
+    """Keep digestive owner copy short and non-clinical."""
+    plain_headline = _clip_owner_text(headline, max_chars=88, max_sentences=1)
+    plain_summary = _clip_owner_text(summary, max_chars=220, max_sentences=2)
+    if not plain_headline:
+        plain_headline = "Ecco il risultato di oggi"
+    if not plain_summary:
+        plain_summary = "Guarda i dettagli e cosa fare adesso."
+    return plain_headline, plain_summary
+
+
 def govern_digestive_with_core(
     result: DigestiveIntelligenceResult,
 ) -> tuple[DigestiveIntelligenceResult, dict[str, Any]]:
@@ -2042,6 +2105,7 @@ def build_digestive_intelligence(
         followup_question=followup_question,
     )
 
+    headline, summary = clamp_digestive_owner_copy(headline, summary)
     return DigestiveIntelligenceResult(
         overall_state=state,
         consumer_headline=headline,

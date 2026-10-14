@@ -50,6 +50,52 @@ export function consumerCopy(value: string | null | undefined): string {
     .trim();
 }
 
+/** Digestive owner cards: plain Italian, short, no clinical jargon. */
+export function simplifyDigestiveOwnerCopy(
+  value: string | null | undefined,
+  options?: { maxChars?: number; maxSentences?: number },
+): string {
+  const maxChars = options?.maxChars ?? 220;
+  const maxSentences = options?.maxSentences ?? 2;
+  let text = consumerCopy(value)
+    .replace(/\bsalsicciotto\b(?:\s*\([^)]*\))?/gi, 'ben formate')
+    .replace(/\(~?\s*[1-7]\s*\)/g, '')
+    .replace(/\bbristol\b[^.,;]*/gi, '')
+    .replace(/\bdel\s+tratto\s+finale\s*\(retto\s*\/\s*ano\)/gi, 'della parte finale')
+    .replace(/\btratto\s+finale\s*\(retto\s*\/\s*ano\)/gi, 'parte finale')
+    .replace(/\bretto\s*\/\s*ano\b/gi, 'parte finale')
+    .replace(/\bdel\s+retto\b/gi, 'della parte finale')
+    .replace(/\bretto\b/gi, 'parte finale')
+    .replace(/\bdell['’]?ano\b/gi, 'dell’uscita')
+    .replace(/\bano\b/gi, 'uscita')
+    .replace(/\bmicrofessur[ae]\b/gi, 'piccola irritazione')
+    .replace(/\bvolume nella norma\b/gi, 'quantità normale')
+    .replace(/\bquadro regolare\b/gi, 'quadro normale')
+    .replace(/\btratto finale\b/gi, 'parte finale')
+    .replace(/\bstriature rosso vivo\b/gi, 'tracce di sangue rosso')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim()
+    .replace(/^[;,\s]+|[;,\s]+$/g, '');
+
+  if (!text) return text;
+  const parts = text.split(/(?<=[.!?])\s+/).map((part) => part.trim()).filter(Boolean);
+  const kept: string[] = [];
+  let total = 0;
+  for (const part of parts) {
+    const next = total + part.length + (kept.length ? 1 : 0);
+    if (kept.length && (kept.length >= maxSentences || next > maxChars)) break;
+    kept.push(part);
+    total = next;
+    if (kept.length >= maxSentences) break;
+  }
+  text = kept.length ? kept.join(' ') : text;
+  if (text.length > maxChars) {
+    text = `${text.slice(0, maxChars - 1).replace(/\s+\S*$/, '').replace(/[,;:]+$/, '')}…`;
+  }
+  return text;
+}
+
 export function mediaQualityCopy(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return '';

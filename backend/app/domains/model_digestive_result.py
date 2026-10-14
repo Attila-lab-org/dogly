@@ -7,6 +7,7 @@ from app.contracts.taxonomy import AnalysisDomain
 from app.domains.digestive_intelligence import (
     DigestiveState,
     DigestiveIntelligenceResult,
+    clamp_digestive_owner_copy,
 )
 from app.domains.realtime_context import (
     load_realtime_context_db,
@@ -44,12 +45,33 @@ async def model_digestive_result(state, *, event, digestive_context):
             if key != "canine_intelligence"
         } or None,
         "output_schema": ModelDigestiveResult.model_json_schema(),
-        "instruction": "Interpreta le evidenze e formula spiegazione, consigli e al massimo una domanda utile. Le classificazioni descrivono la tua lettura dopo il ragionamento. Restituisci JSON conforme allo schema. Nessun link o azione non disponibile: useful_action deve avere key none. followup_key può essere solo vomiting_today, reduced_activity_today, unusual_food_48h, appetite_reduced, straining_or_urgency, supplements_or_medication oppure null. Non richiedere chiarimenti già presenti e attuali.",
+        "instruction": (
+            "Interpreta le evidenze per il proprietario. "
+            "consumer_headline: una sola frase breve (max ~12 parole), tono umano, "
+            "senza termini medici (niente Bristol, retto, ano, microfessura, score). "
+            "consumer_summary: max 2 frasi semplici su cosa vedi e cosa fare oggi. "
+            "Scrivi come a un amico, non come un referto. "
+            "Al massimo una domanda utile. "
+            "Restituisci JSON conforme allo schema. "
+            "useful_action.key deve essere none. "
+            "followup_key può essere solo vomiting_today, reduced_activity_today, "
+            "unusual_food_48h, appetite_reduced, straining_or_urgency, "
+            "supplements_or_medication oppure null. "
+            "Non richiedere chiarimenti già presenti e attuali."
+        ),
     }
     payload = jsonable_encoder(payload)
-    raw, usage = await request_personal_json(state.settings, task="Interpreta l'osservazione per questo cane", payload=payload)
+    raw, usage = await request_personal_json(
+        state.settings,
+        task="Interpreta l'osservazione per questo cane, con parole semplici",
+        payload=payload,
+    )
     result = ModelDigestiveResult.model_validate(raw)
     result.reasoning_version = VERSION
+    result.consumer_headline, result.consumer_summary = clamp_digestive_owner_copy(
+        result.consumer_headline,
+        result.consumer_summary,
+    )
     # Safety evidence is a technical floor, while GPT still owns the wording,
     # explanation and follow-up question.
     severities = {str(flag.get("severity", "")).upper() for flag in event.safety_flags}

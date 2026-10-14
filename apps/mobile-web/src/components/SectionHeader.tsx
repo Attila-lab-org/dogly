@@ -45,13 +45,17 @@ const styles = StyleSheet.create({
   },
   leading: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     flex: 1,
+    minWidth: 0,
   },
   title: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
     color: colors.text,
+    lineHeight: typography.size.lg * 1.25,
   },
 });

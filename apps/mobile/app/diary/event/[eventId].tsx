@@ -37,6 +37,7 @@ import {
 } from '@/features/advice/AdviceCard';
 import { mapApiAdviceItem } from '@/features/advice/map';
 import { selectAdvice } from '@/features/advice/logic';
+import { simplifyDigestiveOwnerCopy } from '@/features/core/conversationCopy';
 
 const NAVY = '#1A2B48';
 
@@ -161,8 +162,12 @@ export default function DiaryEventScreen() {
     ).then(setFeedback);
   };
 
-  const entryTitle = params.title ?? null;
-  const entrySubtitle = params.subtitle || null;
+  const entryTitle = params.title
+    ? simplifyDigestiveOwnerCopy(params.title, { maxChars: 88, maxSentences: 1 })
+    : null;
+  const entrySubtitle = params.subtitle
+    ? simplifyDigestiveOwnerCopy(params.subtitle, { maxChars: 180, maxSentences: 2 })
+    : null;
   const entryRefId = eventId ?? '';
 
   return (
@@ -294,11 +299,17 @@ const styles = StyleSheet.create({
     lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   digestiveSubtitle: {
+    alignSelf: 'stretch',
+    width: '100%',
     fontSize: typography.size.sm,
     color: colors.textSecondary,
+    lineHeight: typography.size.sm * 1.45,
+    marginTop: -spacing.xs,
     marginBottom: spacing.md,
+    textAlign: 'left',
   },
   digestiveButton: {
     marginTop: spacing.sm,
+    alignSelf: 'stretch',
   },
 });
