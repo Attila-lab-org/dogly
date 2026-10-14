@@ -48,9 +48,17 @@ import {
   setProfileVisibility as apiSetVisibility,
 } from '@/features/photos/api';
 import { confirmPublicProfile } from '@/lib/confirmAction';
-import { useMeProfile, useUpdateMeProfile } from '@/features/me/api';
+import {
+  useMeProfile,
+  useUpdateMeProfile,
+  type AskVoiceGender,
+} from '@/features/me/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
+const VOICE_OPTIONS: { value: AskVoiceGender; label: string; hint: string }[] = [
+  { value: 'FEMALE', label: 'Femminile', hint: 'Luminosa e chiara' },
+  { value: 'MALE', label: 'Maschile', hint: 'Calda e posata' },
+];
 
 export default function DogEditScreen() {
   const router = useRouter();
@@ -65,6 +73,9 @@ export default function DogEditScreen() {
   const updateMe = useUpdateMeProfile();
   const [ownerName, setOwnerName] = useState(
     meQuery.data?.display_name ?? '',
+  );
+  const [voiceGender, setVoiceGender] = useState<AskVoiceGender>(
+    meQuery.data?.ask_voice_gender === 'MALE' ? 'MALE' : 'FEMALE',
   );
   const [name, setName] = useState(dog.name);
   const [sex, setSex] = useState<DogSex | null>(dog.sex);
@@ -132,7 +143,10 @@ export default function DogEditScreen() {
     if (meQuery.data?.display_name != null) {
       setOwnerName(meQuery.data.display_name);
     }
-  }, [meQuery.data?.display_name]);
+    if (meQuery.data?.ask_voice_gender) {
+      setVoiceGender(meQuery.data.ask_voice_gender);
+    }
+  }, [meQuery.data?.display_name, meQuery.data?.ask_voice_gender]);
 
   const selectAndUploadPhoto = async () => {
     const uri = await pickAvatarPhoto();
@@ -226,8 +240,19 @@ export default function DogEditScreen() {
     try {
       const nextOwnerName = ownerName.trim() || null;
       const currentOwnerName = meQuery.data?.display_name ?? null;
+      const currentVoice = meQuery.data?.ask_voice_gender ?? 'FEMALE';
+      const mePatch: {
+        display_name?: string | null;
+        ask_voice_gender?: AskVoiceGender;
+      } = {};
       if (userId && nextOwnerName !== currentOwnerName) {
-        await updateMe.mutateAsync({ display_name: nextOwnerName });
+        mePatch.display_name = nextOwnerName;
+      }
+      if (userId && voiceGender !== currentVoice) {
+        mePatch.ask_voice_gender = voiceGender;
+      }
+      if (userId && Object.keys(mePatch).length > 0) {
+        await updateMe.mutateAsync(mePatch);
       }
       if (dogId) {
         const profilePatch = profileChangesToUpdateBody(dog, {
@@ -294,6 +319,50 @@ export default function DogEditScreen() {
         style={styles.input}
         testID="owner-display-name"
       />
+
+      <Text style={styles.label}>Voce di DOGly (Live)</Text>
+      <Text style={styles.voiceHint}>
+        Si sente solo nella conversazione vocale. Puoi cambiarla quando vuoi.
+      </Text>
+      <View style={styles.chips}>
+        {VOICE_OPTIONS.map((option) => (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: voiceGender === option.value }}
+            onPress={() => setVoiceGender(option.value)}
+            style={[
+              styles.chip,
+              styles.voiceChip,
+              voiceGender === option.value && styles.chipActive,
+            ]}
+          >
+            <Ionicons
+              name={option.value === 'FEMALE' ? 'sparkles-outline' : 'planet-outline'}
+              size={16}
+              color={voiceGender === option.value ? '#FFFFFF' : colors.primary}
+            />
+            <View>
+              <Text
+                style={[
+                  styles.chipText,
+                  voiceGender === option.value && styles.chipTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+              <Text
+                style={[
+                  styles.voiceChipHint,
+                  voiceGender === option.value && styles.voiceChipHintActive,
+                ]}
+              >
+                {option.hint}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
 
       <Text style={styles.sectionTitle}>{name.trim() || dog.name}</Text>
 
@@ -563,5 +632,27 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     color: colors.textMuted,
     marginBottom: spacing.sm,
+  },
+  voiceHint: {
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
+  },
+  voiceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    flexGrow: 1,
+    minWidth: '42%',
+  },
+  voiceChipHint: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  voiceChipHintActive: {
+    color: 'rgba(255,255,255,0.85)',
   },
 });

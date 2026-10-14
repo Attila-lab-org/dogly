@@ -5,11 +5,14 @@ import { useSession } from '../auth/SessionProvider';
 import { api } from '../../lib/apiClient';
 import { queryKeys } from '../../lib/queryClient';
 
+export type AskVoiceGender = 'FEMALE' | 'MALE';
+
 export type ApiProfile = {
   user_id: string;
   display_name: string | null;
   locale: string | null;
   timezone: string | null;
+  ask_voice_gender?: AskVoiceGender;
   created_at: string;
 };
 
@@ -26,7 +29,8 @@ export async function fetchMe(): Promise<MeResponse> {
 }
 
 export async function patchMe(body: {
-  display_name: string | null;
+  display_name?: string | null;
+  ask_voice_gender?: AskVoiceGender;
 }): Promise<MeResponse> {
   return api.patch<MeResponse>('/v1/me', body);
 }

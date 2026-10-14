@@ -41,6 +41,26 @@ class RealtimeSessionOut(BaseModel):
     expires_at: datetime
 
 
+class LiveSessionCreate(BaseModel):
+    dog_id: str
+
+
+class LiveSessionOut(BaseModel):
+    """Ephemeral OpenAI Realtime credentials for the Live voice room."""
+
+    session_id: str
+    dog_id: str
+    dog_name: str
+    owner_display_name: str | None = None
+    voice: str
+    voice_gender: Literal["FEMALE", "MALE"]
+    client_secret: str
+    client_secret_expires_at: datetime | None = None
+    seconds_remaining: int
+    welcome_text: str
+    status: Literal["ACTIVE", "ENDED", "EXPIRED"] = "ACTIVE"
+
+
 class RealtimeTurnCreate(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     event_id: str | None = Field(default=None, max_length=80)

@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
   useDogProfile,
@@ -48,9 +48,17 @@ import {
   setProfileVisibility as apiSetVisibility,
 } from '@/features/photos/api';
 import { confirmPublicProfile } from '@/lib/confirmAction';
-import { useMeProfile, useUpdateMeProfile } from '@/features/me/api';
+import {
+  useMeProfile,
+  useUpdateMeProfile,
+  type AskVoiceGender,
+} from '@/features/me/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
+const VOICE_OPTIONS: { value: AskVoiceGender; label: string; hint: string }[] = [
+  { value: 'FEMALE', label: 'Femminile', hint: 'Luminosa e chiara' },
+  { value: 'MALE', label: 'Maschile', hint: 'Calda e posata' },
+];
 
 export default function DogEditScreen() {
   const router = useRouter();
@@ -65,6 +73,9 @@ export default function DogEditScreen() {
   const updateMe = useUpdateMeProfile();
   const [ownerName, setOwnerName] = useState(
     meQuery.data?.display_name ?? '',
+  );
+  const [voiceGender, setVoiceGender] = useState<AskVoiceGender>(
+    meQuery.data?.ask_voice_gender === 'MALE' ? 'MALE' : 'FEMALE',
   );
   const [name, setName] = useState(dog.name);
   const [sex, setSex] = useState<DogSex | null>(dog.sex);
@@ -132,7 +143,10 @@ export default function DogEditScreen() {
     if (meQuery.data?.display_name != null) {
       setOwnerName(meQuery.data.display_name);
     }
-  }, [meQuery.data?.display_name]);
+    if (meQuery.data?.ask_voice_gender) {
+      setVoiceGender(meQuery.data.ask_voice_gender);
+    }
+  }, [meQuery.data?.display_name, meQuery.data?.ask_voice_gender]);
 
   const selectAndUploadPhoto = async () => {
     const uri = await pickAvatarPhoto();
@@ -226,8 +240,19 @@ export default function DogEditScreen() {
     try {
       const nextOwnerName = ownerName.trim() || null;
       const currentOwnerName = meQuery.data?.display_name ?? null;
+      const currentVoice = meQuery.data?.ask_voice_gender ?? 'FEMALE';
+      const mePatch: {
+        display_name?: string | null;
+        ask_voice_gender?: AskVoiceGender;
+      } = {};
       if (userId && nextOwnerName !== currentOwnerName) {
-        await updateMe.mutateAsync({ display_name: nextOwnerName });
+        mePatch.display_name = nextOwnerName;
+      }
+      if (userId && voiceGender !== currentVoice) {
+        mePatch.ask_voice_gender = voiceGender;
+      }
+      if (userId && Object.keys(mePatch).length > 0) {
+        await updateMe.mutateAsync(mePatch);
       }
       if (dogId) {
         const profilePatch = profileChangesToUpdateBody(dog, {
@@ -279,7 +304,7 @@ export default function DogEditScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Modifica profilo" />
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
@@ -295,6 +320,50 @@ export default function DogEditScreen() {
         testID="owner-display-name"
       />
 
+      <Text style={styles.label}>Voce di DOGly (Live)</Text>
+      <Text style={styles.voiceHint}>
+        Si sente solo nella conversazione vocale. Puoi cambiarla quando vuoi.
+      </Text>
+      <View style={styles.chips}>
+        {VOICE_OPTIONS.map((option) => (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: voiceGender === option.value }}
+            onPress={() => setVoiceGender(option.value)}
+            style={[
+              styles.chip,
+              styles.voiceChip,
+              voiceGender === option.value && styles.chipActive,
+            ]}
+          >
+            <Ionicons
+              name={option.value === 'FEMALE' ? 'sparkles-outline' : 'planet-outline'}
+              size={16}
+              color={voiceGender === option.value ? '#FFFFFF' : colors.primary}
+            />
+            <View>
+              <Text
+                style={[
+                  styles.chipText,
+                  voiceGender === option.value && styles.chipTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+              <Text
+                style={[
+                  styles.voiceChipHint,
+                  voiceGender === option.value && styles.voiceChipHintActive,
+                ]}
+              >
+                {option.hint}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+
       <Text style={styles.sectionTitle}>{name.trim() || dog.name}</Text>
 
       <Pressable
@@ -304,15 +373,17 @@ export default function DogEditScreen() {
         onPress={() => void selectAndUploadPhoto()}
         style={styles.avatarSection}
       >
-        <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
+        <View style={styles.avatarHalo}>
+          <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
+        </View>
         <View style={styles.photoBadge}>
-          <Ionicons name="camera" size={16} color={colors.primary} />
+          <Ionicons name="camera" size={16} color="#FFFFFF" />
         </View>
       </Pressable>
       <Text style={styles.photoStatus}>
         {uploadingPhoto
           ? 'Caricamento foto in corso…'
-          : 'Foto profilo · caricamento automatico attivo'}
+          : 'Tocca per cambiare la foto profilo'}
       </Text>
 
       <Text style={styles.label}>Nome</Text>
@@ -451,6 +522,7 @@ export default function DogEditScreen() {
 
       <Button
         title="Salva"
+        variant="secondary"
         loading={
           updateMutation.isPending || updateMe.isPending || uploadingPhoto
         }
@@ -462,54 +534,68 @@ export default function DogEditScreen() {
 }
 
 const styles = StyleSheet.create({
+  content: {
+    paddingBottom: spacing.xxxl,
+  },
   feedback: { color: colors.danger, fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed },
   sectionTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
+    color: '#1A2B48',
     marginBottom: spacing.md,
     marginTop: spacing.sm,
   },
   avatarSection: {
     alignSelf: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  avatarHalo: {
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    borderRadius: 60,
+    ...shadows.card,
   },
   photoBadge: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
+    right: 2,
+    bottom: 2,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.teal,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.teal,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   photoStatus: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
-    marginTop: -spacing.md,
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
   label: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
-    color: colors.text,
+    color: '#1A2B48',
     marginBottom: spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    borderColor: '#EDF2F7',
+    borderRadius: 16,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
     fontSize: typography.size.md,
-    color: colors.text,
-    backgroundColor: colors.surface,
+    color: '#1A2B48',
+    backgroundColor: '#FFFFFF',
+    minHeight: 52,
   },
   breedField: {
     marginBottom: spacing.lg,
@@ -524,26 +610,49 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#F1F5F9',
     minHeight: 44,
     justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.teal,
   },
   chipText: {
     color: colors.textSecondary,
+    fontWeight: typography.weight.medium,
   },
   chipTextActive: {
-    color: colors.primary,
+    color: '#FFFFFF',
     fontWeight: typography.weight.semibold,
   },
   visibilityHint: {
     fontSize: typography.size.xs,
     color: colors.textMuted,
     marginBottom: spacing.sm,
+  },
+  voiceHint: {
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
+  },
+  voiceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    flexGrow: 1,
+    minWidth: '42%',
+  },
+  voiceChipHint: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  voiceChipHintActive: {
+    color: 'rgba(255,255,255,0.85)',
   },
 });

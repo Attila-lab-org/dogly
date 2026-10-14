@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Response, status
@@ -11,6 +12,8 @@ from fastapi import APIRouter, Depends, Response, status
 from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.realtime import (
+    LiveSessionCreate,
+    LiveSessionOut,
     RealtimeDecision,
     RealtimeMemoryDecision,
     RealtimeMemoryDecisionOut,
@@ -19,6 +22,13 @@ from app.contracts.realtime import (
     RealtimeSessionOut,
     RealtimeTurnCreate,
     RealtimeTurnOut,
+)
+from app.domains import profiles_db
+from app.providers.openai_live import (
+    DEFAULT_LIVE_SECONDS,
+    build_live_instructions,
+    mint_realtime_client_secret,
+    openai_voice_for_gender,
 )
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains import (
@@ -193,6 +203,129 @@ async def create_realtime_session(
         started_at=row["started_at"],
         expires_at=row["expires_at"],
     )
+
+
+@router.post("/live/sessions", response_model=LiveSessionOut, status_code=201)
+async def create_live_session(
+    body: LiveSessionCreate,
+    state: StateDep,
+    user_id: UserIdDep,
+    _: Annotated[
+        None, Depends(rate_limit("realtime_live_session", limit=6, window_seconds=60))
+    ],
+) -> LiveSessionOut:
+    """Open the dedicated Live voice room (WebRTC via ephemeral OpenAI secret)."""
+    if state.settings.realtime_kill_switch or state.settings.ai_kill_switch:
+        raise ApiError(ErrorCode.AI_BUDGET_EXCEEDED, "Live non disponibile al momento.")
+    if not state.settings.openai_api_key:
+        raise ApiError(ErrorCode.PROCESSING_FAILED, "Live non configurato.")
+
+    if state.engine is not None:
+        profile = await profiles_db.get_or_create_profile(state.engine, user_id)
+        row = await realtime_db.create_session_db(
+            state.engine,
+            user_id=user_id,
+            dog_id=body.dog_id,
+            modality="VOICE",
+            model="gpt-realtime",
+        )
+    else:
+        profile = state.store.ensure_profile(user_id)
+        row = realtime_db.create_session_memory(
+            state.store,
+            user_id=user_id,
+            dog_id=body.dog_id,
+            modality="VOICE",
+            model="gpt-realtime",
+        )
+    if row is None:
+        raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.")
+
+    gender = (
+        profile.ask_voice_gender
+        if getattr(profile, "ask_voice_gender", None) in {"FEMALE", "MALE"}
+        else "FEMALE"
+    )
+    voice = openai_voice_for_gender(gender)
+    previous_topic = (
+        str(row["previous_topic"]) if row.get("previous_topic") else None
+    )
+    owner_name = str(row["display_name"]) if row.get("display_name") else None
+    dog_name = str(row["dog_name"])
+    instructions = build_live_instructions(
+        dog_name=dog_name,
+        owner_name=owner_name,
+        previous_topic=previous_topic,
+    )
+    try:
+        minted = await mint_realtime_client_secret(
+            state.settings,
+            instructions=instructions,
+            voice=voice,
+            safety_identifier=user_id,
+        )
+    except Exception as exc:
+        logger.exception("Live mint failed")
+        if state.engine is not None:
+            await realtime_db.end_session_db(
+                state.engine, session_id=str(row["id"]), user_id=user_id
+            )
+        raise ApiError(
+            ErrorCode.PROVIDER_TIMEOUT,
+            "Non riesco ad aprire la conversazione vocale. Riprova tra poco.",
+        ) from exc
+
+    expires_raw = minted.get("expires_at")
+    expires_at = None
+    if isinstance(expires_raw, (int, float)):
+        expires_at = datetime.fromtimestamp(float(expires_raw), tz=timezone.utc)
+    elif isinstance(expires_raw, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+        except ValueError:
+            expires_at = None
+
+    return LiveSessionOut(
+        session_id=str(row["id"]),
+        dog_id=str(row["dog_id"]),
+        dog_name=dog_name,
+        owner_display_name=owner_name,
+        voice=str(minted.get("voice") or voice),
+        voice_gender=gender,  # type: ignore[arg-type]
+        client_secret=str(minted["value"]),
+        client_secret_expires_at=expires_at,
+        seconds_remaining=DEFAULT_LIVE_SECONDS,
+        welcome_text=(
+            f"Ciao{', ' + owner_name.split()[0] if owner_name else ''}. "
+            f"Sono qui per parlare di {dog_name}."
+        ),
+        status="ACTIVE",
+    )
+
+
+@router.delete("/live/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def end_live_session(
+    session_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+) -> Response:
+    if state.engine is not None:
+        changed = await realtime_db.end_session_db(
+            state.engine, session_id=session_id, user_id=user_id
+        )
+    else:
+        session = state.store.realtime_sessions.get(session_id)
+        changed = bool(
+            session
+            and str(session.get("user_id")) == user_id
+            and session.get("status") == "ACTIVE"
+        )
+        if changed:
+            session["status"] = "ENDED"
+            session["ended_at"] = now_utc()
+    if not changed:
+        raise ApiError(ErrorCode.NOT_FOUND, "Sessione non trovata.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

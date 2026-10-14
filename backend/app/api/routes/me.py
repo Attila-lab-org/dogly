@@ -80,6 +80,11 @@ def _me_response(
             "display_name": profile.display_name,
             "locale": profile.locale,
             "timezone": profile.timezone,
+            "ask_voice_gender": (
+                profile.ask_voice_gender
+                if profile.ask_voice_gender in {"FEMALE", "MALE"}
+                else "FEMALE"
+            ),
             "created_at": profile.created_at,
         },
         plan={
@@ -106,5 +111,6 @@ def _me_response(
             "full_diary": premium,
             "pattern_insights": premium,
             "nutrition_insights": premium,
+            "ask_live": True,
         },
     )

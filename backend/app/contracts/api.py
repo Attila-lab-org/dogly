@@ -69,11 +69,13 @@ class ProfileOut(BaseModel):
     display_name: str | None = None
     locale: str | None = None
     timezone: str | None = None
+    ask_voice_gender: Literal["FEMALE", "MALE"] = "FEMALE"
     created_at: datetime
 
 
 class ProfilePatch(BaseModel):
     display_name: str | None = Field(default=None, max_length=80)
+    ask_voice_gender: Literal["FEMALE", "MALE"] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -87,7 +89,7 @@ class ProfilePatch(BaseModel):
 
     @model_validator(mode="after")
     def require_a_change(self) -> ProfilePatch:
-        if "display_name" not in self.model_fields_set:
+        if not self.model_fields_set:
             raise ValueError("At least one profile field is required")
         return self
 

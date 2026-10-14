@@ -35,6 +35,7 @@ class ProfileRec(BaseModel):
     display_name: str | None = None
     locale: str | None = None
     timezone: str | None = None
+    ask_voice_gender: str = "FEMALE"
     created_at: datetime
     deleted_at: datetime | None = None
 

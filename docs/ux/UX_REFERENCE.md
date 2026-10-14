@@ -197,10 +197,11 @@ con conferma umana. Video solo se serve; niente finta osservazione in diretta.
 3. **Storia** — foto separata dall’album, visibile per 24h.
 4. **Card share** — sanitizzata per share sheet OS (niente URL bucket permanenti).
 
-## Ask Live — Voce (direzione UX, pre-implementazione)
+## Ask Live — Voce (in shipping)
 
 > Conversazione realtime a voce. Costa crediti/minuti. Non è dettatura.
 > Coerente con Hero Home: atmosfera chiara, respiro, presenza — mai orb dark/purple.
+> Route: `/ask/live`. Preferenza voce M/F in Profilo (`ask_voice_gender` → marin/cedar).
 
 ### Posizionamento
 
