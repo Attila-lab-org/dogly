@@ -42,6 +42,7 @@ class _TimelineEntry:
         feedback: FeedbackValue | None = None,
         media_path: str | None = None,
         media_kind: str | None = None,
+        digestive_score: int | None = None,
     ) -> None:
         self.id = rec.id
         self.dog_id = rec.dog_id
@@ -55,6 +56,7 @@ class _TimelineEntry:
         self.feedback = feedback
         self.media_path = media_path
         self.media_kind = media_kind
+        self.digestive_score = digestive_score
 
 
 @router.get("/diary", response_model=DiaryPage)
@@ -144,6 +146,7 @@ async def get_diary(
                         else None
                     ),
                     media_kind="PHOTO",
+                    digestive_score=e.fecal_score_estimate,
                 )
             )
 
@@ -188,6 +191,7 @@ async def get_diary(
                     else None
                 ),
                 media_kind=entry.media_kind,
+                digestive_score=entry.digestive_score,
                 created_at=entry.created_at,
             )
             for entry in page

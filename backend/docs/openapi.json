@@ -7255,6 +7255,17 @@
             ],
             "title": "Media Kind"
           },
+          "digestive_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digestive Score"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -11608,6 +11619,32 @@
             ],
             "title": "Photo Context"
           },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 180.0,
+                "minimum": -180.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
           "assistant_text": {
             "anyOf": [
               {
@@ -11712,6 +11749,22 @@
               }
             ],
             "title": "Behavior Handoff Href"
+          },
+          "food_review_href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Review Href"
+          },
+          "save_to_moments_suggested": {
+            "type": "boolean",
+            "title": "Save To Moments Suggested",
+            "default": false
           },
           "media_invite": {
             "anyOf": [

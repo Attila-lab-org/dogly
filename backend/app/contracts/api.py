@@ -688,6 +688,9 @@ class DiaryItem(BaseModel):
     # paths never cross the public API boundary.
     media_url: str | None = None
     media_kind: Literal["PHOTO", "VIDEO"] | None = None
+    # Digestive events only: fecal score estimate (Bristol-like 1-7), so the
+    # timeline can render an illustrated status cover without the raw photo.
+    digestive_score: int | None = None
     created_at: datetime
 
 

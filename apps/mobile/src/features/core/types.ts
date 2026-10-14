@@ -84,6 +84,8 @@ export interface DiaryEntry {
   /** Signed event media URL when the backend retains the original capture. */
   mediaUri?: string | null;
   mediaKind?: 'PHOTO' | 'VIDEO' | null;
+  /** Solo DIGESTIVE: punteggio fecale stimato (scala 1-7) per la cover illustrata. */
+  digestiveScore?: number | null;
   /** Per behavior: id del risultato; per digestive: id evento fecale */
   refId: string;
 }

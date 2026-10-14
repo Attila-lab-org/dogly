@@ -120,7 +120,8 @@ async def list_diary_page(
                              e.confidence_band::text as confidence_band,
                              bf.value::text as feedback,
                              case when c.retention_state::text = 'DELETED' then null else c.storage_path end as media_path,
-                             'VIDEO'::text as media_kind
+                             'VIDEO'::text as media_kind,
+                             null::int as digestive_score
                       from public.behavior_events e
                       left join public.behavior_captures c on c.id = e.capture_id
                       left join public.behavior_feedback bf on bf.event_id = e.id
@@ -146,7 +147,8 @@ async def list_diary_page(
                              f.confidence_band::text as confidence_band,
                              null::text as feedback,
                              case when f.retention_state::text = 'DELETED' then null else f.image_path end as media_path,
-                             'PHOTO'::text as media_kind
+                             'PHOTO'::text as media_kind,
+                             f.fecal_score_estimate as digestive_score
                       from public.fecal_events f
                       where f.user_id = cast(:user_id as uuid)
                     ) timeline
@@ -213,6 +215,7 @@ async def list_diary_page(
                     else None
                 ),
                 media_kind=row.get("media_kind"),
+                digestive_score=row.get("digestive_score"),
                 created_at=row["created_at"],
             )
             for row in page_rows
