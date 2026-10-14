@@ -18,6 +18,8 @@ export type DeviceLocationResult =
   | { ok: false; reason: LocationFailureReason };
 
 const LOCATION_TIMEOUT_MS = 6_000;
+/** Chat only needs weather optionally — never block the turn for GPS. */
+const CHAT_LOCATION_TIMEOUT_MS = 1_500;
 const PLACES_TIMEOUT_MS = 10_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => T): Promise<T> {
@@ -121,7 +123,12 @@ export async function readDeviceLocationResult(): Promise<DeviceLocationResult> 
 
 /** Best-effort coords for Ask weather; never hangs the chat. */
 export async function readDeviceLocation(): Promise<{ lat: number; lng: number } | null> {
-  const result = await readDeviceLocationResult();
+  const timedOut: DeviceLocationResult = { ok: false, reason: 'timeout' };
+  const result = await withTimeout(
+    readDeviceLocationResult(),
+    CHAT_LOCATION_TIMEOUT_MS,
+    () => timedOut,
+  );
   return result.ok ? { lat: result.lat, lng: result.lng } : null;
 }
 

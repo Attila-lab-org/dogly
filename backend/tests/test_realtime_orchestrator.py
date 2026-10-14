@@ -50,17 +50,22 @@ def test_realtime_reasoning_effort_scales_with_structural_complexity() -> None:
     assert _select_realtime_reasoning_effort(
         settings, user_text="Colleghiamo questi aspetti", domains=["BEHAVIOR", "DIGESTIVE"],
         context=context, history=[], image_attached=False,
+    ) == "low"
+    assert _select_realtime_reasoning_effort(
+        settings, user_text="Colleghiamo questi aspetti", domains=["BEHAVIOR", "DIGESTIVE"],
+        context=context, history=[{"role": "user", "content": "x"}] * 4,
+        image_attached=False,
     ) == "medium"
     complex_context = context.model_copy(update={"items": [object()] * 6})
     assert _select_realtime_reasoning_effort(
         settings, user_text="Metti insieme tutta la storia", domains=["BEHAVIOR", "DIGESTIVE", "NUTRITION"],
         context=complex_context, history=[{"role": "user", "content": "x"}] * 8,
         image_attached=False,
-    ) == "high"
+    ) == "medium"
     assert _select_realtime_reasoning_effort(
         settings, user_text="Guarda questa cacca", domains=["DIGESTIVE"],
         context=context, history=[], image_attached=True,
-    ) == "high"
+    ) == "medium"
 
 
 def test_realtime_reasoning_effort_override_wins() -> None:

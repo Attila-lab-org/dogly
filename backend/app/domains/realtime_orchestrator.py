@@ -6,6 +6,7 @@ memory, the safety layer, or a source of dog facts.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -334,9 +335,16 @@ def _select_realtime_reasoning_effort(
     history: list[dict[str, Any]],
     image_attached: bool,
 ) -> str:
-    """Choose effort from bounded structural signals; config remains an override."""
+    """Choose effort from bounded structural signals; config remains an override.
+
+    gpt-6-astra with ``high`` routinely burns 30–60s per turn. Chat stays at
+    most ``medium`` (photos included); simple turns stay ``low``.
+    """
     if settings.realtime_reasoning_effort:
         return settings.realtime_reasoning_effort
+
+    if image_attached:
+        return "medium"
 
     complexity = 0
     if len(user_text.strip()) > 180 or len(history) >= 4:
@@ -345,10 +353,7 @@ def _select_realtime_reasoning_effort(
         complexity += 1
     if len(history) >= 8 or len(domains) >= 3 or len(context.items) >= 6:
         complexity += 1
-    if image_attached:
-        # Multimodal turns (es. foto feci) meritano sempre ragionamento pieno.
-        return "high"
-    return "high" if complexity >= 3 else "medium" if complexity else "low"
+    return "medium" if complexity >= 2 else "low"
 
 
 def _apply_conversation_policy(
@@ -531,14 +536,20 @@ async def orchestrate_realtime_turn(
         media_context=media_context,
         domains=domains,
     )
+    # Start weather while we assemble the rest of the payload (sync work).
+    weather_task = None
+    if latitude is not None and longitude is not None:
+        weather_task = asyncio.create_task(
+            fetch_local_weather(latitude=latitude, longitude=longitude)
+        )
     open_threads = build_open_threads(
         dog_name=context.dog_name,
         previous_turns=history,
         evidence_items=list(context.items),
     )
     situation = situational_context_now()
-    if latitude is not None and longitude is not None:
-        weather = await fetch_local_weather(latitude=latitude, longitude=longitude)
+    if weather_task is not None:
+        weather = await weather_task
         if weather:
             situation["weather"] = weather
     payload = {
@@ -617,7 +628,9 @@ async def orchestrate_realtime_turn(
         )
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Cap provider wait: effort is bounded to low/medium so 45s is enough
+        # and the mobile client (48s) can surface a retry instead of hanging.
+        async with httpx.AsyncClient(timeout=45.0) as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={

@@ -14,7 +14,8 @@ async def fetch_local_weather(
 ) -> dict[str, Any] | None:
     """Return a compact weather snapshot, or None if unavailable."""
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        # Keep weather optional and cheap: never stall the chat turn.
+        async with httpx.AsyncClient(timeout=1.5) as client:
             response = await client.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={

@@ -1,9 +1,8 @@
 import { api } from '../../lib/apiClient';
 
-// The realtime backend may spend up to one minute reasoning. Keep the
-// conversation request alive slightly longer than the provider timeout so a
-// slow but valid answer is not shown as a network failure in the client.
-export const REALTIME_TURN_TIMEOUT_MS = 65_000;
+// Provider chat timeout is 45s (low/medium Astra). Keep the client slightly
+// above so a late valid answer still lands before we show retry.
+export const REALTIME_TURN_TIMEOUT_MS = 48_000;
 
 export type RealtimeSession = {
   id: string;
