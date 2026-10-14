@@ -118,7 +118,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
+          <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} />
 
           {processingEventId ? (
             <Pressable

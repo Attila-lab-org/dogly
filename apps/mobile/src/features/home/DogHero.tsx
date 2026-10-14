@@ -30,6 +30,8 @@ import { queryKeys } from '../../lib/queryClient';
 import { localDayKey } from '../checkin/persistence';
 import { useCareEvents } from '../care/store';
 import { usePersonalPatterns } from '../patterns/api';
+import { useLifestyle } from '../lifestyle/api';
+import { breedTipFor } from '../dogs/breedTraits';
 import { DogAvatar } from '../core/components';
 import { fetchDiaryPage } from './api';
 import {
@@ -64,7 +66,7 @@ const STARS: ReadonlyArray<{ top: `${number}%`; left: `${number}%`; size: number
   { top: '78%', left: '70%', size: 2 },
 ];
 
-const HERO_ROUTES: Record<Exclude<HeroMessageKind, 'greeting'>, string> = {
+const HERO_ROUTES: Partial<Record<HeroMessageKind, string>> = {
   care: '/care',
   pattern: '/patterns',
   digestive: '/digestive',
@@ -78,16 +80,19 @@ export function DogHero({
   dogId,
   dogName,
   photoUri,
+  breedLabel,
 }: {
   dogId: string;
   dogName: string;
   photoUri?: string | null;
+  breedLabel?: string | null;
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const { userId } = useSession();
   const careEvents = useCareEvents(dogId, dogName);
   const patternsQuery = usePersonalPatterns(dogId);
+  const lifestyle = useLifestyle(dogId);
   const digestiveEnabled =
     Boolean(userId) && isApiConfigured() && isPersistedId(dogId);
   const digestiveQuery = useQuery({
@@ -131,6 +136,14 @@ export function DogHero({
     return Math.floor((Date.now() - Date.parse(last.created_at)) / DAY_MS);
   }, [digestiveEnabled, digestiveQuery.data]);
 
+  const breedTip = useMemo(
+    () =>
+      breedTipFor(breedLabel, dayPart, {
+        timeAlone: lifestyle.profile?.timeAlone ?? null,
+      }),
+    [breedLabel, dayPart, lifestyle.profile],
+  );
+
   const message = useMemo(
     () =>
       selectHeroMessage({
@@ -138,8 +151,11 @@ export function DogHero({
         careHint,
         patternTitle,
         daysSinceDigestive,
+        breedTip,
+        dayKey: localDayKey(now),
+        dogId,
       }),
-    [careHint, patternTitle, daysSinceDigestive],
+    [careHint, patternTitle, daysSinceDigestive, breedTip, dogId],
   );
 
   const [tapLine, setTapLine] = useState<string | null>(null);
@@ -237,9 +253,7 @@ export function DogHero({
 
   const displayText = joyful ? JOYFUL_LINE : (tapLine ?? message.text);
   const route =
-    !joyful && !tapLine && message.kind !== 'greeting'
-      ? HERO_ROUTES[message.kind]
-      : null;
+    !joyful && !tapLine ? (HERO_ROUTES[message.kind] ?? null) : null;
   const words = useMemo(() => splitWords(displayText), [displayText]);
   const wordStep = words.length > 0 ? Math.min(90, 850 / words.length) : 0;
 

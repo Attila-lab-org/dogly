@@ -1,8 +1,11 @@
 /**
- * Hero Home ("il cane ti parla"): selezione del messaggio del fumetto a
- * cascata (solo dati reali), saluto per fascia oraria, battute affettuose
- * e flag "ingresso teatrale già mostrato oggi" su AsyncStorage (backend
- * iniettabile per i test, come in features/checkin/persistence).
+ * Hero Home ("il cane ti parla"): selezione del messaggio del fumetto —
+ * agenda entro 7 giorni vince sempre, poi rotazione giornaliera deterministica
+ * (seed = data + cane) tra pattern, consiglio razza/contesto e promemoria
+ * digestione, infine saluto per fascia oraria. Solo dati reali, mai inventati.
+ * Qui anche le battute affettuose del tap e il flag "ingresso teatrale già
+ * mostrato oggi" su AsyncStorage (backend iniettabile per i test, come in
+ * features/checkin/persistence).
  */
 import type { CareEventType } from '../care/types';
 import { localDayKey, type KeyValueStorage } from '../checkin/persistence';
@@ -34,9 +37,19 @@ export interface HeroMessageInput {
    * undefined = dato non disponibile (mock gate, errore API).
    */
   daysSinceDigestive?: number | null;
+  /** Consiglio razza/contesto già composto (breedTraits); undefined = assente. */
+  breedTip?: string | null;
+  /** Seed della rotazione giornaliera (data locale + cane). */
+  dayKey?: string;
+  dogId?: string;
 }
 
-export type HeroMessageKind = 'care' | 'pattern' | 'digestive' | 'greeting';
+export type HeroMessageKind =
+  | 'care'
+  | 'pattern'
+  | 'breed'
+  | 'digestive'
+  | 'greeting';
 
 export interface HeroMessage {
   kind: HeroMessageKind;
@@ -64,6 +77,24 @@ const GREETINGS: Record<DayPart, string> = {
   evening: 'Buonasera! Che giornata insieme… come ti sembro stasera?',
 };
 
+/**
+ * Indice stabile nel giorno per la rotazione dei candidati: stesso giorno
+ * e stesso cane → stesso messaggio; giorni diversi → candidati diversi.
+ */
+export function dailySeedIndex(
+  dayKey: string,
+  dogId: string,
+  count: number,
+): number {
+  if (count <= 0) return 0;
+  let hash = 0;
+  const key = `${dayKey}:${dogId}`;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return hash % count;
+}
+
 export function selectHeroMessage(input: HeroMessageInput): HeroMessage {
   const hint = input.careHint;
   if (
@@ -76,19 +107,30 @@ export function selectHeroMessage(input: HeroMessageInput): HeroMessage {
       text: `Psst… ${whenLabel(hint.daysUntil)} ho ${CARE_THINGS[hint.eventType]}. Mi tieni la zampa?`,
     };
   }
+  // Rotazione giornaliera deterministica tra i candidati disponibili.
+  const candidates: HeroMessage[] = [];
   const patternTitle = input.patternTitle?.trim();
   if (patternTitle) {
-    return {
+    candidates.push({
       kind: 'pattern',
       text: `Ho scoperto una cosa di me: “${patternTitle}”. Ti incuriosisce?`,
-    };
+    });
+  }
+  const breedTip = input.breedTip?.trim();
+  if (breedTip) {
+    candidates.push({ kind: 'breed', text: breedTip });
   }
   const days = input.daysSinceDigestive;
   if (days !== undefined && (days === null || days >= DIGESTIVE_REMINDER_DAYS)) {
-    return {
+    candidates.push({
       kind: 'digestive',
       text: 'È da un po’ che non controlliamo la mia pupù… per il resto tutto a posto!',
-    };
+    });
+  }
+  if (candidates.length > 0) {
+    return candidates[
+      dailySeedIndex(input.dayKey ?? '', input.dogId ?? '', candidates.length)
+    ];
   }
   return { kind: 'greeting', text: GREETINGS[dayPartForHour(input.hour)] };
 }
