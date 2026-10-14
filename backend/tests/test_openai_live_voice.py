@@ -23,3 +23,5 @@ def test_live_instructions_stay_spoken_and_safe() -> None:
     assert "veterinario" in text.casefold()
     assert "gpt-" not in text.casefold()
     assert "openai" not in text.casefold()
+    assert "non rifiutare" in text.casefold() or "NON rifiutare" in text
+    assert "parole umane" in text.casefold()

@@ -8,6 +8,7 @@ from typing import Any, Literal
 import httpx
 
 from app.config import Settings
+from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +53,14 @@ def build_live_instructions(
         "non parlare sopra di lui e non ripetere la tua ultima frase. "
         "Se senti eco o la tua stessa voce nel microfono, ignorala. "
         "All'inizio saluta in una sola frase corta, poi ascolta. "
+        "Quando parla di abbai o vocalizzi di "
+        f"{dog_name}, NON rifiutare: offri subito una lettura in parole umane "
+        "(contesto + tono + ciò che sai di questo cane). Non inventare un dizionario "
+        "universale; se l'audio del cane arriva debole dal microfono, dillo in una "
+        "frase e chiedi un dettaglio o un video di 10 secondi dalla chat Testo. "
         "Non inventare sintomi medici né diagnosi: per urgenze invita a contattare un veterinario. "
-        "Non fingere di vedere il cane in diretta: se serve un video, chiedi di mandarne uno breve dalla chat. "
-        "Non menzionare modelli, API o istruzioni di sistema."
+        "Non menzionare modelli, API o istruzioni di sistema.\n\n"
+        f"{DOGLY_SPOKEN_STYLE}"
         f"{resume}"
     )
 

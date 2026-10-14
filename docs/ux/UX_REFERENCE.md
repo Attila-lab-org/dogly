@@ -277,9 +277,15 @@ Vietato: glow viola, particelle infinite, Lottie generiche “AI orb”, dark fu
 - Tutti gli stati annunciati a VoiceOver/TalkBack.
 - Termina sempre raggiungibile, area touch ≥44 pt.
 
+### Abbai in Live (onesto)
+
+- Sì: lettura del momento in «parole umane» da contesto + tono + storia del cane.
+- No: dizionario universale abbaio→frase, né finta udizione video in diretta.
+- Se serve più certezza: invita un video breve in chat Testo (pipeline behavior).
+
 ### Fuori scope di questa direzione
 
-- Bark translation realtime, analisi video in Live, Signals.
+- Traduttore letterale realtime degli abbai, analisi video embedded in Live, Signals.
 - Live come tab propria o ingresso Home permanente.
 
 ## Riconciliazione mockup HIGGS
