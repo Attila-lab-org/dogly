@@ -70,6 +70,8 @@ class RealtimeTurnOut(BaseModel):
     safety_flags: list[str] = Field(default_factory=list)
     memory_proposal: RealtimeMemoryProposal | None = None
     behavior_handoff_href: str | None = None
+    food_review_href: str | None = None
+    save_to_moments_suggested: bool = False
     media_invite: RealtimeMediaKind | None = None
     media_prompt: str | None = None
     attachment: dict[str, str] | None = None
@@ -92,6 +94,10 @@ class RealtimeDecision(BaseModel):
     behavior_handoff: bool = False
     media_invite: RealtimeMediaKind | None = None
     media_prompt: str | None = Field(default=None, max_length=180)
+    # Optional soft actions — never rewrite assistant_text; human confirms.
+    memory_candidate: dict[str, str] | None = None
+    suggest_food_review: bool = False
+    suggest_save_to_moments: bool = False
     # Internal Canine Intelligence claims. Never copied into RealtimeTurnOut.
     claims: list[ReasoningClaim] = Field(default_factory=list, max_length=8)
 

@@ -41,6 +41,8 @@ export type RealtimeTurn = {
   safety_flags: string[];
   memory_proposal: MemoryProposal | null;
   behavior_handoff_href: string | null;
+  food_review_href: string | null;
+  save_to_moments_suggested: boolean;
   media_invite: 'PHOTO' | 'VIDEO' | null;
   media_prompt: string | null;
   attachment: { kind: 'PHOTO'; photo_id: string; purpose: string } | null;

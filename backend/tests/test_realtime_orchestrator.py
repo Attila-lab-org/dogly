@@ -90,13 +90,16 @@ def test_openai_schema_is_small_and_server_owned_fields_are_absent() -> None:
     assert schema["additionalProperties"] is False
     assert "suggested_prompts" not in schema["properties"]
     assert "response_mode" not in schema["properties"]
-    assert "memory_candidate" not in schema["properties"]
+    assert "safety_flags" not in schema["properties"]
     assert set(schema["properties"]) == {
         "assistant_text",
         "action_type",
         "action_options",
         "action_prompt",
         "used_source_ids",
+        "memory_candidate",
+        "suggest_food_review",
+        "suggest_save_to_moments",
     }
     assert schema["properties"]["action_type"]["enum"] == [
         "none", "options", "photo", "video"
@@ -109,6 +112,27 @@ def test_memory_requires_explicit_owner_request_outside_gpt() -> None:
         "statement": "Oreo ama dormire sul divano",
         "category": "PREFERENCE",
     }
+
+
+def test_provider_memory_candidate_rejects_episodic_statements() -> None:
+    from app.domains.realtime_orchestrator import memory_candidate_from_provider
+
+    assert memory_candidate_from_provider(
+        {
+            "memory_candidate": {
+                "statement": "Oreo ha paura dei botti",
+                "category": "PREFERENCE",
+            }
+        }
+    ) == {"statement": "Oreo ha paura dei botti", "category": "PREFERENCE"}
+    assert memory_candidate_from_provider(
+        {
+            "memory_candidate": {
+                "statement": "Oggi Oreo ha avuto diarrea",
+                "category": "HEALTH",
+            }
+        }
+    ) is None
 
 
 def test_provider_decision_keeps_contextual_media_invite() -> None:
@@ -284,10 +308,31 @@ async def test_memory_refresh_failure_does_not_invalidate_saved_turn(monkeypatch
     )
 
 
-def test_welcome_keeps_previous_conversation_internal() -> None:
+def test_welcome_stays_generic_without_open_concern() -> None:
     welcome = resume_welcome_text("attilio", "Oreo", "perché Oreo abbaia la sera")
     assert welcome == "Ciao Attilio. Sono qui con te e Oreo. Raccontami cosa vuoi guardare oggi."
-    assert "Ho ancora presente" not in welcome
+    assert "Come sta oggi" not in welcome
+
+
+def test_welcome_checks_in_when_open_concern_exists() -> None:
+    from app.domains.realtime_context import build_open_threads
+
+    threads = build_open_threads(
+        dog_name="Oreo",
+        previous_turns=[
+            {"role": "user", "content": "Oreo ha diarrea da ieri"},
+            {"role": "assistant", "content": "Monitoriamo feci e idratazione."},
+        ],
+    )
+    assert threads
+    welcome = resume_welcome_text(
+        "attilio",
+        "Oreo",
+        "Oreo ha diarrea da ieri",
+        open_thread=threads[0],
+    )
+    assert "Come sta oggi" in welcome
+    assert "diarrea" in welcome.casefold()
 
 
 def test_conversation_topic_ignores_rotating_starter_questions() -> None:

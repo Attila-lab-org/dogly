@@ -36,6 +36,7 @@ from app.domains.realtime_context import (
     CONVERSATION_MESSAGE_LIMIT,
     CONVERSATION_TURN_LIMIT,
     REALTIME_CONTEXT_VERSION,
+    build_open_threads,
     conversation_topic,
     focus_behavior_event,
     focus_digestive_event,
@@ -69,9 +70,22 @@ def _is_owned_active_voice_session(
 
 
 def _welcome_text(
-    owner_name: str | None, dog_name: str, previous_topic: str | None = None
+    owner_name: str | None,
+    dog_name: str,
+    previous_topic: str | None = None,
+    *,
+    previous_turns: list[dict[str, Any]] | None = None,
 ) -> str:
-    return resume_welcome_text(owner_name, dog_name, previous_topic)
+    open_threads = build_open_threads(
+        dog_name=dog_name,
+        previous_turns=previous_turns,
+    )
+    return resume_welcome_text(
+        owner_name,
+        dog_name,
+        previous_topic,
+        open_thread=open_threads[0] if open_threads else None,
+    )
 
 
 async def _refresh_conversation_memory_best_effort(
@@ -155,6 +169,10 @@ async def create_realtime_session(
         )
     if row is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.")
+    previous_topic = (
+        str(row["previous_topic"]) if row.get("previous_topic") else None
+    )
+    previous_turns = list(row.get("previous_turns") or [])
     return RealtimeSessionOut(
         id=str(row["id"]),
         dog_id=str(row["dog_id"]),
@@ -162,11 +180,12 @@ async def create_realtime_session(
         owner_display_name=(
             str(row["display_name"]) if row.get("display_name") else None
         ),
-        previous_topic=None,
+        previous_topic=previous_topic,
         welcome_text=_welcome_text(
             row.get("display_name"),
             str(row["dog_name"]),
-            None,
+            previous_topic,
+            previous_turns=previous_turns,
         ),
         status=row["status"],
         modality=row["modality"],
@@ -409,7 +428,11 @@ async def create_realtime_turn(
                 "attachment_observation": attachment_observation,
             }
         decision_json = decision.model_dump(mode="json")
-        memory_request = natural_memory_candidate(body.text)
+        memory_request = natural_memory_candidate(body.text) or (
+            dict(decision.memory_candidate)
+            if decision.memory_candidate
+            else None
+        )
         if attachment is not None:
             decision_json["attachment"] = attachment
         if state.engine is not None:
@@ -479,6 +502,14 @@ async def create_realtime_turn(
             f"/behavior/capture?dogId={session['dog_id']}"
             if decision.behavior_handoff
             else None
+        ),
+        food_review_href=(
+            "/nutrition/foods"
+            if decision.suggest_food_review
+            else None
+        ),
+        save_to_moments_suggested=bool(
+            decision.suggest_save_to_moments and attachment is not None
         ),
         created_at=row["created_at"],
     )

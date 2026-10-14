@@ -21,6 +21,8 @@ from app.domains.owner_stories import extract_owner_reported_facts
 from app.domains.realtime_context import (
     CONVERSATION_MESSAGE_LIMIT,
     RealtimeDogContext,
+    build_open_threads,
+    situational_context_now,
 )
 from app.knowledge.claim_validation import (
     extract_claims_from_provider_payload,
@@ -146,10 +148,20 @@ _SYSTEM = (
 Per questo turno di chat:
 Usa liberamente la tua conoscenza generale su cani, razze, salute, comportamento e
 digestione: non ti serve un catalogo interno di knowledge cards.
-Personalizza solo con PERSONAL_DOG_CONTEXT (identità, fatti, evidenze, cronologia):
-razza, età, cibo, ricordi e analisi passate di QUESTO cane contano; non inventarli.
+Personalizza solo con PERSONAL_DOG_CONTEXT (identità, fatti, evidenze, cronologia,
+open_threads, situational_context): non inventare fatti su QUESTO cane.
+Se identity.breed_label è presente, usala come riferimento primario di razza.
+Se open_threads non è vuoto e il messaggio è un saluto o una ripresa generica,
+riprendi il filo in modo naturale (es. come sta rispetto a quel punto); se parla
+di altro, non forzare il check-in.
+situational_context.season_northern: usala solo se cambia davvero la lettura.
 Con una foto (anche feci o altro): osserva ciò che appare davvero e dai una lettura
 chiara e utile, collegata al profilo quando pertinente.
+memory_candidate: al massimo un fatto stabile utile da ricordare, altrimenti null
+(niente episodi monouso tipo "oggi").
+suggest_food_review: true solo se ripassare l'alimento attuale è utile ora.
+suggest_save_to_moments: true se la foto è un bel ricordo del cane, non un'analisi
+(es. feci / campione clinico).
 Rispondi al turno corrente. Restituisci il JSON richiesto; action_options risponde
 alla sola domanda del turno. Azioni photo/video solo se quel media cambia davvero
 la lettura; nessun link inventato. used_source_ids cita solo dati personali forniti.
@@ -173,6 +185,9 @@ def openai_realtime_decision_schema() -> dict[str, Any]:
             "action_options",
             "action_prompt",
             "used_source_ids",
+            "memory_candidate",
+            "suggest_food_review",
+            "suggest_save_to_moments",
         ],
         "properties": {
             "assistant_text": {"type": "string"},
@@ -187,8 +202,46 @@ def openai_realtime_decision_schema() -> dict[str, Any]:
             },
             "action_prompt": {"type": ["string", "null"]},
             "used_source_ids": {"type": "array", "items": {"type": "string"}},
+            "memory_candidate": {
+                "type": ["object", "null"],
+                "additionalProperties": False,
+                "required": ["statement", "category"],
+                "properties": {
+                    "statement": {"type": "string"},
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "ROUTINE",
+                            "PREFERENCE",
+                            "DIET",
+                            "HEALTH",
+                            "GENERAL",
+                        ],
+                    },
+                },
+            },
+            "suggest_food_review": {"type": "boolean"},
+            "suggest_save_to_moments": {"type": "boolean"},
         },
     }
+
+
+def memory_candidate_from_provider(raw: dict[str, Any] | None) -> dict[str, str] | None:
+    """Accept an optional GPT memory hint; never invent one server-side here."""
+    if not isinstance(raw, dict):
+        return None
+    candidate = raw.get("memory_candidate")
+    if not isinstance(candidate, dict):
+        return None
+    statement = " ".join(str(candidate.get("statement") or "").split()).strip(" .,:;-")
+    category = str(candidate.get("category") or "").upper()
+    if not statement or len(statement) > 240:
+        return None
+    if category not in {"ROUTINE", "PREFERENCE", "DIET", "HEALTH", "GENERAL"}:
+        return None
+    if any(marker in statement.casefold() for marker in _EPISODIC_MARKERS):
+        return None
+    return {"statement": statement, "category": category}
 
 def _provider_decision(
     content: str,
@@ -231,6 +284,9 @@ def _provider_decision(
             ][:12],
             media_invite=media_invite,
             media_prompt=media_prompt.strip()[:180] if media_prompt else None,
+            memory_candidate=memory_candidate_from_provider(raw),
+            suggest_food_review=bool(raw.get("suggest_food_review")),
+            suggest_save_to_moments=bool(raw.get("suggest_save_to_moments")),
             claims=extract_claims_from_provider_payload(raw),
         )
     except (TypeError, ValidationError):
@@ -479,6 +535,11 @@ async def orchestrate_realtime_turn(
         media_context=media_context,
         domains=domains,
     )
+    open_threads = build_open_threads(
+        dog_name=context.dog_name,
+        previous_turns=history,
+        evidence_items=list(context.items),
+    )
     payload = {
         "personal_dog_context": {
             "dog_id": context.dog_id,
@@ -487,9 +548,11 @@ async def orchestrate_realtime_turn(
             "core_facts": context.core_facts,
             "retrieved_personal_facts": context.stable_facts,
             "relevant_evidence": [item.model_dump(mode="json") for item in context.items],
+            "open_threads": open_threads,
+            "situational_context": situational_context_now(),
             "missing": context.missing,
         },
-        "context_contract": "personal-dog-core-plus-evidence/v1",
+        "context_contract": "personal-dog-core-plus-evidence/v2",
         "conversation": recent_history,
         "conversation_state": {
             "current_message_has_priority": True,

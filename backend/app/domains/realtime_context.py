@@ -197,13 +197,98 @@ def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
     return topic
 
 
+_CONCERN_MARKERS = {
+    "male", "malato", "malata", "diarrea", "vomito", "vomitato", "febbre",
+    "zoppica", "zoppica", "prurito", "sangue", "letarg", "non mangia",
+    "rifiuta", "cacca", "feci", "dolore", "abbaia", "ansia", "paura",
+    "agitato", "convuls", "tosse", "starnut", "orecchio", "occhio",
+}
+
+
+def _compact_thread_summary(text: str, *, limit: int = 90) -> str:
+    cleaned = " ".join((text or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _text_looks_like_open_concern(text: str) -> bool:
+    folded = (text or "").casefold()
+    return any(marker in folded for marker in _CONCERN_MARKERS)
+
+
+def build_open_threads(
+    *,
+    dog_name: str,
+    previous_turns: list[dict[str, Any]] | None = None,
+    evidence_items: list[RealtimeContextItem] | None = None,
+) -> list[dict[str, str]]:
+    """Light continuity hints for Astra — data, not scripts or safety gates."""
+    threads: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add(kind: str, summary: str) -> None:
+        compact = _compact_thread_summary(summary)
+        key = compact.casefold()
+        if not compact or key in seen:
+            return
+        seen.add(key)
+        threads.append({"kind": kind, "summary": compact, "dog_name": dog_name})
+
+    for item in previous_turns or []:
+        role = str(item.get("role") or "")
+        content = str(item.get("content") or "").strip()
+        if role not in {"proprietario", "user"} or not content:
+            continue
+        if _text_looks_like_open_concern(content):
+            add("conversation", content)
+
+    for item in evidence_items or []:
+        if item.source_type in {"DIGESTIVE_EVENT", "BEHAVIOR_EVENT", "CARE_EVENT"}:
+            if _text_looks_like_open_concern(item.summary) or item.source_type in {
+                "DIGESTIVE_EVENT",
+                "CARE_EVENT",
+            }:
+                add(item.source_type.lower(), item.summary)
+
+    return threads[:3]
+
+
+def northern_season_for_month(month: int) -> str:
+    if month in {12, 1, 2}:
+        return "inverno"
+    if month in {3, 4, 5}:
+        return "primavera"
+    if month in {6, 7, 8}:
+        return "estate"
+    return "autunno"
+
+
+def situational_context_now(*, now: datetime | None = None) -> dict[str, Any]:
+    """Calendar/season only — no weather API, no extra safety rules."""
+    stamp = now or datetime.now(UTC)
+    month = int(stamp.month)
+    return {
+        "utc_date": stamp.date().isoformat(),
+        "month": month,
+        "season_northern": northern_season_for_month(month),
+    }
+
+
 def resume_welcome_text(
-    owner_name: str | None, dog_name: str, previous_topic: str | None
+    owner_name: str | None,
+    dog_name: str,
+    previous_topic: str | None = None,
+    open_thread: dict[str, str] | None = None,
 ) -> str:
     first_name = (owner_name or "").strip().split(" ", 1)[0].capitalize()
     hello = f"Ciao {first_name}" if first_name else "Ciao"
-    # La continuità vive nella cronologia interna inviata al reasoner; il
-    # primo messaggio non deve recitare un frammento della conversazione.
+    if open_thread and open_thread.get("summary"):
+        summary = _compact_thread_summary(str(open_thread["summary"]), limit=80)
+        return (
+            f"{hello}. L'ultima volta stavamo seguendo {dog_name} su questo: "
+            f"{summary}. Come sta oggi?"
+        )
     del previous_topic
     return f"{hello}. Sono qui con te e {dog_name}. Raccontami cosa vuoi guardare oggi."
 
