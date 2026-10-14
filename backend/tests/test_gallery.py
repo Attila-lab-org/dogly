@@ -139,6 +139,11 @@ async def test_recent_dog_photos_exclude_stories(
         json={"title": "Storie"},
         headers=auth_headers,
     )
+    chat = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Allegati chat"},
+        headers=auth_headers,
+    )
     moment = await client.post(
         f"/v1/albums/{moments.json()['id']}/photos/init",
         json={"content_type": "image/jpeg", "bytes": 1_024},
@@ -151,6 +156,11 @@ async def test_recent_dog_photos_exclude_stories(
     )
     await client.post(
         f"/v1/albums/{stories.json()['id']}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 1_024},
+        headers=auth_headers,
+    )
+    await client.post(
+        f"/v1/albums/{chat.json()['id']}/photos/init",
         json={"content_type": "image/jpeg", "bytes": 1_024},
         headers=auth_headers,
     )

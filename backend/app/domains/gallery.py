@@ -123,14 +123,14 @@ def list_dog_photos(
     limit: int,
     offset: int = 0,
 ) -> list[DogPhotoOut]:
-    """Return the dog's latest lasting moments, excluding 24-hour stories."""
+    """Return lasting dog moments; exclude stories and chat-only attachments."""
     get_owned_dog(store, user_id=user_id, dog_id=dog_id)
-    story_album_ids = {
+    hidden_album_ids = {
         album.id
         for album in store.dog_albums.values()
         if album.dog_id == dog_id
         and album.owner_id == user_id
-        and album.title.strip().casefold() == "storie"
+        and album.title.strip().casefold() in {"storie", "allegati chat"}
     }
     photos = [
         photo
@@ -138,7 +138,7 @@ def list_dog_photos(
         if photo.dog_id == dog_id
         and photo.owner_id == user_id
         and photo.deleted_at is None
-        and photo.album_id not in story_album_ids
+        and photo.album_id not in hidden_album_ids
     ]
     # Match the PostgreSQL ordering exactly.  The id tie-breaker matters for
     # uploads created in the same clock tick, otherwise memory-backed local

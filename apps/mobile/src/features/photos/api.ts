@@ -5,7 +5,7 @@
 import { apiRequest, getApiBaseUrl } from '../../lib/apiClient';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import { putSignedUpload } from '../../lib/signedUpload';
-import { contentTypeFromUri } from '../dogs/photoUri';
+import { detectImageContentType } from '../dogs/photoUri';
 import type { AlbumPhoto, PhotoAlbum } from './types';
 
 export type GalleryAlbumDto = {
@@ -41,6 +41,16 @@ export const profileVisibilityQueryKey = (dogId: string) =>
   ['dog-profile-visibility', dogId] as const;
 
 const momentsAlbumCache = new Map<string, PhotoAlbum>();
+const chatAttachmentsAlbumCache = new Map<string, PhotoAlbum>();
+
+/** System album for Ask attachments — not shown in Momenti / dog photo feeds. */
+export const CHAT_ATTACHMENTS_ALBUM_TITLE = 'Allegati chat';
+
+const HIDDEN_ALBUM_TITLES = new Set(['storie', 'allegati chat']);
+
+export function isUserFacingAlbum(album: PhotoAlbum): boolean {
+  return !HIDDEN_ALBUM_TITLES.has(album.title.trim().toLocaleLowerCase());
+}
 
 function apiConfigured(): boolean {
   try {
@@ -82,18 +92,15 @@ function mapPhoto(photo: GalleryPhotoDto, fallbackUri = ''): AlbumPhoto {
 
 export async function fetchAlbums(
   dogId: string,
-  options: { includeStories?: boolean } = {},
+  options: { includeHidden?: boolean; includeStories?: boolean } = {},
 ): Promise<PhotoAlbum[]> {
   if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryAlbumDto[] }>(
     `/v1/dogs/${dogId}/albums`,
   );
   const albums = body.items.map(mapAlbum);
-  return options.includeStories
-    ? albums
-    : albums.filter(
-        (album) => album.title.trim().toLocaleLowerCase() !== 'storie',
-      );
+  const includeHidden = options.includeHidden || options.includeStories;
+  return includeHidden ? albums : albums.filter(isUserFacingAlbum);
 }
 
 export async function createAlbum(dogId: string, title: string): Promise<PhotoAlbum> {
@@ -119,6 +126,26 @@ export async function getOrCreateMomentsAlbum(
   }
   const created = await createAlbum(dogId, 'Momenti');
   momentsAlbumCache.set(dogId, created);
+  return created;
+}
+
+export async function getOrCreateChatAttachmentsAlbum(
+  dogId: string,
+): Promise<PhotoAlbum> {
+  const cached = chatAttachmentsAlbumCache.get(dogId);
+  if (cached) return cached;
+  const albums = await fetchAlbums(dogId, { includeHidden: true });
+  const existing = albums.find(
+    (album) =>
+      album.title.trim().toLocaleLowerCase() ===
+      CHAT_ATTACHMENTS_ALBUM_TITLE.toLocaleLowerCase(),
+  );
+  if (existing) {
+    chatAttachmentsAlbumCache.set(dogId, existing);
+    return existing;
+  }
+  const created = await createAlbum(dogId, CHAT_ATTACHMENTS_ALBUM_TITLE);
+  chatAttachmentsAlbumCache.set(dogId, created);
   return created;
 }
 
@@ -172,7 +199,7 @@ export async function uploadAlbumPhoto(
       'Non riesco a leggere la foto sul dispositivo. Sceglila di nuovo.',
     );
   }
-  const contentType = contentTypeFromUri(localUri);
+  const contentType = await detectImageContentType(localUri);
   const created = await apiRequest<{
     photo: GalleryPhotoDto;
     upload: { url: string };

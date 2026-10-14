@@ -21,6 +21,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 | Knowledge Score | Indicatori di ricchezza dati; niente % di confidenza AI |
 | Raw video analisi | TTL **24h** dal completamento; non entra in album |
 | Album | Privati di default; condivisione esterna via share sheet OS |
+| Momenti vs chat | Album Momenti = solo foto del cane; allegati Ask (es. digestione) restano fuori dai Momenti |
 | Profilo pubblico | Opt-in esplicito |
 | Home | Conversazione in primo piano + accessi rapidi + momenti recenti (mock Oreo) |
 | Routine giornata | Timeline oraria del mock = **in scope** (`/dogs/{id}/routine` + `dog_daily_activities`) |

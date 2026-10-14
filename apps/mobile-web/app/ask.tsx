@@ -11,7 +11,7 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type MemoryProposal, type RealtimeSession, type RealtimeTurn } from '@/features/realtime/api';
 import { queryKeys } from '@/lib/queryClient';
-import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
+import { getOrCreateChatAttachmentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
 import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
 import { pickConversationVideo } from '@/features/behavior/videoPicker';
 import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
@@ -107,7 +107,8 @@ export default function AskScreen() {
     let photoId: string | undefined = existingPhotoId;
     try {
       if (attachment && !photoId) {
-        const album = await getOrCreateMomentsAlbum(dog.id);
+        // Chat attachments (incl. digestione) must NOT enter Momenti.
+        const album = await getOrCreateChatAttachmentsAlbum(dog.id);
         const photo = await uploadAlbumPhoto(album.id, attachment.uri, {
           caption: attachment.purpose,
           visibility: 'PRIVATE',
@@ -116,8 +117,6 @@ export default function AskScreen() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-album', album.id] }),
-          queryClient.invalidateQueries({ queryKey: ['gallery-albums', dog.id] }),
-          queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dog.id] }),
         ]);
         setMediaPhase('analyzing');
       }

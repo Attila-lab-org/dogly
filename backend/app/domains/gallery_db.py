@@ -240,7 +240,7 @@ async def list_dog_photos(
                     where p.dog_id = :dog_id
                       and p.owner_id = :user_id
                       and p.deleted_at is null
-                      and lower(btrim(a.title)) <> 'storie'
+                      and lower(btrim(a.title)) not in ('storie', 'allegati chat')
                     order by coalesce(p.taken_at, p.created_at) desc, p.id desc
                     limit :limit
                     offset :offset
