@@ -235,6 +235,8 @@ async def create_realtime_turn(
         }
 
     domains = route_realtime_domains(body.text)
+    if body.context_source == "digestive" and "DIGESTIVE" not in domains:
+        domains = ["DIGESTIVE", *domains][:3]
     # The route and context builder share the same bounded domain contract.
     context_domains = domains
     source_refs: list[dict[str, str]] = []

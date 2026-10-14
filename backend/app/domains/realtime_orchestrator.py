@@ -52,6 +52,31 @@ _GREETING = re.compile(
     r"^\s*(ciao|salve|buongiorno|buonasera|ehi|hey|ciao dogly)[!.?\s]*$",
     re.IGNORECASE,
 )
+
+_DIGESTIVE_MEDIA_TERMS = {
+    "cacca", "feci", "diarrea", "vomito", "vomitato", "pupù", "pupu",
+    "escrementi",
+}
+
+
+def _attachment_focus(
+    *,
+    user_text: str,
+    media_context: str | None,
+    domains: list[RealtimeDomain],
+) -> str:
+    """Give the provider a narrow hint when the owner names the media subject."""
+    words = set(
+        re.findall(
+            r"[\wÀ-ÖØ-öø-ÿ]+",
+            f"{user_text} {media_context or ''}".casefold(),
+        )
+    )
+    if words & _DIGESTIVE_MEDIA_TERMS or "DIGESTIVE" in domains:
+        return "DIGESTIVE_STOOL"
+    if "BEHAVIOR" in domains:
+        return "BEHAVIOR"
+    return "GENERAL"
 def deterministic_safety_interrupt(
     user_text: str, *, dog_name: str | None = None
 ) -> RealtimeDecision | None:
@@ -161,6 +186,13 @@ clinico o psicologico senza un segnale concreto che lo giustifichi.
 Se una foto o un video aggiunge informazioni reali, chiedilo con un invito breve
 e spiega perché può servire. Quando arriva una foto, separa ciò che si vede davvero
 da ciò che non si può verificare.
+L'immagine allegata è l'evidenza principale del turno: identifica prima il soggetto
+che appare davvero. Non dire che "non si vede il cane" se la foto mostra
+intenzionalmente feci, cibo, una parte del corpo o l'ambiente; il cane non deve
+comparire per poter rispondere su quel soggetto. Per una foto di feci, parti da ciò
+che è visibile nelle feci, indica con chiarezza i limiti della foto e non inserire
+istruzioni per fotografare il cane. Usa l'eventuale contesto personale solo dopo
+questa osservazione e solo se cambia la valutazione.
 
 Non diagnosticare e non affermare causalità certe. In caso di segnali urgenti,
 indirizza subito al veterinario.
@@ -469,6 +501,11 @@ async def orchestrate_realtime_turn(
         }
 
     recent_history = _recent_conversation(history)
+    attachment_focus = _attachment_focus(
+        user_text=user_text,
+        media_context=media_context,
+        domains=domains,
+    )
     payload = {
         "personal_dog_context": {
             "dog_id": context.dog_id,
@@ -487,6 +524,7 @@ async def orchestrate_realtime_turn(
             # original history because the GPT context projection strips it.
             "recent_media_invite": _recent_media_invite(history),
             "image_attached": bool(image_url),
+            "attachment_focus": attachment_focus if image_url else None,
             "last_assistant_message": _last_assistant_text(recent_history),
             "instruction": "Riconosci cambi di significato, correzioni e risposte già date; non ripartire dalla vecchia analisi.",
         },

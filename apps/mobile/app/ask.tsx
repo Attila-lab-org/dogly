@@ -67,8 +67,9 @@ export default function AskScreen() {
       if (resumed) {
         setMessages(resumed.messages);
         if (eventId) {
-          const text = 'Ho caricato il video richiesto.';
-          const turn = await createRealtimeTurn(next.id, text, undefined, { eventId, source: 'behavior' });
+          const digestiveHandoff = source === 'digestive';
+          const text = digestiveHandoff ? 'Ho caricato la foto richiesta.' : 'Ho caricato il video richiesto.';
+          const turn = await createRealtimeTurn(next.id, text, undefined, { eventId, source: digestiveHandoff ? 'digestive' : 'behavior' });
           if (!mounted.current) return;
           setMessages([...resumed.messages, { id: 'video-' + eventId, role: 'user', text }, { id: turn.id, role: 'assistant', text: turn.assistant_text, turn }]);
           setFocusedEventId(undefined);
@@ -144,7 +145,7 @@ export default function AskScreen() {
     if (!turn || turn.media_invite !== 'PHOTO' || sending || !session) return;
     const uri = await takeConversationPhoto();
     if (!uri) return;
-    const purpose = turn.media_prompt || `Ti mostro ${dog.name} in questo momento`;
+    const purpose = turn.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
   }, [dog.name, latestAssistant, send, sending, session]);
 

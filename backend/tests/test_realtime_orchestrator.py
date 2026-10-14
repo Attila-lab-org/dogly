@@ -28,6 +28,7 @@ from app.domains.realtime_context import (
 )
 from app.domains.realtime_orchestrator import (
     _apply_conversation_policy,
+    _attachment_focus,
     _provider_decision,
     _select_realtime_reasoning_effort,
     deterministic_safety_interrupt,
@@ -432,6 +433,24 @@ def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
     assert "suggested_prompts" not in _SYSTEM
 
 
+def test_attachment_focus_is_narrow_and_does_not_assume_the_dog_is_visible() -> None:
+    assert _attachment_focus(
+        user_text="Guarda questa foto di feci",
+        media_context="Ti mostro questo momento",
+        domains=["GENERAL"],
+    ) == "DIGESTIVE_STOOL"
+    assert _attachment_focus(
+        user_text="Cosa sta comunicando?",
+        media_context="Fammi vedere il comportamento",
+        domains=["BEHAVIOR"],
+    ) == "BEHAVIOR"
+    assert _attachment_focus(
+        user_text="Guarda questa foto",
+        media_context="Ti mostro questo momento",
+        domains=["GENERAL"],
+    ) == "GENERAL"
+
+
 def test_deterministic_safety_interrupt_precedes_ai() -> None:
     decision = deterministic_safety_interrupt("Oreo fa fatica a respirare")
     assert decision is not None
@@ -794,7 +813,7 @@ async def test_realtime_payload_encodes_uuid_context_for_media_turn(monkeypatch)
     food_id = uuid.uuid4()
     await orchestrate_realtime_turn(
         settings=Settings(realtime_enabled=True, openai_api_key="test-key"),
-        user_text="Cosa noti in questa foto?",
+        user_text="Cosa noti in questa foto di feci?",
         domains=["GENERAL"],
         context=RealtimeDogContext(
             dog_id="dog-1",
@@ -812,6 +831,7 @@ async def test_realtime_payload_encodes_uuid_context_for_media_turn(monkeypatch)
     context_text = content[0]["text"]
     assert str(food_id) in context_text
     assert "2020-01-01T00:00:00+00:00" in context_text
+    assert '"attachment_focus":"DIGESTIVE_STOOL"' in context_text
 
 
 @pytest.mark.asyncio
