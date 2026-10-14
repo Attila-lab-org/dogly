@@ -28,7 +28,7 @@ from app.knowledge.claim_validation import (
 )
 from app.knowledge.reasoning_core import CANINE_REASONING_CORE
 
-REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v5"
+REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v6"
 REALTIME_HISTORY_LIMIT = CONVERSATION_MESSAGE_LIMIT
 
 _URGENT_RULES: tuple[tuple[str, str, str], ...] = (
@@ -150,6 +150,25 @@ da questionario, riepiloghi automatici e consigli generici scollegati.
 Se il proprietario cambia argomento, segui il nuovo messaggio senza trascinare
 il tema precedente. Per riferimenti come "ieri" o "prima", usa la cronologia
 disponibile e non inventare date o dettagli mancanti.
+
+Prima di rispondere, confronta il turno corrente con la cronologia e con i dati
+personali pertinenti: distingui ciò che l'utente ha chiarito, ciò che ha corretto
+e il solo dato ancora mancante che cambia il prossimo passo. Questo lavoro resta
+interno: non mostrare un riepilogo o uno schema di ragionamento.
+Una risposta parziale chiarisce solo i punti a cui risponde. Non interpretare un
+punto non risposto come un no e non chiedere di nuovo quelli già chiariti.
+Se manca un dato decisivo, dai ciò che puoi dire utilmente e fai una sola domanda
+breve su quel dato; non anticipare un elenco di cause o tutti i possibili scenari.
+Le opzioni dell'interfaccia, se presenti, sono risposte alternative a quella stessa
+domanda, non altri quesiti. Non affiancare una richiesta di media alla domanda.
+Dopo un chiarimento, fai avanzare la conversazione: aggiungi solo ciò che cambia
+rispetto alla risposta precedente. Non ripetere spiegazioni o avvertenze già date
+senza un nuovo segnale concreto; se emerge un'urgenza, dai comunque subito
+l'indicazione necessaria. Un generico "sta bene" non annulla un segnale urgente
+specifico già descritto e non conferma automaticamente ogni sintomo assente.
+Usa un dato episodico solo nel suo tempo: ciò che era vero ieri non prova come
+sta oggi. Se i dati pertinenti sono già disponibili e attuali, rispondi senza
+domande aggiuntive. Le ipotesi proposte da DOGly non sono fatti del proprietario.
 
 Rispondi con la lunghezza necessaria alla domanda. Per una richiesta semplice,
 bastano poche frasi. Se chiede un consiglio, dai subito quello principale e
@@ -280,6 +299,13 @@ def _last_assistant_text(history: list[dict[str, Any]]) -> str | None:
     return next((
         item["content"] for item in reversed(history)
         if item.get("role") == "assistant" and item.get("content", "").strip()
+    ), None)
+
+
+def _last_user_text(history: list[dict[str, Any]]) -> str | None:
+    return next((
+        item["content"] for item in reversed(history)
+        if item.get("role") == "user" and item.get("content", "").strip()
     ), None)
 
 
@@ -525,6 +551,7 @@ async def orchestrate_realtime_turn(
             "recent_media_invite": _recent_media_invite(history),
             "image_attached": bool(image_url),
             "attachment_focus": attachment_focus if image_url else None,
+            "last_user_message": _last_user_text(recent_history),
             "last_assistant_message": _last_assistant_text(recent_history),
             "instruction": "Riconosci cambi di significato, correzioni e risposte già date; non ripartire dalla vecchia analisi.",
         },

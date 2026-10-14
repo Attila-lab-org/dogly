@@ -417,6 +417,10 @@ def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
     assert "Non ripetere spiegazioni già date" in _SYSTEM
     assert "trasformare la chat in un questionario" in _SYSTEM
     assert "Non aggiungere una domanda per chiudere automaticamente" in _SYSTEM
+    assert "fai una sola domanda" in _SYSTEM
+    assert "breve su quel dato" in _SYSTEM
+    assert "Non ripetere spiegazioni o avvertenze già date" in _SYSTEM
+    assert "Una risposta parziale chiarisce" in _SYSTEM
     assert "Se non serve una domanda, continua la conversazione" in _SYSTEM
     assert "Evita titoli, elenchi, numerazioni, grassetto, asterischi" in _SYSTEM
     assert "riconosci il legame senza trasformarlo" in _SYSTEM
@@ -1033,6 +1037,8 @@ async def test_realtime_payload_keeps_only_recent_conversation_window(monkeypatc
     assert "recente-4" in payload
     assert body["reasoning_effort"] == "low"
     assert parsed["conversation_state"]["recent_media_invite"] is True
+    assert parsed["conversation_state"]["last_user_message"] == "vecchio-4"
+    assert parsed["conversation_state"]["last_assistant_message"] == "recente-4"
 
 
 @pytest.mark.asyncio
