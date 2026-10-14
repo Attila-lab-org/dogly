@@ -2270,9 +2270,9 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 12000,
+              "maximum": 25000,
               "minimum": 500,
-              "default": 4500,
+              "default": 8000,
               "title": "Radius M"
             }
           },
@@ -5761,6 +5761,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PrivacyExportStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/weather/current": {
+      "get": {
+        "tags": [
+          "weather"
+        ],
+        "summary": "Get Current Weather",
+        "operationId": "get_current_weather_v1_weather_current_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherCurrentOut"
                 }
               }
             }
@@ -10568,6 +10639,17 @@
           "maps_url": {
             "type": "string",
             "title": "Maps Url"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           }
         },
         "type": "object",
@@ -12462,6 +12544,52 @@
           "audio_base64"
         ],
         "title": "VoiceTranscribeRequest"
+      },
+      "WeatherCurrentOut": {
+        "properties": {
+          "temperature_c": {
+            "type": "number",
+            "title": "Temperature C"
+          },
+          "humidity_pct": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Pct"
+          },
+          "weather_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Code"
+          },
+          "wind_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Speed Kmh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "temperature_c"
+        ],
+        "title": "WeatherCurrentOut"
       },
       "WeightEventCreate": {
         "properties": {

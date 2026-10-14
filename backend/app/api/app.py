@@ -32,6 +32,7 @@ from app.api.routes import (
     signals,
     subscription,
     voice,
+    weather,
     webhooks,
 )
 from app.contracts.errors import ApiError, ErrorBody, ErrorCode
@@ -186,6 +187,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.include_router(subscription.router, prefix="/v1", tags=["subscription", "usage"])
     app.include_router(devices.router, prefix="/v1", tags=["devices"])
     app.include_router(privacy.router, prefix="/v1", tags=["privacy"])
+    app.include_router(weather.router, prefix="/v1", tags=["weather"])
     app.include_router(webhooks.router, prefix="/v1", tags=["webhooks"])
     return app
 

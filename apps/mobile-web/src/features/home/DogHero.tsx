@@ -6,7 +6,12 @@
  * (tap = boing + cuoricini/zampine, long-press = scodinzolata),
  * fumetto con coreografia "sta pensando" (3 puntini) poi parola per
  * parola al primo accesso del giorno, particella ambientale ogni ~8s.
- * Tutto sull'UI thread Reanimated; reduce-motion → scena statica.
+ * Il fumetto è un mazzo di consigli contestuali (buildHeroTips in
+ * dogHeroCopy.ts): urgent (agenda, meteo estremo) prima, il resto
+ * mescolato per giorno; tap sull'avatar = carta successiva, a fine mazzo
+ * rimescola. Le carte con adviceLine mostrano la seconda voce (consiglio
+ * pratico) sotto un divisore. Tutto sull'UI thread Reanimated;
+ * reduce-motion → scena statica.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -32,24 +37,29 @@ import { CuteIcon } from '../../components/CuteIcon';
 import { useSession } from '../auth/SessionProvider';
 import { isApiConfigured } from '../auth/env';
 import { isPersistedId } from '../../lib/persistedId';
+import { api } from '../../lib/apiClient';
 import { queryKeys } from '../../lib/queryClient';
 import { localDayKey } from '../checkin/persistence';
 import { useCareEvents } from '../care/store';
 import { usePersonalPatterns } from '../patterns/api';
 import { useLifestyle } from '../lifestyle/api';
+import { listFeedingPeriods, listFoods } from '../nutrition/api';
+import { readDeviceLocation } from '../places/api';
 import { breedTipFor } from '../dogs/breedTraits';
 import { DogAvatar } from '../core/components';
 import { fetchDiaryPage } from './api';
 import {
   JOYFUL_LINE,
+  ageYearsFrom,
+  buildHeroTips,
   dayPartForHour,
   loadHeroShownDay,
   randomAffectionateLine,
   saveHeroShownDay,
-  selectHeroMessage,
+  shuffleTips,
   splitWords,
   type DayPart,
-  type HeroMessageKind,
+  type HeroWeather,
 } from './dogHeroCopy';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -104,11 +114,12 @@ const BURST_PARTICLES: ReadonlyArray<{ dx: number; delay: number; tone: 'accent'
   { dx: 18, delay: 260, tone: 'light' },
 ];
 
-const HERO_ROUTES: Partial<Record<HeroMessageKind, string>> = {
-  care: '/care',
-  pattern: '/patterns',
-  digestive: '/digestive',
-};
+interface ApiWeatherCurrent {
+  temperature_c: number;
+  humidity_pct: number | null;
+  weather_code: number | null;
+  wind_speed_kmh: number | null;
+}
 
 function startOfLocalDay(value: Date): number {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
@@ -364,24 +375,73 @@ export function DogHero({
   dogName,
   photoUri,
   breedLabel,
+  birthDate,
+  ageLabel,
+  sizeLabel,
 }: {
   dogId: string;
   dogName: string;
   photoUri?: string | null;
   breedLabel?: string | null;
+  birthDate?: string | null;
+  ageLabel?: string | null;
+  sizeLabel?: string | null;
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
-  const { userId } = useSession();
+  const { userId, usingMockGate } = useSession();
   const careEvents = useCareEvents(dogId, dogName);
   const patternsQuery = usePersonalPatterns(dogId);
   const lifestyle = useLifestyle(dogId);
-  const digestiveEnabled =
-    Boolean(userId) && isApiConfigured() && isPersistedId(dogId);
+  const realEnabled =
+    Boolean(userId) && isApiConfigured() && !usingMockGate && isPersistedId(dogId);
   const digestiveQuery = useQuery({
     queryKey: [...queryKeys.diary(userId ?? 'anon', dogId), 'hero-last-digestive'],
     queryFn: () => fetchDiaryPage({ dogId, domain: 'DIGESTIVE', limit: 1 }),
-    enabled: digestiveEnabled,
+    enabled: realEnabled,
+  });
+
+  // Meteo: posizione gentile dopo il mount (mai bloccante), poi GET con
+  // cache 30min. Negato/errore → undefined → il mazzo usa lo stagionale.
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (!realEnabled) return;
+    let alive = true;
+    void readDeviceLocation().then((position) => {
+      if (alive && position) setCoords(position);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [realEnabled]);
+  const weatherQuery = useQuery({
+    queryKey: ['hero-weather', coords?.lat ?? 0, coords?.lng ?? 0],
+    queryFn: async () => {
+      const data = await api.get<ApiWeatherCurrent | undefined>(
+        `/v1/weather/current?lat=${coords?.lat}&lng=${coords?.lng}`,
+      );
+      return data ?? null;
+    },
+    enabled: realEnabled && coords !== null,
+    staleTime: 30 * 60 * 1000,
+  });
+  const weather: HeroWeather | null = weatherQuery.data
+    ? {
+        temperatureC: weatherQuery.data.temperature_c,
+        weatherCode: weatherQuery.data.weather_code,
+      }
+    : null;
+
+  // Alimento attivo: stesse queryKeys di DogCareOverview → cache condivisa.
+  const foodsQuery = useQuery({
+    queryKey: queryKeys.foods(userId ?? 'anon', dogId),
+    queryFn: () => listFoods(dogId),
+    enabled: realEnabled,
+  });
+  const periodsQuery = useQuery({
+    queryKey: [...queryKeys.foods(userId ?? 'anon', dogId), 'periods'],
+    queryFn: () => listFeedingPeriods(dogId),
+    enabled: realEnabled,
   });
 
   const now = new Date();
@@ -413,11 +473,11 @@ export function DogHero({
   }, [patternsQuery.live, patternsQuery.isError, patternsQuery.patterns]);
 
   const daysSinceDigestive = useMemo(() => {
-    if (!digestiveEnabled || !digestiveQuery.data) return undefined;
+    if (!realEnabled || !digestiveQuery.data) return undefined;
     const last = digestiveQuery.data.items[0];
     if (!last) return null;
     return Math.floor((Date.now() - Date.parse(last.created_at)) / DAY_MS);
-  }, [digestiveEnabled, digestiveQuery.data]);
+  }, [realEnabled, digestiveQuery.data]);
 
   const breedTip = useMemo(
     () =>
@@ -427,19 +487,70 @@ export function DogHero({
     [breedLabel, dayPart, lifestyle.profile],
   );
 
-  const message = useMemo(
+  const activeFood = useMemo(() => {
+    if (!realEnabled || !foodsQuery.data || !periodsQuery.data) return undefined;
+    const period = periodsQuery.data.find((item) => item.end_at == null);
+    const food = foodsQuery.data.find(
+      (item) => item.id === period?.food_product_id,
+    );
+    const name = [food?.brand, food?.name].filter(Boolean).join(' ').trim();
+    return {
+      name: name || null,
+      months: period
+        ? (Date.now() - Date.parse(period.start_at)) / (30.44 * DAY_MS)
+        : null,
+    };
+  }, [realEnabled, foodsQuery.data, periodsQuery.data]);
+
+  const baseTips = useMemo(
     () =>
-      selectHeroMessage({
+      buildHeroTips({
+        dogId,
+        dayKey: localDayKey(now),
         hour: now.getHours(),
+        month: now.getMonth() + 1,
         careHint,
         patternTitle,
         daysSinceDigestive,
         breedTip,
-        dayKey: localDayKey(now),
-        dogId,
+        weather,
+        ageYears: ageYearsFrom(birthDate, ageLabel, now),
+        smallSize: /piccola|toy|mini|nano/i.test(sizeLabel ?? ''),
+        activeFoodName: activeFood?.name ?? null,
+        activeFoodMonths: activeFood?.months ?? null,
+        foodDataKnown: activeFood !== undefined,
       }),
-    [careHint, patternTitle, daysSinceDigestive, breedTip, dogId],
+    [
+      dogId,
+      careHint,
+      patternTitle,
+      daysSinceDigestive,
+      breedTip,
+      weather,
+      birthDate,
+      ageLabel,
+      sizeLabel,
+      activeFood,
+    ],
   );
+
+  const [round, setRound] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
+  const tips = useMemo(() => {
+    if (round === 0) return baseTips;
+    const urgent = baseTips.filter((tip) => tip.priority === 'urgent');
+    const rest = shuffleTips(
+      baseTips.filter((tip) => tip.priority === 'normal'),
+      Math.random,
+    );
+    return [...urgent, ...rest];
+  }, [baseTips, round]);
+
+  useEffect(() => {
+    setTipIndex(0);
+  }, [baseTips]);
+
+  const tip = tips[Math.min(tipIndex, tips.length - 1)];
 
   const [tapLine, setTapLine] = useState<string | null>(null);
   const [joyful, setJoyful] = useState(false);
@@ -528,8 +639,20 @@ export function DogHero({
 
   const onAvatarPress = () => {
     setJoyful(false);
-    setTapLine(randomAffectionateLine());
     setBurstTick((tick) => tick + 1);
+    if (tips.length > 1) {
+      // Mazzo a più carte: il tap avanza alla carta successiva; a fine
+      // mazzo rimescola (non deterministico) e riparte dall'inizio.
+      setTapLine(null);
+      if (tipIndex + 1 >= tips.length) {
+        setRound((value) => value + 1);
+        setTipIndex(0);
+      } else {
+        setTipIndex(tipIndex + 1);
+      }
+    } else {
+      setTapLine(randomAffectionateLine());
+    }
     if (reducedMotion) return;
     tapScale.value = withSequence(
       withSpring(1.12, { damping: 5, stiffness: 220 }),
@@ -552,16 +675,17 @@ export function DogHero({
     );
   };
 
-  const displayText = joyful ? JOYFUL_LINE : (tapLine ?? message.text);
-  const route =
-    !joyful && !tapLine ? (HERO_ROUTES[message.kind] ?? null) : null;
+  const displayText = joyful ? JOYFUL_LINE : (tapLine ?? tip.dogLine);
+  const adviceText = !joyful && !tapLine ? tip.adviceLine : undefined;
+  const route = !joyful && !tapLine ? tip.route : undefined;
+  const theatrical = entrance === 'animate' && tipIndex === 0;
   const words = useMemo(() => splitWords(displayText), [displayText]);
   const wordStep = words.length > 0 ? Math.min(90, 850 / words.length) : 0;
 
   const bubbleBody =
-    entrance === 'animate' && !thinkingDone ? (
+    theatrical && !thinkingDone ? (
       <ThinkingDots />
-    ) : entrance === 'animate' ? (
+    ) : theatrical ? (
       <Text
         style={styles.bubbleText}
         accessible
@@ -578,7 +702,26 @@ export function DogHero({
         ))}
       </Text>
     ) : (
-      <Text style={styles.bubbleText}>{displayText}</Text>
+      <Animated.View
+        key={tip.id + (joyful ? ':joy' : tapLine ?? '')}
+        entering={reducedMotion ? undefined : FadeIn.duration(220)}
+      >
+        <Text style={styles.bubbleText}>{displayText}</Text>
+        {adviceText ? (
+          <View style={styles.adviceWrap}>
+            <View style={styles.adviceDivider} />
+            <View style={styles.adviceRow}>
+              <CuteIcon
+                name="paw"
+                size={12}
+                color={colors.accent}
+                secondary={colors.accent}
+              />
+              <Text style={styles.adviceText}>{adviceText}</Text>
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
     );
 
   return (
@@ -638,9 +781,7 @@ export function DogHero({
       <View style={styles.bubbleWrap}>
         <Pressable
           accessibilityRole={route ? 'button' : undefined}
-          accessibilityLabel={
-            route ? `${displayText} Tocca per aprire` : displayText
-          }
+          accessibilityLabel={`${displayText}${adviceText ? `. ${adviceText}` : ''}${route ? ' Tocca per aprire' : ''}`}
           disabled={!route}
           onPress={route ? () => router.push(route as never) : undefined}
           style={({ pressed }) => [
@@ -812,6 +953,25 @@ const styles = StyleSheet.create({
   },
   bubbleHint: {
     alignSelf: 'flex-end',
+  },
+  adviceWrap: {
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+  },
+  adviceDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  adviceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  adviceText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   tail: {
     position: 'absolute',

@@ -125,7 +125,7 @@ export default function HomeScreen() {
           ) : null}
 
           <Animated.View entering={sceneEnter(0)}>
-            <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} />
+            <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} birthDate={dog.birthDate} ageLabel={dog.ageLabel} sizeLabel={dog.sizeLabel} />
           </Animated.View>
 
           {processingEventId ? (

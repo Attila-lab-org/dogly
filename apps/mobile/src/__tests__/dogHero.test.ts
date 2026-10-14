@@ -11,6 +11,8 @@
 import {
   DIGESTIVE_REMINDER_DAYS,
   HERO_CARE_WINDOW_DAYS,
+  ageYearsFrom,
+  buildHeroTips,
   dailySeedIndex,
   dayPartForHour,
   loadHeroShownDay,
@@ -18,8 +20,10 @@ import {
   saveHeroShownDay,
   selectHeroMessage,
   setHeroStorageBackend,
+  shuffleTips,
   splitWords,
   type HeroMessageInput,
+  type HeroTipsInput,
 } from '../features/home/dogHeroCopy';
 import {
   breedArchetypeFor,
@@ -253,8 +257,158 @@ describe('breed archetypes', () => {
   });
 });
 
-describe('hero shown-day persistence', () => {
-  it('roundtrips the day key scoped per dog', async () => {
+describe('buildHeroTips deck', () => {
+  const baseInput: HeroTipsInput = {
+    dogId: 'dog-1',
+    dayKey: '2026-08-03',
+    hour: 9,
+    month: 8,
+  };
+
+  const ids = (input: HeroTipsInput) => buildHeroTips(input).map((t) => t.id);
+
+  it('care event is always the first card (urgent beats everything)', () => {
+    const tips = buildHeroTips({
+      ...baseInput,
+      careHint: { eventType: 'VACCINE', daysUntil: 2 },
+      weather: { temperatureC: 34, weatherCode: 1 },
+      patternTitle: 'Si gratta dopo la pioggia',
+    });
+    expect(tips[0].id).toBe('care:VACCINE:2');
+    expect(tips[0].priority).toBe('urgent');
+    expect(tips[0].route).toBe('/care');
+    expect(tips[0].adviceLine).toBeTruthy();
+    // meteo estremo: secondo urgente
+    expect(tips[1].id).toBe('weather:hot');
+    expect(tips[1].priority).toBe('urgent');
+  });
+
+  it('same day same deck, different days shuffle the normal cards', () => {
+    const first = ids(baseInput);
+    expect(ids(baseInput)).toEqual(first);
+    const firstTips = new Set<string>();
+    for (let day = 1; day <= 30; day += 1) {
+      const dayKey = `2026-09-${String(day).padStart(2, '0')}`;
+      firstTips.add(buildHeroTips({ ...baseInput, dayKey, month: 9 })[0].id);
+    }
+    expect(firstTips.size).toBeGreaterThan(1);
+  });
+
+  it('never invents data: empty input yields greeting + safe evergreen tips', () => {
+    const tips = buildHeroTips(baseInput);
+    expect(tips.every((tip) => tip.priority === 'normal')).toBe(true);
+    expect(ids(baseInput)).toContain('greeting');
+    expect(ids(baseInput)).toContain('season:summer');
+    expect(ids(baseInput)).toContain('evergreen:water');
+    expect(ids(baseInput).some((id) => id.startsWith('weather:'))).toBe(false);
+  });
+
+  it('weather produces the right urgent cards', () => {
+    expect(ids({ ...baseInput, weather: { temperatureC: 33, weatherCode: 0 } })[0])
+      .toBe('weather:hot');
+    expect(ids({ ...baseInput, weather: { temperatureC: 2, weatherCode: 0 } })[0])
+      .toBe('weather:cold');
+    expect(ids({ ...baseInput, weather: { temperatureC: 18, weatherCode: 61 } })[0])
+      .toBe('weather:rain');
+    expect(ids({ ...baseInput, weather: { temperatureC: -1, weatherCode: 73 } })[0])
+      .toBe('weather:snow');
+    // mite → carta normale, niente urgente; niente stagionale se c'è meteo
+    const mild = buildHeroTips({
+      ...baseInput,
+      weather: { temperatureC: 21, weatherCode: 1 },
+    });
+    expect(mild.some((tip) => tip.id === 'weather:mild')).toBe(true);
+    expect(mild.some((tip) => tip.id.startsWith('season:'))).toBe(false);
+    expect(mild.every((tip) => tip.priority === 'normal')).toBe(true);
+  });
+
+  it('cold advice mentions the coat for small dogs only', () => {
+    const cold = (smallSize: boolean) =>
+      buildHeroTips({
+        ...baseInput,
+        smallSize,
+        weather: { temperatureC: 0, weatherCode: 1 },
+      })[0];
+    expect(cold(true).adviceLine).toContain('cappottino');
+    expect(cold(false).adviceLine).not.toContain('cappottino');
+  });
+
+  it('puppy and senior cards follow age', () => {
+    const puppy = ids({ ...baseInput, ageYears: 0.5 });
+    expect(puppy).toContain('age:puppy:explore');
+    expect(puppy).toContain('age:puppy:teeth');
+    const senior = ids({ ...baseInput, ageYears: 9 });
+    expect(senior).toContain('age:senior:joints');
+    const adult = ids({ ...baseInput, ageYears: 4 });
+    expect(adult.some((id) => id.startsWith('age:'))).toBe(false);
+  });
+
+  it('food cards: same food >= 3 months, missing food, fresh food skipped', () => {
+    const same = buildHeroTips({
+      ...baseInput,
+      foodDataKnown: true,
+      activeFoodName: 'Canistar Adult',
+      activeFoodMonths: 4,
+    });
+    const sameCard = same.find((tip) => tip.id.startsWith('food:same'));
+    expect(sameCard?.dogLine).toContain('Canistar Adult');
+    expect(sameCard?.route).toBe('/nutrition/foods');
+    expect(sameCard?.adviceLine).toContain('veterinario');
+
+    const missing = ids({ ...baseInput, foodDataKnown: true, activeFoodName: null });
+    expect(missing).toContain('food:missing');
+
+    const fresh = ids({
+      ...baseInput,
+      foodDataKnown: true,
+      activeFoodName: 'Canistar Adult',
+      activeFoodMonths: 1,
+    });
+    expect(fresh.some((id) => id.startsWith('food:'))).toBe(false);
+
+    // dati non caricati → nessuna carta alimentazione inventata
+    expect(ids(baseInput).some((id) => id.startsWith('food:'))).toBe(false);
+  });
+
+  it('digestive reminder and pattern carry route and advice', () => {
+    const tips = buildHeroTips({
+      ...baseInput,
+      daysSinceDigestive: DIGESTIVE_REMINDER_DAYS,
+      patternTitle: 'Dorme dopo pranzo',
+    });
+    const digestive = tips.find((tip) => tip.id === 'digestive:reminder');
+    expect(digestive?.route).toBe('/digestive');
+    expect(digestive?.adviceLine).toBeTruthy();
+    const pattern = tips.find((tip) => tip.id === 'pattern:Dorme dopo pranzo');
+    expect(pattern?.route).toBe('/patterns');
+    expect(pattern?.adviceLine).toBeTruthy();
+  });
+
+  it('shuffleTips keeps every card exactly once', () => {
+    const tips = buildHeroTips(baseInput);
+    const shuffled = shuffleTips(tips, Math.random);
+    expect(shuffled.map((t) => t.id).sort()).toEqual(
+      tips.map((t) => t.id).sort(),
+    );
+  });
+});
+
+describe('ageYearsFrom', () => {
+  it('prefers birthDate over the label', () => {
+    const now = new Date('2026-08-03T12:00:00');
+    expect(ageYearsFrom('2021-08-01', null, now)).toBeCloseTo(5, 0);
+    expect(ageYearsFrom('2026-02-01', null, now)).toBeCloseTo(0.5, 1);
+  });
+
+  it('parses italian age labels and bails out honestly', () => {
+    expect(ageYearsFrom(null, '5 anni')).toBe(5);
+    expect(ageYearsFrom(null, '8 mesi')).toBeCloseTo(8 / 12, 5);
+    expect(ageYearsFrom(null, 'Taglia media')).toBeNull();
+    expect(ageYearsFrom(undefined, undefined)).toBeNull();
+  });
+});
+
+describe('hero shown-day persistence', () => {  it('roundtrips the day key scoped per dog', async () => {
     setHeroStorageBackend(memoryStorage());
     expect(await loadHeroShownDay('dog-1')).toBeNull();
     await saveHeroShownDay(localDayKey(), 'dog-1');
