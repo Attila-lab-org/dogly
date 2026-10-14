@@ -24,7 +24,6 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchDogPhotos } from '@/features/photos/api';
 import { isPersistedId } from '@/lib/persistedId';
 import { useSession } from '@/features/auth/SessionProvider';
-import { CheckInModal } from '@/features/checkin/CheckInModal';
 import { purchasesEnabled } from '@/mocks/entitlements';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
@@ -195,7 +194,6 @@ export default function HomeScreen() {
           ) : null}
         </ScrollView>
       </SafeAreaView>
-      <CheckInModal dogId={dog.id} dogName={dog.name} mockGate={usingMockGate} />
     </View>
   );
 }

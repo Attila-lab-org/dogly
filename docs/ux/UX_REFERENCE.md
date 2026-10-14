@@ -80,7 +80,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 - Riga Storie orizzontale + aggiunta rapida.
 - Dog card senza Knowledge Score.
 - Nessun check-in fisso in pagina.
-- All’apertura: modal tenero (scodinzolio) che sparisce dopo la risposta.
+- Nessun modal di check-in all’apertura.
 - CTA “SCOPRI I SEGNALI DI {NOME}”, digestione, ultima analisi, quota.
 - Dogly Signals non compare nella Home finché il servizio è sospeso.
 - Il prossimo appuntamento compare solo nei sette giorni precedenti, senza
