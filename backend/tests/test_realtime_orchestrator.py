@@ -325,6 +325,7 @@ def test_welcome_checks_in_when_open_concern_exists() -> None:
         ],
     )
     assert threads
+    assert threads[0]["tone"] == "concern"
     welcome = resume_welcome_text(
         "attilio",
         "Oreo",
@@ -333,6 +334,31 @@ def test_welcome_checks_in_when_open_concern_exists() -> None:
     )
     assert "Come sta oggi" in welcome
     assert "diarrea" in welcome.casefold()
+
+
+def test_welcome_recalls_positive_moments_too() -> None:
+    from app.domains.realtime_context import build_open_threads
+
+    threads = build_open_threads(
+        dog_name="Oreo",
+        previous_turns=[
+            {
+                "role": "user",
+                "content": "Ieri al parco Oreo era felicissimo con gli altri cani",
+            },
+            {"role": "assistant", "content": "Si vede che gli fa bene socializzare."},
+        ],
+    )
+    assert threads
+    assert threads[0]["tone"] == "positive"
+    welcome = resume_welcome_text(
+        "attilio",
+        "Oreo",
+        threads[0]["summary"],
+        open_thread=threads[0],
+    )
+    assert "Com'è andata dopo" in welcome
+    assert "felicissimo" in welcome.casefold()
 
 
 def test_conversation_topic_ignores_rotating_starter_questions() -> None:

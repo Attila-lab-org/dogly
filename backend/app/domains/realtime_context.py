@@ -199,9 +199,15 @@ def conversation_topic(user_texts: list[str], *, dog_name: str) -> str:
 
 _CONCERN_MARKERS = {
     "male", "malato", "malata", "diarrea", "vomito", "vomitato", "febbre",
-    "zoppica", "zoppica", "prurito", "sangue", "letarg", "non mangia",
-    "rifiuta", "cacca", "feci", "dolore", "abbaia", "ansia", "paura",
-    "agitato", "convuls", "tosse", "starnut", "orecchio", "occhio",
+    "zoppica", "prurito", "sangue", "letarg", "non mangia", "rifiuta",
+    "cacca", "feci", "dolore", "abbaia", "ansia", "paura", "agitato",
+    "convuls", "tosse", "starnut", "orecchio", "occhio",
+}
+_POSITIVE_MARKERS = {
+    "felic", "content", "bello", "bella", "bravo", "brava", "gioco", "gioca",
+    "passeggiata", "parco", "coccole", "progress", "miglior", "tranquill",
+    "rilass", "ador", "amore", "tener", "social", "amico", "cucciol",
+    "nuovo trucco", "obbed", "calmo", "calma",
 }
 
 
@@ -212,9 +218,25 @@ def _compact_thread_summary(text: str, *, limit: int = 90) -> str:
     return cleaned[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
-def _text_looks_like_open_concern(text: str) -> bool:
+def _thread_tone(text: str) -> str | None:
+    """Return concern | positive | None for light continuity matching."""
     folded = (text or "").casefold()
-    return any(marker in folded for marker in _CONCERN_MARKERS)
+    if any(marker in folded for marker in _CONCERN_MARKERS):
+        return "concern"
+    if any(marker in folded for marker in _POSITIVE_MARKERS):
+        return "positive"
+    return None
+
+
+def _is_substantive_owner_line(text: str) -> bool:
+    cleaned = " ".join((text or "").split())
+    if not cleaned or len(cleaned) < 12:
+        return False
+    if _RESUME_GREETING.fullmatch(cleaned):
+        return False
+    if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
+        return False
+    return True
 
 
 def build_open_threads(
@@ -223,33 +245,55 @@ def build_open_threads(
     previous_turns: list[dict[str, Any]] | None = None,
     evidence_items: list[RealtimeContextItem] | None = None,
 ) -> list[dict[str, str]]:
-    """Light continuity hints for Astra — data, not scripts or safety gates."""
+    """Light continuity hints for Astra — good and hard moments alike."""
     threads: list[dict[str, str]] = []
     seen: set[str] = set()
 
-    def add(kind: str, summary: str) -> None:
+    def add(kind: str, summary: str, *, tone: str) -> None:
         compact = _compact_thread_summary(summary)
         key = compact.casefold()
         if not compact or key in seen:
             return
         seen.add(key)
-        threads.append({"kind": kind, "summary": compact, "dog_name": dog_name})
+        threads.append(
+            {
+                "kind": kind,
+                "tone": tone,
+                "summary": compact,
+                "dog_name": dog_name,
+            }
+        )
 
+    last_substantive: str | None = None
     for item in previous_turns or []:
         role = str(item.get("role") or "")
         content = str(item.get("content") or "").strip()
         if role not in {"proprietario", "user"} or not content:
             continue
-        if _text_looks_like_open_concern(content):
-            add("conversation", content)
+        if _is_substantive_owner_line(content):
+            last_substantive = content
+        tone = _thread_tone(content)
+        if tone:
+            add("conversation", content, tone=tone)
+
+    # Fallback: remember the last real topic even without keyword hits
+    # (es. un racconto neutro ma personale su Oreo).
+    if not threads and last_substantive:
+        add("conversation", last_substantive, tone="neutral")
 
     for item in evidence_items or []:
-        if item.source_type in {"DIGESTIVE_EVENT", "BEHAVIOR_EVENT", "CARE_EVENT"}:
-            if _text_looks_like_open_concern(item.summary) or item.source_type in {
-                "DIGESTIVE_EVENT",
-                "CARE_EVENT",
-            }:
-                add(item.source_type.lower(), item.summary)
+        if item.source_type not in {
+            "DIGESTIVE_EVENT",
+            "BEHAVIOR_EVENT",
+            "CARE_EVENT",
+        }:
+            continue
+        tone = _thread_tone(item.summary) or (
+            "concern"
+            if item.source_type in {"DIGESTIVE_EVENT", "CARE_EVENT"}
+            else "neutral"
+        )
+        add(item.source_type.lower(), item.summary, tone=tone)
 
     return threads[:3]
 
@@ -285,9 +329,20 @@ def resume_welcome_text(
     hello = f"Ciao {first_name}" if first_name else "Ciao"
     if open_thread and open_thread.get("summary"):
         summary = _compact_thread_summary(str(open_thread["summary"]), limit=80)
+        tone = str(open_thread.get("tone") or "neutral")
+        if tone == "positive":
+            return (
+                f"{hello}. L'ultima volta parlavamo di {dog_name} così: "
+                f"{summary}. Com'è andata dopo?"
+            )
+        if tone == "concern":
+            return (
+                f"{hello}. L'ultima volta stavamo seguendo {dog_name} su questo: "
+                f"{summary}. Come sta oggi?"
+            )
         return (
-            f"{hello}. L'ultima volta stavamo seguendo {dog_name} su questo: "
-            f"{summary}. Come sta oggi?"
+            f"{hello}. L'ultima volta eravamo su {dog_name}: "
+            f"{summary}. Vuoi riprendere da lì?"
         )
     del previous_topic
     return f"{hello}. Sono qui con te e {dog_name}. Raccontami cosa vuoi guardare oggi."
