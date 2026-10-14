@@ -44,8 +44,8 @@ import { useCareEvents } from '../care/store';
 import { usePersonalPatterns } from '../patterns/api';
 import { useLifestyle } from '../lifestyle/api';
 import { listFeedingPeriods, listFoods } from '../nutrition/api';
-import { readDeviceLocation } from '../places/api';
-import { breedTipFor } from '../dogs/breedTraits';
+import { readDeviceLocationResult } from '../places/api';
+import { breedTipFor, coatTypeFor } from '../dogs/breedTraits';
 import { DogAvatar } from '../core/components';
 import { fetchDiaryPage } from './api';
 import {
@@ -54,8 +54,10 @@ import {
   buildHeroTips,
   dayPartForHour,
   loadHeroShownDay,
+  loadShownTipIds,
   randomAffectionateLine,
   saveHeroShownDay,
+  saveShownTipIds,
   shuffleTips,
   splitWords,
   type DayPart,
@@ -402,13 +404,17 @@ export function DogHero({
   });
 
   // Meteo: posizione gentile dopo il mount (mai bloccante), poi GET con
-  // cache 30min. Negato/errore → undefined → il mazzo usa lo stagionale.
+  // cache 30min. Permesso negato → carta soft che invita ad attivarla;
+  // errore → undefined → il mazzo usa lo stagionale.
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
   useEffect(() => {
     if (!realEnabled) return;
     let alive = true;
-    void readDeviceLocation().then((position) => {
-      if (alive && position) setCoords(position);
+    void readDeviceLocationResult().then((result) => {
+      if (!alive) return;
+      if (result.ok) setCoords({ lat: result.lat, lng: result.lng });
+      else if (result.reason === 'denied') setLocationDenied(true);
     });
     return () => {
       alive = false;
@@ -431,6 +437,8 @@ export function DogHero({
         ? {
             temperatureC: weatherQuery.data.temperature_c,
             weatherCode: weatherQuery.data.weather_code,
+            windSpeedKmh: weatherQuery.data.wind_speed_kmh,
+            humidityPct: weatherQuery.data.humidity_pct,
           }
         : null,
     [weatherQuery.data],
@@ -506,6 +514,13 @@ export function DogHero({
     };
   }, [realEnabled, foodsQuery.data, periodsQuery.data]);
 
+  // Anti-ripetizione tra giorni: gli id mostrati vengono caricati una volta
+  // (snapshot per il mazzo di oggi) e aggiornati solo su storage, così la
+  // carta corrente non sparisce dal mazzo mentre la stai leggendo.
+  const [recentTipIds, setRecentTipIds] = useState<readonly string[]>([]);
+  const shownTipsRef = useRef<string[]>([]);
+  const lastRecordedTip = useRef<string | null>(null);
+
   const baseTips = useMemo(
     () =>
       buildHeroTips({
@@ -520,6 +535,9 @@ export function DogHero({
         weather,
         ageYears: ageYearsFrom(birthDate, ageLabel, now),
         smallSize: /piccola|toy|mini|nano/i.test(sizeLabel ?? ''),
+        coatType: coatTypeFor(breedLabel),
+        recentTipIds,
+        locationDenied,
         activeFoodName: activeFood?.name ?? null,
         activeFoodMonths: activeFood?.months ?? null,
         foodDataKnown: activeFood !== undefined,
@@ -534,6 +552,9 @@ export function DogHero({
       birthDate,
       ageLabel,
       sizeLabel,
+      breedLabel,
+      recentTipIds,
+      locationDenied,
       activeFood,
     ],
   );
@@ -571,6 +592,25 @@ export function DogHero({
   const [burstTick, setBurstTick] = useState(0);
   const [ambient, setAmbient] = useState<{ id: number; x: number } | null>(null);
   const joyfulTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void loadShownTipIds(dogId).then((ids) => {
+      if (!alive) return;
+      shownTipsRef.current = ids;
+      setRecentTipIds(ids);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [dogId]);
+
+  useEffect(() => {
+    if (!tip || tip.id === lastRecordedTip.current) return;
+    lastRecordedTip.current = tip.id;
+    shownTipsRef.current = [...shownTipsRef.current, tip.id];
+    void saveShownTipIds(shownTipsRef.current, dogId);
+  }, [tip, dogId]);
 
   useEffect(() => {
     let alive = true;

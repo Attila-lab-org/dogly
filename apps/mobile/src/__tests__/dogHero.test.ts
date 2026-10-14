@@ -16,12 +16,15 @@ import {
   dailySeedIndex,
   dayPartForHour,
   loadHeroShownDay,
+  loadShownTipIds,
   randomAffectionateLine,
   saveHeroShownDay,
+  saveShownTipIds,
   selectHeroMessage,
   setHeroStorageBackend,
   shuffleTips,
   splitWords,
+  SHOWN_TIPS_LIMIT,
   type HeroMessageInput,
   type HeroTipsInput,
 } from '../features/home/dogHeroCopy';
@@ -279,7 +282,7 @@ describe('buildHeroTips deck', () => {
     expect(tips[0].route).toBe('/care');
     expect(tips[0].adviceLine).toBeTruthy();
     // meteo estremo: secondo urgente
-    expect(tips[1].id).toBe('weather:hot');
+    expect(tips[1].id).toBe('weather:torrid');
     expect(tips[1].priority).toBe('urgent');
   });
 
@@ -298,28 +301,111 @@ describe('buildHeroTips deck', () => {
     const tips = buildHeroTips(baseInput);
     expect(tips.every((tip) => tip.priority === 'normal')).toBe(true);
     expect(ids(baseInput)).toContain('greeting');
-    expect(ids(baseInput)).toContain('season:summer');
+    expect(ids(baseInput)).toContain('season:08');
     expect(ids(baseInput)).toContain('evergreen:water');
+    expect(ids(baseInput)).toContain('nutrition:snacks');
+    expect(ids(baseInput)).toContain('mind:sniff');
     expect(ids(baseInput).some((id) => id.startsWith('weather:'))).toBe(false);
   });
 
   it('weather produces the right urgent cards', () => {
     expect(ids({ ...baseInput, weather: { temperatureC: 33, weatherCode: 0 } })[0])
+      .toBe('weather:torrid');
+    expect(ids({ ...baseInput, weather: { temperatureC: 29, weatherCode: 0 } })[0])
       .toBe('weather:hot');
     expect(ids({ ...baseInput, weather: { temperatureC: 2, weatherCode: 0 } })[0])
       .toBe('weather:cold');
     expect(ids({ ...baseInput, weather: { temperatureC: 18, weatherCode: 61 } })[0])
       .toBe('weather:rain');
-    expect(ids({ ...baseInput, weather: { temperatureC: -1, weatherCode: 73 } })[0])
-      .toBe('weather:snow');
-    // mite → carta normale, niente urgente; niente stagionale se c'è meteo
+    const snowy = ids({ ...baseInput, weather: { temperatureC: -1, weatherCode: 73 } });
+    // freddo urgente (temperatura) + neve urgente (condizione), max 2 meteo
+    expect(snowy.slice(0, 2)).toEqual(['weather:cold', 'weather:snow']);
+    expect(ids({ ...baseInput, weather: { temperatureC: 20, weatherCode: 95 } })[0])
+      .toBe('weather:storm');
+    const humid = ids({
+      ...baseInput,
+      weather: { temperatureC: 27, weatherCode: 1, humidityPct: 85 },
+    });
+    expect(humid[0]).toBe('weather:humid');
+    // mite → carte normali prominenti, niente urgente; niente stagionale
     const mild = buildHeroTips({
       ...baseInput,
       weather: { temperatureC: 21, weatherCode: 1 },
     });
-    expect(mild.some((tip) => tip.id === 'weather:mild')).toBe(true);
+    expect(mild.some((tip) => tip.id === 'weather:perfect')).toBe(true);
     expect(mild.some((tip) => tip.id.startsWith('season:'))).toBe(false);
     expect(mild.every((tip) => tip.priority === 'normal')).toBe(true);
+    // meteo sempre tra le prime 3 quando disponibile
+    expect(mild.slice(0, 3).some((tip) => tip.id.startsWith('weather:'))).toBe(true);
+  });
+
+  it('temperature bands each have a card', () => {
+    const band = (t: number) =>
+      buildHeroTips({ ...baseInput, weather: { temperatureC: t, weatherCode: 0 } })
+        .find((tip) => tip.id.startsWith('weather:'))?.id;
+    expect(band(35)).toBe('weather:torrid');
+    expect(band(29)).toBe('weather:hot');
+    expect(band(24)).toBe('weather:warm');
+    expect(band(16)).toBe('weather:perfect');
+    expect(band(8)).toBe('weather:chilly');
+    expect(band(2)).toBe('weather:cold');
+  });
+
+  it('caps weather at 2 cards even with condition + temperature', () => {
+    const tips = buildHeroTips({
+      ...baseInput,
+      weather: { temperatureC: 33, weatherCode: 61, windSpeedKmh: 45 },
+    });
+    expect(tips.filter((tip) => tip.id.startsWith('weather:')).length)
+      .toBeLessThanOrEqual(2);
+    // torrido (urgent) + pioggia (urgent): entrambe presenti
+    expect(tips[0].id).toBe('weather:torrid');
+    expect(tips[1].id).toBe('weather:rain');
+  });
+
+  it('excludes recently shown cards when the deck stays rich enough', () => {
+    const all = ids(baseInput);
+    const recent = all.filter((id) => !id.startsWith('care:')).slice(0, 10);
+    const filtered = ids({ ...baseInput, recentTipIds: recent });
+    for (const id of recent) {
+      expect(filtered).not.toContain(id);
+    }
+    expect(filtered.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('keeps everything when exclusion would shrink the deck too much', () => {
+    const all = ids(baseInput);
+    const filtered = ids({ ...baseInput, recentTipIds: all });
+    expect(filtered.length).toBe(all.length);
+  });
+
+  it('builds a rich deck (>= 15 cards) with full data', () => {
+    const rich = buildHeroTips({
+      ...baseInput,
+      weather: { temperatureC: 24, weatherCode: 1 },
+      breedTip: 'Consiglio di razza.',
+      patternTitle: 'Dorme dopo pranzo',
+      daysSinceDigestive: 6,
+      ageYears: 0.5,
+      coatType: 'double',
+      foodDataKnown: true,
+      activeFoodName: 'Canistar Adult',
+      activeFoodMonths: 4,
+    });
+    expect(rich.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('offers a soft location card only when permission was denied', () => {
+    expect(ids({ ...baseInput, locationDenied: true })).toContain('weather:permission');
+    expect(ids(baseInput)).not.toContain('weather:permission');
+    // con meteo disponibile la carta permesso non serve
+    expect(
+      ids({
+        ...baseInput,
+        locationDenied: true,
+        weather: { temperatureC: 20, weatherCode: 1 },
+      }),
+    ).not.toContain('weather:permission');
   });
 
   it('cold advice mentions the coat for small dogs only', () => {
@@ -405,6 +491,19 @@ describe('ageYearsFrom', () => {
     expect(ageYearsFrom(null, '8 mesi')).toBeCloseTo(8 / 12, 5);
     expect(ageYearsFrom(null, 'Taglia media')).toBeNull();
     expect(ageYearsFrom(undefined, undefined)).toBeNull();
+  });
+});
+
+describe('shown tips persistence', () => {
+  it('roundtrips ids capped at the limit, scoped per dog', async () => {
+    setHeroStorageBackend(memoryStorage());
+    expect(await loadShownTipIds('dog-1')).toEqual([]);
+    const many = Array.from({ length: 20 }, (_, i) => `tip:${i}`);
+    await saveShownTipIds(many, 'dog-1');
+    const stored = await loadShownTipIds('dog-1');
+    expect(stored.length).toBe(SHOWN_TIPS_LIMIT);
+    expect(stored[stored.length - 1]).toBe('tip:19');
+    expect(await loadShownTipIds('dog-2')).toEqual([]);
   });
 });
 

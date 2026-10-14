@@ -155,6 +155,31 @@ export function breedArchetypeFor(
   return 'generic';
 }
 
+/** Tipo di mantello stimato dall'archetipo (guida cappottino/spazzolatura). */
+export type CoatType = 'double' | 'short' | 'long';
+
+export function coatTypeFor(
+  breedLabel: string | null | undefined,
+): CoatType | null {
+  switch (breedArchetypeFor(breedLabel)) {
+    case 'nordic':
+    case 'herding':
+    case 'retriever':
+      return 'double';
+    case 'hound':
+    case 'sighthound':
+    case 'pinscher':
+    case 'pointer':
+    case 'molossi':
+      return 'short';
+    case 'toy':
+    case 'terrier':
+      return 'long';
+    default:
+      return null;
+  }
+}
+
 /** `{breed}` viene sostituito col nome reale della razza. */
 const ARCHETYPE_TIPS: Record<BreedArchetypeId, Record<DayPart, string>> = {
   herding: {
