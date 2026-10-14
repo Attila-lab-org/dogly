@@ -16,8 +16,12 @@ import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
 import { readDeviceLocation } from '@/features/places/api';
 import { pickConversationVideo } from '@/features/behavior/videoPicker';
 import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
+import { isQuotaExhaustedError } from '@/features/behavior/api';
+import { takeDigestivePhoto } from '@/features/digestive/photo';
+import { enqueueAndUploadDigestivePhoto } from '@/features/digestive/upload';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
 import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
+import { purchasesEnabled } from '@/mocks/entitlements';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
 import {
@@ -31,7 +35,7 @@ type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: Re
 export default function AskScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const { userId } = useSession();
+  const { userId, usingMockGate } = useSession();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[]; intent?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
@@ -193,38 +197,81 @@ export default function AskScreen() {
     if (text) void send(text);
   }, [dog.id, entryId, send, sending, session, starting, userId]);
 
+  const captureDigestiveFromChat = useCallback(async () => {
+    if (sending || !session || !userId || !dog.id) return;
+    await rememberRealtimeSession(session, messages);
+    setError(null);
+    setMediaPhase('uploading');
+    try {
+      const uri = await takeDigestivePhoto();
+      if (!uri) {
+        setMediaPhase(null);
+        return;
+      }
+      if (usingMockGate) {
+        router.replace({
+          pathname: '/digestive/processing/fecal-ok-1',
+          params: { returnTo: 'ask', sessionId: session.id },
+        } as never);
+        return;
+      }
+      const { eventId: digestiveEventId } = await enqueueAndUploadDigestivePhoto({
+        userId,
+        dogId: dog.id,
+        localUri: uri,
+      });
+      router.replace({
+        pathname: `/digestive/processing/${digestiveEventId}`,
+        params: { returnTo: 'ask', sessionId: session.id },
+      } as never);
+    } catch (err) {
+      setMediaPhase(null);
+      if (isQuotaExhaustedError(err) && purchasesEnabled) {
+        router.replace('/paywall');
+        return;
+      }
+      setError('Non sono riuscito a scattare o caricare la foto. Riprova.');
+    }
+  }, [dog.id, messages, router, sending, session, userId, usingMockGate]);
+
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
     if (sending || !session) return;
     if (needsDigestivePhoto) {
-      await rememberRealtimeSession(session, messages);
-      router.push({
-        pathname: '/digestive/capture',
-        params: { from: 'ask', sessionId: session.id },
-      } as never);
+      await captureDigestiveFromChat();
       return;
     }
     const uri = await takeConversationPhoto();
     if (!uri) return;
     const purpose = turn?.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
-  }, [latestAssistant, messages, needsDigestivePhoto, router, send, sending, session]);
+  }, [
+    captureDigestiveFromChat,
+    latestAssistant,
+    needsDigestivePhoto,
+    send,
+    sending,
+    session,
+  ]);
 
   const pickPhoto = useCallback(async () => {
     if (sending || !session) return;
     if (needsDigestivePhoto) {
-      await rememberRealtimeSession(session, messages);
-      router.push({
-        pathname: '/digestive/capture',
-        params: { from: 'ask', sessionId: session.id },
-      } as never);
+      await captureDigestiveFromChat();
       return;
     }
     const uri = await pickAlbumPhoto();
     if (!uri) return;
     const purpose = latestAssistant?.turn?.media_prompt || 'Ti mostro questo momento';
     void send(purpose, { uri, purpose });
-  }, [latestAssistant, messages, needsDigestivePhoto, router, send, sending, session]);
+  }, [
+    captureDigestiveFromChat,
+    latestAssistant,
+    needsDigestivePhoto,
+    send,
+    sending,
+    session,
+  ]);
 
   const pickVideo = useCallback(async () => {
     if (sending || !session) return;
