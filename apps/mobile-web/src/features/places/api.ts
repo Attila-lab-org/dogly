@@ -36,16 +36,8 @@ export function formatDistance(meters: number | null | undefined): string {
 async function readExpoLocation(): Promise<{ lat: number; lng: number } | null> {
   if (Platform.OS === 'web') return null;
   try {
-    // Dynamic import keeps web bundles free of native location code.
-    // Dependency is declared in package.json; local installs may lag CI.
-    // @ts-ignore — types appear after local `pnpm add expo-location`
-    const Location = (await import('expo-location')) as {
-      Accuracy: { Balanced: number };
-      requestForegroundPermissionsAsync: () => Promise<{ status: string }>;
-      getCurrentPositionAsync: (options?: {
-        accuracy?: number;
-      }) => Promise<{ coords: { latitude: number; longitude: number } }>;
-    };
+    // Dynamic import keeps web bundles free of native location linking.
+    const Location = await import('expo-location');
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== 'granted') return null;
     const current = await Location.getCurrentPositionAsync({
