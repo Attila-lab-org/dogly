@@ -161,24 +161,16 @@ function CareRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        compact && { backgroundColor: tones[tone].background, minHeight: 88 },
+        compact && { backgroundColor: tones[tone].background },
         pressed && styles.pressed,
       ]}
     >
       <View style={[styles.icon, { backgroundColor: tones[tone].soft }]}>
         <Ionicons name={icon} size={24} color={tones[tone].icon} />
       </View>
-      <View style={styles.copy}>
-        <Text style={styles.title}>{title}</Text>
-        {!compact ? (
-          <Text style={styles.detail} numberOfLines={2}>
-            {detail}
-          </Text>
-        ) : null}
-      </View>
-      {!compact ? (
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-      ) : null}
+      <Text style={styles.title} numberOfLines={1}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -195,10 +187,9 @@ const styles = StyleSheet.create({
   row: {
     width: '48%',
     flexGrow: 1,
-    minHeight: 92,
+    minHeight: 108,
     padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     borderRadius: 20,
     borderWidth: 1,
@@ -212,12 +203,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  copy: { flex: 1, gap: 4 },
   title: {
+    alignSelf: 'stretch',
     color: colors.text,
     fontSize: 14,
     fontWeight: typography.weight.semibold,
   },
-  detail: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
   pressed: { opacity: 0.78 },
 });
