@@ -1,4 +1,12 @@
-"""Nearby useful places via Photon + optional Nominatim phone enrichment."""
+"""Nearby useful places: Overpass (POI per categoria OSM) primary, Photon fallback.
+
+Photon è un geocoder, non un motore POI: restava come unica sorgente e
+restituiva risultati irrilevanti/lontani. Overpass interroga direttamente i
+tag OSM (amenity=veterinary, leisure=dog_park|park|recreation_ground) entro
+il raggio reale — niente chiavi, gratis, e i telefoni sono già nei tag.
+Se Overpass fallisce si ripiega sul geocoder Photon (con arricchimento
+telefoni Nominatim, che Overpass rende inutile nel ramo primario).
+"""
 
 from __future__ import annotations
 
@@ -18,9 +26,12 @@ from app.contracts.errors import ApiError, ErrorCode
 Kind = Literal["PARK", "VET"]
 logger = logging.getLogger(__name__)
 
+OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
 PHOTON_ENDPOINT = "https://photon.komoot.io/api/"
 NOMINATIM_LOOKUP = "https://nominatim.openstreetmap.org/lookup"
 _USER_AGENT = "Dogly/1.0 (nearby places; contact=support@dogly.app)"
+
+RESULT_LIMIT = 12
 
 
 @dataclass
@@ -68,6 +79,132 @@ def _bbox(lat: float, lng: float, radius_m: int) -> str:
     return f"{lng - dlng},{lat - dlat},{lng + dlng},{lat + dlat}"
 
 
+def _normalize_phone(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    cleaned = re.sub(r"[^\d+]", "", str(raw).strip())
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) < 6:
+        return None
+    return cleaned if cleaned.startswith("+") else digits
+
+
+# ---------------------------------------------------------------------------
+# Overpass (sorgente primaria)
+# ---------------------------------------------------------------------------
+
+
+def _overpass_query_text(
+    *,
+    lat: float,
+    lng: float,
+    kind: Kind | None,
+    radius_m: int,
+) -> str:
+    parts: list[str] = []
+    if kind in (None, "VET"):
+        parts.append(f'nwr(around:{radius_m},{lat},{lng})["amenity"="veterinary"];')
+        parts.append(f'nwr(around:{radius_m},{lat},{lng})["office"="veterinary"];')
+    if kind in (None, "PARK"):
+        parts.append(
+            f'nwr(around:{radius_m},{lat},{lng})'
+            '["leisure"~"^(dog_park|park|recreation_ground)$"];'
+        )
+    body = "\n  ".join(parts)
+    return f"[out:json][timeout:10];\n(\n  {body}\n);\nout center tags;"
+
+
+def _overpass_hit_kind(tags: dict[str, Any]) -> Kind | None:
+    if str(tags.get("amenity") or "").casefold() == "veterinary":
+        return "VET"
+    if str(tags.get("office") or "").casefold() == "veterinary":
+        return "VET"
+    leisure = str(tags.get("leisure") or "").casefold()
+    if leisure in {"dog_park", "park", "recreation_ground"}:
+        return "PARK"
+    return None
+
+
+def _overpass_name(tags: dict[str, Any], kind: Kind) -> str:
+    name = str(tags.get("name") or "").strip()
+    if name:
+        return name
+    if kind == "VET":
+        return "Veterinario"
+    leisure = str(tags.get("leisure") or "").casefold()
+    return "Area cani" if leisure == "dog_park" else "Parco"
+
+
+def _parse_overpass(
+    payload: dict[str, Any],
+    *,
+    lat: float,
+    lng: float,
+    kind: Kind | None,
+    radius_m: int,
+) -> list[_PlaceHit]:
+    items: list[_PlaceHit] = []
+    for element in payload.get("elements") or []:
+        etype = str(element.get("type") or "")
+        eid = element.get("id")
+        if etype == "node":
+            plat, plng = element.get("lat"), element.get("lon")
+        else:
+            center = element.get("center") or {}
+            plat, plng = center.get("lat"), center.get("lon")
+        if plat is None or plng is None or eid is None:
+            continue
+        tags = element.get("tags") or {}
+        hit_kind = _overpass_hit_kind(tags)
+        if hit_kind is None or (kind and hit_kind != kind):
+            continue
+        flat, flng = float(plat), float(plng)
+        distance = haversine_m(lat, lng, flat, flng)
+        if distance > radius_m:
+            continue
+        name = _overpass_name(tags, hit_kind)
+        phone = _normalize_phone(tags.get("phone") or tags.get("contact:phone"))
+        osm_ref = f"{etype[:1].upper()}{eid}"
+        items.append(
+            _PlaceHit(
+                id=f"{hit_kind.lower()}-osm-{osm_ref}",
+                name=name,
+                kind=hit_kind,
+                distance_m=distance,
+                lat=flat,
+                lng=flng,
+                maps_url=maps_url(name, flat, flng),
+                osm_ref=osm_ref,
+                phone=phone,
+            )
+        )
+    return items
+
+
+async def _fetch_overpass(
+    *,
+    lat: float,
+    lng: float,
+    kind: Kind | None,
+    radius_m: int,
+) -> list[_PlaceHit]:
+    query = _overpass_query_text(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        response = await client.post(
+            OVERPASS_ENDPOINT,
+            content=query,
+            headers={"User-Agent": _USER_AGENT},
+        )
+        response.raise_for_status()
+        payload = response.json()
+    return _parse_overpass(payload, lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+
+
+# ---------------------------------------------------------------------------
+# Photon (fallback: geocoder, meno preciso sui POI per categoria)
+# ---------------------------------------------------------------------------
+
+
 def _photon_kind(properties: dict[str, Any], requested: Kind) -> Kind | None:
     osm_value = str(properties.get("osm_value") or "").casefold()
     osm_key = str(properties.get("osm_key") or "").casefold()
@@ -96,16 +233,6 @@ def _photon_kind(properties: dict[str, Any], requested: Kind) -> Kind | None:
             return "PARK"
         return "PARK" if osm_key == "leisure" else None
     return None
-
-
-def _normalize_phone(raw: str | None) -> str | None:
-    if not raw:
-        return None
-    cleaned = re.sub(r"[^\d+]", "", str(raw).strip())
-    digits = re.sub(r"\D", "", cleaned)
-    if len(digits) < 6:
-        return None
-    return cleaned if cleaned.startswith("+") else digits
 
 
 async def _photon_query(
@@ -207,7 +334,7 @@ async def _fetch_photon(
 
 
 async def _enrich_vet_phones(items: list[_PlaceHit]) -> list[_PlaceHit]:
-    """Attach phone numbers for vets via Nominatim extratags when available."""
+    """Attach phone numbers for vets via Nominatim extratags (ramo Photon)."""
     vets = [item for item in items if item.kind == "VET" and item.osm_ref]
     if not vets:
         return items
@@ -228,8 +355,6 @@ async def _enrich_vet_phones(items: list[_PlaceHit]) -> list[_PlaceHit]:
     phones: dict[str, str] = {}
     for row in rows:
         osm_type = str(row.get("osm_type") or "")[:1].upper()
-        # Nominatim uses full words: node/way/relation
-        type_map = {"n": "N", "w": "W", "r": "R", "N": "N", "W": "W", "R": "R"}
         full = str(row.get("osm_type") or "").casefold()
         if full.startswith("node"):
             osm_type = "N"
@@ -237,8 +362,6 @@ async def _enrich_vet_phones(items: list[_PlaceHit]) -> list[_PlaceHit]:
             osm_type = "W"
         elif full.startswith("relation"):
             osm_type = "R"
-        else:
-            osm_type = type_map.get(osm_type, osm_type)
         osm_id = row.get("osm_id")
         if osm_id is None:
             continue
@@ -259,12 +382,22 @@ async def _enrich_vet_phones(items: list[_PlaceHit]) -> list[_PlaceHit]:
     return items
 
 
-def _dedupe(items: list[_PlaceHit], *, limit: int = 12) -> list[_PlaceHit]:
+# ---------------------------------------------------------------------------
+# Orchestrazione
+# ---------------------------------------------------------------------------
+
+
+def _dedupe(items: list[_PlaceHit], *, limit: int = RESULT_LIMIT) -> list[_PlaceHit]:
     items = sorted(items, key=lambda item: item.distance_m)
-    seen: set[tuple[str, int, int]] = set()
+    seen: set[tuple[str, str, int, int]] = set()
     unique: list[_PlaceHit] = []
     for item in items:
-        key = (item.kind, int(item.lat * 1e4), int(item.lng * 1e4))
+        key = (
+            item.name.casefold(),
+            item.kind,
+            int(item.lat * 1e4),
+            int(item.lng * 1e4),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -274,12 +407,12 @@ def _dedupe(items: list[_PlaceHit], *, limit: int = 12) -> list[_PlaceHit]:
     return unique
 
 
-async def search_nearby(
+async def _search_photon(
     *,
     lat: float,
     lng: float,
-    kind: Kind | None = None,
-    radius_m: int = 8000,
+    kind: Kind | None,
+    radius_m: int,
 ) -> NearbyPlacesResponse:
     kinds: list[Kind] = [kind] if kind else ["PARK", "VET"]
     provider_errors = 0
@@ -316,3 +449,29 @@ async def search_nearby(
         items=[item.to_out() for item in unique],
         location_label=None,
     )
+
+
+async def search_nearby(
+    *,
+    lat: float,
+    lng: float,
+    kind: Kind | None = None,
+    radius_m: int = 5000,
+) -> NearbyPlacesResponse:
+    try:
+        items = _dedupe(
+            await _fetch_overpass(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+        )
+        if not items:
+            # Expand once (zone con OSM rado): stessa sorgente, raggio doppio.
+            wide = max(radius_m * 2, 20_000)
+            items = _dedupe(
+                await _fetch_overpass(lat=lat, lng=lng, kind=kind, radius_m=wide)
+            )
+        return NearbyPlacesResponse(
+            items=[item.to_out() for item in items],
+            location_label=None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Overpass nearby failed, fallback to Photon: %s", exc)
+    return await _search_photon(lat=lat, lng=lng, kind=kind, radius_m=radius_m)

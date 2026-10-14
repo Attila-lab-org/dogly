@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { CuteIcon } from '@/components/CuteIcon';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { fetchDogPhotos } from '@/features/photos/api';
 import {
@@ -24,6 +25,14 @@ import {
   type LocationFailureReason,
   type NearbyPlace,
 } from '@/features/places/api';
+
+type PlaceFilter = 'ALL' | 'PARK' | 'VET';
+
+const PLACE_FILTERS: { key: PlaceFilter; label: string }[] = [
+  { key: 'ALL', label: 'Tutti' },
+  { key: 'PARK', label: 'Parchi' },
+  { key: 'VET', label: 'Veterinari' },
+];
 
 export default function AroundScreen() {
   const router = useRouter();
@@ -78,10 +87,18 @@ export default function AroundScreen() {
   }, [coords, placesQuery.isFetching]);
 
   const photos = photosQuery.data ?? [];
-  const places = placesQuery.data?.items ?? [];
-  const parks = places.filter((item) => item.kind === 'PARK').slice(0, 3);
-  const vets = places.filter((item) => item.kind === 'VET').slice(0, 3);
-  const cards = [...parks, ...vets].slice(0, 4);
+  const places = useMemo(
+    () => placesQuery.data?.items ?? [],
+    [placesQuery.data],
+  );
+  const [placeFilter, setPlaceFilter] = useState<PlaceFilter>('ALL');
+  const filteredPlaces = useMemo(
+    () =>
+      placeFilter === 'ALL'
+        ? places
+        : places.filter((place) => place.kind === placeFilter),
+    [places, placeFilter],
+  );
 
   return (
     <View style={styles.root}>
@@ -106,40 +123,37 @@ export default function AroundScreen() {
           </View>
 
           {photos.length > 0 ? (
-            <View style={styles.gallery}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  router.push(
-                    `/dogs/${dog.id}/album/photo/${photos[0].id}?albumId=${photos[0].albumId}` as never,
-                  )
-                }
-                style={styles.galleryLarge}
-              >
-                <Image source={{ uri: photos[0].thumbnailUri }} style={styles.galleryImage} resizeMode="cover" />
-              </Pressable>
-              <View style={styles.gallerySide}>
-                {photos.slice(1, 3).map((photo, index) => (
-                  <Pressable
-                    key={photo.id}
-                    accessibilityRole="button"
-                    onPress={() =>
-                      router.push(
-                        `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
-                      )
-                    }
-                    style={styles.gallerySmall}
-                  >
-                    <Image source={{ uri: photo.thumbnailUri }} style={styles.galleryImage} resizeMode="cover" />
-                    {index === 1 && photos.length > 3 ? (
-                      <View style={styles.moreOverlay}>
-                        <Text style={styles.moreText}>+{photos.length - 2}</Text>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.galleryRow}
+            >
+              {photos.slice(0, 5).map((photo) => (
+                <Pressable
+                  key={photo.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={photo.caption || 'Apri momento'}
+                  onPress={() =>
+                    router.push(
+                      `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
+                    )
+                  }
+                  style={styles.galleryThumb}
+                >
+                  <Image source={{ uri: photo.thumbnailUri }} style={styles.galleryImage} resizeMode="cover" />
+                </Pressable>
+              ))}
+              {photos.length > 5 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Apri l'album completo"
+                  onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
+                  style={[styles.galleryThumb, styles.galleryMore]}
+                >
+                  <Text style={styles.moreText}>+{photos.length - 5}</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
           ) : (
             <Pressable
               accessibilityRole="button"

@@ -2272,7 +2272,7 @@
               "type": "integer",
               "maximum": 25000,
               "minimum": 500,
-              "default": 8000,
+              "default": 5000,
               "title": "Radius M"
             }
           },
@@ -5220,6 +5220,117 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/realtime/live/sessions": {
+      "post": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "Create Live Session",
+        "description": "Open the dedicated Live voice room (WebRTC via ephemeral OpenAI secret).",
+        "operationId": "create_live_session_v1_realtime_live_sessions_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveSessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/realtime/live/sessions/{session_id}": {
+      "delete": {
+        "tags": [
+          "realtime"
+        ],
+        "summary": "End Live Session",
+        "operationId": "end_live_session_v1_realtime_live_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -10546,6 +10657,105 @@
         "title": "LifestyleRoutine",
         "description": "Typed owner-reported daily routine.\n\nClosed key set with bounds (extra=\"forbid\"): the API is the enforcement\npoint, since the DB column stays jsonb. `null` clears a previously\nreported value. Keys match the mobile client's snake_case payload\n(activity, sleep, time_alone, social, enrichment) plus quantified fields."
       },
+      "LiveSessionCreate": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id"
+        ],
+        "title": "LiveSessionCreate"
+      },
+      "LiveSessionOut": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "dog_name": {
+            "type": "string",
+            "title": "Dog Name"
+          },
+          "owner_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Display Name"
+          },
+          "voice": {
+            "type": "string",
+            "title": "Voice"
+          },
+          "voice_gender": {
+            "type": "string",
+            "enum": [
+              "FEMALE",
+              "MALE"
+            ],
+            "title": "Voice Gender"
+          },
+          "client_secret": {
+            "type": "string",
+            "title": "Client Secret"
+          },
+          "client_secret_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret Expires At"
+          },
+          "seconds_remaining": {
+            "type": "integer",
+            "title": "Seconds Remaining"
+          },
+          "welcome_text": {
+            "type": "string",
+            "title": "Welcome Text"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ENDED",
+              "EXPIRED"
+            ],
+            "title": "Status",
+            "default": "ACTIVE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "dog_id",
+          "dog_name",
+          "voice",
+          "voice_gender",
+          "client_secret",
+          "seconds_remaining",
+          "welcome_text"
+        ],
+        "title": "LiveSessionOut",
+        "description": "Ephemeral OpenAI Realtime credentials for the Live voice room."
+      },
       "MeResponse": {
         "properties": {
           "profile": {
@@ -11394,6 +11604,15 @@
             ],
             "title": "Timezone"
           },
+          "ask_voice_gender": {
+            "type": "string",
+            "enum": [
+              "FEMALE",
+              "MALE"
+            ],
+            "title": "Ask Voice Gender",
+            "default": "FEMALE"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -11420,6 +11639,21 @@
               }
             ],
             "title": "Display Name"
+          },
+          "ask_voice_gender": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "FEMALE",
+                  "MALE"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask Voice Gender"
           }
         },
         "type": "object",
