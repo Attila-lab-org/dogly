@@ -45,15 +45,38 @@ export default function DogProfileTabScreen() {
           <DogCareOverview dogId={dog.id} dogName={dog.name} />
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>I suoi momenti</Text><Pressable accessibilityRole="button" accessibilityLabel="Apri album" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} style={styles.pill}><Text style={styles.pillText}>Apri album</Text></Pressable></View>
           {photos.isLoading ? <Text style={styles.emptyText}>Carico i suoi momenti…</Text> : photos.isError ? <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.pillText}>Non riesco a caricare le foto · Riprova</Text></Pressable> : (photos.data ?? []).length > 0 ? <View style={styles.photoRow}>{(photos.data ?? []).slice(0, 3).map((photo) => <PhotoThumbnail key={photo.id} photo={photo} size={photoSize} onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never)} />)}</View> : <ProfileLink icon="images-outline" title="Aggiungi una foto" detail="I vostri momenti preferiti" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} />}
-          <Pressable accessibilityRole="button" accessibilityLabel="Luoghi utili nelle vicinanze" onPress={() => router.push('/(tabs)/around' as never)} style={({ pressed }) => [styles.placeCard, pressed && styles.pressed]}>
-            <View style={styles.placeIcon}><Ionicons name="location-outline" size={22} color={colors.accent} /></View>
-            <View style={styles.identityCopy}><Text style={styles.linkTitle}>Luoghi utili nelle vicinanze</Text><Text style={styles.meta}>Parchi e veterinari sulla mappa</Text></View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
-          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Cosa sto imparando</Text><Pressable onPress={() => router.push('/patterns')} accessibilityRole="button"><Text style={styles.pillText}>Vedi tutto</Text></Pressable></View>
-          <View style={styles.card}>
-            {patterns.live && patterns.isLoading ? <Text style={styles.emptyText}>Sto iniziando a conoscere {dog.name}…</Text> : patterns.live && patterns.isError ? <Pressable accessibilityRole="button" onPress={() => void patterns.refetch()}><Text style={styles.pillText}>Non riesco a caricare le abitudini · Riprova</Text></Pressable> : learned.length ? learned.map((pattern) => <Pressable key={pattern.id} onPress={() => router.push(`/patterns/${pattern.id}`)} accessibilityRole="button" style={styles.patternRow}><Ionicons name="sparkles-outline" size={20} color={colors.primary} /><Text style={styles.patternText}>{pattern.title}</Text><Ionicons name="chevron-forward" size={18} color={colors.textSecondary} /></Pressable>) : <Pressable accessibilityRole="button" onPress={() => router.push('/ask' as never)} style={({ pressed }) => [styles.learnMore, pressed && styles.pressed]}><Ionicons name="sparkles-outline" size={18} color={colors.primary} /><Text style={styles.learnMoreText}>Condividi un momento per scoprire le sue abitudini</Text><Ionicons name="chevron-forward" size={17} color={colors.textSecondary} /></Pressable>}
-          </View>
+          {learned.length > 0 || (patterns.live && (patterns.isLoading || patterns.isError)) ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Cosa sto imparando</Text>
+                <Pressable onPress={() => router.push('/patterns')} accessibilityRole="button">
+                  <Text style={styles.pillText}>Vedi tutto</Text>
+                </Pressable>
+              </View>
+              <View style={styles.card}>
+                {patterns.live && patterns.isLoading ? (
+                  <Text style={styles.emptyText}>Sto iniziando a conoscere {dog.name}…</Text>
+                ) : patterns.live && patterns.isError ? (
+                  <Pressable accessibilityRole="button" onPress={() => void patterns.refetch()}>
+                    <Text style={styles.pillText}>Non riesco a caricare le abitudini · Riprova</Text>
+                  </Pressable>
+                ) : (
+                  learned.map((pattern) => (
+                    <Pressable
+                      key={pattern.id}
+                      onPress={() => router.push(`/patterns/${pattern.id}`)}
+                      accessibilityRole="button"
+                      style={styles.patternRow}
+                    >
+                      <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+                      <Text style={styles.patternText}>{pattern.title}</Text>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                    </Pressable>
+                  ))
+                )}
+              </View>
+            </>
+          ) : null}
           <ProfileLink icon="bookmark-outline" title="Informazioni che ricordo" detail="Puoi rivederle, correggerle o eliminarle." onPress={() => router.push(`/dogs/${dog.id}/memories` as never)} />
         </View>
       </ScrollView>
@@ -83,14 +106,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   photoRow: { flexDirection: 'row', gap: 8 },
   card: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 14 },
-  placeCard: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  placeIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
   link: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   linkTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   patternRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52 },
   patternText: { flex: 1, color: colors.text, fontSize: 14, lineHeight: 20 },
-  learnMore: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  learnMoreText: { flex: 1, color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
   emptyText: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
-  pressed: { opacity: 0.78 },
 });

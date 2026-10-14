@@ -32,7 +32,7 @@ import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 
-type DiaryFilter = 'ALL' | DiaryDomain | 'ROUTINE';
+type DiaryFilter = 'ALL' | DiaryDomain;
 type TimelineItem =
   | {
       kind: 'header';
@@ -62,7 +62,6 @@ const FILTERS: { key: DiaryFilter; label: string }[] = [
   { key: 'ALL', label: 'Tutti' },
   { key: 'BEHAVIOR', label: 'Comportamento' },
   { key: 'DIGESTIVE', label: 'Salute' },
-  { key: 'ROUTINE', label: 'Routine' },
 ];
 
 const puppyPlaySource = require('../../assets/images/puppy-play.png');
@@ -239,14 +238,14 @@ export default function DiaryScreen() {
     queryFn: ({ pageParam }) =>
       fetchDiaryPage({
         dogId: dog.id,
-        domain: filter === 'ALL' || filter === 'ROUTINE' ? undefined : filter,
+        domain: filter === 'ALL' ? undefined : filter,
         cursor: pageParam,
         limit: 20,
         q: debouncedSearch || undefined,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    enabled: realEnabled && filter !== 'ROUTINE',
+    enabled: realEnabled,
   });
 
   const entries = useMemo<DiaryEntry[]>(() => {
@@ -374,25 +373,19 @@ export default function DiaryScreen() {
                     ? 'Il diario è ancora vuoto'
                     : filter === 'BEHAVIOR'
                       ? 'Nessun video nel diario'
-                      : filter === 'DIGESTIVE'
-                        ? 'Nessun controllo digestivo'
-                        : 'La routine ha una schermata dedicata'
+                      : 'Nessun controllo digestivo'
               }
               message={
                 debouncedSearch
                   ? 'Prova un’altra parola oppure cancella la ricerca.'
-                  : filter === 'ROUTINE'
-                    ? `Apri la routine di ${dog.name} per vedere le sue abitudini.`
-                    : filter === 'DIGESTIVE'
+                  : filter === 'DIGESTIVE'
                     ? 'Aggiungi una foto per seguire la digestione nel tempo.'
                     : `Mostra un momento di ${dog.name}: lo ritroverai qui con la sua lettura.`
               }
               actionLabel={
                 debouncedSearch
                   ? undefined
-                  : filter === 'ROUTINE'
-                    ? 'Apri routine'
-                    : filter === 'DIGESTIVE'
+                  : filter === 'DIGESTIVE'
                     ? 'Controlla la digestione'
                     : filter === 'BEHAVIOR'
                       ? 'Registra un video'
@@ -401,9 +394,7 @@ export default function DiaryScreen() {
               onAction={
                 debouncedSearch
                   ? undefined
-                  : filter === 'ROUTINE'
-                    ? () => router.push(`/dogs/${dog.id}/routine` as never)
-                    : filter === 'DIGESTIVE'
+                  : filter === 'DIGESTIVE'
                     ? () => router.push('/digestive/capture')
                     : () => router.push('/behavior/capture')
               }
