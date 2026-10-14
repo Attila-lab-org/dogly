@@ -351,9 +351,8 @@ def test_recent_partial_result_is_repaired_when_read_from_the_api():
     assert result.consumer_headline == "Rocky è in allerta e sta segnalando qualcosa"
     assert "qualcosa" in (result.dog_voice or "")
     assert "ti sta avvisando" in (result.summary or "")
-    assert result.recommended_next_step is None
-    assert "possibile abbaio" in (result.sound_note or "")
-    assert "non è abbastanza nitido" in (result.sound_note or "")
+    assert result.recommended_next_step == "Registra un altro video."
+    assert result.sound_note is None
 
 
 def test_legacy_alert_result_is_upgraded_when_read_from_the_api():
@@ -401,14 +400,9 @@ def test_legacy_alert_result_is_upgraded_when_read_from_the_api():
         )
     )
 
-    assert result.consumer_headline == (
-        "Oreo sta segnalando qualcosa che lo ha messo in allerta"
-    )
-    assert "ti sta avvisando" in (result.summary or "")
-    assert "tre abbai" not in (result.summary or "")
-    assert result.advice is not None
-    assert result.advice.code == "ADVICE_REWARD_BASED_REDIRECT"
-    assert "Controlla con calma" in result.advice.action
+    assert result.consumer_headline == interpretation.consumer_headline
+    assert result.summary == interpretation.consumer_summary
+    assert result.advice is None
 
 
 def test_clear_reading_keeps_voice_without_creating_an_action():

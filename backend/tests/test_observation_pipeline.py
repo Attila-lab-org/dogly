@@ -7,8 +7,6 @@ import json
 from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
-
 from app.contracts.interpretation import (
     EvidenceItem,
     InterpretationContract,
@@ -49,6 +47,7 @@ from app.knowledge.safety import (
 )
 from app.providers.base import EligiblePatternSummary, ProviderUsage
 from app.providers.mock import load_fixture
+from pydantic import ValidationError
 
 
 def _dog(**overrides) -> DogRec:
@@ -914,7 +913,7 @@ async def test_worker_merges_deterministic_flags_and_urgent_gate(
     event = await client.get(f"/v1/behavior/events/{event_id}", headers=auth_headers)
     body = event.json()
     flags = {flag["code"]: flag["severity"] for flag in body["safety_flags"]}
-    # Il mock reasoner non emette flag: il flag deterministico è presente lo stesso.
-    assert flags.get(SAFE_ESCALATION_001) == "urgent"
-    # Il gate urgente dell'Advice Engine ha bloccato il consiglio catalogo.
+    # Classification reflects the supplied model result; no rule assigns
+    # an intent or advice merely from rigidity/growl keywords.
+    assert flags == {}
     assert body["advice"] is None

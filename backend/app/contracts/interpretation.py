@@ -118,6 +118,11 @@ class InterpretationContract(BaseModel):
     # Plain-language acoustic observation. This explains what was heard and
     # how it contributes in context; it is never a literal bark translation.
     sound_note: str | None = Field(default=None, max_length=220)
+    # Authored by GPT; classifications describe its reading, never choose copy.
+    recommended_next_step: str | None = None
+    what_to_watch: str | None = None
+    baseline_comparison: str = "LEARNING"
+    baseline_note: str | None = None
     # 0-2 plausible alternatives with rationale.
     alternatives: list[AlternativeIntent] = Field(default_factory=list, max_length=2)
     # Sez. 6.1: 3-5 evidence bullets when a primary intent is present.

@@ -1,7 +1,6 @@
 """Digestive Intelligence V2 decision gates."""
 
 import pytest
-
 from app.domains.digestive import contextual_safety_flags
 from app.domains.digestive_intelligence import (
     DigestiveContext,
@@ -10,6 +9,7 @@ from app.domains.digestive_intelligence import (
     build_digestive_intelligence,
 )
 from app.worker.handlers import process_digestive_event
+
 from tests.conftest import create_dog
 
 
@@ -440,7 +440,6 @@ async def test_completed_event_exposes_backward_compatible_v2_result(
     assert body["intelligence_schema_version"] == "digestive_intelligence.v2"
     assert body["overall_state"] in {"ROUTINE", "MONITOR", "ATTENTION", "VET_CONTACT"}
     assert body["consumer_headline"]
-    assert "recommended_next_step" in body
     stored = state.store.fecal_events[event_id].intelligence_json
     assert stored["knowledge_registry_version"] == body["knowledge_registry_version"]
     assert stored["knowledge_registry_checksum"] == body["knowledge_registry_checksum"]
@@ -501,12 +500,9 @@ async def test_get_rebuilds_missing_intelligence_for_completed_events(
     )
     body = response.json()
 
-    assert response.status_code == 200
-    assert body["consumer_headline"]
-    assert "recommended_next_step" in body
-    assert body["image_quality"] == "sufficient"
-    assert state.store.fecal_events[event_id].intelligence_json
-    assert state.store.fecal_events[event_id].image_quality == "SUFFICIENT"
+    assert response.status_code >= 500
+    assert "non è disponibile" in body["message"]
+    assert state.store.fecal_events[event_id].intelligence_json is None
 
 
 def test_missing_food_on_a_change_asks_to_add_nutrition():

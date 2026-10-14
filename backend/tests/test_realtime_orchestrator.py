@@ -410,31 +410,13 @@ def test_conversation_policy_does_not_rewrite_affection_or_force_media() -> None
     assert decision.media_invite is None
 
 
-def test_realtime_prompt_leaves_meaning_to_gpt() -> None:
+def test_realtime_prompt_uses_shared_product_identity() -> None:
     from app.domains.realtime_orchestrator import _SYSTEM
-    assert "usa il contesto del cane solo quando è pertinente" in _SYSTEM
-    assert "La frase corrente ha priorità sulla risposta precedente" in _SYSTEM
-    assert "Non ripetere spiegazioni già date" in _SYSTEM
-    assert "trasformare la chat in un questionario" in _SYSTEM
-    assert "Non aggiungere una domanda per chiudere automaticamente" in _SYSTEM
-    assert "fai una sola domanda" in _SYSTEM
-    assert "breve su quel dato" in _SYSTEM
-    assert "Non ripetere spiegazioni o avvertenze già date" in _SYSTEM
-    assert "Una risposta parziale chiarisce" in _SYSTEM
-    assert "Se non serve una domanda, continua la conversazione" in _SYSTEM
-    assert "Evita titoli, elenchi, numerazioni, grassetto, asterischi" in _SYSTEM
-    assert "riconosci il legame senza trasformarlo" in _SYSTEM
-    assert "separa ciò che si vede davvero" in _SYSTEM
-    assert "La correzione sostituisce la lettura precedente" in _SYSTEM
-    assert "Non trasformare un comportamento normale" in _SYSTEM
-    assert "Se il proprietario cambia argomento" in _SYSTEM
-    assert "ieri" in _SYSTEM
-    assert "Se l'utente fa solo un'osservazione" in _SYSTEM
-    assert "Non offrire calcoli" in _SYSTEM
-    assert "solo quando manca un dato" in _SYSTEM
+    from app.knowledge.product_instruction import PRODUCT_INSTRUCTION
+    assert _SYSTEM.startswith(PRODUCT_INSTRUCTION)
     assert "Oreo" not in _SYSTEM
-    assert "Restituisci soltanto JSON" not in _SYSTEM
-    assert "suggested_prompts" not in _SYSTEM
+    assert "catalog" not in _SYSTEM
+    assert "used_source_ids" in _SYSTEM
 
 
 def test_attachment_focus_is_narrow_and_does_not_assume_the_dog_is_visible() -> None:
@@ -1206,3 +1188,30 @@ async def test_confirmed_chat_memory_is_visible_in_owner_stories(
     assert stories.json()["items"][0]["facts"][0]["statement"] == (
         "Oreo ama dormire sul divano."
     )
+
+
+@pytest.mark.asyncio
+async def test_realtime_turn_idempotency_prevents_duplicate_saved_answers(
+    client, auth_headers: dict[str, str]
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    session = await client.post(
+        "/v1/realtime/sessions",
+        headers=auth_headers,
+        json={"dog_id": dog_id, "modality": "TEXT"},
+    )
+    key = "realtime-turn-retry-1"
+    body = {"text": "Riprendi da qui.", "assistant_text": "Ci sono."}
+    first = await client.post(
+        f"/v1/realtime/sessions/{session.json()['id']}/turns",
+        headers={**auth_headers, "X-Idempotency-Key": key},
+        json=body,
+    )
+    second = await client.post(
+        f"/v1/realtime/sessions/{session.json()['id']}/turns",
+        headers={**auth_headers, "X-Idempotency-Key": key},
+        json=body,
+    )
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]

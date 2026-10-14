@@ -55,21 +55,12 @@ from app.domains import (
 )
 from app.domains import lifestyle as lifestyle_domain
 from app.domains import privacy as privacy_domain
-from app.domains.behavior_decision import apply_behavior_decision_policy
-from app.domains.behavior_intelligence import (
-    build_behavior_consumer,
-    govern_behavior_consumer_with_core,
-)
 from app.domains.billing import QuotaService
 from app.domains.consents import get_consents
 from app.domains.context_bucket import resolve_context_bucket
 from app.domains.digestive import (
     build_inmemory_digestive_context,
     contextual_safety_flags,
-)
-from app.domains.digestive_intelligence import (
-    build_digestive_intelligence,
-    govern_digestive_with_core,
 )
 from app.domains.digestive_observation import (
     persistable_image_quality,
@@ -88,6 +79,8 @@ from app.domains.digestive_verification import (
     needed_anomaly_verifications,
 )
 from app.domains.intelligence_context import build_dog_intelligence_context
+from app.domains.model_behavior_result import model_behavior_result
+from app.domains.model_digestive_result import model_digestive_result
 from app.domains.models import BehaviorEventRec
 from app.domains.personal_dog_context import (
     assemble_behavior_dog_context,
@@ -103,12 +96,10 @@ from app.domains.retention import (
     schedule_behavior_raw_expiry,
     schedule_digestive_raw_expiry,
 )
-from app.knowledge.advice import build_advice
 from app.knowledge.retrieval import retrieve_evidence
 from app.knowledge.safety import (
-    deterministic_safety_flags as behavior_safety_flags,
+    merge_safety_flags,
 )
-from app.knowledge.safety import merge_safety_flags
 from app.providers import supabase_auth_admin
 from app.providers.base import (
     EligiblePatternSummary,
@@ -863,7 +854,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         # retrieval, fonte unica in knowledge.safety): il reasoner le riceve
         # come vincoli stabiliti e il merge finale le rende effettive anche se
         # l'LLM non emette flag (gate urgente Advice Engine, sez. 16.3/19.3).
-        det_flags = behavior_safety_flags(observation, dog_context)
+        det_flags = []
         interpret_kwargs: dict = {
             "observation": observation,
             "context_bucket": context_bucket,
@@ -901,21 +892,6 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
                 "context_bucket": context_bucket,
             }
         )
-        interpretation, decision_trace = apply_behavior_decision_policy(
-            interpretation,
-            observation,
-            dog_name=dog.name,
-            context_bucket=context_bucket,
-            knowledge=knowledge_context,
-        )
-        confidence = _calibrated_confidence(
-            interpretation,
-            observation,
-        )
-        if confidence != interpretation.confidence_band:
-            interpretation = interpretation.model_copy(
-                update={"confidence_band": confidence}
-            )
     except TimeoutError:
         return await _fail(state, event, ErrorCode.PROVIDER_TIMEOUT, retryable=True)
     except BudgetExceededError:
@@ -941,12 +917,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
 
     # INTERPRETING -> COMPLETED: persist event + finalize quota (sez. 7.2).
     transition(event, BehaviorEventStatus.COMPLETED)
-    try:
-        advice = build_advice(
-            interpretation, dog_context, knowledge_context, observation=observation
-        )
-    except Exception:  # noqa: BLE001 -- advice failure must not discard interpretation
-        advice = None
+    advice = None
     interpretation_json = interpretation.model_dump(mode="json")
     interpretation_json["knowledge_audit"] = {
         "registry_version": knowledge_context.registry_version,
@@ -954,23 +925,12 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
         "card_ids": [card.card_id for card in knowledge_context.cards],
     }
     interpretation_json["intelligence_audit"] = intelligence.audit()
-    interpretation_json["decision_audit"] = decision_trace.model_dump(mode="json")
+    interpretation_json["decision_audit"] = {"writer": "gpt-personal/v1"}
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
-    consumer = build_behavior_consumer(
-        interpretation,
-        dog_name=dog.name,
-        dog_context=dog_context,
-        advice=advice,
-    )
-    consumer, canine_audit = govern_behavior_consumer_with_core(
-        consumer,
-        scientific_card_ids=[card.card_id for card in knowledge_context.cards],
-        personal_source_ids=[
-            item.pattern_id for item in interpretation.personal_memory_used
-        ],
-    )
+    consumer = model_behavior_result(interpretation)
+    canine_audit = {"writer": "gpt-personal/v1"}
     interpretation_json["consumer"] = consumer.model_dump(mode="json")
     interpretation_json["canine_intelligence"] = canine_audit
     interpretation_json["context_bucket"] = (
@@ -984,7 +944,7 @@ async def process_behavior_event(state: AppState, *, event_id: str) -> dict:
             state.engine,
             event_id=event.id,
             governed_interpretation_json=interpretation.model_dump(mode="json"),
-            decision_trace=decision_trace.model_dump(mode="json"),
+            decision_trace={"writer": "gpt-personal/v1"},
             consumer_json=consumer.model_dump(mode="json"),
         )
     event.interpretation_json = interpretation_json
@@ -1120,7 +1080,7 @@ async def refine_behavior_event_context(
         domain="behavior",
         settings=state.settings,
     )
-    deterministic_flags = behavior_safety_flags(observation, dog_context)
+    deterministic_flags = []
 
     from app.domains.processing_context import (
         owner_facts_for_reasoner as _owner_facts,
@@ -1190,25 +1150,8 @@ async def refine_behavior_event_context(
         ),
         "context_bucket": context_bucket,
     }
-    if owner_answer is not None:
-        refinement_update.update(
-            {
-                "needs_context": False,
-                "context_question": None,
-                "context_options": [],
-                "context_effect": interpretation.context_effect
-                or f"Ho aggiornato la lettura con la tua risposta: {owner_answer.label}.",
-            }
-        )
     interpretation = _ground_personal_memory(interpretation, eligible_memory)
     interpretation = interpretation.model_copy(update=refinement_update)
-    interpretation, decision_trace = apply_behavior_decision_policy(
-        interpretation,
-        observation,
-        dog_name=dog.name,
-        context_bucket=context_bucket,
-        knowledge=knowledge_context,
-    )
 
     await state.cost_meter.record(
         usage=usage,
@@ -1217,25 +1160,9 @@ async def refine_behavior_event_context(
         event_id=event.id,
         user_id=event.user_id,
     )
-    try:
-        advice = build_advice(
-            interpretation, dog_context, knowledge_context, observation=observation
-        )
-    except Exception:  # noqa: BLE001 -- advice cannot discard a valid refinement
-        advice = None
-    consumer = build_behavior_consumer(
-        interpretation,
-        dog_name=dog.name,
-        dog_context=dog_context,
-        advice=advice,
-    )
-    consumer, canine_audit = govern_behavior_consumer_with_core(
-        consumer,
-        scientific_card_ids=[card.card_id for card in knowledge_context.cards],
-        personal_source_ids=[
-            item.pattern_id for item in interpretation.personal_memory_used
-        ],
-    )
+    advice = None
+    consumer = model_behavior_result(interpretation)
+    canine_audit = {"writer": "gpt-personal/v1"}
     interpretation_json = interpretation.model_dump(mode="json")
     interpretation_json["knowledge_audit"] = {
         "registry_version": knowledge_context.registry_version,
@@ -1243,7 +1170,7 @@ async def refine_behavior_event_context(
         "card_ids": [card.card_id for card in knowledge_context.cards],
     }
     interpretation_json["intelligence_audit"] = intelligence.audit()
-    interpretation_json["decision_audit"] = decision_trace.model_dump(mode="json")
+    interpretation_json["decision_audit"] = {"writer": "gpt-personal/v1"}
     interpretation_json["advice"] = (
         advice.model_dump(mode="json") if advice is not None else None
     )
@@ -1259,7 +1186,7 @@ async def refine_behavior_event_context(
             state.engine,
             event_id=event.id,
             governed_interpretation_json=interpretation.model_dump(mode="json"),
-            decision_trace=decision_trace.model_dump(mode="json"),
+            decision_trace={"writer": "gpt-personal/v1"},
             consumer_json=consumer.model_dump(mode="json"),
         )
 
@@ -1420,6 +1347,8 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
                     image_sha256_hex=digest,
                     identity=identity,
                 )
+        if event.observation_json:
+            cached = event.observation_json
         if cached is not None:
             observation_json = dict(cached)
             usage = ProviderUsage(
@@ -1444,12 +1373,14 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             event_id=event.id,
             user_id=event.user_id,
         )
+        raw_observation = dict(observation_json.get("raw_observation") or observation_json)
         observation_json = prepare_digestive_observation(
             observation_json,
             image_sha256=digest,
             observer_provider=identity["observer_provider"],
             observer_model=identity["observer_model"],
         )
+        observation_json["raw_observation"] = raw_observation
         if digest:
             if state.engine is not None:
                 await store_cached_observation_db(
@@ -1647,18 +1578,36 @@ async def process_digestive_event(state: AppState, *, event_id: str) -> dict:
             state.store, event=event
         )
     # Includes owner-confirmed context; generated text cannot add or downgrade.
-    event.safety_flags = contextual_safety_flags(obs_json, digestive_context)
-    intelligence = build_digestive_intelligence(
-        obs_json,
-        digestive_context,
-        longitudinal=state.settings.digestive_longitudinal_v3,
-    )
-    intelligence, canine_audit = govern_digestive_with_core(intelligence)
+        event.safety_flags = contextual_safety_flags(obs_json, digestive_context)
+    try:
+        intelligence, canine_audit = await model_digestive_result(
+            state, event=event, digestive_context=digestive_context
+        )
+    except Exception as exc:
+        logger.exception("Digestive reasoner failed for %s", event.id)
+        event.last_error_code = ErrorCode.PROCESSING_FAILED.value
+        event.status = "FAILED_RETRYABLE" if event.attempt_count < MAX_TASK_ATTEMPTS else "FAILED_TERMINAL"
+        if event.status == "FAILED_TERMINAL" and event.quota_reserved and not event.quota_committed and not event.quota_refunded:
+            await quota.refund(event.user_id, AnalysisDomain.DIGESTIVE, reference_id=event.id)
+            event.quota_refunded = True
+        if state.engine is not None:
+            await digestive_db.save_fecal_state(state.engine, event)
+        await _set_analysis_job_status(state, event_id=event.id,
+            status="RETRYING" if event.status == "FAILED_RETRYABLE" else "FAILED",
+            error_code=event.last_error_code)
+        if event.status == "FAILED_RETRYABLE":
+            raise RetryableTaskError({"event_id": event.id, "status": event.status, "error": event.last_error_code}) from exc
+        return {"event_id": event.id, "status": event.status, "error": event.last_error_code}
     event.intelligence_json = {
         **intelligence.model_dump(mode="json"),
         "canine_intelligence": canine_audit,
     }
     event.summary = intelligence.consumer_summary
+    event.safety_flags = list({
+        str(flag.get("code")): flag
+        for flag in [*event.safety_flags, *intelligence.safety_flags]
+        if isinstance(flag, dict) and flag.get("code")
+    }.values())
     event.status = "COMPLETED"
     event.completed_at = now_utc()
     if event.quota_reserved and not event.quota_committed and not event.quota_refunded:

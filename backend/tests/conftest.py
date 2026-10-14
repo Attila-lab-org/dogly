@@ -9,14 +9,13 @@ import uuid
 import httpx
 import jwt as pyjwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-
 from app.api.app import create_app
 from app.api.auth import StaticJwksProvider
 from app.api.deps import AppState, build_default_state
 from app.config import Settings
 from app.worker.main import create_worker_app
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 ISSUER = "https://test-project.supabase.co/auth/v1"
 AUDIENCE = "authenticated"
@@ -50,7 +49,24 @@ def settings() -> Settings:
 
 
 @pytest.fixture()
-def state(settings: Settings, rsa_keys: tuple[str, dict]) -> AppState:
+def state(settings: Settings, rsa_keys: tuple[str, dict], monkeypatch) -> AppState:
+    # Explicit simulated semantic writer for CI. Never a runtime fallback.
+    from app.domains import model_digestive_result
+    from app.domains.digestive_intelligence import (
+        DigestiveContext,
+        build_digestive_intelligence,
+    )
+    from app.providers.base import ProviderUsage
+
+    async def simulated_writer(settings, *, task, payload, **kwargs):
+        result = build_digestive_intelligence(
+            payload["observation"] or {},
+            DigestiveContext.model_validate(payload["digestive_history"]),
+            longitudinal=settings.digestive_longitudinal_v3,
+        )
+        return result.model_dump(mode="json"), ProviderUsage(provider="mock", model="fixture-reasoner")
+
+    monkeypatch.setattr(model_digestive_result, "request_personal_json", simulated_writer)
     st = build_default_state(settings)
     st.jwks_provider = StaticJwksProvider(rsa_keys[1])
     return st

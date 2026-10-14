@@ -24,6 +24,7 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.taxonomy import (
     INTERPRETATION_SCHEMA_VERSION,
+    BehaviorEventStatus,
     FeedbackValue,
     IntentCode,
 )
@@ -35,15 +36,12 @@ from app.domains import (
     lifestyle_db,
     processing_context_store,
 )
-from app.domains.behavior_intelligence import (
-    BEHAVIOR_CONSUMER_VERSION,
-    behavior_meaning_copy,
-)
 from app.domains.context_bucket import resolve_context_bucket
 from app.domains.models import BehaviorEventRec
 from app.domains.processing_context import (
     MAX_PROCESSING_QUESTIONS,
     PLANNER_VERSION,
+    PlannedQuestion,
     accepted_answers_for_event,
     is_collection_open,
     owner_facts_for_reasoner,
@@ -51,7 +49,6 @@ from app.domains.processing_context import (
     question_short_label,
     resolve_question,
 )
-from app.knowledge.advice import alert_vigilance_advice
 from app.knowledge.models import AdviceOutcomeValue
 
 router = APIRouter()
@@ -163,40 +160,12 @@ def event_out(
 ) -> BehaviorEventOut:
     interp = event.interpretation_json or {}
     consumer = dict(interp.get("consumer") or {})
-    partial_but_useful = _partial_reading_is_useful(interp, consumer)
-    effective_intent = _effective_legacy_intent(
-        event,
-        interp,
-        partial_but_useful=partial_but_useful,
-    )
-    legacy_consumer = (
-        bool(consumer)
-        and consumer.get("composer_version") != BEHAVIOR_CONSUMER_VERSION
-    )
-    if legacy_consumer:
-        headline, summary, dog_voice = behavior_meaning_copy(
-            _legacy_dog_name(interp, consumer),
-            effective_intent,
-        )
-    else:
-        headline = consumer.get("consumer_headline")
-        summary = consumer.get("consumer_summary") or event.summary
-        dog_voice = consumer["dog_voice"] if "dog_voice" in consumer else interp.get("dog_voice")
-    advice = event.advice_json or interp.get("advice")
-    recommended_next_step = (
-        None
-        if partial_but_useful and interp.get("needs_context")
-        else consumer.get("recommended_next_step")
-    )
-    if (
-        legacy_consumer
-        and effective_intent is IntentCode.ALERT_VIGILANCE
-        and not interp.get("needs_context")
-        and not consumer.get("safety")
-    ):
-        upgraded_advice = alert_vigilance_advice()
-        advice = upgraded_advice.model_dump(mode="json")
-        recommended_next_step = upgraded_advice.action
+    # Reading a saved result is a projection, never a new interpretation.
+    headline = consumer.get("consumer_headline") or interp.get("consumer_headline")
+    summary = consumer.get("consumer_summary") or event.summary
+    dog_voice = consumer["dog_voice"] if "dog_voice" in consumer else interp.get("dog_voice")
+    advice = None
+    recommended_next_step = consumer.get("recommended_next_step")
     return BehaviorEventOut(
         id=event.id,
         dog_id=event.dog_id,
@@ -217,7 +186,7 @@ def event_out(
         context_options=interp.get("context_options", []),
         context_effect=interp.get("context_effect"),
         dog_voice=dog_voice,
-        sound_note=_sound_note(event, interp),
+        sound_note=interp.get("sound_note"),
         policy_version=event.policy_version,
         taxonomy_version=event.taxonomy_version,
         feedback=feedback,
@@ -437,43 +406,51 @@ async def _processing_rows(state: StateDep, *, event_id: str, user_id: str):
 
 
 async def _processing_plan_state(state: StateDep, event: BehaviorEventRec):
-    from app.worker.handlers import _dog_context, _eligible_memory
-
     rows = await _processing_rows(
         state, event_id=event.id, user_id=event.user_id
     )
     occupied = [row.question_id for row in rows]
-    capture = None
-    if state.engine is not None:
-        capture = await behavior_db.load_capture(
-            state.engine, capture_id=event.capture_id
-        )
-    if capture is None:
+    interp = event.interpretation_json or {}
+    planned = None
+    if state.settings.app_env == "local" and not event.interpretation_json:
+        # CI-only fixture keeps the legacy processing UI testable before a
+        # simulated model result exists. Production questions come from GPT.
+        from app.worker.handlers import _dog_context, _eligible_memory
         capture = state.store.captures.get(event.capture_id)
-    has_audio = True if capture is None else bool(capture.has_audio)
-    bucket = getattr(capture, "context_bucket", None) if capture is not None else None
-    dog_name = "il cane"
-    dog_context = None
-    lifestyle = None
-    memory = []
-    try:
-        dog, dog_context, lifestyle = await _dog_context(state, event)
-        dog_name = dog.name
-        memory = await _eligible_memory(state, event.dog_id)
-    except (ApiError, KeyError, AttributeError, TypeError, ValueError):
-        stored = state.store.dogs.get(event.dog_id)
-        if stored is not None:
-            dog_name = stored.name
-    planned = plan_next_question(
-        dog_name=dog_name,
-        context_bucket=bucket,
-        has_audio=has_audio,
-        occupied_question_ids=occupied,
-        dog_context=dog_context,
-        eligible_memory=memory,
-        observation=event.observation_json,
-        lifestyle=lifestyle,
-    )
+        dog_name = "il cane"
+        dog_context = None
+        lifestyle = None
+        memory = []
+        try:
+            dog, dog_context, lifestyle = await _dog_context(state, event)
+            dog_name = dog.name
+            memory = await _eligible_memory(state, event.dog_id)
+        except (ApiError, KeyError, AttributeError, TypeError, ValueError):
+            pass
+        planned = plan_next_question(
+            dog_name=dog_name,
+            context_bucket=getattr(capture, "context_bucket", None),
+            has_audio=True if capture is None else bool(capture.has_audio),
+            occupied_question_ids=occupied,
+            dog_context=dog_context,
+            eligible_memory=memory,
+            observation=event.observation_json,
+            lifestyle=lifestyle,
+        )
+    if (
+        not occupied
+        and interp.get("needs_context")
+        and interp.get("context_question")
+    ):
+        planned = PlannedQuestion(
+            id="gpt_context",
+            text=str(interp["context_question"]),
+            options=[
+                {"id": item["id"], "label": item["label"]}
+                for item in interp.get("context_options", [])
+                if isinstance(item, dict) and item.get("id") and item.get("label")
+            ],
+        )
     return rows, occupied, planned
 
 
@@ -546,10 +523,6 @@ async def post_processing_context(
     user_id: UserIdDep,
     _limiter: None = Depends(rate_limit("behavior.processing_context", limit=30)),
 ) -> ProcessingContextOut:
-    try:
-        resolve_question(payload.question_id, None if payload.skipped else payload.answer_id)
-    except ValueError as exc:
-        raise ApiError(ErrorCode.VALIDATION_FAILED, "Unknown question or answer.") from exc
     if state.engine is not None:
         event = await behavior_db.get_event(
             state.engine, user_id=user_id, event_id=event_id
@@ -558,7 +531,22 @@ async def post_processing_context(
         event = behavior_domain.get_event(
             state.store, user_id=user_id, event_id=event_id
         )
+    if payload.question_id != "gpt_context":
+        try:
+            resolve_question(payload.question_id, None if payload.skipped else payload.answer_id)
+        except ValueError as exc:
+            raise ApiError(ErrorCode.VALIDATION_FAILED, "Unknown question or answer.") from exc
+    else:
+        allowed = {
+            str(item.get("id"))
+            for item in (event.interpretation_json or {}).get("context_options", [])
+            if isinstance(item, dict)
+        }
+        if not payload.skipped and payload.answer_id not in allowed:
+            raise ApiError(ErrorCode.VALIDATION_FAILED, "Unknown answer.")
     rows, occupied, planned = await _processing_plan_state(state, event)
+    if event.status in {BehaviorEventStatus.REJECTED_QUALITY, BehaviorEventStatus.FAILED_TERMINAL}:
+        raise ApiError(ErrorCode.VALIDATION_FAILED, "Processing context is closed.")
     existing = next(
         (row for row in rows if row.question_id == payload.question_id),
         None,
@@ -569,7 +557,7 @@ async def post_processing_context(
                 ErrorCode.VALIDATION_FAILED,
                 "Processing companion already collected three answers.",
             )
-        if planned is None or planned.id != payload.question_id:
+        if is_collection_open(event) and (planned is None or planned.id != payload.question_id):
             raise ApiError(
                 ErrorCode.VALIDATION_FAILED,
                 "This question is not the current processing question.",

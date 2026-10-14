@@ -20,14 +20,10 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, idempotency_db
-from app.domains.digestive_intelligence import (
-    DIGESTIVE_REASONING_VERSION,
-    build_digestive_intelligence,
-)
 from app.domains.digestive_observation import (
     api_image_quality,
-    persistable_image_quality,
 )
+from app.domains.model_digestive_result import model_digestive_result
 from app.domains.models import FecalEventRec
 
 router = APIRouter()
@@ -36,40 +32,7 @@ router = APIRouter()
 async def _ensure_digestive_intelligence(
     event: FecalEventRec, state: AppState
 ) -> FecalEventRec:
-    """Build or refresh deterministic consumer intelligence."""
-    if (
-        event.status != "COMPLETED"
-        or not event.observation_json
-        or (
-            event.intelligence_json
-            and event.intelligence_json.get("reasoning_version")
-            == DIGESTIVE_REASONING_VERSION
-        )
-    ):
-        return event
-    if state.engine is not None:
-        context = await digestive_db.load_digestive_context(
-            state.engine, event=event
-        )
-    else:
-        context = digestive_domain.build_inmemory_digestive_context(
-            state.store, event=event
-        )
-    intelligence = build_digestive_intelligence(
-        event.observation_json,
-        context,
-        longitudinal=state.settings.digestive_longitudinal_v3,
-    )
-    event.intelligence_json = intelligence.model_dump(mode="json")
-    event.summary = intelligence.consumer_summary
-    event.image_quality = persistable_image_quality(
-        event.observation_json.get("image_quality")
-    ) or event.image_quality
-    event.safety_flags = digestive_domain.contextual_safety_flags(
-        event.observation_json, context
-    )
-    if state.engine is not None:
-        await digestive_db.save_fecal_state(state.engine, event)
+    """Reopening is read-only: retain the saved writer's exact result."""
     return event
 
 
@@ -192,6 +155,12 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
         )
         active_food_name = food.name if food is not None else None
         baseline_comparison = None
+    if e.status == "COMPLETED" and not e.intelligence_json:
+        raise ApiError(
+            ErrorCode.PROCESSING_FAILED,
+            "Il risultato non è disponibile in questo momento. Riprova tra poco.",
+            retryable=True,
+        )
     e = await _ensure_digestive_intelligence(e, state)
     observation = e.observation_json or {}
     intelligence = e.intelligence_json or {}
@@ -315,15 +284,16 @@ async def update_digestive_context(
             state.store, event=event
         )
 
-    intelligence = build_digestive_intelligence(
-        event.observation_json or {},
-        context,
-        longitudinal=state.settings.digestive_longitudinal_v3,
+    previous_flags = list(event.safety_flags or [])
+    intelligence, audit = await model_digestive_result(
+        state, event=event, digestive_context=context
     )
-    event.safety_flags = digestive_domain.contextual_safety_flags(
-        event.observation_json or {}, context
-    )
-    event.intelligence_json = intelligence.model_dump(mode="json")
+    event.safety_flags = list({
+        str(flag.get("code")): flag
+        for flag in [*previous_flags, *intelligence.safety_flags]
+        if isinstance(flag, dict) and flag.get("code")
+    }.values())
+    event.intelligence_json = {**intelligence.model_dump(mode="json"), "canine_intelligence": audit}
     event.summary = intelligence.consumer_summary
     if state.engine is not None:
         await digestive_db.save_fecal_state(state.engine, event)

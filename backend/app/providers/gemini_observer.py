@@ -54,6 +54,8 @@ present=no. Do not leave present=unknown merely because the meaning of a clearly
 audible bark, growl, whine, whimper or howl is uncertain.
 If something is not clearly visible, use unknown/not_visible values.
 Return JSON matching the ObservationContract schema exactly.
+Use additional_observations for useful objective details that do not fit its
+categories. Preserve sequence, movement and audible details; never assign intent.
 Do not add extra keys. Do not invent field names.
 Quality fields (framing, lighting, motion_blur, audio_quality, overall_quality)
 must be exactly: good, degraded, insufficient, unknown, or absent for audio_quality.

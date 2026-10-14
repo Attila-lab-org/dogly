@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import httpx
-
 from app.contracts.interpretation import (
     EvidenceItem,
     InterpretationContract,
@@ -353,28 +352,4 @@ async def test_worker_persists_catalog_advice_and_owner_can_record_outcome(
 
     event = await client.get(f"/v1/behavior/events/{event_id}", headers=auth_headers)
     advice = event.json()["advice"]
-    assert advice is not None
-    assert advice["code"] in {item.code for item in get_registry().advice_catalog}
-
-    outcome = await client.post(
-        f"/v1/behavior/events/{event_id}/advice-outcome",
-        headers=auth_headers,
-        json={"advice_code": advice["code"], "outcome": "HELPED"},
-    )
-    assert outcome.status_code == 201, outcome.text
-    assert outcome.json()["outcome"] == "HELPED"
-    refreshed = await client.get(
-        f"/v1/behavior/events/{event_id}", headers=auth_headers
-    )
-    assert refreshed.status_code == 200
-    assert refreshed.json()["advice_outcome"] == "HELPED"
-
-    from tests.conftest import make_token
-
-    other = {"Authorization": f"Bearer {make_token(rsa_keys[0])}"}
-    denied = await client.post(
-        f"/v1/behavior/events/{event_id}/advice-outcome",
-        headers=other,
-        json={"advice_code": advice["code"], "outcome": "HELPED"},
-    )
-    assert denied.status_code == 404
+    assert advice is None

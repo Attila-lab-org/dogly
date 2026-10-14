@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -256,6 +256,8 @@ class ObservationContract(BaseModel):
     timeline: list[TimelineSegment] = Field(default_factory=list)
     # Features not observable or quality-limited.
     unknowns: list[str] = Field(default_factory=list)
+    # Preserve objective details outside the interface's closed categories.
+    additional_observations: dict[str, Any] = Field(default_factory=dict)
     observer_meta: ObserverMeta
 
 
@@ -629,6 +631,11 @@ def normalize_observation_dict(raw: dict) -> dict:
     così un JSON Gemini "creativo" non fa fallire l'analisi.
     """
     normalized = dict(raw)
+    known_fields = set(ObservationContract.model_fields)
+    normalized["additional_observations"] = {
+        **(raw.get("additional_observations") or {}),
+        **{key: value for key, value in raw.items() if key not in known_fields},
+    }
     for section_name, model in _NESTED_MODELS.items():
         section = normalized.get(section_name)
         if not isinstance(section, dict):

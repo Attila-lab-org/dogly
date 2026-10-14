@@ -63,6 +63,7 @@ export function createRealtimeTurn(
     source?: 'behavior' | 'digestive';
     photoId?: string;
     photoContext?: string;
+    idempotencyKey?: string;
   },
 ) {
   return api.post<RealtimeTurn>(`/v1/realtime/sessions/${sessionId}/turns`, {
@@ -72,7 +73,9 @@ export function createRealtimeTurn(
     ...(options?.source ? { context_source: options.source } : {}),
     ...(options?.photoId ? { photo_id: options.photoId } : {}),
     ...(options?.photoContext ? { photo_context: options.photoContext } : {}),
-  }, { timeoutMs: REALTIME_TURN_TIMEOUT_MS });
+  }, { timeoutMs: REALTIME_TURN_TIMEOUT_MS,
+    headers: options?.idempotencyKey ? {'X-Idempotency-Key': options.idempotencyKey} : undefined,
+  });
 }
 
 export function decideRealtimeMemory(

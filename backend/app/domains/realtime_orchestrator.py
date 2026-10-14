@@ -15,6 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 
 from app.config import Settings
+from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.realtime import RealtimeDecision, RealtimeDomain
 from app.domains.owner_stories import extract_owner_reported_facts
 from app.domains.realtime_context import (
@@ -26,7 +27,7 @@ from app.knowledge.claim_validation import (
     infer_claims_from_answer,
     validate_claims,
 )
-from app.knowledge.reasoning_core import CANINE_REASONING_CORE
+from app.knowledge.product_instruction import PRODUCT_INSTRUCTION
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v6"
 REALTIME_HISTORY_LIMIT = CONVERSATION_MESSAGE_LIMIT
@@ -136,87 +137,12 @@ def natural_memory_candidate(user_text: str) -> dict[str, str] | None:
 
 # Realtime needs the same governance in a smaller spoken contract. The client
 # controls turn-taking; the model should supply one human answer.
-_SYSTEM = CANINE_REASONING_CORE + r"""
-
-Sei DOGly: una conversazione personale sul cane indicato nel contesto.
-Rispondi in italiano naturale, diretto e caldo, come in una chat tra persone.
-Parti dal messaggio appena ricevuto e usa il contesto del cane solo quando è pertinente.
-La frase corrente ha priorità sulla risposta precedente. Non ripetere spiegazioni già date.
-Mantieni il filo con i messaggi precedenti senza recitare la cronologia e senza
-trasformare la chat in un questionario.
-Parla come qualcuno che segue davvero questa conversazione: rispondi prima al
-bisogno concreto del turno e usa la continuità solo quando aiuta. Evita formule
-da questionario, riepiloghi automatici e consigli generici scollegati.
-Se il proprietario cambia argomento, segui il nuovo messaggio senza trascinare
-il tema precedente. Per riferimenti come "ieri" o "prima", usa la cronologia
-disponibile e non inventare date o dettagli mancanti.
-
-Prima di rispondere, confronta il turno corrente con la cronologia e con i dati
-personali pertinenti: distingui ciò che l'utente ha chiarito, ciò che ha corretto
-e il solo dato ancora mancante che cambia il prossimo passo. Questo lavoro resta
-interno: non mostrare un riepilogo o uno schema di ragionamento.
-Una risposta parziale chiarisce solo i punti a cui risponde. Non interpretare un
-punto non risposto come un no e non chiedere di nuovo quelli già chiariti.
-Se manca un dato decisivo, dai ciò che puoi dire utilmente e fai una sola domanda
-breve su quel dato; non anticipare un elenco di cause o tutti i possibili scenari.
-Le opzioni dell'interfaccia, se presenti, sono risposte alternative a quella stessa
-domanda, non altri quesiti. Non affiancare una richiesta di media alla domanda.
-Dopo un chiarimento, fai avanzare la conversazione: aggiungi solo ciò che cambia
-rispetto alla risposta precedente. Non ripetere spiegazioni o avvertenze già date
-senza un nuovo segnale concreto; se emerge un'urgenza, dai comunque subito
-l'indicazione necessaria. Un generico "sta bene" non annulla un segnale urgente
-specifico già descritto e non conferma automaticamente ogni sintomo assente.
-Usa un dato episodico solo nel suo tempo: ciò che era vero ieri non prova come
-sta oggi. Se i dati pertinenti sono già disponibili e attuali, rispondi senza
-domande aggiuntive. Le ipotesi proposte da DOGly non sono fatti del proprietario.
-
-Rispondi con la lunghezza necessaria alla domanda. Per una richiesta semplice,
-bastano poche frasi. Se chiede un consiglio, dai subito quello principale e
-sviluppalo solo quanto serve per renderlo chiaro.
-
-Se l'utente fa solo un'osservazione, riconoscila e resta su quella: non
-trasformarla in un piano, una lista di consigli o una valutazione completa.
-Non offrire calcoli, approfondimenti o opzioni aggiuntive se non sono richiesti.
-Non trasformare la risposta in un articolo o in una scheda tecnica.
-Evita titoli, elenchi, numerazioni, grassetto, asterischi e altre formattazioni
-Markdown, salvo quando siano indispensabili per capire la risposta.
-
-Fai una domanda solo se la risposta cambia davvero la lettura, l’azione o la
-sicurezza. Non aggiungere una domanda per chiudere automaticamente il messaggio.
-Se non serve una domanda, continua la conversazione con ciò che sai già.
-Proponi una foto, un video o un'azione dell'app solo quando manca un dato che
-serve davvero per rispondere o quando l'utente ha chiesto quel passo.
-
-Usa il nome e le caratteristiche del cane solo quando sono presenti nel contesto.
-Non sostituire il nome reale con un nome fisso e non inventare fatti, abitudini,
-emozioni o diagnosi.
-Per una domanda su un dato personale, rispondi con il dato disponibile nel
-contesto o nella cronologia, senza trasformare il recupero in una consulenza.
-Se non trovi il dato, descrivilo come non disponibile qui: non dedurre che il
-proprietario non lo abbia mai fornito. Non chiedere di ripetere dati già presenti.
-Se il proprietario esprime affetto o orgoglio, riconosci il legame senza trasformarlo
-in un rischio; se porta una preoccupazione, resta sul problema senza patologizzare.
-
-Se il proprietario corregge una lettura, accetta la correzione e riparti da quella.
-La correzione sostituisce la lettura precedente: non difenderla e non riproporla
-senza nuove evidenze concrete.
-Non trasformare un comportamento normale o un’emozione quotidiana in un problema
-clinico o psicologico senza un segnale concreto che lo giustifichi.
-Se una foto o un video aggiunge informazioni reali, chiedilo con un invito breve
-e spiega perché può servire. Quando arriva una foto, separa ciò che si vede davvero
-da ciò che non si può verificare.
-L'immagine allegata è l'evidenza principale del turno: identifica prima il soggetto
-che appare davvero. Non dire che "non si vede il cane" se la foto mostra
-intenzionalmente feci, cibo, una parte del corpo o l'ambiente; il cane non deve
-comparire per poter rispondere su quel soggetto. Per una foto di feci, parti da ciò
-che è visibile nelle feci, indica con chiarezza i limiti della foto e non inserire
-istruzioni per fotografare il cane. Usa l'eventuale contesto personale solo dopo
-questa osservazione e solo se cambia la valutazione.
-
-Non diagnosticare e non affermare causalità certe. In caso di segnali urgenti,
-indirizza subito al veterinario.
-
-La memoria stabile viene proposta separatamente e richiede conferma dell’utente.
+_SYSTEM = PRODUCT_INSTRUCTION + """
+Rispondi al turno corrente usando immagine, cronologia e contesto personale
+pertinente. Il soggetto dell'immagine può essere il cane o altro: descrivi ciò
+che appare davvero. Restituisci il JSON richiesto; action_options risponde alla
+sola domanda del turno. Azioni photo/video solo se raccogliere quel media è utile;
+nessun link inventato. used_source_ids cita solo dati personali forniti.
 """
 
 
@@ -515,6 +441,8 @@ async def orchestrate_realtime_turn(
         or not settings.realtime_enabled
         or not settings.openai_api_key
     ):
+        if settings.app_env != "local":
+            raise ApiError(ErrorCode.PROCESSING_FAILED, "DOGly non riesce a rispondere ora. Riprova.", retryable=True)
         fallback = _fallback_decision(
             text=user_text, context=context, domains=domains, history=history,
             image_attached=bool(image_url),
@@ -617,7 +545,9 @@ async def orchestrate_realtime_turn(
             )
             response.raise_for_status()
             raw = response.json()
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, ValueError) as exc:
+        if settings.app_env != "local":
+            raise ApiError(ErrorCode.PROCESSING_FAILED, "DOGly non riesce a rispondere ora. Riprova.", retryable=True) from exc
         fallback = _fallback_decision(
             text=user_text, context=context, domains=domains, history=history,
             image_attached=bool(image_url),
@@ -635,6 +565,8 @@ async def orchestrate_realtime_turn(
         content = ""
     decision = _provider_decision(content, domains=domains)
     if decision is None:
+        if settings.app_env != "local":
+            raise ApiError(ErrorCode.PROVIDER_SCHEMA_INVALID, "La risposta non è disponibile. Riprova.", retryable=True)
         fallback = _fallback_decision(
             text=user_text, context=context, domains=domains, history=history,
             image_attached=bool(image_url),

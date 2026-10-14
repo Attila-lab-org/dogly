@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from app.config import Settings
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import ContextBucket
@@ -47,11 +46,12 @@ def test_gpt4_family_keeps_temperature():
     assert body["temperature"] == 0.2
 
 
-def test_reasoner_prompt_prioritizes_grounded_affection():
+def test_reasoner_prompt_uses_shared_product_identity():
+    from app.knowledge.product_instruction import PRODUCT_INSTRUCTION
     from app.providers.openai_reasoner import _SYSTEM
-
-    assert "Give the owner's emotional context a real place" in _SYSTEM
-    assert "ordinary affection into agitation" in _SYSTEM
+    assert _SYSTEM.startswith(PRODUCT_INSTRUCTION)
+    assert "recommended_next_step" in _SYSTEM
+    assert "baseline_note" in _SYSTEM
 
 
 def test_merge_openai_usage_adds_repair_tokens():

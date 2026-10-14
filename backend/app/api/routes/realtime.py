@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Response, status
 
-from app.api.deps import StateDep, UserIdDep, rate_limit
+from app.api.deps import IdempotencyDep, StateDep, UserIdDep, rate_limit
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.realtime import (
     RealtimeDecision,
@@ -20,6 +20,7 @@ from app.contracts.realtime import (
     RealtimeTurnCreate,
     RealtimeTurnOut,
 )
+from app.contracts.taxonomy import AnalysisDomain
 from app.domains import (
     behavior,
     behavior_db,
@@ -27,6 +28,7 @@ from app.domains import (
     digestive_db,
     gallery,
     gallery_db,
+    idempotency_db,
     realtime_db,
 )
 from app.domains.gallery_db import GALLERY_BUCKET
@@ -48,6 +50,7 @@ from app.domains.realtime_orchestrator import (
     orchestrate_realtime_turn,
 )
 from app.domains.repository import now_utc
+from app.providers.personal_reasoning import recognize_attachment
 
 router = APIRouter(prefix="/realtime")
 logger = logging.getLogger(__name__)
@@ -181,10 +184,13 @@ async def create_realtime_turn(
     body: RealtimeTurnCreate,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
     _: Annotated[
         None, Depends(rate_limit("realtime_turn", limit=20, window_seconds=60))
     ],
 ) -> RealtimeTurnOut:
+    if cached := guard.lookup():
+        return RealtimeTurnOut.model_validate(cached)
     if state.engine is not None:
         session = await realtime_db.load_session_db(
             state.engine, session_id=session_id, user_id=user_id
@@ -234,7 +240,23 @@ async def create_realtime_turn(
             "purpose": (body.photo_context or body.text).strip()[:280],
         }
 
-    domains = route_realtime_domains(body.text)
+    attachment_observation: dict[str, Any] | None = None
+    context_query = body.text
+    if image_url and not body.assistant_text and state.settings.openai_api_key:
+        attachment_observation, attachment_usage = await recognize_attachment(
+            state.settings, image_url=image_url, user_text=body.text
+        )
+        await state.cost_meter.record(
+            usage=attachment_usage,
+            operation="realtime.attachment_recognition",
+            domain=AnalysisDomain.OWNER_STORY,
+            event_id=session_id,
+            user_id=user_id,
+        )
+        context_query = f"{body.text}\n{attachment_observation['description']}"
+    domains = route_realtime_domains(context_query)
+    if attachment_observation:
+        domains = list(dict.fromkeys([*attachment_observation["domains"], *domains]))[:3]
     if body.context_source == "digestive" and "DIGESTIVE" not in domains:
         domains = ["DIGESTIVE", *domains][:3]
     # The route and context builder share the same bounded domain contract.
@@ -252,7 +274,7 @@ async def create_realtime_turn(
                 user_id=user_id,
                 dog_id=str(session["dog_id"]),
                 domains=context_domains,
-                user_text=body.text,
+                user_text=context_query,
             )
             if body.event_id and body.context_source == "behavior":
                 focus_behavior_event(
@@ -290,7 +312,17 @@ async def create_realtime_turn(
                 context=context,
                 history=history,
                 image_url=image_url,
-                media_context=body.photo_context,
+                media_context=(
+                    "\n".join(
+                        value for value in [
+                            body.photo_context,
+                            (
+                                "Soggetto osservato nell'allegato: "
+                                + attachment_observation["description"]
+                            ) if attachment_observation else None,
+                        ] if value
+                    ) or None
+                ),
             )
             used = set(decision.used_source_ids)
             source_refs = [
@@ -299,7 +331,7 @@ async def create_realtime_turn(
         else:
             context = load_realtime_context_memory(
                 state.store, dog_id=str(session["dog_id"]), domains=context_domains,
-                user_text=body.text,
+                user_text=context_query,
             )
             if body.event_id and body.context_source == "behavior":
                 focus_behavior_event(
@@ -371,6 +403,11 @@ async def create_realtime_turn(
         ) from exc
 
     try:
+        if attachment_observation:
+            provider_audit = {
+                **provider_audit,
+                "attachment_observation": attachment_observation,
+            }
         decision_json = decision.model_dump(mode="json")
         memory_request = natural_memory_candidate(body.text)
         if attachment is not None:
@@ -425,7 +462,7 @@ async def create_realtime_turn(
         if proposal
         else None
     )
-    return RealtimeTurnOut(
+    result = RealtimeTurnOut(
         id=str(row["id"]),
         session_id=session_id,
         assistant_text=decision.assistant_text,
@@ -445,6 +482,12 @@ async def create_realtime_turn(
         ),
         created_at=row["created_at"],
     )
+    saved_response = result.model_dump(mode="json")
+    guard.record(saved_response)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(state.engine, scope=guard._scope,
+            body=saved_response, payload_hash=guard._payload_hash)
+    return result
 
 
 @router.post(
