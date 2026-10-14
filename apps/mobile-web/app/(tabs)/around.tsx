@@ -29,13 +29,17 @@ export default function AroundScreen() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [locationTick, setLocationTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    setLocating(true);
+    setLocationDenied(false);
     void readDeviceLocation().then((value) => {
       if (!alive) return;
       setLocating(false);
       if (!value) {
+        setCoords(null);
         setLocationDenied(true);
         return;
       }
@@ -44,7 +48,7 @@ export default function AroundScreen() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [locationTick]);
 
   const photosQuery = useQuery({
     queryKey: ['gallery-dog-photos', dog.id, 5],
@@ -55,6 +59,7 @@ export default function AroundScreen() {
     queryKey: ['nearby-places', coords?.lat, coords?.lng],
     queryFn: () => fetchNearbyPlaces({ lat: coords!.lat, lng: coords!.lng }),
     enabled: Boolean(coords),
+    retry: 1,
   });
 
   const photos = photosQuery.data ?? [];
@@ -136,7 +141,7 @@ export default function AroundScreen() {
             <Ionicons name="location-outline" size={22} color={colors.accent} />
           </View>
 
-          {locating || placesQuery.isLoading ? (
+          {locating || (Boolean(coords) && placesQuery.isLoading) ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.emptyText}>Cerco posti vicini…</Text>
@@ -146,6 +151,11 @@ export default function AroundScreen() {
               <Text style={styles.emptyText}>
                 Attiva la posizione per vedere distanze e posti vicini. Puoi comunque aprire la mappa.
               </Text>
+              <PlaceFallback
+                title="Riprova la posizione"
+                button="Attiva / riprova"
+                onPress={() => setLocationTick((value) => value + 1)}
+              />
               <PlaceFallback
                 title="Aree per correre e giocare"
                 button="Cerca aree vicine"
@@ -167,6 +177,26 @@ export default function AroundScreen() {
                 }
               />
             </View>
+          ) : placesQuery.isError ? (
+            <View style={styles.fallback}>
+              <Text style={styles.emptyText}>
+                Non riesco a caricare i luoghi adesso. Riprova tra poco oppure apri la mappa.
+              </Text>
+              <PlaceFallback
+                title="Riprova"
+                button="Carica di nuovo"
+                onPress={() => void placesQuery.refetch()}
+              />
+              <PlaceFallback
+                title="Apri la mappa"
+                button="Cerca nelle vicinanze"
+                onPress={() =>
+                  void Linking.openURL(
+                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('parco cani')}&query_place_id=&center=${coords.lat},${coords.lng}`,
+                  )
+                }
+              />
+            </View>
           ) : cards.length === 0 ? (
             <View style={styles.fallback}>
               <Text style={styles.emptyText}>
@@ -177,7 +207,7 @@ export default function AroundScreen() {
                 button="Cerca nelle vicinanze"
                 onPress={() =>
                   void Linking.openURL(
-                    `https://www.google.com/maps/search/?api=1&query=parco+cani&query_place_id=&center=${coords.lat},${coords.lng}`,
+                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('parco cani')}&query_place_id=&center=${coords.lat},${coords.lng}`,
                   )
                 }
               />

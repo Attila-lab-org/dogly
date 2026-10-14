@@ -36,7 +36,14 @@ function FoodRow({ food, active, onOpen, onRemove }: { food: ApiFoodProduct; act
         </View>
         <View style={styles.chipsRow}>
           {active ? <View style={styles.activePill}><Text style={styles.activePillText}>Lo mangia adesso</Text></View> : null}
-          {food.verified_at === null ? <View style={styles.pendingPill}><Text style={styles.pendingPillText}>Da completare</Text></View> : null}
+          {food.verified_at === null ? (
+            <View style={styles.pendingPill}><Text style={styles.pendingPillText}>Da completare</Text></View>
+          ) : (
+            <View style={styles.verifiedPill}>
+              <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+              <Text style={styles.verifiedPillText}>Verificato</Text>
+            </View>
+          )}
         </View>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`Rimuovi ${food.name || 'questo alimento'}`} onPress={onRemove} style={styles.removeAction}>
@@ -145,6 +152,17 @@ const styles = StyleSheet.create({
   activePillText: { color: colors.accent, fontSize: 11, fontWeight: typography.weight.bold },
   pendingPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.warningSoft },
   pendingPillText: { color: colors.warning, fontSize: 11, fontWeight: typography.weight.bold },
+  verifiedPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: '#DCFCE7',
+  },
+  verifiedPillText: { color: '#16A34A', fontSize: 11, fontWeight: typography.weight.bold },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(15,35,65,0.48)' },
   modalCard: { width: '100%', maxWidth: 380, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface },
   modalTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold, marginBottom: spacing.sm },

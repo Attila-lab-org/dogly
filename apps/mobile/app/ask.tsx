@@ -15,8 +15,12 @@ import { getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api
 import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
 import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
-
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
+import {
+  startNativeDictation,
+  startWebDictation,
+  type DictationHandle,
+} from '@/features/realtime/voiceDictation';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; retryRequestId?: string; attachmentUri?: string };
 
@@ -42,7 +46,7 @@ export default function AskScreen() {
   const [dictating, setDictating] = useState(false);
   const [mediaPhase, setMediaPhase] = useState<'uploading' | 'analyzing' | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<string | undefined>(eventId);
-  const dictationRef = useRef<{ stop: () => void } | null>(null);
+  const dictationRef = useRef<DictationHandle | null>(null);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
@@ -158,21 +162,31 @@ export default function AskScreen() {
     router.push({ pathname: '/behavior/capture', params: { from: 'ask', sessionId: session.id } } as never);
   }, [router, sending, session, messages]);
 
-  const toggleDictation = () => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    if (dictating) { dictationRef.current?.stop(); return; }
-    const browserWindow = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
-    const SpeechRecognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
-    if (!SpeechRecognition) { setError('La dettatura non è disponibile in questo browser.'); return; }
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'it-IT'; recognition.interimResults = false; recognition.continuous = false;
-    recognition.onstart = () => setDictating(true);
-    recognition.onresult = (event: any) => setDraft((current) => `${current}${current ? ' ' : ''}${event.results[0][0].transcript}`.slice(0, 4000));
-    recognition.onerror = () => { setDictating(false); setError('Non ho capito la dettatura. Puoi riprovare.'); };
-    recognition.onend = () => { setDictating(false); dictationRef.current = null; };
-    dictationRef.current = recognition;
-    recognition.start();
-  };
+  const appendTranscript = useCallback((text: string) => {
+    setDraft((current) => `${current}${current ? ' ' : ''}${text}`.slice(0, 4000));
+  }, []);
+
+  const toggleDictation = useCallback(() => {
+    if (dictating) {
+      dictationRef.current?.stop();
+      return;
+    }
+    const handlers = {
+      onTranscript: appendTranscript,
+      onError: (message: string) => setError(message),
+      onStateChange: (recording: boolean) => {
+        setDictating(recording);
+        if (!recording) dictationRef.current = null;
+      },
+    };
+    if (Platform.OS === 'web') {
+      dictationRef.current = startWebDictation(handlers);
+      return;
+    }
+    void startNativeDictation(handlers).then((handle) => {
+      dictationRef.current = handle;
+    });
+  }, [appendTranscript, dictating]);
 
   const intentHandled = useRef(false);
   useEffect(() => {
@@ -185,11 +199,9 @@ export default function AskScreen() {
       });
     } else if (intent === 'voice') {
       intentHandled.current = true;
-      if (Platform.OS === 'web') {
-        setTimeout(() => toggleDictation(), 400);
-      }
+      setTimeout(() => toggleDictation(), 400);
     }
-  }, [intent, send, session, starting]);
+  }, [intent, send, session, starting, toggleDictation]);
 
   const decideMemory = async (proposal: MemoryProposal, action: 'CONFIRM' | 'REJECT') => {
     setMemoryBusy(proposal.id);
@@ -235,7 +247,7 @@ export default function AskScreen() {
           </View>)}
           {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>{mediaPhase === 'uploading' ? 'Preparo la foto…' : mediaPhase === 'analyzing' ? 'Guardo questo momento…' : 'DOGly sta pensando…'}</Text></View> : null}
         </ScrollView>
-        <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi a DOGly di ' + dog.name} placeholder={'Raccontami di ' + dog.name + '…'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} />{Platform.OS === 'web' ? <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
+        <View style={styles.composerWrap}><TextInput accessibilityLabel={'Scrivi a DOGly di ' + dog.name} placeholder={'Raccontami di ' + dog.name + '…'} placeholderTextColor={colors.textMuted} value={draft} onChangeText={(value) => setDraft(value.slice(0, 4000))} multiline maxLength={4000} editable={!starting && !sending && Boolean(session)} style={styles.input} onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }} /><Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}><Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
         <Text style={styles.disclaimer}>DOGly aiuta a leggere i comportamenti. Per sintomi o urgenze, contatta un veterinario.</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>

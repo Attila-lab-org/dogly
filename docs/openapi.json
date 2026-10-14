@@ -2272,7 +2272,7 @@
               "type": "integer",
               "maximum": 12000,
               "minimum": 500,
-              "default": 3500,
+              "default": 4500,
               "title": "Radius M"
             }
           },
@@ -2300,6 +2300,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NearbyPlacesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/voice/transcribe": {
+      "post": {
+        "tags": [
+          "voice"
+        ],
+        "summary": "Transcribe Voice",
+        "operationId": "transcribe_voice_v1_voice_transcribe_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceTranscribeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceTranscribeOut"
                 }
               }
             }
@@ -12310,6 +12369,46 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VoiceTranscribeOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "VoiceTranscribeOut"
+      },
+      "VoiceTranscribeRequest": {
+        "properties": {
+          "audio_base64": {
+            "type": "string",
+            "maxLength": 4000000,
+            "minLength": 16,
+            "title": "Audio Base64"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "audio/m4a",
+              "audio/mp4",
+              "audio/webm",
+              "audio/wav",
+              "audio/mpeg"
+            ],
+            "title": "Content Type",
+            "default": "audio/m4a"
+          }
+        },
+        "type": "object",
+        "required": [
+          "audio_base64"
+        ],
+        "title": "VoiceTranscribeRequest"
       },
       "WeightEventCreate": {
         "properties": {

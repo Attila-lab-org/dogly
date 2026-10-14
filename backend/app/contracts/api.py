@@ -785,6 +785,17 @@ class OwnerStoryAudioPrepareRequest(BaseModel):
     ]
 
 
+class VoiceTranscribeRequest(BaseModel):
+    audio_base64: str = Field(min_length=16, max_length=4_000_000)
+    content_type: Literal[
+        "audio/m4a", "audio/mp4", "audio/webm", "audio/wav", "audio/mpeg"
+    ] = "audio/m4a"
+
+
+class VoiceTranscribeOut(BaseModel):
+    text: str
+
+
 class OwnerStoryDraftOut(BaseModel):
     draft_id: str
     dog_id: str

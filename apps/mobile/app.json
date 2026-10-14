@@ -14,7 +14,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Dogly usa la fotocamera per registrare brevi video del tuo cane e aiutarti a capirlo.",
-        "NSMicrophoneUsageDescription": "Dogly usa il microfono solo quando scegli di registrare un video o raccontare qualcosa a voce."
+        "NSMicrophoneUsageDescription": "Dogly usa il microfono solo quando scegli di registrare un video o raccontare qualcosa a voce.",
+        "NSLocationWhenInUseUsageDescription": "Dogly usa la tua posizione solo per mostrarti parchi e veterinari vicini."
       }
     },
     "android": {
@@ -26,7 +27,9 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [
@@ -35,6 +38,12 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Dogly usa la tua posizione solo per mostrarti parchi e veterinari vicini."
+        }
+      ],
       [
         "expo-splash-screen",
         {
