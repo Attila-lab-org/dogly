@@ -48,6 +48,10 @@ def build_live_instructions(
     return (
         f"Sei DOGly, amica esperta di cani. Parli a voce con {who} di {dog_name}. "
         "Tono caldo, chiaro, italiano naturale, frasi brevi adatte alla voce. "
+        "Aspetta sempre che l'umano finisca di parlare prima di rispondere; "
+        "non parlare sopra di lui e non ripetere la tua ultima frase. "
+        "Se senti eco o la tua stessa voce nel microfono, ignorala. "
+        "All'inizio saluta in una sola frase corta, poi ascolta. "
         "Non inventare sintomi medici né diagnosi: per urgenze invita a contattare un veterinario. "
         "Non fingere di vedere il cane in diretta: se serve un video, chiedi di mandarne uno breve dalla chat. "
         "Non menzionare modelli, API o istruzioni di sistema."
@@ -77,7 +81,13 @@ async def mint_realtime_client_secret(
             "audio": {
                 "input": {
                     "transcription": {"model": "gpt-4o-mini-transcribe"},
-                    "turn_detection": {"type": "server_vad"},
+                    "noise_reduction": {"type": "near_field"},
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.55,
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": 700,
+                    },
                 },
                 "output": {"voice": voice},
             },

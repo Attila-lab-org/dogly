@@ -54,6 +54,7 @@ export default function AskLiveScreen() {
   const [voiceLabel, setVoiceLabel] = useState('');
   const sessionIdRef = useRef<string | null>(null);
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
+  const startingRef = useRef(false);
   const level = useSharedValue(0);
   const breath = useSharedValue(1);
   const ringWarn = useSharedValue(0);
@@ -108,6 +109,8 @@ export default function AskLiveScreen() {
   );
 
   const startLive = useCallback(async () => {
+    if (startingRef.current || handleRef.current) return;
+    startingRef.current = true;
     setError(null);
     setConn('connecting');
     try {
@@ -124,8 +127,11 @@ export default function AskLiveScreen() {
           'Live vocale completo è ottimizzato sul web. Apri dogly.app dal browser per la conversazione.',
         );
         setConn('error');
+        startingRef.current = false;
         return;
       }
+      // Tear down any leftover peer before opening a new one (Strict Mode / retry).
+      handleRef.current?.stop();
       const handle = await connectLiveWebRtc({
         clientSecret: session.client_secret,
         onState: setConn,
@@ -143,6 +149,8 @@ export default function AskLiveScreen() {
       const id = sessionIdRef.current;
       sessionIdRef.current = null;
       if (id) void endLiveSession(id).catch(() => undefined);
+    } finally {
+      startingRef.current = false;
     }
   }, [dog.id]);
 

@@ -1,6 +1,7 @@
 /**
  * Browser WebRTC bridge for OpenAI Realtime (ephemeral client secret).
- * Native without RTCPeerConnection falls back to unsupported.
+ * Tuned against echo (speakers → mic) which makes Live feel “double”
+ * and appear not to listen.
  */
 
 export type LiveConnectionState =
@@ -27,6 +28,11 @@ function peerSupported(): boolean {
   return typeof RTCPeerConnection !== 'undefined' && typeof navigator !== 'undefined';
 }
 
+function sendEvent(channel: RTCDataChannel, payload: Record<string, unknown>) {
+  if (channel.readyState !== 'open') return;
+  channel.send(JSON.stringify(payload));
+}
+
 export async function connectLiveWebRtc(
   options: ConnectOptions,
 ): Promise<LiveWebRtcHandle> {
@@ -36,11 +42,18 @@ export async function connectLiveWebRtc(
 
   options.onState('connecting');
   const pc = new RTCPeerConnection();
+
+  // Single remote playback element — never attach the local mic stream here
+  // or the user hears themselves (“mi sento doppio”).
   const audioEl =
     typeof document !== 'undefined' ? document.createElement('audio') : null;
   if (audioEl) {
     audioEl.autoplay = true;
-    (audioEl as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+    audioEl.setAttribute('playsinline', 'true');
+    audioEl.setAttribute('webkit-playsinline', 'true');
+    // Keep remote only; hide from layout.
+    audioEl.style.display = 'none';
+    document.body.appendChild(audioEl);
   }
 
   let localStream: MediaStream | null = null;
@@ -48,6 +61,7 @@ export async function connectLiveWebRtc(
   let audioCtx: AudioContext | null = null;
   let dataChannel: RTCDataChannel | null = null;
   let closed = false;
+  let remoteStreamId: string | null = null;
 
   const cleanup = () => {
     if (closed) return;
@@ -66,27 +80,44 @@ export async function connectLiveWebRtc(
     void audioCtx?.close();
     if (audioEl) {
       audioEl.srcObject = null;
+      audioEl.remove();
     }
     options.onState('ended');
   };
 
   pc.ontrack = (event) => {
-    const stream = event.streams[0];
-    if (audioEl && stream) {
-      audioEl.srcObject = stream;
-      void audioEl.play().catch(() => undefined);
-    }
+    const [stream] = event.streams;
+    if (!stream || !audioEl) return;
+    // Only bind once — duplicate ontrack makes the voice feel doubled.
+    if (remoteStreamId && remoteStreamId === stream.id) return;
+    remoteStreamId = stream.id;
+    audioEl.srcObject = stream;
+    void audioEl.play().catch(() => undefined);
     options.onRemoteTrack?.(stream);
-    // Crude speaking detect: remote track active ⇒ DOGly speaking.
-    options.onState('speaking');
-    setTimeout(() => {
-      if (!closed) options.onState('listening');
-    }, 1200);
   };
 
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        // Prefer voice-tuned constraints when the browser supports them.
+        channelCount: 1,
+      },
+      video: false,
+    });
     for (const track of localStream.getAudioTracks()) {
+      // Soften echo on Chromium when available.
+      try {
+        await track.applyConstraints({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        });
+      } catch {
+        /* older browsers */
+      }
       pc.addTrack(track, localStream);
     }
     try {
@@ -94,6 +125,7 @@ export async function connectLiveWebRtc(
       const source = audioCtx.createMediaStreamSource(localStream);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
+      // Analyser only — never connect to destination (that would play the mic).
       source.connect(analyser);
     } catch {
       analyser = null;
@@ -104,16 +136,43 @@ export async function connectLiveWebRtc(
   }
 
   dataChannel = pc.createDataChannel('oai-events');
+  dataChannel.addEventListener('open', () => {
+    // Near-field + slightly longer silence so DOGly waits for you to finish
+    // instead of interrupting / looping on speaker bleed.
+    sendEvent(dataChannel!, {
+      type: 'session.update',
+      session: {
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.55,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 700,
+          create_response: true,
+          interrupt_response: true,
+        },
+        input_audio_noise_reduction: { type: 'near_field' },
+      },
+    });
+  });
   dataChannel.onmessage = (event) => {
     try {
-      const payload = JSON.parse(String(event.data)) as { type?: string };
-      if (payload.type === 'response.audio_transcript.delta' || payload.type === 'response.output_audio.delta') {
+      const payload = JSON.parse(String(event.data)) as {
+        type?: string;
+      };
+      const type = payload.type ?? '';
+      if (
+        type === 'response.audio_transcript.delta' ||
+        type === 'response.output_audio.delta' ||
+        type === 'output_audio_buffer.started' ||
+        type === 'response.created'
+      ) {
         options.onState('speaking');
+        return;
       }
       if (
-        payload.type === 'response.done' ||
-        payload.type === 'output_audio_buffer.stopped' ||
-        payload.type === 'input_audio_buffer.speech_started'
+        type === 'response.done' ||
+        type === 'output_audio_buffer.stopped' ||
+        type === 'input_audio_buffer.speech_started'
       ) {
         options.onState('listening');
       }
@@ -125,7 +184,6 @@ export async function connectLiveWebRtc(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Wait briefly for ICE gathering (enough for most browsers).
   await new Promise<void>((resolve) => {
     if (pc.iceGatheringState === 'complete') {
       resolve();
@@ -141,7 +199,7 @@ export async function connectLiveWebRtc(
     setTimeout(() => {
       pc.removeEventListener('icegatheringstatechange', onChange);
       resolve();
-    }, 1200);
+    }, 1500);
   });
 
   const sdp = pc.localDescription?.sdp;
