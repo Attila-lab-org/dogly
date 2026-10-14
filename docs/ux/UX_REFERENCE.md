@@ -197,10 +197,89 @@ con conferma umana. Video solo se serve; niente finta osservazione in diretta.
 3. **Storia** — foto separata dall’album, visibile per 24h.
 4. **Card share** — sanitizzata per share sheet OS (niente URL bucket permanenti).
 
-## Post-V1 (documentato, non implementato)
+## Ask Live — Voce (direzione UX, pre-implementazione)
 
-- Reazioni alle storie e feed multiutente.
-- Console admin (eventi, audit, privacy, costi, moderazione).
+> Conversazione realtime a voce. Costa crediti/minuti. Non è dettatura.
+> Coerente con Hero Home: atmosfera chiara, respiro, presenza — mai orb dark/purple.
+
+### Posizionamento
+
+| Modalità | Ruolo | Dove |
+| --- | --- | --- |
+| **Testo** | Scrivere, foto, video, detta | `/ask` composer |
+| **Dettatura** | Trascrive nel campo | mic nel composer |
+| **Voce (Live)** | Conversazione realtime a minuti | `/ask/live` stanza dedicata |
+
+Live non è un quinto bottone nel composer. È **un’altra stanza** di “Parla con DOGly”.
+
+### Come ci arrivano (scoperta premium)
+
+1. **Primario** — in header Ask, segmented `Testo · Voce`. Toccare Voce = ingresso rituale.
+2. **Scoperta** — chat vuota: una sola card “Preferisci parlare? Hai X min.” + CTA.
+3. **Contestuale** — dopo una risposta densa, invito soft una volta/sessione: “Continuiamo a voce?”.
+
+Copy consumer: **Voce** / **Parla**, non “Live” / “GPT”.
+
+### Rituale di ingresso (i crediti devono sentirsi preziosi)
+
+1. Switch Voce → breve gate (≈800–1200 ms), non paywall grezzo.
+2. Centro: avatar di `{nome}` che **cresce** (shared-element feel) e diventa presenza.
+3. Sotto: `Hai 4:00 · Si consumano solo mentre parli`.
+4. CTA unica: **Inizia**. Annulla torna a Testo senza addebito.
+5. Al tap: wash atmosferico (stessa famiglia del DogHero: cielo soft, drift lento) + haptic leggero → stanza Live.
+
+Se minuti = 0: stesso gate, CTA diventa **Ottieni minuti** → paywall. Nessun errore tecnico in faccia.
+
+### Stanza Live (una composizione, non una dashboard)
+
+Primo viewport solo:
+
+- presenza centrale (avatar + alone respirante)
+- una riga di stato (“Ti ascolto” / “DOGly parla” / “Un attimo…”)
+- anello minuti in alto (elegante, non countdown da timer da cucina)
+- un controllo: **Termina**
+
+Niente transcript a schermo pieno, niente chat sotto, niente chip promo, niente secondi decimali.
+
+### Sistema motion (wow coerente, non rumore)
+
+Stessa grammatica di `DogHero` (Reanimated, reduce-motion rispettato):
+
+| Stato | Motion |
+| --- | --- |
+| Idle connesso | Alone teal/blu che respira (scale 1 → 1.04, ~1.4 s) |
+| Utente parla | Anelli concentrici morbidi legati al livello audio (ampiezza clampata) |
+| DOGly parla | Alone primario più ampio + leggero drift dell’avatar (come Hero) |
+| Pensiero / rete | Tre punti soft sotto lo stato (stesso thinking del Hero) |
+| Ultimi 30 s | Anello minuti passa soft da primary → warning; copy “Quasi finiti” una sola volta |
+| Termina | Dissolve della presenza → ritorno Ask con card riassunto che entra in FadeInUp |
+
+Vietato: glow viola, particelle infinite, Lottie generiche “AI orb”, dark full-screen, badge flottanti sui minuti.
+
+### Crediti — UX onesta (ADR-005 spirit)
+
+- Reserve all’**Inizia**, commit per secondi usati, refund se fallisce prima dell’audio.
+- Il consumo è visibile solo come anello + `m:ss` discreto — non un ticker aggressivo.
+- A esaurimento: fade out audio, messaggio caldo “I minuti di oggi sono finiti”, CTA **Ottieni minuti** o **Torna alla chat**.
+- Mai addebitare in background se l’utente ha lasciato l’app senza sessione attiva (lifecycle esplicito).
+
+### Uscita premium
+
+1. Termina → conferma soft solo se >15 s parlati (“Chiudere la conversazione?”).
+2. Rientro in Ask in modalità Testo.
+3. Una bubble sistema: *“Abbiamo parlato di {tema breve}. Vuoi che me lo ricordi?”* + azioni soft già previste da Ask.
+4. Nessun dump di transcript grezzo; eventuale dettaglio in “Perché?” / memoria solo su conferma.
+
+### Accessibilità
+
+- `reduce-motion`: presenza statica, stati solo testuali, niente anelli audio.
+- Tutti gli stati annunciati a VoiceOver/TalkBack.
+- Termina sempre raggiungibile, area touch ≥44 pt.
+
+### Fuori scope di questa direzione
+
+- Bark translation realtime, analisi video in Live, Signals.
+- Live come tab propria o ingresso Home permanente.
 
 ## Riconciliazione mockup HIGGS
 
