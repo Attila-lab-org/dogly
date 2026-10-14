@@ -17,8 +17,8 @@ export type DeviceLocationResult =
   | { ok: true; lat: number; lng: number }
   | { ok: false; reason: LocationFailureReason };
 
-const LOCATION_TIMEOUT_MS = 8_000;
-const PLACES_TIMEOUT_MS = 18_000;
+const LOCATION_TIMEOUT_MS = 6_000;
+const PLACES_TIMEOUT_MS = 10_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => T): Promise<T> {
   return new Promise((resolve) => {

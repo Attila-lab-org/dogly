@@ -32,12 +32,14 @@ export default function AroundScreen() {
   const [locating, setLocating] = useState(true);
   const [locationFailure, setLocationFailure] = useState<LocationFailureReason | null>(null);
   const [locationTick, setLocationTick] = useState(0);
+  const [placesTimedOut, setPlacesTimedOut] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setLocating(true);
     setLocationFailure(null);
     setCoords(null);
+    setPlacesTimedOut(false);
     void readDeviceLocationResult().then((result) => {
       if (!alive) return;
       setLocating(false);
@@ -63,8 +65,17 @@ export default function AroundScreen() {
     queryKey: ['nearby-places', coords?.lat, coords?.lng],
     queryFn: () => fetchNearbyPlaces({ lat: coords!.lat, lng: coords!.lng }),
     enabled: Boolean(coords),
-    retry: 1,
+    retry: 0,
   });
+
+  useEffect(() => {
+    if (!coords || !placesQuery.isFetching) {
+      setPlacesTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setPlacesTimedOut(true), 12_000);
+    return () => clearTimeout(timer);
+  }, [coords, placesQuery.isFetching]);
 
   const photos = photosQuery.data ?? [];
   const places = placesQuery.data?.items ?? [];
@@ -150,7 +161,7 @@ export default function AroundScreen() {
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.emptyText}>Chiedo la posizione…</Text>
             </View>
-          ) : Boolean(coords) && placesQuery.isLoading ? (
+          ) : Boolean(coords) && placesQuery.isFetching && !placesTimedOut && !placesQuery.isError ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.emptyText}>Cerco posti vicini…</Text>
@@ -188,7 +199,7 @@ export default function AroundScreen() {
                 }
               />
             </View>
-          ) : placesQuery.isError ? (
+          ) : placesQuery.isError || placesTimedOut ? (
             <View style={styles.fallback}>
               <Text style={styles.emptyText}>
                 Non riesco a caricare i luoghi adesso. Riprova tra poco oppure apri la mappa.
@@ -196,7 +207,10 @@ export default function AroundScreen() {
               <PlaceFallback
                 title="Riprova"
                 button="Carica di nuovo"
-                onPress={() => void placesQuery.refetch()}
+                onPress={() => {
+                  setPlacesTimedOut(false);
+                  void placesQuery.refetch();
+                }}
               />
               <PlaceFallback
                 title="Apri la mappa"
