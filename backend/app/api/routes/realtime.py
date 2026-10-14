@@ -342,6 +342,8 @@ async def create_realtime_turn(
                         ] if value
                     ) or None
                 ),
+                latitude=body.latitude,
+                longitude=body.longitude,
             )
             used = set(decision.used_source_ids)
             source_refs = [
@@ -399,6 +401,8 @@ async def create_realtime_turn(
                 history=history,
                 image_url=image_url,
                 media_context=body.photo_context,
+                latitude=body.latitude,
+                longitude=body.longitude,
             )
     except ApiError:
         raise

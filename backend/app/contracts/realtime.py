@@ -49,6 +49,9 @@ class RealtimeTurnCreate(BaseModel):
     # the reasoner can see it in the same context as the owner's message.
     photo_id: str | None = Field(default=None, max_length=80)
     photo_context: str | None = Field(default=None, max_length=280)
+    # Optional device location so Ask can include local weather (not required).
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     # Internal test/migration bridge only; the product never exposes live voice.
     assistant_text: str | None = Field(default=None, max_length=1400)
 

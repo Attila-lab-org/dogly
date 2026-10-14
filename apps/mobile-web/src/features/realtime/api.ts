@@ -65,6 +65,8 @@ export function createRealtimeTurn(
     source?: 'behavior' | 'digestive';
     photoId?: string;
     photoContext?: string;
+    latitude?: number;
+    longitude?: number;
     idempotencyKey?: string;
   },
 ) {
@@ -75,6 +77,8 @@ export function createRealtimeTurn(
     ...(options?.source ? { context_source: options.source } : {}),
     ...(options?.photoId ? { photo_id: options.photoId } : {}),
     ...(options?.photoContext ? { photo_context: options.photoContext } : {}),
+    ...(options?.latitude != null ? { latitude: options.latitude } : {}),
+    ...(options?.longitude != null ? { longitude: options.longitude } : {}),
   }, { timeoutMs: REALTIME_TURN_TIMEOUT_MS,
     headers: options?.idempotencyKey ? {'X-Idempotency-Key': options.idempotencyKey} : undefined,
   });

@@ -136,14 +136,12 @@ la sostengono. Episodi preliminari o contestati non diventano abitudini conferma
 il numero di interazioni o il livello di conoscenza da solo non prova un'abitudine.
 Nella spiegazione si conserva il significato memorizzato, mai contatori interni.
 
-La chat Ask parla come un amico esperto che già conosce i cani (razze, salute,
-digestione, comportamento) e personalizza con il dossier di questo cane. Lunghezza
-adattiva: breve se basta, più articolata quando collega profilo, foto e storia.
-Al rientro, se c’è un filo aperto (es. stava male), il welcome può chiedere come sta
-oggi; nei turni open_threads e stagione restano dati per Astra, non script.
-Azioni soft opzionali (ricorda, salva nei Momenti, rivedi alimento) con conferma umana.
-Chiede un video solo se serve a distinguere le letture, senza fingere di osservare
-il cane in diretta. La conoscenza canina generica viene dal modello, non da un RAG interno.
+La chat Ask è Astra con prompt da amico esperto: conosce già i cani; noi le diamo
+solo il dossier di questo cane (razza, età, peso, cibo, ricordi, storia) più
+situazione (stagione, meteo locale se la posizione è disponibile). Ragiona su
+condizioni ottimali senza cataloghi RAG né blindature extra. Al rientro riprende
+fili aperti (belli o difficili). Azioni soft opzionali (ricorda, Momenti, alimento)
+con conferma umana. Video solo se serve; niente finta osservazione in diretta.
 
 - Feedback a tre vie; "Non lo so" senza penalità.
 - Condividi card sanitizzata (niente raw video).

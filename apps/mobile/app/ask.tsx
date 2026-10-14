@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/queryClient';
 import { getOrCreateChatAttachmentsAlbum, getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
 import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
 import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
+import { readDeviceLocation } from '@/features/places/api';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
 import {
@@ -119,6 +120,7 @@ export default function AskScreen() {
         ]);
         setMediaPhase('analyzing');
       }
+      const location = await readDeviceLocation();
       const turn = await createRealtimeTurn(
         session.id,
         text,
@@ -129,6 +131,8 @@ export default function AskScreen() {
           source: behaviorSource ? 'behavior' : digestiveSource ? 'digestive' : undefined,
           photoId,
           photoContext: attachment?.purpose,
+          latitude: location?.lat,
+          longitude: location?.lng,
         },
       );
       if (focusedEventId) setFocusedEventId(undefined);

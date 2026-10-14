@@ -13,6 +13,7 @@ import { createRealtimeSession, createRealtimeTurn, decideRealtimeMemory, type M
 import { queryKeys } from '@/lib/queryClient';
 import { getOrCreateChatAttachmentsAlbum, getOrCreateMomentsAlbum, uploadAlbumPhoto } from '@/features/photos/api';
 import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
+import { readDeviceLocation } from '@/features/places/api';
 import { pickConversationVideo } from '@/features/behavior/videoPicker';
 import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
@@ -122,6 +123,7 @@ export default function AskScreen() {
         ]);
         setMediaPhase('analyzing');
       }
+      const location = await readDeviceLocation();
       const turn = await createRealtimeTurn(
         session.id,
         text,
@@ -132,6 +134,8 @@ export default function AskScreen() {
           source: behaviorSource ? 'behavior' : digestiveSource ? 'digestive' : undefined,
           photoId,
           photoContext: attachment?.purpose,
+          latitude: location?.lat,
+          longitude: location?.lng,
         },
       );
       if (focusedEventId) setFocusedEventId(undefined);

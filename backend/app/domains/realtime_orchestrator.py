@@ -24,6 +24,7 @@ from app.domains.realtime_context import (
     build_open_threads,
     situational_context_now,
 )
+from app.domains.realtime_weather import fetch_local_weather
 from app.knowledge.claim_validation import (
     extract_claims_from_provider_payload,
     infer_claims_from_answer,
@@ -138,33 +139,26 @@ def natural_memory_candidate(user_text: str) -> dict[str, str] | None:
     return {"statement": facts[0].statement, "category": facts[0].category}
 
 
-# Chat Ask: frontier model owns canine knowledge; server only supplies THIS dog.
+# Chat Ask: Astra already knows dogs; we only supply THIS dog + situation.
 _SYSTEM = (
     PRODUCT_INSTRUCTION
     + "\n\n"
     + DOGLY_SPOKEN_STYLE
     + """
 
-Per questo turno di chat:
-Usa liberamente la tua conoscenza generale su cani, razze, salute, comportamento e
-digestione: non ti serve un catalogo interno di knowledge cards.
-Personalizza solo con PERSONAL_DOG_CONTEXT (identità, fatti, evidenze, cronologia,
-open_threads, situational_context): non inventare fatti su QUESTO cane.
-Se identity.breed_label è presente, usala come riferimento primario di razza.
-Se open_threads non è vuoto e il messaggio è un saluto o una ripresa generica,
-riprendi il filo in modo naturale — sia momenti difficili sia belle notizie
-(tone concern|positive|neutral); se parla di altro, non forzare il check-in.
-situational_context.season_northern: usala solo se cambia davvero la lettura.
-Con una foto (anche feci o altro): osserva ciò che appare davvero e dai una lettura
-chiara e utile, collegata al profilo quando pertinente.
-memory_candidate: al massimo un fatto stabile utile da ricordare, altrimenti null
-(niente episodi monouso tipo "oggi").
-suggest_food_review: true solo se ripassare l'alimento attuale è utile ora.
-suggest_save_to_moments: true se la foto è un bel ricordo del cane, non un'analisi
-(es. feci / campione clinico).
-Rispondi al turno corrente. Restituisci il JSON richiesto; action_options risponde
-alla sola domanda del turno. Azioni photo/video solo se quel media cambia davvero
-la lettura; nessun link inventato. used_source_ids cita solo dati personali forniti.
+Per ogni consiglio o lettura, controlla insieme:
+1) profilo di QUESTO cane (razza, età/age_stage, peso, cibo, ricordi, evidenze),
+2) cosa è successo prima (cronologia, open_threads: belli o difficili),
+3) situazione attuale (situational_context: stagione e meteo locale se presente).
+Usa razza, età e condizioni (caldo/freddo/umidità/sforzo) per un suggerimento
+adeguato: non chiedere i gradi se temperature_c è già nel contesto.
+Se manca un dato decisivo sul cane, chiedine uno solo; non inventarlo.
+Se open_threads c'è e il messaggio è un saluto/ripresa, riprendi il filo; se parla
+di altro, non forzare.
+Con una foto: osserva ciò che vedi e rispondi utile, collegata al profilo.
+memory_candidate: al massimo un fatto stabile utile, altrimenti null.
+suggest_food_review / suggest_save_to_moments: solo se davvero utili ora.
+JSON richiesto; used_source_ids solo per dati personali forniti; nessun link inventato.
 """
 )
 
@@ -491,6 +485,8 @@ async def orchestrate_realtime_turn(
     history: list[dict[str, Any]],
     image_url: str | None = None,
     media_context: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
 ) -> tuple[RealtimeDecision, dict[str, Any]]:
     safety = deterministic_safety_interrupt(user_text, dog_name=context.dog_name)
     if safety:
@@ -540,6 +536,11 @@ async def orchestrate_realtime_turn(
         previous_turns=history,
         evidence_items=list(context.items),
     )
+    situation = situational_context_now()
+    if latitude is not None and longitude is not None:
+        weather = await fetch_local_weather(latitude=latitude, longitude=longitude)
+        if weather:
+            situation["weather"] = weather
     payload = {
         "personal_dog_context": {
             "dog_id": context.dog_id,
@@ -549,10 +550,10 @@ async def orchestrate_realtime_turn(
             "retrieved_personal_facts": context.stable_facts,
             "relevant_evidence": [item.model_dump(mode="json") for item in context.items],
             "open_threads": open_threads,
-            "situational_context": situational_context_now(),
+            "situational_context": situation,
             "missing": context.missing,
         },
-        "context_contract": "personal-dog-core-plus-evidence/v2",
+        "context_contract": "personal-dog-core-plus-evidence/v3",
         "conversation": recent_history,
         "conversation_state": {
             "current_message_has_priority": True,

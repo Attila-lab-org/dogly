@@ -491,10 +491,11 @@ def test_realtime_prompt_uses_shared_product_identity() -> None:
     assert _SYSTEM.startswith(PRODUCT_INSTRUCTION)
     assert "Oreo" not in _SYSTEM
     assert "used_source_ids" in _SYSTEM
-    assert "conoscenza generale" in _SYSTEM
     assert "catalogo interno" in _SYSTEM
     assert "amico esperto di cani" in _SYSTEM
-    assert "knowledge cards" in _SYSTEM
+    assert "temperature_c" in _SYSTEM
+    assert "razza" in _SYSTEM.casefold()
+    assert "età" in _SYSTEM or "age_stage" in _SYSTEM
 
 
 def test_attachment_focus_is_narrow_and_does_not_assume_the_dog_is_visible() -> None:
