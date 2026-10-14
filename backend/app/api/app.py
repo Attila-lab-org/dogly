@@ -83,47 +83,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
     # response returns.
     app.add_middleware(RequestIdMiddleware)
 
-    @app.exception_handler(ApiError)
-    async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
-        # Use the request id as correlation_id when available (FIX 1.7);
-        # fall back to the exception's own id for non-request contexts.
-        rid = get_request_id()
-        body = exc.to_body()
-        if rid:
-            body = body.model_copy(update={"correlation_id": rid})
-        return JSONResponse(status_code=exc.http_status, content=body.model_dump(mode="json"))
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
-        body = ErrorBody(
-            code=ErrorCode.VALIDATION_FAILED,
-            message="Request failed validation.",
-            retryable=False,
-            correlation_id=get_request_id() or uuid.uuid4().hex,
-        )
-        return JSONResponse(status_code=422, content=body.model_dump(mode="json"))
-
-    @app.exception_handler(IntegrityError)
-    async def integrity_error_handler(_: Request, exc: IntegrityError) -> JSONResponse:
-        mapped = _map_database_error(exc)
-        if mapped is not None:
-            return JSONResponse(
-                status_code=mapped.http_status,
-                content=mapped.to_body().model_dump(mode="json"),
-            )
-        return await unhandled_error_handler(_, exc)
-
-    @app.exception_handler(DBAPIError)
-    async def dbapi_error_handler(_: Request, exc: DBAPIError) -> JSONResponse:
-        mapped = _map_database_error(exc)
-        if mapped is not None:
-            return JSONResponse(
-                status_code=mapped.http_status,
-                content=mapped.to_body().model_dump(mode="json"),
-            )
-        return await unhandled_error_handler(_, exc)
-
     async def _release_failed_idempotency(request: Request) -> None:
+        # Drop in-flight claims on any failed response so the client can retry
+        # immediately (same key or a fresh one). Claim itself raises before
+        # idempotency_scope is set, so conflicting retries never release the
+        # owner request's claim.
         scope = getattr(request.state, "idempotency_scope", None)
         if not scope:
             return
@@ -135,6 +99,52 @@ def create_app(state: AppState | None = None) -> FastAPI:
             from app.domains import idempotency_db
 
             await idempotency_db.release_inflight(state.engine, scope=scope)
+
+    @app.exception_handler(ApiError)
+    async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+        # Use the request id as correlation_id when available (FIX 1.7);
+        # fall back to the exception's own id for non-request contexts.
+        rid = get_request_id()
+        body = exc.to_body()
+        if rid:
+            body = body.model_copy(update={"correlation_id": rid})
+        await _release_failed_idempotency(request)
+        return JSONResponse(status_code=exc.http_status, content=body.model_dump(mode="json"))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        body = ErrorBody(
+            code=ErrorCode.VALIDATION_FAILED,
+            message="Request failed validation.",
+            retryable=False,
+            correlation_id=get_request_id() or uuid.uuid4().hex,
+        )
+        await _release_failed_idempotency(request)
+        return JSONResponse(status_code=422, content=body.model_dump(mode="json"))
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+        mapped = _map_database_error(exc)
+        if mapped is not None:
+            await _release_failed_idempotency(request)
+            return JSONResponse(
+                status_code=mapped.http_status,
+                content=mapped.to_body().model_dump(mode="json"),
+            )
+        return await unhandled_error_handler(request, exc)
+
+    @app.exception_handler(DBAPIError)
+    async def dbapi_error_handler(request: Request, exc: DBAPIError) -> JSONResponse:
+        mapped = _map_database_error(exc)
+        if mapped is not None:
+            await _release_failed_idempotency(request)
+            return JSONResponse(
+                status_code=mapped.http_status,
+                content=mapped.to_body().model_dump(mode="json"),
+            )
+        return await unhandled_error_handler(request, exc)
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:

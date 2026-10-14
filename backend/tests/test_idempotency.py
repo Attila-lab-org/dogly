@@ -190,3 +190,43 @@ async def test_unhandled_error_releases_inflight_idempotency_key(
         second = await client.post("/v1/nutrition/foods/manual", json=payload, headers=headers)
         assert second.status_code == 201, second.text
         assert second.json()["name"] == "Crocchette prova"
+
+
+async def test_api_error_releases_inflight_idempotency_key(
+    state, auth_headers, monkeypatch
+):
+    """PROCESSING_FAILED (and other ApiError) must release the claim so a
+    retry with the same key is not stuck on 429 / payload-hash 409."""
+    from app.api.app import create_app
+    from app.contracts.errors import ApiError, ErrorCode
+    from app.domains import digestive
+
+    app = create_app(state)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        dog_id = await create_dog(client, auth_headers)
+
+        original = digestive.create_manual_food_product
+
+        def boom(*_args, **_kwargs):
+            raise ApiError(
+                ErrorCode.PROCESSING_FAILED,
+                "temporary provider failure",
+                retryable=True,
+            )
+
+        monkeypatch.setattr(digestive, "create_manual_food_product", boom)
+        payload = {
+            "dog_id": dog_id,
+            "client_request_id": "manual-food-api-error-retry",
+            "name": "Crocchette prova",
+        }
+        headers = {**auth_headers, "X-Idempotency-Key": "manual-food-api-error-retry"}
+        first = await client.post("/v1/nutrition/foods/manual", json=payload, headers=headers)
+        assert first.status_code == 500, first.text
+        assert first.json()["code"] == "PROCESSING_FAILED"
+
+        monkeypatch.setattr(digestive, "create_manual_food_product", original)
+        second = await client.post("/v1/nutrition/foods/manual", json=payload, headers=headers)
+        assert second.status_code == 201, second.text
+        assert second.json()["name"] == "Crocchette prova"
