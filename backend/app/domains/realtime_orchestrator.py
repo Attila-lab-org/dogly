@@ -337,8 +337,8 @@ def _select_realtime_reasoning_effort(
 ) -> str:
     """Choose effort from bounded structural signals; config remains an override.
 
-    gpt-6-astra with ``high`` routinely burns 30–60s per turn. Chat stays at
-    most ``medium`` (photos included); simple turns stay ``low``.
+    Heavy effort on flagship models routinely burns 30–60s per turn. Chat stays
+    at most ``medium`` (photos included); simple turns stay ``low``.
     """
     if settings.realtime_reasoning_effort:
         return settings.realtime_reasoning_effort

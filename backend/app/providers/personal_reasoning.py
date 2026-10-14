@@ -32,7 +32,7 @@ async def request_personal_json(settings, *, task: str, payload: dict,
             "response_format": {"type": "json_object"}}
     model_name = settings.realtime_reasoning_model.lower()
     if model_name.startswith("gpt-5") or model_name.startswith("gpt-6"):
-        # gpt-6-astra rejects temperature and requires an explicit effort.
+        # gpt-6.* rejects temperature and requires an explicit effort.
         body["reasoning_effort"] = "medium" if image_url else "low"
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
@@ -49,9 +49,12 @@ async def request_personal_json(settings, *, task: str, payload: dict,
     return answer, ProviderUsage(provider="openai", model=settings.realtime_reasoning_model,
         input_tokens=usage.get("prompt_tokens", 0), output_tokens=usage.get("completion_tokens", 0),
         request_id=raw.get("id", ""), latency_ms=int((time.perf_counter()-started)*1000),
-        cost_usd=_estimate_openai_cost(usage, input_usd_per_million=settings.reasoner_input_usd_per_million,
-            output_usd_per_million=settings.reasoner_output_usd_per_million,
-            safety_margin=settings.ai_cost_safety_margin))
+        cost_usd=_estimate_openai_cost(
+            usage,
+            input_usd_per_million=settings.realtime_input_usd_per_million,
+            output_usd_per_million=settings.realtime_output_usd_per_million,
+            safety_margin=settings.ai_cost_safety_margin,
+        ))
 
 
 async def recognize_attachment(settings, *, image_url: str, user_text: str) -> tuple[dict, ProviderUsage]:

@@ -57,7 +57,8 @@ class Settings(BaseSettings):
     # model so the safety-sensitive second look uses the same capability tier.
     digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
-    realtime_reasoning_model: str = "gpt-6-astra"
+    # Ask chat (text). Sol ≈5× cheaper than Astra with near-flagship quality.
+    realtime_reasoning_model: str = "gpt-6.1-sol"
     # Optional operational override. When absent, realtime chooses a bounded
     # effort from the structural complexity of the current turn.
     realtime_reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
@@ -70,6 +71,9 @@ class Settings(BaseSettings):
     observer_output_usd_per_million: float = 3.75
     reasoner_input_usd_per_million: float = 1.75
     reasoner_output_usd_per_million: float = 14.0
+    # Ask / personal-dog chat pricing (gpt-6.1-sol list rates).
+    realtime_input_usd_per_million: float = 2.0
+    realtime_output_usd_per_million: float = 10.0
     digestive_input_usd_per_million: float = 1.75
     digestive_output_usd_per_million: float = 14.0
     digestive_verifier_input_usd_per_million: float | None = None
