@@ -23,8 +23,10 @@ from app.domains.personal_dog_context import (
 )
 from app.domains.repository import InMemoryStore
 
-REALTIME_CONTEXT_VERSION = "personal-dog-context/v3"
+REALTIME_CONTEXT_VERSION = "personal-dog-context/v4"
 REALTIME_EVIDENCE_LIMIT = 16
+# When lexical overlap misses, still give the model recent personal episodes.
+REALTIME_RECENT_EVIDENCE_FALLBACK = 6
 # Keep a useful conversational window across sessions without turning the
 # provider payload into an unbounded transcript. Twelve turns is enough to
 # resolve references such as "quello di ieri" while durable dog facts remain
@@ -275,12 +277,18 @@ def _select_realtime_items(
             item.occurred_at or datetime.min.replace(tzinfo=UTC),
         )
 
-    if not query_terms and not selected_domains:
-        return []
     ranked = sorted(candidates, key=relevance, reverse=True)
-    ranked = [item for item in ranked if relevance(item)[0] > 0]
-    candidates = ranked
-    return candidates[: min(limit, REALTIME_EVIDENCE_LIMIT)]
+    matched = [item for item in ranked if relevance(item)[0] > 0]
+    if matched:
+        return matched[: min(limit, REALTIME_EVIDENCE_LIMIT)]
+    # Dossier continuity: even without keyword hit, pass recent episodes so the
+    # model can personalize like ChatGPT with memory of THIS dog.
+    recent = sorted(
+        candidates,
+        key=lambda item: item.occurred_at or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
+    return recent[: min(limit, REALTIME_RECENT_EVIDENCE_FALLBACK, REALTIME_EVIDENCE_LIMIT)]
 
 
 
@@ -297,6 +305,8 @@ def realtime_context_from_personal(
     stable = personal_to_stable_facts(
         personal, user_text=user_text, domains=domains, limit=16
     )
+    # Always keep the personal dossier available. Domain filters only prioritize
+    # when the turn is clearly scoped; GENERAL must not starve the model.
     if selected_domains:
         allowed_stable_domains = set().union(
             *(
@@ -304,14 +314,11 @@ def realtime_context_from_personal(
                 for domain in selected_domains
             )
         )
-        stable = [
+        scoped = [
             fact for fact in stable if fact.get("domain") in allowed_stable_domains
         ]
-    else:
-        # A GENERAL turn is conversational, not a request for the dog's full
-        # stable-memory set. Core facts remain available as durable constraints;
-        # stable facts wait for a clearly scoped retrieval turn.
-        stable = []
+        # If domain filter empties the set, fall back to full stable dossier.
+        stable = scoped or stable
     return RealtimeDogContext(
         dog_id=personal.dog_id,
         dog_name=personal.dog_name,
@@ -391,9 +398,9 @@ async def load_realtime_context_db(
         engine,
         user_id=user_id,
         dog_id=dog_id,
-        # Active feeding is a recommendation-critical core fact and must be
-        # available even when the current message has no nutrition keywords.
-        domains=list({*domains, "NUTRITION"}),
+        # Always load the personal dossier across domains. Turn relevance is
+        # applied later in _select_realtime_items (lexical + recent fallback).
+        domains=list({*domains, "NUTRITION", "BEHAVIOR", "DIGESTIVE", "CARE"}),
     )
     dog_rec = DogRec(
         id=str(dog["id"]),
@@ -450,7 +457,9 @@ def load_realtime_context_memory(
 ) -> RealtimeDogContext:
     dog = store.dogs[dog_id]
     evidence = load_cross_domain_evidence_memory(
-        store, dog_id=dog_id, domains=list({*domains, "NUTRITION"})
+        store,
+        dog_id=dog_id,
+        domains=list({*domains, "NUTRITION", "BEHAVIOR", "DIGESTIVE", "CARE"}),
     )
     lifestyle = store.dog_lifestyle_profiles.get((dog.owner_id, dog_id)) or {}
     if hasattr(lifestyle, "model_dump"):

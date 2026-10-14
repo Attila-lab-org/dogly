@@ -28,8 +28,9 @@ from app.knowledge.claim_validation import (
     validate_claims,
 )
 from app.knowledge.product_instruction import PRODUCT_INSTRUCTION
+from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
 
-REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v6"
+REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v7"
 REALTIME_HISTORY_LIMIT = CONVERSATION_MESSAGE_LIMIT
 
 _URGENT_RULES: tuple[tuple[str, str, str], ...] = (
@@ -135,15 +136,30 @@ def natural_memory_candidate(user_text: str) -> dict[str, str] | None:
     return {"statement": facts[0].statement, "category": facts[0].category}
 
 
-# Realtime needs the same governance in a smaller spoken contract. The client
-# controls turn-taking; the model should supply one human answer.
-_SYSTEM = PRODUCT_INSTRUCTION + """
-Rispondi al turno corrente usando immagine, cronologia e contesto personale
-pertinente. Il soggetto dell'immagine può essere il cane o altro: descrivi ciò
-che appare davvero. Restituisci il JSON richiesto; action_options risponde alla
-sola domanda del turno. Azioni photo/video solo se raccogliere quel media è utile;
-nessun link inventato. used_source_ids cita solo dati personali forniti.
+# Chat Ask: frontier model owns canine knowledge; server only supplies THIS dog.
+_SYSTEM = (
+    PRODUCT_INSTRUCTION
+    + "\n\n"
+    + DOGLY_SPOKEN_STYLE
+    + """
+
+Per questo turno di chat:
+Usa liberamente la tua conoscenza generale su cani, razze, salute, comportamento e
+digestione: non ti serve un catalogo interno di knowledge cards.
+Personalizza solo con PERSONAL_DOG_CONTEXT (identità, fatti, evidenze, cronologia):
+razza, età, cibo, ricordi e analisi passate di QUESTO cane contano; non inventarli.
+Con una foto (anche feci o altro): osserva ciò che appare davvero e dai una lettura
+chiara e utile, collegata al profilo quando pertinente.
+Rispondi al turno corrente. Restituisci il JSON richiesto; action_options risponde
+alla sola domanda del turno. Azioni photo/video solo se quel media cambia davvero
+la lettura; nessun link inventato. used_source_ids cita solo dati personali forniti.
 """
+)
+
+
+def _uses_reasoning_effort(model: str) -> bool:
+    name = model.lower()
+    return name.startswith("gpt-5") or name.startswith("gpt-6")
 
 
 def openai_realtime_decision_schema() -> dict[str, Any]:
@@ -279,8 +295,9 @@ def _select_realtime_reasoning_effort(
         complexity += 1
     if len(history) >= 8 or len(domains) >= 3 or len(context.items) >= 6:
         complexity += 1
-    if image_attached and complexity:
-        complexity += 1
+    if image_attached:
+        # Multimodal turns (es. foto feci) meritano sempre ragionamento pieno.
+        return "high"
     return "high" if complexity >= 3 else "medium" if complexity else "low"
 
 
@@ -359,12 +376,14 @@ def _fallback_decision(
             media_invite="VIDEO",
             media_prompt="Fammi vedere come si comporta in quel momento",
         )
+    breed = str((context.identity or {}).get("breed_label") or "").strip()
+    breed_bit = f" e di un {breed}" if breed else ""
     return RealtimeDecision(
         assistant_text=(
-            f"Su questo non ho ancora un dato personale sufficiente per {name}. "
-            "Posso aiutarti senza indovinare se mi racconti cosa è successo oggi."
+            f"Posso ragionare su {name} con quello che so dei cani{breed_bit}; "
+            "raccontami cosa sta succedendo adesso e lo collego al suo profilo."
         ),
-        question=f"Qual è il cambiamento concreto che hai notato in {name}?",
+        question=f"Cosa hai notato in {name}?",
         question_options=["È successo oggi", "Succede spesso", "È una cosa nuova"],
         question_information_gain="CHANGES_MEANING",
         domains=domains,
@@ -523,7 +542,7 @@ async def orchestrate_realtime_turn(
             },
         },
     }
-    if settings.realtime_reasoning_model.lower().startswith("gpt-5"):
+    if _uses_reasoning_effort(settings.realtime_reasoning_model):
         body["reasoning_effort"] = _select_realtime_reasoning_effort(
             settings,
             user_text=user_text,

@@ -131,9 +131,11 @@ la sostengono. Episodi preliminari o contestati non diventano abitudini conferma
 il numero di interazioni o il livello di conoscenza da solo non prova un'abitudine.
 Nella spiegazione si conserva il significato memorizzato, mai contatori interni.
 
-Realtime usa italiano parlato e normalmente 1–2 frasi: risposta utile, eventuale azione,
-poi si ferma. Chiede un video solo se serve a distinguere le letture, senza fingere
-di osservare il cane in diretta. Lo stile è condiviso da voce e conversazione testuale.
+La chat Ask parla come un amico esperto che già conosce i cani (razze, salute,
+digestione, comportamento) e personalizza con il dossier di questo cane. Lunghezza
+adattiva: breve se basta, più articolata quando collega profilo, foto e storia.
+Chiede un video solo se serve a distinguere le letture, senza fingere di osservare
+il cane in diretta. La conoscenza canina generica viene dal modello, non da un RAG interno.
 
 - Feedback a tre vie; "Non lo so" senza penalità.
 - Condividi card sanitizzata (niente raw video).

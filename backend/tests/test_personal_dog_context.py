@@ -413,7 +413,7 @@ def test_realtime_evidence_selection_excludes_recent_irrelevant_event() -> None:
     assert [item.source_id for item in context.items] == ["relevant"]
 
 
-def test_realtime_evidence_selection_returns_empty_for_unrelated_general_turn() -> None:
+def test_realtime_evidence_falls_back_to_recent_on_unrelated_general_turn() -> None:
     dog = _dog()
     personal = build_personal_dog_context(
         dog=dog,
@@ -438,11 +438,11 @@ def test_realtime_evidence_selection_returns_empty_for_unrelated_general_turn() 
         personal, user_text="Oggi è felicissimo", domains=["GENERAL"]
     )
 
-    assert outside.items == []
-    assert mood.items == []
+    assert [item.source_id for item in outside.items] == ["b1"]
+    assert [item.source_id for item in mood.items] == ["b1"]
 
 
-def test_realtime_evidence_selection_is_empty_without_relevance() -> None:
+def test_realtime_evidence_falls_back_to_recent_without_lexical_hit() -> None:
     dog = _dog()
     personal = build_personal_dog_context(
         dog=dog,
@@ -464,10 +464,10 @@ def test_realtime_evidence_selection_is_empty_without_relevance() -> None:
         personal, user_text="Qual è la situazione?", domains=["GENERAL"]
     )
 
-    assert context.items == []
+    assert [item.source_id for item in context.items] == ["c1"]
 
 
-def test_realtime_context_keeps_core_but_gates_stable_facts_by_turn_domain() -> None:
+def test_realtime_context_keeps_personal_dossier_on_general_turns() -> None:
     dog = _dog()
     personal = build_personal_dog_context(
         dog=dog,
@@ -477,7 +477,17 @@ def test_realtime_context_keeps_core_but_gates_stable_facts_by_turn_domain() -> 
                 "id": "story-food",
                 "confirmed_at": datetime.now(UTC),
                 "facts": [{"statement": "Oreo mangia pollo e riso", "category": "DIET"}],
-            }
+            },
+            {
+                "id": "story-fear",
+                "confirmed_at": datetime.now(UTC),
+                "facts": [
+                    {
+                        "statement": "Oreo ha paura dei botti",
+                        "category": "PREFERENCE",
+                    }
+                ],
+            },
         ],
     )
 
@@ -489,7 +499,10 @@ def test_realtime_context_keeps_core_but_gates_stable_facts_by_turn_domain() -> 
     )
 
     assert any("pollo" in str(fact.get("value")) for fact in weather.core_facts)
-    assert weather.stable_facts == []
+    assert any(
+        "botti" in str(fact.get("value") or fact.get("statement") or "")
+        for fact in weather.stable_facts
+    )
     assert any("pollo" in str(fact.get("value")) for fact in food.core_facts)
 
 

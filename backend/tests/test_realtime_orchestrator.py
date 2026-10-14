@@ -55,7 +55,11 @@ def test_realtime_reasoning_effort_scales_with_structural_complexity() -> None:
     assert _select_realtime_reasoning_effort(
         settings, user_text="Metti insieme tutta la storia", domains=["BEHAVIOR", "DIGESTIVE", "NUTRITION"],
         context=complex_context, history=[{"role": "user", "content": "x"}] * 8,
-        image_attached=True,
+        image_attached=False,
+    ) == "high"
+    assert _select_realtime_reasoning_effort(
+        settings, user_text="Guarda questa cacca", domains=["DIGESTIVE"],
+        context=context, history=[], image_attached=True,
     ) == "high"
 
 
@@ -415,8 +419,11 @@ def test_realtime_prompt_uses_shared_product_identity() -> None:
     from app.knowledge.product_instruction import PRODUCT_INSTRUCTION
     assert _SYSTEM.startswith(PRODUCT_INSTRUCTION)
     assert "Oreo" not in _SYSTEM
-    assert "catalog" not in _SYSTEM
     assert "used_source_ids" in _SYSTEM
+    assert "conoscenza generale" in _SYSTEM
+    assert "catalogo interno" in _SYSTEM
+    assert "amico esperto di cani" in _SYSTEM
+    assert "knowledge cards" in _SYSTEM
 
 
 def test_attachment_focus_is_narrow_and_does_not_assume_the_dog_is_visible() -> None:
@@ -657,7 +664,8 @@ async def test_realtime_route_aligns_domain_and_context_end_to_end(
 
     assert general_response.status_code == 201
     assert behavior_response.status_code == 201
-    assert captured[0].items == []
+    # GENERAL turns still receive recent personal episodes (dossier continuity).
+    assert [item.source_id for item in captured[0].items] == [event_id]
     assert [item.source_id for item in captured[1].items] == [event_id]
 
 
@@ -706,9 +714,11 @@ async def test_realtime_api_prioritizes_explicit_behavior_event(
 
     assert response.status_code == 201
     assert len(captured_contexts) == 1
-    assert len(captured_contexts[0].items) == 1
     assert captured_contexts[0].items[0].source_id == selected_id
     assert captured_contexts[0].items[0].source_type == "BEHAVIOR_EVENT"
+    # Focus pins the selected analysis first; recent dossier episodes may follow.
+    assert len(captured_contexts[0].items) <= 12
+    assert selected_id in {item.source_id for item in captured_contexts[0].items}
 
 
 @pytest.mark.asyncio

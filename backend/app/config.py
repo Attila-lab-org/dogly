@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # model so the safety-sensitive second look uses the same capability tier.
     digestive_verifier_model: str | None = None
     owner_transcription_model: str = "gpt-4o-mini-transcribe"
-    realtime_reasoning_model: str = "gpt-5.2"
+    realtime_reasoning_model: str = "gpt-6-astra"
     # Optional operational override. When absent, realtime chooses a bounded
     # effort from the structural complexity of the current turn.
     realtime_reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
