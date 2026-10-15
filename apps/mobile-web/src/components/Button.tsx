@@ -7,7 +7,9 @@ import {
   ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated from 'react-native-reanimated';
 import { colors, gradients, radius, spacing, typography } from '../theme/tokens';
+import { usePressSpring } from './pressSpring';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger';
 
@@ -41,6 +43,7 @@ export function Button({
   testID,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const press = usePressSpring();
 
   const content = (
     <>
@@ -74,59 +77,68 @@ export function Button({
     </>
   );
 
+  const springHandlers = {
+    onPressIn: press.onPressIn,
+    onPressOut: press.onPressOut,
+  };
+
   if (variant === 'primary') {
     return (
+      <Animated.View style={[press.style, style]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          disabled={isDisabled}
+          testID={testID}
+          {...springHandlers}
+          style={({ pressed }) => [
+            styles.base,
+            pressed && !isDisabled && styles.pressedPrimary,
+            isDisabled && styles.disabled,
+          ]}
+        >
+          <LinearGradient
+            colors={[...gradients.cta]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradient}
+          >
+            {content}
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View style={[press.style, style]}>
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
         disabled={isDisabled}
         testID={testID}
+        {...springHandlers}
         style={({ pressed }) => [
           styles.base,
-          pressed && !isDisabled && styles.pressedPrimary,
+          styles.inner,
+          variant === 'secondary' && styles.secondary,
+          variant === 'secondary' && pressed && !isDisabled && styles.secondaryPressed,
+          variant === 'outline' && styles.outline,
+          variant === 'outline' && pressed && !isDisabled && styles.outlinePressed,
+          variant === 'danger' && styles.danger,
+          variant === 'danger' && pressed && !isDisabled && styles.dangerPressed,
           isDisabled && styles.disabled,
-          style,
         ]}
       >
-        <LinearGradient
-          colors={[...gradients.cta]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradient}
-        >
-          {content}
-        </LinearGradient>
+        {content}
       </Pressable>
-    );
-  }
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      disabled={isDisabled}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.base,
-        styles.inner,
-        variant === 'secondary' && styles.secondary,
-        variant === 'secondary' && pressed && !isDisabled && styles.secondaryPressed,
-        variant === 'outline' && styles.outline,
-        variant === 'outline' && pressed && !isDisabled && styles.outlinePressed,
-        variant === 'danger' && styles.danger,
-        variant === 'danger' && pressed && !isDisabled && styles.dangerPressed,
-        isDisabled && styles.disabled,
-        style,
-      ]}
-    >
-      {content}
-    </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
   gradient: {
@@ -134,7 +146,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: 14,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
   },
   inner: {
@@ -142,7 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: 14,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
   },
   label: {
@@ -153,33 +165,30 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
   },
   labelOutline: {
-    color: colors.teal,
+    color: colors.accent,
   },
   pressedPrimary: {
     opacity: 0.9,
-    transform: [{ scale: 0.98 }],
   },
   secondary: {
-    backgroundColor: colors.teal,
+    backgroundColor: colors.accent,
   },
   secondaryPressed: {
-    backgroundColor: '#269394',
-    transform: [{ scale: 0.98 }],
+    backgroundColor: colors.accentPressed,
   },
   outline: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: colors.teal,
+    borderColor: colors.accent,
   },
   outlinePressed: {
-    backgroundColor: colors.tealSoft,
+    backgroundColor: colors.accentSoft,
   },
   danger: {
-    backgroundColor: colors.coral,
+    backgroundColor: colors.danger,
   },
   dangerPressed: {
-    backgroundColor: '#E5735D',
-    transform: [{ scale: 0.98 }],
+    backgroundColor: colors.dangerPressed,
   },
   disabled: {
     opacity: 0.5,

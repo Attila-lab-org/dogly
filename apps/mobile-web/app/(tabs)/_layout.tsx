@@ -1,14 +1,71 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { hapticLight } from '../../src/lib/haptics';
 import { useSession } from '../../src/features/auth/SessionProvider';
 import { useDogProfile } from '../../src/features/core/useDogProfile';
 
 /**
  * Tab ADR-017: Home / Diario / {cane} / Social (storie Momenti + luoghi).
- * Protetto: senza sessione → welcome.
+ * Protetto: senza sessione → welcome. Icona attiva: pill teal-soft +
+ * piccolo bounce; tap tab = haptic leggero (nativa).
  */
+function TabIcon({
+  name,
+  outline,
+  color,
+  size,
+  focused,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  outline: keyof typeof Ionicons.glyphMap;
+  color: string;
+  size: number;
+  focused: boolean;
+}) {
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    if (!focused || reducedMotion) return;
+    scale.value = 0.82;
+    scale.value = withSpring(1, { damping: 8, stiffness: 240 });
+  }, [focused, reducedMotion, scale]);
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const pillStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(focused ? 1 : 0, { duration: 160 }),
+  }));
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: 'absolute',
+            width: size + 22,
+            height: size + 14,
+            borderRadius: (size + 14) / 2,
+            backgroundColor: 'rgba(20, 184, 166, 0.14)',
+          },
+          pillStyle,
+        ]}
+      />
+      <Animated.View style={iconStyle}>
+        <Ionicons name={focused ? name : outline} size={size} color={color} />
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function TabsLayout() {
   const { loading, sessionState, usingMockGate } = useSession();
   const { dog } = useDogProfile();
@@ -33,6 +90,11 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => {
+          void hapticLight();
+        },
+      }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#0066FF',
@@ -77,11 +139,7 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'home' : 'home-outline'}
-              size={size}
-              color={color as string}
-            />
+            <TabIcon name="home" outline="home-outline" color={color as string} size={size} focused={focused} />
           ),
         }}
       />
@@ -90,11 +148,7 @@ export default function TabsLayout() {
         options={{
           title: 'Diario',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'calendar' : 'calendar-outline'}
-              size={size}
-              color={color as string}
-            />
+            <TabIcon name="calendar" outline="calendar-outline" color={color as string} size={size} focused={focused} />
           ),
         }}
       />
@@ -103,11 +157,7 @@ export default function TabsLayout() {
         options={{
           title: dog.name || 'Cane',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'paw' : 'paw-outline'}
-              size={size}
-              color={color as string}
-            />
+            <TabIcon name="paw" outline="paw-outline" color={color as string} size={size} focused={focused} />
           ),
         }}
       />
@@ -116,11 +166,7 @@ export default function TabsLayout() {
         options={{
           title: 'Momenti',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'people' : 'people-outline'}
-              size={size}
-              color={color as string}
-            />
+            <TabIcon name="people" outline="people-outline" color={color as string} size={size} focused={focused} />
           ),
         }}
       />

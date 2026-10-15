@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
+import { Skeleton } from '@/components/Skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
@@ -173,7 +174,13 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          {photos.isLoading ? <Text style={styles.quota}>Carico i momenti…</Text> : photos.isError ? (
+          {photos.isLoading ? (
+            <View style={styles.momentsRow}>
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} style={{ flex: 1, aspectRatio: 1 }} height={100} borderRadius={14} />
+              ))}
+            </View>
+          ) : photos.isError ? (
             <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.seeAll}>Non riesco a caricare le foto · Riprova</Text></Pressable>
           ) : (photos.data ?? []).length > 0 ? (
             <ScrollView
@@ -405,6 +412,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   momentCard: { width: 132, gap: 6 },
+  momentsRow: { flexDirection: 'row', gap: 10 },
   momentPhoto: {
     width: '100%',
     aspectRatio: 1,

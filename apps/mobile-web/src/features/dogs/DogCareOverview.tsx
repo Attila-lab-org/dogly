@@ -14,6 +14,8 @@ import { isPersistedId } from '../../lib/persistedId';
 import { queryKeys } from '../../lib/queryClient';
 import { feedingPeriodsMock, foodProductsMock } from '../../mocks/secondary';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { usePressSpring } from '../../components/pressSpring';
+import Animated from 'react-native-reanimated';
 import { digestiveSummaryLabel, foodSummary, routineSummary } from './profileSummary';
 
 /** Hub cura sul profilo cane (Oreo) — non usare in Home. */
@@ -178,9 +180,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   card: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  rowWrap: { width: '48%', flexGrow: 1 },
   row: {
-    width: '48%',
-    flexGrow: 1,
+    width: '100%',
     minHeight: 108,
     padding: 14,
     alignItems: 'flex-start',

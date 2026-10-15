@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
-import { ScreenContainer } from '@/components';
+import { ScreenContainer, SkeletonCard } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { AvatarActor } from '@/features/core/AvatarActor';
@@ -25,6 +25,7 @@ import {
   type LeaderboardEntry,
 } from '@/features/games/api';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { hapticLight } from '@/lib/haptics';
 
 const GAME_TABS: GameId[] = ['squirrel', 'agility', 'match'];
 
@@ -209,7 +210,10 @@ export default function LeaderboardScreen() {
               key={tab}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              onPress={() => setGame(tab)}
+              onPress={() => {
+                void hapticLight();
+                setGame(tab);
+              }}
               style={[styles.tab, active && styles.tabActive]}
             >
               <Text style={[styles.tabText, active && styles.tabTextActive]}>
@@ -235,7 +239,11 @@ export default function LeaderboardScreen() {
           </Pressable>
         </View>
       ) : leaderboard.isLoading ? (
-        <Text style={styles.emptyText}>Leggo la classifica…</Text>
+        <View style={{ gap: 10 }}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
       ) : leaderboard.isError ? (
         <Pressable
           accessibilityRole="button"

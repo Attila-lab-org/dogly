@@ -55,6 +55,7 @@ import {
 import { fetchGameLeaderboard, submitGameScore } from '@/features/games/api';
 import { shareSquirrelResult } from '@/features/games/shareScoreCard';
 import { useSession } from '@/features/auth/SessionProvider';
+import { hapticSelection, hapticSuccess } from '@/lib/haptics';
 import { isApiConfigured } from '@/features/auth/env';
 import { isPersistedId } from '@/lib/persistedId';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -417,7 +418,10 @@ export default function MatchGameScreen() {
   const finish = () => {
     setPhase('done');
     setScore((finalScore) => {
-      void saveMatchBest(finalScore, dog.id).then(setBest);
+      void saveMatchBest(finalScore, dog.id).then((nextBest) => {
+        setBest(nextBest);
+        if (finalScore > 0 && nextBest === finalScore) void hapticSuccess();
+      });
       if (realEnabled) {
         setSubmitting(true);
         void (async () => {
@@ -522,6 +526,7 @@ export default function MatchGameScreen() {
       setSelected(null);
       return;
     }
+    void hapticSelection();
     setPulse({ a: selected, b: index, tick: Date.now() });
     const next = swapCells(boardRef.current, selected, index);
     setSelected(null);

@@ -2,6 +2,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows, spacing, typography } from '../../theme/tokens';
+import Animated from 'react-native-reanimated';
+import { usePressSpring } from '../../components/pressSpring';
 import { dayDistance, formatCareDate, relativeCareDate } from './date';
 import { CARE_TYPE_META, type CareEvent } from './types';
 
@@ -32,11 +34,15 @@ export function CareEventCard({
     .toLocaleDateString('it-IT', { month: 'short' })
     .replace('.', '');
 
+  const press = usePressSpring();
   return (
+    <Animated.View style={press.style}>
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${event.title}, ${formatCareDate(event.scheduledAt, event.allDay)}`}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={({ pressed }) => [
         styles.card,
         completed && styles.completedCard,
@@ -116,6 +122,7 @@ export function CareEventCard({
 
       <Ionicons name="chevron-forward" size={18} color={colors.iconMuted} />
     </Pressable>
+    </Animated.View>
   );
 }
 

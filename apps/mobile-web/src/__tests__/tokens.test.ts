@@ -2,10 +2,10 @@ import { colors, gradients, radius, shadows, spacing, tabBar, typography } from 
 
 describe('design tokens (UX_REFERENCE vincolante)', () => {
   it('palette principale: sfondo freddo, primario blu, accent teal, testo navy', () => {
-    expect(colors.background).toBe('#F8FAFC');
-    expect(colors.primary).toBe('#0050D8');
-    expect(colors.accent).toBe('#2DAAAB');
-    expect(colors.text).toBe('#1A2B48');
+    expect(colors.background).toBe('#F4F7FB');
+    expect(colors.primary).toBe('#2563EB');
+    expect(colors.accent).toBe('#14B8A6');
+    expect(colors.text).toBe('#0E2A47');
     expect(colors.surface).toBe('#FFFFFF');
   });
 

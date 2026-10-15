@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { useSession } from '../auth/SessionProvider';
 import { prepareHomeMessage } from '../realtime/homeMessage';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { usePressSpring } from '../../components/pressSpring';
+import Animated from 'react-native-reanimated';
 
 export function HomeConversation({
   dogId,
@@ -34,6 +36,7 @@ export function HomeConversation({
     opening.current = false;
   };
 
+  const press = usePressSpring();
   const send = () => {
     if (disabled || opening.current) return;
     const entryId = prepareHomeMessage(userId!, dogId, draft);
@@ -75,20 +78,24 @@ export function HomeConversation({
             <Ionicons name="mic-outline" size={22} color={colors.text} />
           </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Invia messaggio a DOGly"
-          accessibilityState={{ disabled: disabled || !draft.trim() }}
-          onPress={send}
-          disabled={disabled || !draft.trim()}
-          style={({ pressed }) => [
-            styles.send,
-            (disabled || !draft.trim()) && styles.disabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="arrow-forward" size={20} color={colors.textOnPrimary} />
-        </Pressable>
+        <Animated.View style={press.style}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Invia messaggio a DOGly"
+            accessibilityState={{ disabled: disabled || !draft.trim() }}
+            onPress={send}
+            disabled={disabled || !draft.trim()}
+            onPressIn={press.onPressIn}
+            onPressOut={press.onPressOut}
+            style={({ pressed }) => [
+              styles.send,
+              (disabled || !draft.trim()) && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons name="arrow-forward" size={20} color={colors.textOnPrimary} />
+          </Pressable>
+        </Animated.View>
       </View>
     </View>
   );

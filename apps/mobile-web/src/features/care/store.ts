@@ -2,6 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { api } from '../../lib/apiClient';
 import { isPersistedId } from '../../lib/persistedId';
 import { getAccessToken } from '../../lib/secureStore';
+import { hapticSuccess } from '../../lib/haptics';
 import type {
   CareEvent,
   CareEventStatus,
@@ -148,9 +149,6 @@ async function hydrateCareEvents(dogId: string, dogName: string): Promise<void> 
   hydratingDogs.add(dogId);
   emit();
   if (!(await getAccessToken())) {
-    // Auth may still be booting when the profile first mounts. Allow the
-    // next authenticated render to retry hydration instead of pinning this
-    // dog as already loaded forever.
     hydratedDogs.delete(dogId);
     hydratingDogs.delete(dogId);
     emit();
@@ -257,6 +255,7 @@ export async function completeCareEvent(
   const event = careEventById(eventId);
   if (!event) return;
   if (event.status === 'COMPLETED') return;
+  void hapticSuccess();
 
   const previousStatus = event.status;
   const previousNotificationId = event.notificationId;

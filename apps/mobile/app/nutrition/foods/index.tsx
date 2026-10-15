@@ -118,6 +118,7 @@ function FoodRow({
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
+      </Animated.View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Rimuovi ${food.name || 'questo alimento'}`}

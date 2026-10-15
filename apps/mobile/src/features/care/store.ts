@@ -2,6 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { api } from '../../lib/apiClient';
 import { isPersistedId } from '../../lib/persistedId';
 import { getAccessToken } from '../../lib/secureStore';
+import { hapticSuccess } from '../../lib/haptics';
 import type {
   CareEvent,
   CareEventStatus,
@@ -254,6 +255,7 @@ export async function completeCareEvent(
   const event = careEventById(eventId);
   if (!event) return;
   if (event.status === 'COMPLETED') return;
+  void hapticSuccess();
 
   const previousStatus = event.status;
   const previousNotificationId = event.notificationId;

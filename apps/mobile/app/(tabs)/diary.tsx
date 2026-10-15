@@ -33,6 +33,8 @@ import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 import { DiaryMediaCover } from '@/features/home/DiaryMediaCover';
 import { usePressSpring } from '@/components/pressSpring';
+import { SkeletonCard } from '@/components/Skeleton';
+import { hapticLight } from '@/lib/haptics';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogIllustration } from '@/components/DogIllustration';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -387,7 +389,10 @@ export default function DiaryScreen() {
                   key={f.key}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  onPress={() => setFilter(f.key)}
+                  onPress={() => {
+                    void hapticLight();
+                    setFilter(f.key);
+                  }}
                   style={[styles.filterPill, active && styles.filterPillActive]}
                   testID={`diary-filter-${f.key.toLowerCase()}`}
                 >
@@ -402,11 +407,11 @@ export default function DiaryScreen() {
           </ScrollView>
 
           {realEnabled && query.isLoading ? (
-            <SoftState
-              loading
-              title="Sfoglio il diario…"
-              message={`Sto raccogliendo le giornate di ${dog.name}.`}
-            />
+            <View style={{ gap: 12 }}>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </View>
           ) : realEnabled && query.isError ? (
             <SoftState
               mood="thinking"

@@ -32,6 +32,9 @@ import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 import { DiaryMediaCover } from '@/features/home/DiaryMediaCover';
+import { usePressSpring } from '@/components/pressSpring';
+import { SkeletonCard } from '@/components/Skeleton';
+import { hapticLight } from '@/lib/haptics';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogIllustration } from '@/components/DogIllustration';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -154,6 +157,7 @@ function StatusBadgeView({ badge }: { badge: StatusBadge }) {
 function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
   const badge = entryStatusBadge(entry);
   const icon = entryIconTone(entry);
+  const press = usePressSpring();
 
   const meta = (
     <View style={styles.metaRow}>
@@ -175,10 +179,13 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
 
   if (entry.domain === 'DIGESTIVE' || entry.mediaUri) {
     return (
+      <Animated.View style={press.style}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={cardAccessibilityLabel}
         onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
         style={({ pressed }) => [styles.mediaCard, pressed && styles.entryCardPressed]}
       >
         <View style={styles.mediaTop}>
@@ -193,14 +200,18 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
           {deleted}
         </View>
       </Pressable>
+      </Animated.View>
     );
   }
 
   return (
+    <Animated.View style={press.style}>
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={cardAccessibilityLabel}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={({ pressed }) => [styles.plainCard, pressed && styles.entryCardPressed]}
     >
       <View style={[styles.iconBlock, { backgroundColor: icon.bg }]}>
@@ -215,6 +226,7 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
         {deleted}
       </View>
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -377,7 +389,10 @@ export default function DiaryScreen() {
                   key={f.key}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  onPress={() => setFilter(f.key)}
+                  onPress={() => {
+                    void hapticLight();
+                    setFilter(f.key);
+                  }}
                   style={[styles.filterPill, active && styles.filterPillActive]}
                   testID={`diary-filter-${f.key.toLowerCase()}`}
                 >
@@ -392,11 +407,11 @@ export default function DiaryScreen() {
           </ScrollView>
 
           {realEnabled && query.isLoading ? (
-            <SoftState
-              loading
-              title="Sfoglio il diario…"
-              message={`Sto raccogliendo le giornate di ${dog.name}.`}
-            />
+            <View style={{ gap: 12 }}>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </View>
           ) : realEnabled && query.isError ? (
             <SoftState
               mood="thinking"

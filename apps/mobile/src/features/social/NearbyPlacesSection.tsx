@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { CuteIcon } from '@/components/CuteIcon';
+import { SkeletonCard } from '@/components/Skeleton';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import {
   fetchNearbyPlaces,
@@ -106,9 +107,9 @@ export function NearbyPlacesSection() {
         placesQuery.isFetching &&
         !placesTimedOut &&
         !placesQuery.isError ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.muted}>Cerco i posti giusti vicino a voi…</Text>
+        <View style={{ gap: 10 }}>
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : locationFailure || !coords ? (
         <View style={styles.fallback}>

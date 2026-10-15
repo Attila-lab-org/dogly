@@ -46,6 +46,7 @@ import {
 import { fetchGameLeaderboard, submitGameScore } from '@/features/games/api';
 import { shareSquirrelResult } from '@/features/games/shareScoreCard';
 import { useSession } from '@/features/auth/SessionProvider';
+import { hapticSuccess } from '@/lib/haptics';
 import { isApiConfigured } from '@/features/auth/env';
 import { isPersistedId } from '@/lib/persistedId';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -315,7 +316,10 @@ export default function SquirrelGameScreen() {
         setActive(new Map());
         setPhase('done');
         setScore((finalScore) => {
-          void saveSquirrelBest(finalScore, dog.id).then(setBest);
+          void saveSquirrelBest(finalScore, dog.id).then((nextBest) => {
+        setBest(nextBest);
+        if (finalScore > 0 && nextBest === finalScore) void hapticSuccess();
+      });
           if (realEnabled) {
             setSubmitting(true);
             void (async () => {

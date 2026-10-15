@@ -24,3 +24,4 @@ export { CuteIcon, CUTE_ICON_NAMES } from './CuteIcon';
 export type { CuteIconProps, CuteIconName } from './CuteIcon';
 export { DogIllustration } from './DogIllustration';
 export type { DogIllustrationProps } from './DogIllustration';
+export { Skeleton, SkeletonCard } from "./Skeleton";

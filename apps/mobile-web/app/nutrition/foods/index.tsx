@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
+import Animated from 'react-native-reanimated';
+import { usePressSpring } from '@/components/pressSpring';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -27,9 +29,11 @@ function ActiveFoodHero({
   onRemove: () => void;
 }) {
   const imageUri = food.catalog_image_url || food.label_image_url || undefined;
+  const press = usePressSpring();
   return (
     <View style={styles.heroCard}>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={styles.heroPress}>
+      <Animated.View style={press.style}>
+      <Pressable accessibilityRole="button" onPress={onOpen} onPressIn={press.onPressIn} onPressOut={press.onPressOut} style={styles.heroPress}>
         <View style={styles.heroPack}>
           {imageUri ? (
             <Image
@@ -61,6 +65,7 @@ function ActiveFoodHero({
           )}
         </View>
       </Pressable>
+      </Animated.View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Rimuovi ${food.name || 'questo alimento'}`}
@@ -84,9 +89,11 @@ function FoodRow({
   onRemove: () => void;
 }) {
   const imageUri = food.catalog_image_url || food.label_image_url || undefined;
+  const press = usePressSpring();
   return (
     <View style={styles.rowCard}>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={styles.rowPress}>
+      <Animated.View style={press.style}>
+      <Pressable accessibilityRole="button" onPress={onOpen} onPressIn={press.onPressIn} onPressOut={press.onPressOut} style={styles.rowPress}>
         {imageUri ? (
           <Image
             source={{ uri: imageUri }}
@@ -111,6 +118,7 @@ function FoodRow({
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
+      </Animated.View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Rimuovi ${food.name || 'questo alimento'}`}
