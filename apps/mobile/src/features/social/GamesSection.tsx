@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -17,6 +18,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
@@ -116,6 +118,89 @@ function AgilityMark() {
   );
 }
 
+/** Press spring condiviso: scala 0.96 al tocco, rebound morbido. */
+function usePressSpring() {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const onPressIn = () => {
+    scale.value = withSpring(0.96, { damping: 12, stiffness: 260 });
+  };
+  const onPressOut = () => {
+    scale.value = withSpring(1, { damping: 9, stiffness: 220 });
+  };
+  return { style, onPressIn, onPressOut };
+}
+
+function ArrowCircle({ tone }: { tone: 'onColor' | 'onLight' }) {
+  return (
+    <View style={[styles.arrowCircle, tone === 'onLight' && styles.arrowCircleLight]}>
+      <Ionicons
+        name="arrow-forward"
+        size={15}
+        color={tone === 'onColor' ? colors.textOnPrimary : colors.accent}
+      />
+    </View>
+  );
+}
+
+function BestPill({ best }: { best: number | null }) {
+  if (best === null || best <= 0) return null;
+  return (
+    <View style={styles.bestPill}>
+      <CuteIcon name="paw" size={11} color={colors.accent} secondary={colors.accent} />
+      <Text style={styles.bestPillText}>{best}</Text>
+    </View>
+  );
+}
+
+/** Tile colorata del gioco: illustrazione protagonista, titolo, freccia. */
+function GameTile({
+  label,
+  gradient,
+  best,
+  onPress,
+  children,
+}: {
+  label: string;
+  gradient: [string, string];
+  best?: number | null;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
+  const press = usePressSpring();
+  return (
+    <Animated.View style={[styles.tile, press.style]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Gioca a ${label}`}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={styles.tilePress}
+      >
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.tileArt} pointerEvents="none">
+          {children}
+        </View>
+        {best !== undefined ? (
+          <View style={styles.tileBest}>
+            <BestPill best={best ?? null} />
+          </View>
+        ) : null}
+        <Text style={styles.tileTitle}>{label}</Text>
+        <View style={styles.tileArrow}>
+          <ArrowCircle tone="onLight" />
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export function GamesSection() {
   const router = useRouter();
   const { dog } = useDogProfile();
@@ -142,18 +227,26 @@ export function GamesSection() {
   }, [dog.id]);
 
   const leaders = (leaderboard.data?.items ?? []).slice(0, 3);
+  const heroPress = usePressSpring();
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Giochi del quartiere</Text>
 
-      <View style={styles.heroCard}>
+      <Animated.View style={[styles.heroCard, styles.heroCardRaised, heroPress.style]}>
         <LinearGradient
           colors={['#E0F7F4', '#F0FAF6', '#FFF3D6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Gioca a ${GAME_LABELS.match}`}
+          onPress={() => router.push('/games/match' as never)}
+          onPressIn={heroPress.onPressIn}
+          onPressOut={heroPress.onPressOut}
+        >
         <View style={styles.weeklyChip}>
           <Text style={styles.weeklyText}>Gioco della settimana</Text>
         </View>
@@ -174,12 +267,13 @@ export function GamesSection() {
               onPress={() => router.push('/games/match' as never)}
               style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
             >
-              <CuteIcon name="play" size={15} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
+              <CuteIcon name="play" size={16} color={colors.accent} secondary={colors.accent} />
               <Text style={styles.playText}>Gioca</Text>
             </Pressable>
           </View>
           <MatchMarkAnimated reducedMotion={reducedMotion} />
         </View>
+        </Pressable>
 
         {enabled && leaders.length > 0 ? (
           <Pressable
@@ -201,27 +295,23 @@ export function GamesSection() {
             <Text style={styles.seeBoard}>Vedi classifica</Text>
           </Pressable>
         ) : null}
-      </View>
+      </Animated.View>
 
       <View style={styles.otherRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Gioca a ${GAME_LABELS.squirrel}`}
+        <GameTile
+          label={GAME_LABELS.squirrel}
+          gradient={['#D9F0E4', '#BFE8DA']}
           onPress={() => router.push('/games/squirrel' as never)}
-          style={({ pressed }) => [styles.otherCard, pressed && styles.pressed]}
         >
-          <SquirrelArt size={56} />
-          <Text style={styles.otherTitle}>{GAME_LABELS.squirrel}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Gioca a ${GAME_LABELS.agility}`}
+          <SquirrelArt size={78} />
+        </GameTile>
+        <GameTile
+          label={GAME_LABELS.agility}
+          gradient={['#FFF1EE', '#FFDFD4']}
           onPress={() => router.push('/games/agility' as never)}
-          style={({ pressed }) => [styles.otherCard, pressed && styles.pressed]}
         >
           <AgilityMark />
-          <Text style={styles.otherTitle}>{GAME_LABELS.agility}</Text>
-        </Pressable>
+        </GameTile>
       </View>
     </View>
   );
@@ -285,13 +375,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     alignSelf: 'flex-start',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.surface,
     borderRadius: radius.full,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm + 2,
+    ...shadows.card,
   },
   playText: {
-    color: colors.textOnPrimary,
+    color: colors.accent,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
@@ -326,22 +417,57 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   otherRow: { flexDirection: 'row', gap: spacing.md },
-  otherCard: {
+  tile: {
     flex: 1,
     minWidth: 0,
+    borderRadius: radius.lg,
+    overflow: 'visible',
+    ...shadows.raised,
+  },
+  tilePress: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    padding: spacing.md,
+    minHeight: 148,
+    justifyContent: 'flex-end',
+  },
+  tileArt: {
+    position: 'absolute',
+    top: -12,
+    right: -8,
+    transform: [{ rotate: '6deg' }],
+  },
+  tileBest: { position: 'absolute', top: spacing.sm, left: spacing.sm },
+  tileTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    marginTop: spacing.xl,
+  },
+  tileArrow: { position: 'absolute', right: spacing.sm, bottom: spacing.sm },
+  arrowCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
+  arrowCircleLight: { backgroundColor: colors.surface },
+  bestPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
+    gap: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
   },
-  otherTitle: {
+  bestPillText: {
     color: colors.text,
-    fontSize: typography.size.sm,
+    fontSize: 11,
     fontWeight: typography.weight.bold,
   },
+  heroCardRaised: { ...shadows.raised },
   pressed: { opacity: 0.88 },
 });

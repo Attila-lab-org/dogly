@@ -16,6 +16,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
@@ -86,6 +87,18 @@ function AgilityMark() {
   );
 }
 
+function usePressSpring() {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const onPressIn = () => {
+    scale.value = withSpring(0.96, { damping: 12, stiffness: 260 });
+  };
+  const onPressOut = () => {
+    scale.value = withSpring(1, { damping: 9, stiffness: 220 });
+  };
+  return { style, onPressIn, onPressOut };
+}
+
 function BestChip({ best }: { best: number | null }) {
   if (best === null) return null;
   return (
@@ -102,6 +115,9 @@ export default function GamesHubScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const reducedMotion = useReducedMotion();
+  const heroPress = usePressSpring();
+  const squirrelPress = usePressSpring();
+  const agilityPress = usePressSpring();
   const [best, setBest] = useState<Record<'match' | 'squirrel' | 'agility', number | null>>({
     match: null,
     squirrel: null,
@@ -133,12 +149,14 @@ export default function GamesHubScreen() {
         la vostra sfida.
       </Text>
 
-      <Animated.View entering={enter(0)}>
+      <Animated.View entering={enter(0)} style={heroPress.style}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Gioca a ${GAME_LABELS.match}, gioco della settimana`}
           onPress={() => router.push('/games/match' as never)}
-          style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
+          onPressIn={heroPress.onPressIn}
+          onPressOut={heroPress.onPressOut}
+          style={[styles.heroCard, styles.raised]}
         >
           <LinearGradient
             colors={['#E0F7F4', '#F0FAF6', '#FFF3D6']}
@@ -166,12 +184,14 @@ export default function GamesHubScreen() {
         </Pressable>
       </Animated.View>
 
-      <Animated.View entering={enter(120)}>
+      <Animated.View entering={enter(120)} style={squirrelPress.style}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Gioca a ${GAME_LABELS.squirrel}`}
           onPress={() => router.push('/games/squirrel' as never)}
-          style={({ pressed }) => [styles.heroCard, styles.compactCard, pressed && styles.pressed]}
+          onPressIn={squirrelPress.onPressIn}
+          onPressOut={squirrelPress.onPressOut}
+          style={[styles.heroCard, styles.compactCard, styles.raised]}
         >
           <LinearGradient
             colors={['#DFF3EC', '#EAF7F1', '#FFF6E8']}
@@ -190,12 +210,14 @@ export default function GamesHubScreen() {
         </Pressable>
       </Animated.View>
 
-      <Animated.View entering={enter(240)}>
+      <Animated.View entering={enter(240)} style={agilityPress.style}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Gioca a ${GAME_LABELS.agility}`}
           onPress={() => router.push('/games/agility' as never)}
-          style={({ pressed }) => [styles.heroCard, styles.compactCard, pressed && styles.pressed]}
+          onPressIn={agilityPress.onPressIn}
+          onPressOut={agilityPress.onPressOut}
+          style={[styles.heroCard, styles.compactCard, styles.raised]}
         >
           <LinearGradient
             colors={['#E3EFFE', '#EAF3FD', '#E0F7F4']}
@@ -303,5 +325,6 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
   },
+  raised: { ...shadows.raised },
   pressed: { opacity: 0.9 },
 });
