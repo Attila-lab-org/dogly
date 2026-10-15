@@ -28,12 +28,17 @@ npm start
 
 ## Autenticazione
 
-V0: login puramente visuale solo se `NEXT_PUBLIC_ADMIN_DEMO=true`; senza questa
-variabile l’accesso resta disabilitato per evitare di presentare una console
-senza autenticazione come ambiente reale.
-In V1 l'auth sarà Supabase: copia `.env.example` in `.env.local` e valorizza
-`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-Nessun segreto reale va committato.
+Login reale via **Supabase Auth** (email/password) + cookie di sessione
+server-side (`@supabase/ssr`). Solo le email in `ADMIN_ALLOWED_EMAILS` entrano.
+
+1. Copia `.env.example` → `.env.local`
+2. Imposta `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   (stessi valori pubblici dell’app mobile)
+3. Imposta `ADMIN_ALLOWED_EMAILS` (virgola) — fail-closed se vuoto
+4. Crea l’utente in Supabase Dashboard → Authentication → Users
+5. Su Vercel (`dogly-admin`): stesse env in Production/Preview
+
+Mai mettere la service-role key nel frontend o in variabili `NEXT_PUBLIC_*`.
 
 ## Aree
 

@@ -72,7 +72,7 @@ function computeResults(query: string): SearchResult[] {
   return [...foundUsers, ...foundDogs, ...foundEvents, ...foundReports];
 }
 
-export default function TopBar() {
+export default function TopBar({ sessionSlot }: { sessionSlot?: React.ReactNode }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -219,11 +219,6 @@ export default function TopBar() {
       </div>
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
-        <span className="pill" style={{ background: "#FEF3C7", color: "#92400E" }}>
-          <span className="dot" style={{ background: "#D97706" }} />
-          DEMO
-        </span>
-
         <button
           type="button"
           aria-label="Notifiche (3 non lette)"
@@ -262,25 +257,7 @@ export default function TopBar() {
           </span>
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <span
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: "50%",
-              background: "var(--primary)",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 13,
-              fontWeight: 700,
-            }}
-          >
-            A
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Admin</span>
-        </div>
+        {sessionSlot}
       </div>
     </header>
   );

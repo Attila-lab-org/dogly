@@ -1,16 +1,23 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { signIn, type LoginState } from "./actions";
 
-export default function LoginPage() {
-  const router = useRouter();
-  const demoEnabled =
-    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ADMIN_DEMO === "true";
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+const initialState: LoginState = { error: null };
+
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const [state, formAction, pending] = useActionState(signIn, initialState);
+  const notAllowed = searchParams.get("error") === "not_allowed";
+  const configured =
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    );
 
   return (
     <main
@@ -23,7 +30,10 @@ export default function LoginPage() {
         padding: 24,
       }}
     >
-      <div className="card" style={{ width: "min(400px, 100%)", padding: "36px 32px", textAlign: "center" }}>
+      <div
+        className="card"
+        style={{ width: "min(400px, 100%)", padding: "36px 32px", textAlign: "center" }}
+      >
         <span
           style={{
             display: "inline-flex",
@@ -44,36 +54,45 @@ export default function LoginPage() {
         <p className="muted" style={{ margin: "0 0 6px", fontSize: 13 }}>
           Il tuo cane, finalmente capito.
         </p>
-        <p className="small muted" style={{ margin: "0 0 22px", letterSpacing: "0.12em", fontWeight: 600 }}>
-          CONTROL CENTER · {demoEnabled ? "DEMO LOCALE" : "NON CONFIGURATO"}
-        </p>
-        <p className="small" style={{ margin: "0 0 18px", color: "#92400E" }}>
-          {demoEnabled
-            ? "Accesso grafico di prototipo: non verifica credenziali e non è un ambiente di produzione."
-            : "L’autenticazione admin non è ancora configurata. Questa console non accetta accessi finché non esiste un provider server-side."}
-        </p>
-        {error ? <p role="alert" className="small" style={{ margin: "0 0 12px", color: "#B91C1C" }}>{error}</p> : null}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!demoEnabled) {
-              setError("Console non disponibile: manca l’autenticazione admin reale.");
-              return;
-            }
-            router.push("/");
-          }}
-          style={{ display: "grid", gap: 12, textAlign: "left" }}
+        <p
+          className="small muted"
+          style={{ margin: "0 0 22px", letterSpacing: "0.12em", fontWeight: 600 }}
         >
+          CONTROL CENTER · ACCESSO SICURO
+        </p>
+
+        {!configured ? (
+          <p className="small" style={{ margin: "0 0 18px", color: "#92400E", textAlign: "left" }}>
+            Configura su Vercel (o in <code>.env.local</code>):{" "}
+            <code>NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
+            <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> e{" "}
+            <code>ADMIN_ALLOWED_EMAILS</code>. Poi crea l’utente in Supabase Auth.
+          </p>
+        ) : (
+          <p className="small muted" style={{ margin: "0 0 18px", textAlign: "left" }}>
+            Accedi con l’account Supabase autorizzato. Solo le email in allowlist
+            entrano nella console.
+          </p>
+        )}
+
+        {(state.error || notAllowed) && (
+          <p role="alert" className="small" style={{ margin: "0 0 12px", color: "#B91C1C" }}>
+            {state.error ||
+              "Questo account non è autorizzato. Contatta un Owner del team."}
+          </p>
+        )}
+
+        <form action={formAction} style={{ display: "grid", gap: 12, textAlign: "left" }}>
           <label className="small" style={{ fontWeight: 600 }}>
             Email
             <input
               className="input"
               type="email"
+              name="email"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
               placeholder="nome.cognome@dogly.it"
+              disabled={!configured || pending}
               style={{ marginTop: 5 }}
             />
           </label>
@@ -82,22 +101,36 @@ export default function LoginPage() {
             <input
               className="input"
               type="password"
+              name="password"
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               placeholder="••••••••"
+              disabled={!configured || pending}
               style={{ marginTop: 5 }}
             />
           </label>
-          <button className="btn btn-primary" type="submit" style={{ justifyContent: "center", padding: "11px 14px" }}>
-            Accedi
+          <button
+            className="btn btn-primary"
+            type="submit"
+            disabled={!configured || pending}
+            style={{ justifyContent: "center", padding: "11px 14px" }}
+          >
+            {pending ? "Accesso…" : "Accedi"}
           </button>
         </form>
 
         <p className="small muted" style={{ marginTop: 20, marginBottom: 0 }}>
-          Accesso riservato al team — demo locale soltanto
+          Accesso riservato al team Dogly
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: "100vh" }} />}>
+      <LoginForm />
+    </Suspense>
   );
 }
