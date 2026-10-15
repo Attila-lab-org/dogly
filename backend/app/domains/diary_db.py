@@ -62,7 +62,9 @@ async def list_diary_page(
 ) -> DiaryPage:
     params: dict[str, Any] = {
         "user_id": user_id,
-        "limit": limit + 1,  # fetch one extra to detect a next page
+        # The SQL query must fetch one extra row.  The extra row is how we
+        # know whether the returned page has a successor without a COUNT.
+        "fetch_limit": limit + 1,
     }
     dog_filter = ""
     domain_filter = ""
@@ -164,7 +166,7 @@ async def list_diary_page(
                       {status_filter}
                       {cursor_filter}
                     order by created_at desc, id desc
-                    limit :limit
+                    limit :fetch_limit
                     """
                 ),
                 params,
