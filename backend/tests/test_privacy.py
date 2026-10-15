@@ -19,10 +19,14 @@ async def test_privacy_export_memory_path_uploads_gzip(
 ) -> None:
     dog_id = await create_dog(client, auth_headers)
 
-    started = await client.post("/v1/privacy/export", headers=auth_headers)
+    export_headers = {**auth_headers, "X-Idempotency-Key": "privacy-export-test-1"}
+    started = await client.post("/v1/privacy/export", headers=export_headers)
     assert started.status_code == 202, started.text
     job_id = started.json()["export_job_id"]
     assert started.json()["status"] == "queued"
+    replay = await client.post("/v1/privacy/export", headers=export_headers)
+    assert replay.status_code == 202, replay.text
+    assert replay.json() == started.json()
 
     processed = await worker_client.post(
         "/tasks/run",
@@ -63,14 +67,22 @@ async def test_account_deletion_memory_path_requires_confirmation_and_purges(
     )
     assert invalid.status_code == 422
 
+    delete_headers = {**auth_headers, "X-Idempotency-Key": "account-delete-test-1"}
     started = await client.post(
         "/v1/privacy/delete-account",
         json={"confirm": "DELETE_MY_ACCOUNT"},
-        headers=auth_headers,
+        headers=delete_headers,
     )
     assert started.status_code == 202, started.text
     job_id = started.json()["deletion_job_id"]
     assert started.json()["status"] == "pending"
+    replay = await client.post(
+        "/v1/privacy/delete-account",
+        json={"confirm": "DELETE_MY_ACCOUNT"},
+        headers=delete_headers,
+    )
+    assert replay.status_code == 202, replay.text
+    assert replay.json() == started.json()
 
     processed = await worker_client.post(
         "/tasks/run",

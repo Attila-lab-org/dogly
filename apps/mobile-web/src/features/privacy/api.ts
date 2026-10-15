@@ -1,5 +1,19 @@
 import { api } from '../../lib/apiClient';
 
+function newIdempotencyKey(prefix: string): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}-${crypto.randomUUID()}`;
+    }
+  } catch {
+    // fall through for older Hermes/web runtimes
+  }
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+let exportKey: string | null = null;
+let deletionKey: string | null = null;
+
 export type PrivacyExportResponse = {
   export_job_id: string;
   status: string;
@@ -18,7 +32,12 @@ export type DeleteAccountResponse = {
 };
 
 export async function requestPrivacyExport(): Promise<PrivacyExportResponse> {
-  return api.post<PrivacyExportResponse>('/v1/privacy/export');
+  exportKey ??= newIdempotencyKey('privacy-export');
+  const response = await api.post<PrivacyExportResponse>('/v1/privacy/export', undefined, {
+    headers: { 'X-Idempotency-Key': exportKey },
+  });
+  exportKey = null;
+  return response;
 }
 
 export async function getPrivacyExportStatus(
@@ -28,9 +47,12 @@ export async function getPrivacyExportStatus(
 }
 
 export async function requestAccountDeletion(): Promise<DeleteAccountResponse> {
-  return api.post<DeleteAccountResponse>('/v1/privacy/delete-account', {
-    confirm: 'DELETE_MY_ACCOUNT',
-  });
+  deletionKey ??= newIdempotencyKey('account-deletion');
+  return api.post<DeleteAccountResponse>(
+    '/v1/privacy/delete-account',
+    { confirm: 'DELETE_MY_ACCOUNT' },
+    { headers: { 'X-Idempotency-Key': deletionKey } },
+  );
 }
 
 export async function waitForExportReady(

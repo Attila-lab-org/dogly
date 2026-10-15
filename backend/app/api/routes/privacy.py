@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter
 
-from app.api.deps import StateDep, UserIdDep
+from app.api.deps import IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
     DeleteAccountRequest,
     DeleteAccountResponse,
@@ -14,14 +14,29 @@ from app.contracts.api import (
     PrivacyExportStatusResponse,
 )
 from app.contracts.errors import ApiError, ErrorCode
+from app.domains import idempotency_db, privacy_db
 from app.domains import privacy as privacy_domain
-from app.domains import privacy_db
 
 router = APIRouter()
 
 
+async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=getattr(guard, "_payload_hash", None),
+        )
+
+
 @router.post("/privacy/export", response_model=PrivacyExportResponse, status_code=202)
-async def start_export(state: StateDep, user_id: UserIdDep) -> PrivacyExportResponse:
+async def start_export(
+    state: StateDep, user_id: UserIdDep, guard: IdempotencyDep
+) -> PrivacyExportResponse:
+    if cached := guard.lookup():
+        return PrivacyExportResponse.model_validate(cached)
     if state.engine is not None:
         job = await privacy_db.start_export(state.engine, user_id)
     else:
@@ -31,13 +46,20 @@ async def start_export(state: StateDep, user_id: UserIdDep) -> PrivacyExportResp
         payload={"event_id": job.id, "user_id": user_id},
     )
     job.task_id = task_id
-    return PrivacyExportResponse(export_job_id=job.id, status=job.status)
+    response = PrivacyExportResponse(export_job_id=job.id, status=job.status)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/privacy/delete-account", response_model=DeleteAccountResponse, status_code=202)
 async def delete_account(
-    payload: DeleteAccountRequest, state: StateDep, user_id: UserIdDep
+    payload: DeleteAccountRequest,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> DeleteAccountResponse:
+    if cached := guard.lookup():
+        return DeleteAccountResponse.model_validate(cached)
     if payload.confirm != "DELETE_MY_ACCOUNT":
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Deletion confirmation is required.")
     if state.engine is not None:
@@ -49,7 +71,9 @@ async def delete_account(
         payload={"event_id": job.id, "user_id": user_id},
     )
     job.task_id = task_id
-    return DeleteAccountResponse(deletion_job_id=job.id, status=job.status)
+    response = DeleteAccountResponse(deletion_job_id=job.id, status=job.status)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.get("/privacy/export/{job_id}", response_model=PrivacyExportStatusResponse)
