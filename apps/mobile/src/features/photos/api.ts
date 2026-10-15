@@ -42,6 +42,8 @@ export const profileVisibilityQueryKey = (dogId: string) =>
 
 const momentsAlbumCache = new Map<string, PhotoAlbum>();
 const chatAttachmentsAlbumCache = new Map<string, PhotoAlbum>();
+const momentsAlbumPending = new Map<string, Promise<PhotoAlbum>>();
+const chatAttachmentsAlbumPending = new Map<string, Promise<PhotoAlbum>>();
 
 /** System album for Ask attachments — not shown in Momenti / dog photo feeds. */
 export const CHAT_ATTACHMENTS_ALBUM_TITLE = 'Allegati chat';
@@ -116,17 +118,23 @@ export async function getOrCreateMomentsAlbum(
 ): Promise<PhotoAlbum> {
   const cached = momentsAlbumCache.get(dogId);
   if (cached) return cached;
-  const albums = await fetchAlbums(dogId);
-  const moments = albums.find(
-    (album) => album.title.trim().toLocaleLowerCase() === 'momenti',
-  );
-  if (moments) {
-    momentsAlbumCache.set(dogId, moments);
-    return moments;
+  const pending = momentsAlbumPending.get(dogId);
+  if (pending) return pending;
+  const request = (async () => {
+    const albums = await fetchAlbums(dogId);
+    const moments = albums.find(
+      (album) => album.title.trim().toLocaleLowerCase() === 'momenti',
+    );
+    const resolved = moments ?? (await createAlbum(dogId, 'Momenti'));
+    momentsAlbumCache.set(dogId, resolved);
+    return resolved;
+  })();
+  momentsAlbumPending.set(dogId, request);
+  try {
+    return await request;
+  } finally {
+    if (momentsAlbumPending.get(dogId) === request) momentsAlbumPending.delete(dogId);
   }
-  const created = await createAlbum(dogId, 'Momenti');
-  momentsAlbumCache.set(dogId, created);
-  return created;
 }
 
 export async function getOrCreateChatAttachmentsAlbum(
@@ -134,19 +142,25 @@ export async function getOrCreateChatAttachmentsAlbum(
 ): Promise<PhotoAlbum> {
   const cached = chatAttachmentsAlbumCache.get(dogId);
   if (cached) return cached;
-  const albums = await fetchAlbums(dogId, { includeHidden: true });
-  const existing = albums.find(
-    (album) =>
-      album.title.trim().toLocaleLowerCase() ===
-      CHAT_ATTACHMENTS_ALBUM_TITLE.toLocaleLowerCase(),
-  );
-  if (existing) {
-    chatAttachmentsAlbumCache.set(dogId, existing);
-    return existing;
+  const pending = chatAttachmentsAlbumPending.get(dogId);
+  if (pending) return pending;
+  const request = (async () => {
+    const albums = await fetchAlbums(dogId, { includeHidden: true });
+    const existing = albums.find(
+      (album) =>
+        album.title.trim().toLocaleLowerCase() ===
+        CHAT_ATTACHMENTS_ALBUM_TITLE.toLocaleLowerCase(),
+    );
+    const resolved = existing ?? (await createAlbum(dogId, CHAT_ATTACHMENTS_ALBUM_TITLE));
+    chatAttachmentsAlbumCache.set(dogId, resolved);
+    return resolved;
+  })();
+  chatAttachmentsAlbumPending.set(dogId, request);
+  try {
+    return await request;
+  } finally {
+    if (chatAttachmentsAlbumPending.get(dogId) === request) chatAttachmentsAlbumPending.delete(dogId);
   }
-  const created = await createAlbum(dogId, CHAT_ATTACHMENTS_ALBUM_TITLE);
-  chatAttachmentsAlbumCache.set(dogId, created);
-  return created;
 }
 
 export async function fetchAlbum(albumId: string): Promise<PhotoAlbum> {
