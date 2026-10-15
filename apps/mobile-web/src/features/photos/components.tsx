@@ -21,14 +21,16 @@ export function PhotoThumbnail({
   photo,
   onPress,
   onLongPress,
+  onPressTrash,
   size = 104,
-  manageMode = false,
+  showTrash = false,
 }: {
   photo: AlbumPhoto;
   onPress?: () => void;
   onLongPress?: () => void;
+  onPressTrash?: () => void;
   size?: number;
-  manageMode?: boolean;
+  showTrash?: boolean;
 }) {
   return (
     <Pressable
@@ -40,10 +42,19 @@ export function PhotoThumbnail({
       style={[styles.thumb, { width: size, height: size }]}
     >
       <Image source={{ uri: photo.thumbnailUri }} style={styles.thumbImage} />
-      {manageMode ? (
-        <View style={styles.deleteBadge}>
-          <Ionicons name="trash-outline" size={14} color="#FFFFFF" />
-        </View>
+      {showTrash ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Elimina momento"
+          hitSlop={6}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onPressTrash?.();
+          }}
+          style={styles.trashBadge}
+        >
+          <Ionicons name="trash" size={14} color="#FFFFFF" />
+        </Pressable>
       ) : null}
     </Pressable>
   );
@@ -53,21 +64,24 @@ export function PhotoGrid({
   photos,
   onPressPhoto,
   onLongPressPhoto,
+  onPressTrash,
+  armedPhotoId = null,
   style,
   header,
   footer,
   empty,
-  manageMode = false,
   onEndReached,
 }: {
   photos: AlbumPhoto[];
   onPressPhoto: (photo: AlbumPhoto) => void;
   onLongPressPhoto?: (photo: AlbumPhoto) => void;
+  onPressTrash?: (photo: AlbumPhoto) => void;
+  /** Foto su cui è apparso il cestino dopo long-press. */
+  armedPhotoId?: string | null;
   style?: ViewStyle;
   header?: ReactElement;
   footer?: ReactElement;
   empty?: ReactElement;
-  manageMode?: boolean;
   onEndReached?: () => void;
 }) {
   const { width } = useWindowDimensions();
@@ -89,6 +103,7 @@ export function PhotoGrid({
       ListEmptyComponent={empty}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.4}
+      keyboardShouldPersistTaps="handled"
       renderItem={({ item: photo }) => (
         <PhotoThumbnail
           photo={photo}
@@ -96,8 +111,11 @@ export function PhotoGrid({
           onLongPress={
             onLongPressPhoto ? () => onLongPressPhoto(photo) : undefined
           }
+          onPressTrash={
+            onPressTrash ? () => onPressTrash(photo) : undefined
+          }
           size={size}
-          manageMode={manageMode}
+          showTrash={armedPhotoId === photo.id}
         />
       )}
     />
@@ -161,7 +179,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  deleteBadge: {
+  trashBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
@@ -170,7 +188,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15,23,42,0.72)',
+    backgroundColor: colors.danger,
+    zIndex: 2,
   },
   gridList: {
     flex: 1,

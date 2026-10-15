@@ -1,28 +1,24 @@
 /**
- * Viewer Momenti — lightbox immersivo stile Instagram.
- * Foto full-bleed, caption inline, azioni leggere (share / more).
+ * Dettaglio momento — stessa lingua delle altre sottopagine (chiaro, non fullscreen).
+ * Cestino in header a destra; caption; condivisione secondaria.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
-  FlatList,
   Image,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Pressable,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { DogAvatar } from '@/features/core/components';
+import { EmptyState, ErrorState, ScreenContainer } from '@/components';
+import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { sharePhoto } from '@/features/photos/share';
 import {
@@ -33,18 +29,15 @@ import {
 } from '@/features/photos/api';
 import type { AlbumPhoto } from '@/features/photos/types';
 import { confirmDestructiveAction } from '@/lib/confirmAction';
-import { typography } from '@/theme/tokens';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
-export default function PhotoViewerScreen() {
+export default function PhotoDetailScreen() {
   const { photoId, albumId, dogId: paramDogId } = useLocalSearchParams<{
     photoId: string;
     albumId: string;
     dogId: string;
   }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { dog } = useDogProfile();
   const queryClient = useQueryClient();
   const dogId = paramDogId || dog.id;
@@ -60,72 +53,38 @@ export default function PhotoViewerScreen() {
     enabled: Boolean(dogId) && (albumQuery.isError || !albumId),
   });
 
-  const photos = useMemo(() => {
-    const fromAlbum = albumQuery.data ?? [];
-    if (fromAlbum.length > 0) return fromAlbum;
-    return dogPhotosQuery.data ?? [];
-  }, [albumQuery.data, dogPhotosQuery.data]);
+  const photo: AlbumPhoto | undefined =
+    (albumQuery.data ?? []).find((item) => item.id === photoId) ??
+    (dogPhotosQuery.data ?? []).find((item) => item.id === photoId);
 
-  const startIndex = useMemo(() => {
-    const idx = photos.findIndex((p) => p.id === photoId);
-    return idx >= 0 ? idx : 0;
-  }, [photos, photoId]);
-
-  const [index, setIndex] = useState(startIndex);
   const [caption, setCaption] = useState('');
   const [savingCaption, setSavingCaption] = useState(false);
-  const [editingCaption, setEditingCaption] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const listRef = useRef<FlatList<AlbumPhoto>>(null);
-  const captionRef = useRef<TextInput>(null);
-
-  const current = photos[index] ?? photos.find((p) => p.id === photoId);
 
   useEffect(() => {
-    if (photos.length === 0) return;
-    const next = Math.min(Math.max(startIndex, 0), photos.length - 1);
-    setIndex(next);
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: next, animated: false });
-    });
-  }, [photos.length, startIndex]);
-
-  useEffect(() => {
-    if (current) {
-      setCaption(current.caption ?? '');
-      setEditingCaption(false);
+    if (photo) {
+      setCaption(photo.caption ?? '');
       setActionError(null);
     }
-  }, [current?.id]);
+  }, [photo?.id, photo?.caption]);
 
-  const close = useCallback(() => {
+  const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace(`/dogs/${dogId}/album` as never);
-  }, [dogId, router]);
-
-  const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.round(event.nativeEvent.contentOffset.x / SCREEN_W);
-    if (next !== index && next >= 0 && next < photos.length) {
-      setIndex(next);
-    }
   };
 
   const persistCaption = async () => {
-    if (!current) return;
+    if (!photo) return;
     const next = caption.trim();
-    const prev = (current.caption ?? '').trim();
-    if (next === prev) {
-      setEditingCaption(false);
-      return;
-    }
+    const prev = (photo.caption ?? '').trim();
+    if (next === prev) return;
     setSavingCaption(true);
     setActionError(null);
     try {
-      const updated = await updateAlbumPhotoCaption(current.id, caption);
+      const updated = await updateAlbumPhotoCaption(photo.id, caption);
       const patch = (list: AlbumPhoto[] | undefined) =>
-        (list ?? []).map((photo) => (photo.id === updated.id ? updated : photo));
+        (list ?? []).map((item) => (item.id === updated.id ? updated : item));
       queryClient.setQueryData<AlbumPhoto[]>(['gallery-photos', albumId], patch);
       queryClient.setQueryData<{ pages: AlbumPhoto[][]; pageParams: number[] }>(
         ['gallery-dog-photos', dogId, 24],
@@ -141,7 +100,6 @@ export default function PhotoViewerScreen() {
         queryKey: ['gallery-dog-photos', dogId],
         refetchType: 'none',
       });
-      setEditingCaption(false);
     } catch {
       setActionError('Non ho salvato la frase. Riprova.');
     } finally {
@@ -150,415 +108,231 @@ export default function PhotoViewerScreen() {
   };
 
   const removePhoto = () => {
-    if (!current) return;
-    setMenuOpen(false);
-    setDeleting(true);
-    setActionError(null);
-    void deleteAlbumPhoto(current.id)
-      .then(() => {
-        const drop = (list: AlbumPhoto[] | undefined) =>
-          (list ?? []).filter((photo) => photo.id !== current.id);
-        queryClient.setQueryData<AlbumPhoto[]>(['gallery-photos', albumId], drop);
-        void queryClient.invalidateQueries({
-          queryKey: ['gallery-dog-photos', dogId],
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['gallery-albums', dogId],
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['social-moments', dogId],
-        });
-        if (photos.length <= 1) {
-          close();
-          return;
-        }
-        const nextIndex = Math.min(index, photos.length - 2);
-        setIndex(nextIndex);
-        listRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-        setDeleting(false);
-      })
-      .catch(() => {
-        setDeleting(false);
-        setActionError('Non ho eliminato il momento. Riprova.');
-      });
+    if (!photo) return;
+    confirmDestructiveAction(
+      'Eliminare questo momento?',
+      `Verrà rimosso dai Momenti di ${dog.name}.`,
+      () => {
+        setDeleting(true);
+        setActionError(null);
+        void deleteAlbumPhoto(photo.id)
+          .then(async () => {
+            await Promise.all([
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-photos', albumId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-dog-photos', dogId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-albums', dogId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['social-moments', dogId],
+              }),
+            ]);
+            goBack();
+          })
+          .catch(() => {
+            setDeleting(false);
+            setActionError('Non ho eliminato il momento. Riprova.');
+          });
+      },
+    );
   };
 
-  const loading = albumQuery.isLoading || (photos.length === 0 && dogPhotosQuery.isLoading);
+  const loading =
+    albumQuery.isLoading ||
+    (!photo && dogPhotosQuery.isLoading);
 
   if (loading) {
     return (
-      <View style={[styles.root, styles.center]}>
-        <StatusBar barStyle="light-content" />
-        <ActivityIndicator color="#FFFFFF" />
-      </View>
+      <ScreenContainer>
+        <StackScreenHeader title={`Un momento di ${dog.name}`} />
+        <ActivityIndicator color={colors.primary} />
+      </ScreenContainer>
     );
   }
 
-  if (!current || photos.length === 0) {
+  if (!photo) {
     return (
-      <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" />
-        <Text style={styles.emptyTitle}>Momento non trovato</Text>
-        <Pressable onPress={close} style={styles.emptyBtn}>
-          <Text style={styles.emptyBtnText}>Torna indietro</Text>
-        </Pressable>
-      </View>
+      <ScreenContainer>
+        <StackScreenHeader title={`Un momento di ${dog.name}`} />
+        {albumQuery.isError && dogPhotosQuery.isError ? (
+          <ErrorState
+            title="Momento non caricato"
+            message="Controlla la connessione e riprova."
+            retryLabel="Riprova"
+            onRetry={() => {
+              void albumQuery.refetch();
+              void dogPhotosQuery.refetch();
+            }}
+          />
+        ) : (
+          <EmptyState
+            title="Momento non trovato"
+            message="Torna ai Momenti e aprine un altro."
+          />
+        )}
+      </ScreenContainer>
     );
   }
+
+  const photoWidth = width - spacing.lg * 2;
+  const photoHeight = Math.min(photoWidth * 1.15, width * 0.92);
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <ScreenContainer scroll contentStyle={styles.content}>
+      <StackScreenHeader
+        title={`Un momento di ${dog.name}`}
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Elimina momento"
+            disabled={deleting}
+            onPress={removePhoto}
+            hitSlop={8}
+            style={styles.headerTrash}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Ionicons name="trash-outline" size={22} color={colors.danger} />
+            )}
+          </Pressable>
+        }
+      />
 
-      <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Chiudi"
-          onPress={close}
-          hitSlop={12}
-          style={styles.topBtn}
-        >
-          <Ionicons name="close" size={28} color="#FFFFFF" />
-        </Pressable>
-        <View style={styles.identity}>
-          <DogAvatar photoUri={dog.photoUri} dogName={dog.name} size={32} />
-          <View style={styles.identityCopy}>
-            <Text style={styles.dogName} numberOfLines={1}>
-              {dog.name}
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {index + 1} / {photos.length}
-            </Text>
-          </View>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Altre azioni"
-          onPress={() => setMenuOpen(true)}
-          hitSlop={12}
-          style={styles.topBtn}
-        >
-          <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
-        </Pressable>
-      </View>
-
-      <View style={styles.stage}>
-        <FlatList
-          ref={listRef}
-          data={photos}
-          keyExtractor={(item) => item.id}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          initialScrollIndex={startIndex}
-          getItemLayout={(_, i) => ({
-            length: SCREEN_W,
-            offset: SCREEN_W * i,
-            index: i,
-          })}
-          onMomentumScrollEnd={onScrollEnd}
-          onScrollToIndexFailed={({ index: failed }) => {
-            setTimeout(() => {
-              listRef.current?.scrollToIndex({ index: failed, animated: false });
-            }, 50);
-          }}
-          renderItem={({ item }) => (
-            <View style={styles.slide}>
-              <Image
-                source={{ uri: item.localUri }}
-                style={styles.photo}
-                resizeMode="contain"
-              />
-            </View>
-          )}
+      <View style={[styles.photoCard, { width: photoWidth }]}>
+        <Image
+          source={{ uri: photo.localUri }}
+          style={{ width: photoWidth, height: photoHeight }}
+          resizeMode="cover"
         />
-      </View>
-
-      <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-
-        <View style={styles.actionRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Condividi"
-            onPress={() =>
-              void sharePhoto(
-                { ...current, caption: caption.trim() || undefined },
-                dog.name,
-              )
-            }
-            style={styles.actionHit}
-          >
-            <Ionicons name="paper-plane-outline" size={26} color="#FFFFFF" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={editingCaption ? 'Chiudi modifica' : 'Modifica ricordo'}
-            onPress={() => {
-              setEditingCaption(true);
-              requestAnimationFrame(() => captionRef.current?.focus());
-            }}
-            style={styles.actionHit}
-          >
-            <Ionicons name="chatbubble-outline" size={24} color="#FFFFFF" />
-          </Pressable>
-          <View style={styles.actionSpacer} />
-          <View style={styles.lockPill}>
-            <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.85)" />
-            <Text style={styles.lockText}>Solo tua</Text>
-          </View>
-        </View>
-
-        <View style={styles.captionBlock}>
-          {editingCaption ? (
-            <View style={styles.captionEdit}>
-              <TextInput
-                ref={captionRef}
-                value={caption}
-                onChangeText={setCaption}
-                placeholder="Scrivi un ricordo…"
-                placeholderTextColor="rgba(255,255,255,0.45)"
-                maxLength={280}
-                multiline
-                style={styles.captionInput}
-                onBlur={() => void persistCaption()}
-              />
-              <Pressable
-                accessibilityRole="button"
-                disabled={savingCaption}
-                onPress={() => void persistCaption()}
-                style={styles.captionDone}
-              >
-                {savingCaption ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.captionDoneText}>Fatto</Text>
-                )}
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setEditingCaption(true);
-                requestAnimationFrame(() => captionRef.current?.focus());
-              }}
-            >
-              <Text style={styles.captionRead} numberOfLines={3}>
-                <Text style={styles.captionAuthor}>{dog.name} </Text>
-                {caption.trim() || 'Aggiungi un ricordo…'}
-              </Text>
-            </Pressable>
-          )}
+        <View style={styles.privacy}>
+          <Ionicons name="lock-closed" size={12} color={colors.textSecondary} />
+          <Text style={styles.privacyText}>Solo tua</Text>
         </View>
       </View>
 
-      <Modal visible={menuOpen} transparent animationType="fade">
-        <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
-          <View style={[styles.menuSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={deleting}
-              onPress={() =>
-                confirmDestructiveAction(
-                  'Eliminare questo momento?',
-                  `Verrà rimosso dai Momenti di ${dog.name}.`,
-                  removePhoto,
-                )
-              }
-              style={styles.menuItem}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
-              <Text style={styles.menuDanger}>
-                {deleting ? 'Elimino…' : 'Elimina'}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setMenuOpen(false)}
-              style={[styles.menuItem, styles.menuCancel]}
-            >
-              <Text style={styles.menuCancelText}>Annulla</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-    </View>
+      <Text style={styles.label}>Una frase per questo momento</Text>
+      <View style={styles.captionBox}>
+        <TextInput
+          value={caption}
+          onChangeText={setCaption}
+          onBlur={() => void persistCaption()}
+          placeholder="Aggiungi un ricordo…"
+          placeholderTextColor={colors.textMuted}
+          maxLength={280}
+          multiline
+          style={styles.captionInput}
+        />
+        {savingCaption ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
+            style={styles.captionSpinner}
+          />
+        ) : null}
+      </View>
+
+      {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Condividi"
+        onPress={() =>
+          void sharePhoto(
+            { ...photo, caption: caption.trim() || undefined },
+            dog.name,
+          )
+        }
+        style={styles.shareRow}
+      >
+        <Ionicons name="share-outline" size={20} color={colors.primary} />
+        <Text style={styles.shareText}>Condividi</Text>
+      </Pressable>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#000000',
+  content: {
+    paddingBottom: spacing.xxxl,
+    gap: spacing.md,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  emptyTitle: {
-    color: '#FFFFFF',
-    fontSize: typography.size.lg,
-    fontWeight: typography.weight.bold,
-  },
-  emptyBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  emptyBtnText: {
-    color: '#FFFFFF',
-    fontWeight: typography.weight.bold,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    zIndex: 2,
-  },
-  topBtn: {
-    width: 44,
-    height: 44,
+  headerTrash: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  identity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minWidth: 0,
+  photoCard: {
+    alignSelf: 'center',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+    ...shadows.card,
   },
-  identityCopy: { flex: 1, minWidth: 0, gap: 1 },
-  dogName: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: typography.weight.bold,
-  },
-  meta: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-  },
-  stage: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  slide: {
-    width: SCREEN_W,
-    height: Math.min(SCREEN_H * 0.62, SCREEN_W * 1.25),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photo: {
-    width: SCREEN_W,
-    height: '100%',
-  },
-  bottom: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    gap: 12,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionHit: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionSpacer: { flex: 1 },
-  lockPill: {
+  privacy: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
-  lockText: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
+  privacyText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },
-  captionBlock: {
-    minHeight: 44,
-    paddingBottom: 4,
+  label: {
+    marginTop: spacing.sm,
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
   },
-  captionRead: {
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  captionAuthor: {
-    color: '#FFFFFF',
-    fontWeight: typography.weight.bold,
-  },
-  captionEdit: {
-    gap: 8,
+  captionBox: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 52,
+    justifyContent: 'center',
   },
   captionInput: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    lineHeight: 21,
-    minHeight: 48,
-    maxHeight: 100,
+    color: colors.text,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * typography.lineHeight.normal,
+    minHeight: 40,
+    maxHeight: 120,
     padding: 0,
   },
-  captionDone: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  captionDoneText: {
-    color: '#FFFFFF',
-    fontWeight: typography.weight.bold,
-    fontSize: 13,
+  captionSpinner: {
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.md,
   },
   error: {
-    color: '#FF8B8B',
-    fontSize: 13,
+    color: colors.danger,
+    fontSize: typography.size.sm,
   },
-  menuBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-  },
-  menuSheet: {
-    margin: 12,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: '#1C1C1E',
-  },
-  menuItem: {
-    minHeight: 52,
+  shareRow: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
+    gap: 8,
+    minHeight: 44,
+    paddingVertical: spacing.sm,
   },
-  menuDanger: {
-    color: '#FF6B6B',
-    fontSize: 16,
+  shareText: {
+    color: colors.primary,
+    fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
-  },
-  menuCancel: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: '#2C2C2E',
-  },
-  menuCancelText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: typography.weight.bold,
   },
 });

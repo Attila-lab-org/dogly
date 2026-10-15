@@ -1,5 +1,5 @@
 /**
- * Momenti — griglia stile Instagram (profilo): foto a filo, + in header, meno click.
+ * Momenti — griglia profilo: tap apre dettaglio, long-press → cestino in alto a dx.
  */
 import React, { useMemo, useState } from 'react';
 import {
@@ -38,7 +38,7 @@ export default function AlbumIndexScreen() {
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
   const [adding, setAdding] = useState(false);
-  const [managing, setManaging] = useState(false);
+  const [armedPhotoId, setArmedPhotoId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const photosQuery = useInfiniteQuery({
     queryKey: ['gallery-dog-photos', dogId, PAGE_SIZE],
@@ -95,6 +95,7 @@ export default function AlbumIndexScreen() {
         setDeletingId(photo.id);
         void deleteAlbumPhoto(photo.id)
           .then(async () => {
+            setArmedPhotoId(null);
             await Promise.all([
               queryClient.invalidateQueries({
                 queryKey: ['gallery-dog-photos', dogId],
@@ -134,49 +135,32 @@ export default function AlbumIndexScreen() {
     <ScreenContainer padded={false} style={styles.screen}>
       <PhotoGrid
         photos={photos}
-        manageMode={managing}
+        armedPhotoId={armedPhotoId}
         header={
           <View style={styles.headerPad}>
             <StackScreenHeader
-              title={managing ? 'Seleziona' : 'Momenti'}
+              title="Momenti"
               right={
-                <View style={styles.headerActions}>
-                  {photos.length > 0 ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        managing ? 'Esci dalla selezione' : 'Gestisci momenti'
-                      }
-                      onPress={() => setManaging((value) => !value)}
-                      hitSlop={8}
-                      style={styles.iconBtn}
-                    >
-                      <Ionicons
-                        name={managing ? 'checkmark' : 'trash-outline'}
-                        size={22}
-                        color={managing ? colors.primary : colors.text}
-                      />
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Aggiungi momento"
-                    disabled={adding || Boolean(deletingId)}
-                    onPress={() => void addMoment()}
-                    hitSlop={8}
-                    style={styles.iconBtn}
-                  >
-                    {adding ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <Ionicons name="add" size={28} color={colors.text} />
-                    )}
-                  </Pressable>
-                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Aggiungi momento"
+                  disabled={adding || Boolean(deletingId)}
+                  onPress={() => void addMoment()}
+                  hitSlop={8}
+                  style={styles.iconBtn}
+                >
+                  {adding ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="add" size={28} color={colors.text} />
+                  )}
+                </Pressable>
               }
             />
-            {managing ? (
-              <Text style={styles.manageHint}>Tocca un momento per eliminarlo.</Text>
+            {armedPhotoId ? (
+              <Text style={styles.armHint}>
+                Tocca il cestino per eliminare, oppure un altro momento.
+              </Text>
             ) : null}
           </View>
         }
@@ -211,18 +195,16 @@ export default function AlbumIndexScreen() {
           )
         }
         onPressPhoto={(photo) => {
-          if (managing) {
-            deletePhoto(photo);
+          if (armedPhotoId) {
+            setArmedPhotoId(null);
             return;
           }
           router.push(
             `/dogs/${dogId}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
           );
         }}
-        onLongPressPhoto={(photo) => {
-          if (!managing) setManaging(true);
-          else deletePhoto(photo);
-        }}
+        onLongPressPhoto={(photo) => setArmedPhotoId(photo.id)}
+        onPressTrash={deletePhoto}
         onEndReached={() => {
           if (photosQuery.hasNextPage && !photosQuery.isFetchingNextPage) {
             void photosQuery.fetchNextPage();
@@ -249,14 +231,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   iconBtn: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  manageHint: {
+  armHint: {
     color: colors.textSecondary,
     fontSize: typography.size.xs,
     marginBottom: spacing.sm,

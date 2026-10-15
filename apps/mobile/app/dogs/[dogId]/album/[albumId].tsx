@@ -1,5 +1,5 @@
 /**
- * Dettaglio album — stessa griglia Instagram, + in header.
+ * Dettaglio album — stessa griglia: tap apre, long-press → cestino in alto a dx.
  */
 import React, { useState } from 'react';
 import {
@@ -7,21 +7,26 @@ import {
   Alert,
   Pressable,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState, ErrorState, ScreenContainer } from '@/components';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { PhotoGrid } from '@/features/photos/components';
 import { pickAlbumPhoto } from '@/features/photos/share';
 import {
+  deleteAlbumPhoto,
   fetchAlbum,
   fetchAlbumPhotos,
   uploadAlbumPhoto,
 } from '@/features/photos/api';
+import { useDogProfile } from '@/features/core/useDogProfile';
+import { confirmDestructiveAction } from '@/lib/confirmAction';
+import type { AlbumPhoto } from '@/features/photos/types';
 
 export default function AlbumDetailScreen() {
   const { dogId, albumId } = useLocalSearchParams<{
@@ -30,7 +35,9 @@ export default function AlbumDetailScreen() {
   }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { dog } = useDogProfile();
   const [uploading, setUploading] = useState(false);
+  const [armedPhotoId, setArmedPhotoId] = useState<string | null>(null);
   const albumQuery = useQuery({
     queryKey: ['gallery-album', albumId],
     queryFn: () => fetchAlbum(albumId!),
@@ -61,6 +68,36 @@ export default function AlbumDetailScreen() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const deletePhoto = (photo: AlbumPhoto) => {
+    confirmDestructiveAction(
+      'Eliminare questo momento?',
+      `Verrà rimosso dai Momenti di ${dog.name}.`,
+      () => {
+        void deleteAlbumPhoto(photo.id)
+          .then(async () => {
+            setArmedPhotoId(null);
+            await Promise.all([
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-photos', albumId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-dog-photos', dogId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['gallery-albums', dogId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['social-moments', dogId],
+              }),
+            ]);
+          })
+          .catch(() => {
+            Alert.alert('Foto non eliminata', 'Riprova tra poco.');
+          });
+      },
+    );
   };
 
   if (albumQuery.isLoading) {
@@ -99,6 +136,7 @@ export default function AlbumDetailScreen() {
     <ScreenContainer padded={false}>
       <PhotoGrid
         photos={photos}
+        armedPhotoId={armedPhotoId}
         header={
           <View style={styles.headerPad}>
             <StackScreenHeader
@@ -120,6 +158,11 @@ export default function AlbumDetailScreen() {
                 </Pressable>
               }
             />
+            {armedPhotoId ? (
+              <Text style={styles.armHint}>
+                Tocca il cestino per eliminare, oppure un altro momento.
+              </Text>
+            ) : null}
           </View>
         }
         empty={
@@ -134,11 +177,17 @@ export default function AlbumDetailScreen() {
             </View>
           )
         }
-        onPressPhoto={(photo) =>
+        onPressPhoto={(photo) => {
+          if (armedPhotoId) {
+            setArmedPhotoId(null);
+            return;
+          }
           router.push(
             `/dogs/${dogId}/album/photo/${photo.id}?albumId=${albumId}` as never,
-          )
-        }
+          );
+        }}
+        onLongPressPhoto={(photo) => setArmedPhotoId(photo.id)}
+        onPressTrash={deletePhoto}
         footer={<View style={styles.footerSpacer} />}
       />
     </ScreenContainer>
@@ -152,6 +201,12 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  armHint: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   emptyPad: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl },
   footerSpacer: { height: spacing.xxxl },
