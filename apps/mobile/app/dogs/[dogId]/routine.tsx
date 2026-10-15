@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -92,6 +93,7 @@ export default function DailyRoutineScreen() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['daily-activities', dogId] });
     },
+    onError: () => setError('Non sono riuscito a rimuovere l’attività. Riprova.'),
   });
 
   const selectedDate = useMemo(() => dateForWeekday(selectedDay), [selectedDay]);
@@ -174,7 +176,15 @@ export default function DailyRoutineScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Elimina ${item.title}`}
-                    onPress={() => removeMutation.mutate(item.id)}
+                    disabled={removeMutation.isPending}
+                    onPress={() => Alert.alert(
+                      'Rimuovere questa attività?',
+                      `${item.title} verrà tolta dalla routine di ${dog.name}.`,
+                      [
+                        { text: 'Annulla', style: 'cancel' },
+                        { text: 'Rimuovi', style: 'destructive', onPress: () => removeMutation.mutate(item.id) },
+                      ],
+                    )}
                     hitSlop={10}
                   >
                     <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
@@ -185,6 +195,8 @@ export default function DailyRoutineScreen() {
           })}
         </View>
       )}
+
+      {error && !composerOpen ? <Text style={styles.error}>{error}</Text> : null}
 
       <Button
         title="Aggiungi attività"

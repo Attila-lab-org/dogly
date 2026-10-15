@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Modal,
   Pressable,
@@ -341,10 +342,14 @@ export default function AiutoScreen() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => {
-                setMenuOpen(false);
-                void clearSavedVet(dog.id).then(() => setSavedVet(null));
-              }}
+              onPress={() => Alert.alert(
+                'Rimuovere il veterinario?',
+                'Il contatto salvato verrà rimosso da questo dispositivo.',
+                [
+                  { text: 'Annulla', style: 'cancel' },
+                  { text: 'Rimuovi', style: 'destructive', onPress: () => { setMenuOpen(false); void clearSavedVet(dog.id).then(() => setSavedVet(null)); } },
+                ],
+              )}
               style={styles.menuItem}
             >
               <Ionicons name="trash-outline" size={20} color={colors.danger} />
