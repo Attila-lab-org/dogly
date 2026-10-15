@@ -91,8 +91,11 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   }
   const dogsByUser = new Map<string, number>();
   for (const dog of dogs.data ?? []) dogsByUser.set(dog.owner_id, (dogsByUser.get(dog.owner_id) ?? 0) + 1);
+  const monthStart = Date.now() - 30 * 86400000;
   const analysesByUser = new Map<string, number>();
-  for (const event of behavior.data ?? []) analysesByUser.set(event.user_id, (analysesByUser.get(event.user_id) ?? 0) + 1);
+  for (const event of behavior.data ?? []) {
+    if (Date.parse(event.created_at) >= monthStart) analysesByUser.set(event.user_id, (analysesByUser.get(event.user_id) ?? 0) + 1);
+  }
   const planByUser = new Map((subscriptions.data ?? []).map((subscription) => [subscription.user_id, subscription.plan]));
   return authUsers.data.users.map((user) => ({
     id: user.id,
@@ -120,8 +123,8 @@ export async function getAdminBehaviorEvents(): Promise<BehaviorEvent[]> {
   const feedbackByEvent = new Map((feedback.data ?? []).map((item) => [item.event_id, item.value]));
   return (events.data ?? []).map((event) => {
     const dog = dogById.get(event.dog_id);
-    const status = event.status === "COMPLETED" ? "completed" : event.status === "FAILED" ? "failed" : "processing";
-    const value = feedbackByEvent.get(event.id);
+    const status = event.status === "COMPLETED" ? "completed" : String(event.status).startsWith("FAILED") ? "failed" : "processing";
+    const value = String(feedbackByEvent.get(event.id) ?? "").toUpperCase();
     return {
       id: event.id,
       dogName: dog?.name ?? "Cane",
@@ -129,8 +132,62 @@ export async function getAdminBehaviorEvents(): Promise<BehaviorEvent[]> {
       timestamp: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.created_at)),
       interpretation: event.summary ?? event.primary_intent ?? "In attesa di interpretazione",
       confidenceBand: event.confidence_band === "HIGH" || event.confidence_band === "MEDIUM" ? event.confidence_band : "LOW",
-      ownerFeedback: value === "yes" || value === "no" ? value : null,
+      ownerFeedback: value === "YES" ? "yes" : value === "NO" ? "no" : value === "UNKNOWN" ? "unsure" : null,
       status,
     };
   });
+}
+
+export async function getAdminUserDetail(userId: string): Promise<import("./types").UserDetail> {
+  const supabase = await requireAdmin();
+  const [auth, dogs, subscription, usage, behavior, digestive, consents] = await Promise.all([
+    supabase.auth.admin.getUserById(userId),
+    supabase.from("dogs").select("id, name, breed_label, birth_date, created_at").eq("owner_id", userId),
+    supabase.from("subscriptions").select("plan, status, store, period_end").eq("user_id", userId).maybeSingle(),
+    supabase.from("usage_ledgers").select("behavior_limit, behavior_used, digestive_limit, digestive_used").eq("user_id", userId).order("period_start", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("behavior_events").select("id, dog_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(500),
+    supabase.from("fecal_events").select("id, dog_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(500),
+    supabase.from("user_consents").select("consent_type, granted").eq("user_id", userId),
+  ]);
+  if (auth.error || dogs.error || subscription.error || usage.error || behavior.error || digestive.error || consents.error || !auth.data.user) {
+    throw new AdminDataUnavailableError("Supabase non ha restituito il dettaglio utente.");
+  }
+  const user = auth.data.user;
+  const dogRows = dogs.data ?? [];
+  const behaviorRows = behavior.data ?? [];
+  const digestiveRows = digestive.data ?? [];
+  const planValue = String(subscription.data?.plan ?? "FREE");
+  const plan = planValue.startsWith("PREMIUM") || planValue === "PREMIUM" ? "premium" : "free";
+  const ledger = usage.data;
+  const consentMap = new Map((consents.data ?? []).map((item) => [item.consent_type, item.granted]));
+  const dogById = new Map(dogRows.map((dog) => [dog.id, dog]));
+  const lastByDog = new Map<string, string>();
+  for (const event of behaviorRows) if (!lastByDog.has(event.dog_id)) lastByDog.set(event.dog_id, event.created_at);
+  return {
+    id: user.id,
+    name: (user.user_metadata?.display_name as string | undefined) ?? user.email?.split("@")[0] ?? "Utente",
+    emailMasked: user.email ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2") : "—",
+    plan,
+    dogsCount: dogRows.length,
+    monthlyAnalyses: behaviorRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length,
+    lastAccess: user.last_sign_in_at ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(user.last_sign_in_at)) : "Mai",
+    status: user.banned_until && new Date(user.banned_until) > new Date() ? "suspended" : "active",
+    locale: (user.user_metadata?.locale as string | undefined) ?? "—",
+    createdAt: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(user.created_at)),
+    subscription: { plan, renewal: subscription.data?.period_end ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(subscription.data.period_end)) : "—", platform: String(subscription.data?.store ?? "—"), quotaUsed: (ledger?.behavior_used ?? 0) + (ledger?.digestive_used ?? 0), quotaTotal: (ledger?.behavior_limit ?? 0) + (ledger?.digestive_limit ?? 0) },
+    dogs: dogRows.map((dog) => ({ id: dog.id, name: dog.name, breed: dog.breed_label ?? "Non indicata", age: dog.birth_date ? `${new Date().getFullYear() - new Date(dog.birth_date).getFullYear()} anni` : "Età non indicata", knowledgeStatus: `${behaviorRows.filter((event) => event.dog_id === dog.id).length} eventi comportamentali`, lastAnalysis: lastByDog.get(dog.id) ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(lastByDog.get(dog.id)!)) : "Nessuna" })),
+    usage30d: { behaviorEvents: behaviorRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length, digestiveEvents: digestiveRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length, retries: 0, quotaBlocks: 0 },
+    consents: { service: consentMap.get("SERVICE_TERMS") ?? false, notifications: consentMap.get("NOTIFICATIONS") ?? false, research: consentMap.get("RESEARCH_TRAINING") ?? false, mediaRetention: consentMap.get("MEDIA_RETENTION") ?? false },
+    supportRisk: { openTickets: 0, riskFlags: [] },
+  };
+}
+
+export async function getAdminBehaviorEvent(eventId: string) {
+  const supabase = await requireAdmin();
+  const [event, feedback] = await Promise.all([
+    supabase.from("behavior_events").select("id, dog_id, user_id, status, primary_intent, summary, confidence_band, created_at, completed_at").eq("id", eventId).maybeSingle(),
+    supabase.from("behavior_feedback").select("value, correction_label, updated_at").eq("event_id", eventId).maybeSingle(),
+  ]);
+  if (event.error || feedback.error || !event.data) throw new AdminDataUnavailableError("Analisi non trovata.");
+  return { ...event.data, feedback: feedback.data ?? null };
 }

@@ -98,7 +98,8 @@ export default function DogEditScreen() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const dirtyRef = useRef(false);
   const saveInFlightRef = useRef(false);
-  const markDirty = () => { dirtyRef.current = true; setSaveState('idle'); };
+  const changeVersionRef = useRef(0);
+  const markDirty = () => { changeVersionRef.current += 1; dirtyRef.current = true; setSaveState('idle'); };
 
   const notify = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -162,6 +163,7 @@ export default function DogEditScreen() {
   const save = async () => {
     if (!dirtyRef.current || saveInFlightRef.current) return;
     saveInFlightRef.current = true;
+    const saveVersion = changeVersionRef.current;
     setSaveState('saving');
     let photoUploadedOnSave = false;
     if (
@@ -288,8 +290,15 @@ export default function DogEditScreen() {
           }
         }
       }
-      dirtyRef.current = false;
-      setSaveState('saved');
+      if (changeVersionRef.current === saveVersion) {
+        dirtyRef.current = false;
+        setSaveState('saved');
+      } else {
+        // A newer edit happened while the request was in flight. Keep it dirty
+        // so the debounce effect immediately persists the newer snapshot.
+        dirtyRef.current = true;
+        setSaveState('idle');
+      }
     } catch {
       notify(
         'Salvataggio non riuscito',
