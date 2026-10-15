@@ -13,6 +13,8 @@ export type AdminOverview = {
   status: "operativo";
 };
 
+import type { AdminUser } from "./types";
+
 export class AdminDataUnavailableError extends Error {}
 
 function startOfDayIso() {
@@ -74,4 +76,34 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     analyses7d,
     status: "operativo",
   };
+}
+
+export async function getAdminUsers(): Promise<AdminUser[]> {
+  const supabase = await requireAdmin();
+  const [authUsers, dogs, subscriptions, behavior] = await Promise.all([
+    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    supabase.from("dogs").select("owner_id"),
+    supabase.from("subscriptions").select("user_id, plan"),
+    supabase.from("behavior_events").select("user_id, created_at"),
+  ]);
+  if (authUsers.error || dogs.error || subscriptions.error || behavior.error) {
+    throw new AdminDataUnavailableError("Supabase non ha restituito gli utenti admin.");
+  }
+  const dogsByUser = new Map<string, number>();
+  for (const dog of dogs.data ?? []) dogsByUser.set(dog.owner_id, (dogsByUser.get(dog.owner_id) ?? 0) + 1);
+  const analysesByUser = new Map<string, number>();
+  for (const event of behavior.data ?? []) analysesByUser.set(event.user_id, (analysesByUser.get(event.user_id) ?? 0) + 1);
+  const planByUser = new Map((subscriptions.data ?? []).map((subscription) => [subscription.user_id, subscription.plan]));
+  return authUsers.data.users.map((user) => ({
+    id: user.id,
+    name: (user.user_metadata?.display_name as string | undefined) ?? user.email?.split("@")[0] ?? "Utente",
+    emailMasked: user.email ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2") : "—",
+    plan: planByUser.get(user.id)?.startsWith("PREMIUM") || planByUser.get(user.id) === "PREMIUM" ? "premium" : "free",
+    dogsCount: dogsByUser.get(user.id) ?? 0,
+    monthlyAnalyses: analysesByUser.get(user.id) ?? 0,
+    lastAccess: user.last_sign_in_at ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(user.last_sign_in_at)) : "Mai",
+    status: user.banned_until && new Date(user.banned_until) > new Date() ? "suspended" : "active",
+    locale: (user.user_metadata?.locale as string | undefined) ?? "—",
+    createdAt: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(user.created_at)),
+  }));
 }
