@@ -138,15 +138,24 @@ async def list_dog_photos(
 
 @router.post("/dogs/{dog_id}/albums", response_model=DogAlbumOut, status_code=201)
 async def create_album(
-    dog_id: str, payload: DogAlbumCreate, state: StateDep, user_id: UserIdDep
+    dog_id: str,
+    payload: DogAlbumCreate,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> DogAlbumOut:
+    if cached := guard.lookup():
+        return DogAlbumOut.model_validate(cached)
     if state.engine is not None:
-        return await gallery_db.create_album(
+        album = await gallery_db.create_album(
             state.engine, user_id=user_id, dog_id=dog_id, payload=payload
         )
-    return gallery_domain.create_album(
-        state.store, user_id=user_id, dog_id=dog_id, payload=payload
-    )
+    else:
+        album = gallery_domain.create_album(
+            state.store, user_id=user_id, dog_id=dog_id, payload=payload
+        )
+    await _record_guard(state, guard, album.model_dump(mode="json"))
+    return album
 
 
 @router.get("/albums/{album_id}", response_model=DogAlbumOut)

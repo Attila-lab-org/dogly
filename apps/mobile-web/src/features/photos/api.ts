@@ -105,9 +105,14 @@ export async function fetchAlbums(
   return includeHidden ? albums : albums.filter(isUserFacingAlbum);
 }
 
-export async function createAlbum(dogId: string, title: string): Promise<PhotoAlbum> {
+export async function createAlbum(
+  dogId: string,
+  title: string,
+  idempotencyKey?: string,
+): Promise<PhotoAlbum> {
   const album = await apiRequest<GalleryAlbumDto>(`/v1/dogs/${dogId}/albums`, {
     method: 'POST',
+    headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : undefined,
     body: { title: title.trim(), default_visibility: 'PRIVATE' },
   });
   return mapAlbum(album);
@@ -125,7 +130,7 @@ export async function getOrCreateMomentsAlbum(
     const moments = albums.find(
       (album) => album.title.trim().toLocaleLowerCase() === 'momenti',
     );
-    const resolved = moments ?? (await createAlbum(dogId, 'Momenti'));
+    const resolved = moments ?? (await createAlbum(dogId, 'Momenti', `system-album-${dogId}-momenti`));
     momentsAlbumCache.set(dogId, resolved);
     return resolved;
   })();
@@ -151,7 +156,7 @@ export async function getOrCreateChatAttachmentsAlbum(
         album.title.trim().toLocaleLowerCase() ===
         CHAT_ATTACHMENTS_ALBUM_TITLE.toLocaleLowerCase(),
     );
-    const resolved = existing ?? (await createAlbum(dogId, CHAT_ATTACHMENTS_ALBUM_TITLE));
+    const resolved = existing ?? (await createAlbum(dogId, CHAT_ATTACHMENTS_ALBUM_TITLE, `system-album-${dogId}-chat-attachments`));
     chatAttachmentsAlbumCache.set(dogId, resolved);
     return resolved;
   })();

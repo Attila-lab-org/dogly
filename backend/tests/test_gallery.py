@@ -155,6 +155,25 @@ async def test_photo_init_is_idempotent_on_retry(
     ]
 
 
+async def test_system_album_creation_is_idempotent_on_retry(
+    client: httpx.AsyncClient, auth_headers
+):
+    dog_id = await create_dog(client, auth_headers)
+    headers = {**auth_headers, "X-Idempotency-Key": "system-album-retry-001"}
+    payload = {"title": "Allegati chat", "default_visibility": "PRIVATE"}
+
+    first = await client.post(
+        f"/v1/dogs/{dog_id}/albums", json=payload, headers=headers
+    )
+    replay = await client.post(
+        f"/v1/dogs/{dog_id}/albums", json=payload, headers=headers
+    )
+
+    assert first.status_code == 201, first.text
+    assert replay.status_code == 201, replay.text
+    assert replay.json() == first.json()
+
+
 async def test_recent_dog_photos_exclude_stories(
     client: httpx.AsyncClient,
     auth_headers,
