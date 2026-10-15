@@ -1,5 +1,5 @@
 /** Home: conversazione, momenti da mostrare e osservazioni da ritrovare. */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -13,10 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
-import { CuteIcon } from '@/components/CuteIcon';
+import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogHero } from '@/features/home/DogHero';
 import { HomeNextAction } from '@/features/home/HomeNextAction';
+import { DiaryVideoPreview } from '@/features/home/DiaryVideoPreview';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
@@ -227,7 +229,6 @@ export default function HomeScreen() {
                   <InsightMomentCard
                     key={insight.eventId}
                     insight={insight}
-                    dogPhotoUri={dog.photoUri}
                     onPress={() => router.push('/(tabs)/diary' as never)}
                   />
                 ))}
@@ -264,76 +265,100 @@ function formatMomentStamp(iso: string): string {
   return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 }
 
+const TONE_COVER: Record<InsightTone, readonly [string, string]> = {
+  positive: ['#5EEAD4', '#2563EB'],
+  neutral: ['#93C5FD', '#1D4ED8'],
+  watch: ['#FDE68A', '#F59E0B'],
+};
+
+function insightCoverIcon(label: string, tone: InsightTone): CuteIconName {
+  const lower = label.toLowerCase();
+  if (/porta|uscire/.test(lower)) return 'door';
+  if (/gioc|pupazzo|palla/.test(lower)) return 'play';
+  if (/incoll|contatto|affetto|coccol/.test(lower)) return 'heart';
+  if (/attenzion/.test(lower)) return 'attention';
+  if (tone === 'watch') return 'alert';
+  if (tone === 'positive') return 'play';
+  return 'paw';
+}
+
 function InsightMomentCard({
   insight,
-  dogPhotoUri,
   onPress,
 }: {
   insight: LastInsight;
-  dogPhotoUri: string | null;
   onPress: () => void;
 }) {
-  const coverUri = insight.mediaUri || dogPhotoUri;
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const icon = insightCoverIcon(insight.label, insight.tone);
+  // Behavior moments are usually video; never feed a video URL into <Image>
+  // (that produced the empty grey tiles).
+  const kind =
+    insight.mediaKind ?? (insight.mediaUri ? ('VIDEO' as const) : null);
+  const showVideo = kind === 'VIDEO' && Boolean(insight.mediaUri) && !mediaFailed;
+  const showPhoto = kind === 'PHOTO' && Boolean(insight.mediaUri) && !mediaFailed;
+  const hasRealMedia = showVideo || showPhoto;
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Apri: ${insight.label}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.insightCard, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.momentCard, pressed && styles.pressed]}
     >
       <View style={styles.insightMedia}>
-        {coverUri ? (
-          <Image source={{ uri: coverUri }} style={styles.insightPhoto} />
-        ) : (
-          <View style={[styles.insightPhoto, styles.insightPhotoFallback]}>
-            <CuteIcon
-              name="paw"
-              size={36}
-              color={colors.primary}
-              secondary={colors.primarySoft}
-            />
+        <LinearGradient
+          colors={[...TONE_COVER[insight.tone]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {showVideo && insight.mediaUri ? (
+          <DiaryVideoPreview
+            uri={insight.mediaUri}
+            fallback={
+              <View style={styles.insightIconWrap}>
+                <CuteIcon name="play" size={34} color="#FFFFFF" secondary="#FFFFFF" />
+              </View>
+            }
+          />
+        ) : null}
+        {showPhoto && insight.mediaUri ? (
+          <Image
+            source={{ uri: insight.mediaUri }}
+            style={styles.insightPhoto}
+            onError={() => setMediaFailed(true)}
+          />
+        ) : null}
+        {!hasRealMedia ? (
+          <View style={styles.insightIconWrap}>
+            <CuteIcon name={icon} size={36} color="#FFFFFF" secondary="#FFFFFF" />
           </View>
-        )}
-        <View style={styles.insightWash} />
-        <TonePill tone={insight.tone} />
+        ) : null}
+        <LinearGradient
+          colors={['rgba(14,42,71,0)', 'rgba(14,42,71,0.55)']}
+          locations={[0.35, 1]}
+          style={styles.insightScrim}
+        />
+        <View style={styles.tonePill}>
+          <View
+            style={[
+              styles.toneDot,
+              insight.tone === 'positive' && styles.toneDotPositive,
+              insight.tone === 'watch' && styles.toneDotWatch,
+              insight.tone === 'neutral' && styles.toneDotNeutral,
+            ]}
+          />
+          <Text style={styles.toneText}>{insightToneLabel(insight.tone)}</Text>
+        </View>
       </View>
-      <Text style={styles.insightTitle} numberOfLines={3}>
+      <Text style={styles.insightTitle} numberOfLines={2}>
         {insight.label}
       </Text>
-      <Text style={styles.insightTime}>{insight.timestampLabel}</Text>
-    </Pressable>
-  );
-}
-
-function TonePill({ tone }: { tone: InsightTone }) {
-  return (
-    <View
-      style={[
-        styles.tonePill,
-        tone === 'positive' && styles.tonePillPositive,
-        tone === 'watch' && styles.tonePillWatch,
-        tone === 'neutral' && styles.tonePillNeutral,
-      ]}
-    >
-      <View
-        style={[
-          styles.toneDot,
-          tone === 'positive' && styles.toneDotPositive,
-          tone === 'watch' && styles.toneDotWatch,
-          tone === 'neutral' && styles.toneDotNeutral,
-        ]}
-      />
-      <Text
-        style={[
-          styles.toneText,
-          tone === 'positive' && styles.toneTextPositive,
-          tone === 'watch' && styles.toneTextWatch,
-          tone === 'neutral' && styles.toneTextNeutral,
-        ]}
-      >
-        {insightToneLabel(tone)}
+      <Text style={styles.momentCaption} numberOfLines={1}>
+        {insight.timestampLabel}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -410,68 +435,53 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.lg },
   sectionTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
   seeAll: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
-  insightCard: {
-    width: 208,
-    gap: 8,
-  },
   insightMedia: {
     width: '100%',
-    aspectRatio: 0.92,
-    borderRadius: 22,
+    aspectRatio: 1,
+    borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: '#D9E8F6',
-    justifyContent: 'flex-end',
+    backgroundColor: colors.primarySoft,
   },
   insightPhoto: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
-  insightPhotoFallback: {
+  insightIconWrap: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#D9E8F6',
   },
-  insightWash: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(14, 42, 71, 0.12)',
+  insightScrim: {
+    ...StyleSheet.absoluteFill,
   },
   insightTitle: {
     color: colors.text,
-    fontSize: typography.size.md,
-    lineHeight: typography.size.md * 1.28,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * 1.35,
     fontWeight: typography.weight.bold,
-    letterSpacing: -0.2,
   },
-  insightTime: { color: colors.textMuted, fontSize: typography.size.xs },
   tonePill: {
     position: 'absolute',
-    left: 10,
-    bottom: 10,
+    left: 8,
+    bottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.94)',
   },
-  tonePillPositive: { backgroundColor: 'rgba(220, 252, 231, 0.95)' },
-  tonePillNeutral: { backgroundColor: 'rgba(255,255,255,0.92)' },
-  tonePillWatch: { backgroundColor: 'rgba(254, 243, 199, 0.95)' },
   toneDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted },
   toneDotPositive: { backgroundColor: colors.success },
-  toneDotNeutral: { backgroundColor: colors.textMuted },
+  toneDotNeutral: { backgroundColor: colors.primary },
   toneDotWatch: { backgroundColor: colors.warning },
   toneText: {
-    color: colors.textSecondary,
-    fontSize: 11,
+    color: colors.text,
+    fontSize: 10,
     fontWeight: typography.weight.bold,
   },
-  toneTextPositive: { color: '#166534' },
-  toneTextNeutral: { color: colors.textSecondary },
-  toneTextWatch: { color: '#92400E' },
   emptyInsight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, width: '100%', padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   emptyText: { color: colors.textSecondary, fontSize: typography.size.xs },
   quota: { color: colors.textMuted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.sm },

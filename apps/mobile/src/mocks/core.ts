@@ -250,6 +250,8 @@ export const homeDataMock: HomeData = {
     label: 'è tranquillo e rilassato',
     timestampLabel: 'Oggi, 09:30',
     tone: 'positive',
+    mediaUri: null,
+    mediaKind: null,
   },
   processingEventId: null,
   isNewUser: false,

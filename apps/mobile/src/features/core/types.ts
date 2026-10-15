@@ -65,6 +65,7 @@ export interface LastInsight {
   tone: InsightTone;
   /** Frame/foto del momento, se disponibile. */
   mediaUri: string | null;
+  mediaKind: 'PHOTO' | 'VIDEO' | null;
 }
 
 /** Domini rappresentati nella timeline unificata del Diario (sez. 5.1). */

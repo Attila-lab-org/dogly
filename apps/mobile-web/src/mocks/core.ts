@@ -26,7 +26,7 @@ export const dogMock: DogProfile = {
   sizeLabel: 'Taglia media',
   weightKg: 28.5,
   sex: 'MALE',
-  breedLabel: 'Labrador',
+  breedLabel: 'Golden Retriever',
   isMix: false,
   photoUri:
     'https://images.unsplash.com/photo-1552053831-71594a27632d?w=800&q=80',
@@ -250,6 +250,8 @@ export const homeDataMock: HomeData = {
     label: 'è tranquillo e rilassato',
     timestampLabel: 'Oggi, 09:30',
     tone: 'positive',
+    mediaUri: null,
+    mediaKind: null,
   },
   processingEventId: null,
   isNewUser: false,

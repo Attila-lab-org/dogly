@@ -230,6 +230,7 @@ function toLastInsight(item: ApiDiaryItem, now: Date): LastInsight {
     timestampLabel: formatInsightTimestamp(item.created_at, now),
     tone: insightToneFromTitle(item.title),
     mediaUri: item.media_url ?? null,
+    mediaKind: item.media_kind ?? null,
   };
 }
 
