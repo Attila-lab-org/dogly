@@ -13,7 +13,7 @@ export type AdminOverview = {
   status: "operativo";
 };
 
-import type { AdminUser } from "./types";
+import type { AdminUser, BehaviorEvent } from "./types";
 
 export class AdminDataUnavailableError extends Error {}
 
@@ -106,4 +106,31 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
     locale: (user.user_metadata?.locale as string | undefined) ?? "—",
     createdAt: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(user.created_at)),
   }));
+}
+
+export async function getAdminBehaviorEvents(): Promise<BehaviorEvent[]> {
+  const supabase = await requireAdmin();
+  const [events, dogs, feedback] = await Promise.all([
+    supabase.from("behavior_events").select("id, dog_id, status, primary_intent, summary, confidence_band, created_at").order("created_at", { ascending: false }).limit(500),
+    supabase.from("dogs").select("id, name, breed_label"),
+    supabase.from("behavior_feedback").select("event_id, value"),
+  ]);
+  if (events.error || dogs.error || feedback.error) throw new AdminDataUnavailableError("Supabase non ha restituito le analisi comportamentali.");
+  const dogById = new Map((dogs.data ?? []).map((dog) => [dog.id, dog]));
+  const feedbackByEvent = new Map((feedback.data ?? []).map((item) => [item.event_id, item.value]));
+  return (events.data ?? []).map((event) => {
+    const dog = dogById.get(event.dog_id);
+    const status = event.status === "COMPLETED" ? "completed" : event.status === "FAILED" ? "failed" : "processing";
+    const value = feedbackByEvent.get(event.id);
+    return {
+      id: event.id,
+      dogName: dog?.name ?? "Cane",
+      dogBreed: dog?.breed_label ?? "Razza non indicata",
+      timestamp: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.created_at)),
+      interpretation: event.summary ?? event.primary_intent ?? "In attesa di interpretazione",
+      confidenceBand: event.confidence_band === "HIGH" || event.confidence_band === "MEDIUM" ? event.confidence_band : "LOW",
+      ownerFeedback: value === "yes" || value === "no" ? value : null,
+      status,
+    };
+  });
 }
