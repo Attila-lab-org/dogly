@@ -48,6 +48,27 @@ import {
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; retryRequestId?: string; attachmentUri?: string };
 
+/** Se il messaggio lascia l’episodio pinnato, la chat torna libera. */
+function looksLikeTopicChange(text: string): boolean {
+  const t = text.trim().toLocaleLowerCase('it-IT');
+  if (t.length < 10) return false;
+  if (
+    /approfond|perch[eé]|questo momento|questa analisi|la foto|il video|le feci|digest|cacca|abbaia|comportament|s[iì]\b|ok\b|va bene|dimmi di pi[uù]|e poi|cosa (hai|significa|vuol)/i.test(
+      t,
+    )
+  ) {
+    return false;
+  }
+  if (
+    /parliamo di|cambiando|altra cosa|un['’ ]altra|invece\b|vorrei sapere|domanda diversa|del cibo|della passeggiata|del veterinario|dove (posso|trovo)|intorno a|parco|agenda|promemoria/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return t.length > 90;
+}
+
 export default function AskScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
@@ -356,15 +377,19 @@ export default function AskScreen() {
         setMediaPhase('analyzing');
       }
       const location = await readDeviceLocation();
-      const activeEventId = focusedEventId ?? pinnedAnalysis?.eventId;
-      const activeSource =
-        focusedEventId
-          ? behaviorSource
-            ? 'behavior'
-            : digestiveSource
-              ? 'digestive'
-              : pinnedAnalysis?.source
-          : pinnedAnalysis?.source;
+      let activePin = pinnedAnalysis;
+      if (activePin && looksLikeTopicChange(text)) {
+        activePin = null;
+        setPinnedAnalysis(null);
+      }
+      const activeEventId = focusedEventId ?? activePin?.eventId;
+      const activeSource = focusedEventId
+        ? behaviorSource
+          ? 'behavior'
+          : digestiveSource
+            ? 'digestive'
+            : activePin?.source
+        : activePin?.source;
       const turn = await createRealtimeTurn(
         session.id,
         text,
