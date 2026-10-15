@@ -105,6 +105,9 @@ export default function AskScreen() {
   const analysisDoneRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>(messages);
   messagesRef.current = messages;
+  // State updates are asynchronous; this guard prevents two rapid taps from
+  // starting the same upload/turn twice before `sending` is rendered.
+  const mediaActionLock = useRef(false);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
   const [momentsBusy, setMomentsBusy] = useState<string | null>(null);
   const [savedToMoments, setSavedToMoments] = useState<Record<string, boolean>>({});
@@ -371,7 +374,8 @@ export default function AskScreen() {
 
   const send = useCallback(async (value: string, attachment?: { uri: string; purpose: string }, existingPhotoId?: string, existingRequestId?: string) => {
     const text = value.trim();
-    if (!text || sending || !session) return;
+    if (!text || sending || mediaActionLock.current || !session) return;
+    mediaActionLock.current = true;
     setDraft(''); setError(null);
     const localId = 'question-' + Date.now();
     const requestId = existingRequestId ?? `${localId}-${Math.random().toString(36).slice(2)}`;
@@ -429,7 +433,10 @@ export default function AskScreen() {
       if (!mounted.current) return;
       setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: attachment || photoId ? 'Non sono riuscito a leggere questo momento. Puoi riprovare?' : 'Non sono riuscito a ricevere una risposta. Puoi riprovare?', failed: true, retryForId: localId, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId, retryRequestId: requestId }]);
       setError('La risposta non è arrivata.');
-    } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
+    } finally {
+      mediaActionLock.current = false;
+      if (mounted.current) { setSending(false); setMediaPhase(null); }
+    }
   }, [
     behaviorSource,
     digestiveSource,
@@ -558,7 +565,8 @@ export default function AskScreen() {
       hasAudio: boolean;
       contentType?: string;
     }) => {
-      if (!session || !userId || !dog.id) return;
+      if (!session || !userId || !dog.id || mediaActionLock.current) return;
+      mediaActionLock.current = true;
       setError(null);
       setMediaPhase('uploading');
       const uploadMsg: Message = {
@@ -606,6 +614,8 @@ export default function AskScreen() {
           return;
         }
         setError('Non sono riuscito a caricare il video. Riprova.');
+      } finally {
+        mediaActionLock.current = false;
       }
     },
     [dog.id, dog.name, router, session, userId, usingMockGate],
