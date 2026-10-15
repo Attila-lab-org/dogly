@@ -48,11 +48,11 @@ export type RealtimeTurn = {
   created_at: string;
 };
 
-export function createRealtimeSession(dogId: string) {
+export function createRealtimeSession(dogId: string, idempotencyKey?: string) {
   return api.post<RealtimeSession>('/v1/realtime/sessions', {
     dog_id: dogId,
     modality: 'TEXT',
-  });
+  }, idempotencyKey ? { headers: { 'X-Idempotency-Key': idempotencyKey } } : undefined);
 }
 
 export function createRealtimeTurn(

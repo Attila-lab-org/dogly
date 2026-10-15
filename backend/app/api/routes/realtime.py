@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Response, status
@@ -23,14 +23,6 @@ from app.contracts.realtime import (
     RealtimeTurnCreate,
     RealtimeTurnOut,
 )
-from app.domains import profiles_db
-from app.providers.openai_live import (
-    DEFAULT_LIVE_SECONDS,
-    build_live_instructions,
-    compact_live_dossier,
-    mint_realtime_client_secret,
-    openai_voice_for_gender,
-)
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains import (
     behavior,
@@ -40,6 +32,7 @@ from app.domains import (
     gallery,
     gallery_db,
     idempotency_db,
+    profiles_db,
     realtime_db,
 )
 from app.domains.gallery_db import GALLERY_BUCKET
@@ -62,6 +55,13 @@ from app.domains.realtime_orchestrator import (
     orchestrate_realtime_turn,
 )
 from app.domains.repository import now_utc
+from app.providers.openai_live import (
+    DEFAULT_LIVE_SECONDS,
+    build_live_instructions,
+    compact_live_dossier,
+    mint_realtime_client_secret,
+    openai_voice_for_gender,
+)
 from app.providers.personal_reasoning import recognize_attachment
 
 router = APIRouter(prefix="/realtime")
@@ -155,10 +155,13 @@ async def create_realtime_session(
     body: RealtimeSessionCreate,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
     _: Annotated[
         None, Depends(rate_limit("realtime_session", limit=10, window_seconds=60))
     ],
 ) -> RealtimeSessionOut:
+    if cached := guard.lookup():
+        return RealtimeSessionOut.model_validate(cached)
     # Keep written conversations independent from the live audio model. This
     # avoids routing the reliable text-first experience through voice settings.
     model = state.settings.realtime_reasoning_model
@@ -184,7 +187,7 @@ async def create_realtime_session(
         str(row["previous_topic"]) if row.get("previous_topic") else None
     )
     previous_turns = list(row.get("previous_turns") or [])
-    return RealtimeSessionOut(
+    response = RealtimeSessionOut(
         id=str(row["id"]),
         dog_id=str(row["dog_id"]),
         dog_name=str(row["dog_name"]),
@@ -204,6 +207,16 @@ async def create_realtime_session(
         started_at=row["started_at"],
         expires_at=row["expires_at"],
     )
+    saved_response = response.model_dump(mode="json")
+    guard.record(saved_response)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=saved_response,
+            payload_hash=guard._payload_hash,
+        )
+    return response
 
 
 @router.post("/live/sessions", response_model=LiveSessionOut, status_code=201)
@@ -305,7 +318,7 @@ async def create_live_session(
     expires_raw = minted.get("expires_at")
     expires_at = None
     if isinstance(expires_raw, (int, float)):
-        expires_at = datetime.fromtimestamp(float(expires_raw), tz=timezone.utc)
+        expires_at = datetime.fromtimestamp(float(expires_raw), tz=UTC)
     elif isinstance(expires_raw, str):
         try:
             expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))

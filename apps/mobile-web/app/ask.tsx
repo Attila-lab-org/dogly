@@ -140,11 +140,18 @@ export default function AskScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
   const startedKey = useRef<string | null>(null);
+  const sessionCreateKey = useRef<{ scope: string; key: string } | null>(null);
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const start = useCallback(async () => {
     if (!dog.id) return;
     const key = `${dog.id}:${eventId ?? 'free'}:${sessionId ?? 'new'}:${intent ?? ''}:${source ?? ''}`;
+    if (!sessionCreateKey.current || sessionCreateKey.current.scope !== key) {
+      sessionCreateKey.current = {
+        scope: key,
+        key: `realtime-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      };
+    }
     if (startedKey.current === key) return;
     startedKey.current = key;
     setStarting(true); setError(null);
@@ -153,7 +160,7 @@ export default function AskScreen() {
       const resumed = sessionId ? await resumeRealtimeSession<Message>(sessionId, dog.id) : null;
       resumedHandoff = resumed;
       if (sessionId && !resumed) throw new Error('Conversation unavailable');
-      const next = resumed?.session ?? await createRealtimeSession(dog.id);
+      const next = resumed?.session ?? await createRealtimeSession(dog.id, sessionCreateKey.current.key);
       if (!mounted.current) return;
       setSession(next);
       const digestiveHandoff = source === 'digestive';

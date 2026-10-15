@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+
 from app.api.routes import realtime as realtime_route
 from app.api.routes.realtime import (
     _is_owned_active_voice_session,
@@ -36,7 +37,6 @@ from app.domains.realtime_orchestrator import (
     openai_realtime_decision_schema,
     orchestrate_realtime_turn,
 )
-
 from tests.conftest import create_dog
 
 
@@ -692,6 +692,20 @@ async def test_realtime_api_session_turn_and_close(
     )
     # Live voice is intentionally retired; the conversation endpoint is text-only.
     assert again.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_realtime_session_idempotency_replays_same_session(
+    client, auth_headers: dict[str, str]
+) -> None:
+    dog_id = await create_dog(client, auth_headers, name="Oreo")
+    headers = {**auth_headers, "X-Idempotency-Key": "realtime-session-retry-1"}
+    body = {"dog_id": dog_id, "modality": "TEXT"}
+    first = await client.post("/v1/realtime/sessions", headers=headers, json=body)
+    replay = await client.post("/v1/realtime/sessions", headers=headers, json=body)
+
+    assert first.status_code == replay.status_code == 201
+    assert replay.json() == first.json()
 
 
 @pytest.mark.asyncio
