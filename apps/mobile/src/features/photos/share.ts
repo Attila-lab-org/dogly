@@ -44,7 +44,7 @@ export async function pickAlbumPhoto(): Promise<string | null> {
     if (result.canceled || !result.assets[0]) {
       return null;
     }
-    return prepareNativeImage(result.assets[0].uri);
+    return await prepareNativeImage(result.assets[0].uri);
   } catch {
     Alert.alert(
       'Galleria non disponibile',
@@ -73,7 +73,7 @@ export async function takeStoryPhoto(): Promise<string | null> {
   if (result.canceled || !result.assets[0]) {
     return null;
   }
-  return prepareNativeImage(result.assets[0].uri);
+  return await prepareNativeImage(result.assets[0].uri);
 }
 
 /** Foto inviata dentro una conversazione: mantiene il formato originale. */
@@ -93,7 +93,7 @@ export async function takeConversationPhoto(): Promise<string | null> {
       allowsEditing: false,
     });
     if (result.canceled || !result.assets[0]) return null;
-    return prepareNativeImage(result.assets[0].uri);
+    return await prepareNativeImage(result.assets[0].uri);
   } catch {
     Alert.alert('Fotocamera non disponibile', 'Riprova tra poco.');
     return null;

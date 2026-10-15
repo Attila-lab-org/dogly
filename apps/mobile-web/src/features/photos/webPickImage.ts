@@ -122,7 +122,10 @@ export function pickWebImage(options: { capture?: boolean } = {}): Promise<WebPi
         finish(null);
         return;
       }
-      void fileToAllowedImage(file).then(finish, reject);
+      void fileToAllowedImage(file).then(finish, (error) => {
+        input.remove();
+        reject(error);
+      });
     });
     input.addEventListener('cancel', () => finish(null));
 

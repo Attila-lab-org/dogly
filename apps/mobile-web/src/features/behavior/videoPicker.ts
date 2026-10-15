@@ -44,10 +44,12 @@ export async function pickConversationVideo(): Promise<PickedConversationVideo |
   }
 
   try {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permesso richiesto', 'Per scegliere un video serve l’accesso alla galleria.');
-      return null;
+    if (Platform.OS !== 'android') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permesso richiesto', 'Per scegliere un video serve l’accesso alla galleria.');
+        return null;
+      }
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],

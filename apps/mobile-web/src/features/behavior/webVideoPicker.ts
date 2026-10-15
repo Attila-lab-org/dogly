@@ -45,6 +45,8 @@ export function pickWebVideo(): Promise<WebPickedVideo | null> {
         finish({ uri, blob: file, durationMs, mimeType: file.type || 'video/mp4' });
       };
       video.onerror = () => {
+        URL.revokeObjectURL(uri);
+        input.remove();
         reject(new Error('Non sono riuscito a leggere la durata del video.'));
       };
       video.src = uri;
