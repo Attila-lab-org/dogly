@@ -16,7 +16,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 | Tema | Decisione |
 | --- | --- |
 | Brand | **Dogly** (non CANINE / CBI in UI) |
-| Tab | **4:** Home / Diario / {Nome cane} / Cerca (luoghi utili; social cani post-P1) — ADR-017 |
+| Tab | **4:** Home / Diario / {Nome cane} / Social (storie Momenti + luoghi utili) — ADR-017 |
 | Confidenza AI | Solo bande bassa/media/alta |
 | Knowledge Score | Indicatori di ricchezza dati; niente % di confidenza AI |
 | Raw video analisi | TTL **24h** dal completamento; non entra in album |
@@ -27,7 +27,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 | Routine giornata | Timeline oraria del mock = **in scope** (`/dogs/{id}/routine` + `dog_daily_activities`) |
 | Digestione / nutrizione | In V1, wording osservativo |
 | Dogly Signals | Posticipato; nessun ingresso visibile nella UX corrente |
-| Storie | Non MVP consumer corrente; album/momenti sì |
+| Storie | Shipping v1: Momenti-as-stories (UX Instagram, niente TTL 24h); feed multi-cane/follow post-V1 |
 | Admin | Post-V1 (demo distinta da produzione) |
 
 ## Design language
@@ -52,9 +52,9 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 | --- | --- | --- |
 | Welcome / Sign-in | `(auth)/welcome`, `(auth)/sign-in` | Privacy summary + auth |
 | Onboarding | `onboarding/dog` | Nome, meta, foto opzionale |
-| Home | `(tabs)/home` | Storie, CTA “Scopri i segnali”, ultima analisi |
-| Fotocamera | `(tabs)/camera` | Crea una storia da fotocamera o galleria |
-| Storie | `stories/[storyId]` | Viewer sequenziale, tap sinistra/destra |
+| Home | `(tabs)/home` | Conversazione + accessi rapidi; shortcut a Social |
+| Social | `(tabs)/social` | Rail storie (Momenti) + luoghi utili sotto |
+| Story viewer | `social/story` | Fullscreen Instagram: progress, tap L/R, hold pause |
 | Diario | `(tabs)/diary`, `diary/event/[id]` | Behavior + digestione; accesso dall’icona Home |
 | Profilo | `(tabs)/rocky` (titolo dinamico) | Hub cane + album preview |
 | Edit profilo | `dogs/[dogId]/edit` | Modifica meta e avatar |
@@ -83,7 +83,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
   7 giorni, abitudine recente o controllo digestione da rifare; sfondo con
   gradiente legato al momento della giornata; nessuna animazione con
   riduzione del movimento attiva.
-- Riga Storie orizzontale + aggiunta rapida.
+- Storie Instagram: tab **Social** (Momenti-as-stories + luoghi utili).
 - Dog card senza Knowledge Score.
 - Nessun check-in fisso in pagina.
 - Nessun modal di check-in all’apertura.

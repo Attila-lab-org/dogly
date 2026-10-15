@@ -6,7 +6,7 @@ import { useSession } from '../../src/features/auth/SessionProvider';
 import { useDogProfile } from '../../src/features/core/useDogProfile';
 
 /**
- * Tab ADR-017: Home / Diario / {cane} / Cerca (luoghi utili).
+ * Tab ADR-017: Home / Diario / {cane} / Social (storie Momenti + luoghi).
  * Protetto: senza sessione → welcome.
  */
 export default function TabsLayout() {
@@ -112,12 +112,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="around"
+        name="social"
         options={{
-          title: 'Cerca',
+          title: 'Social',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'search' : 'search-outline'}
+              name={focused ? 'people' : 'people-outline'}
               size={size}
               color={color as string}
             />

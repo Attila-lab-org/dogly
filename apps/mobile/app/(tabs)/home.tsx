@@ -66,12 +66,12 @@ export default function HomeScreen() {
             <View style={styles.headerActions}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Cerca luoghi utili"
-                onPress={() => router.push('/(tabs)/around' as never)}
+                accessibilityLabel="Apri Social"
+                onPress={() => router.push('/(tabs)/social' as never)}
                 hitSlop={12}
                 style={styles.headerIcon}
               >
-                <Ionicons name="search-outline" size={22} color={colors.primary} />
+                <Ionicons name="people-outline" size={22} color={colors.primary} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"

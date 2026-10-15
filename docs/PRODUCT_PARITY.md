@@ -33,7 +33,9 @@ Elenco corrente (percorsi relativi a `app/` o `src/` condivisi):
 - `app/(tabs)/home.tsx`
 - `app/(tabs)/diary.tsx`
 - `app/(tabs)/rocky.tsx`
-- `app/(tabs)/around.tsx`
+- `app/(tabs)/social.tsx`
+- `app/social/story.tsx`
+- `src/features/social/*`
 - `app/care/index.tsx`
 - `app/digestive/index.tsx`
 - `app/nutrition/foods/catalog.tsx`
@@ -56,6 +58,6 @@ Elenco corrente (percorsi relativi a `app/` o `src/` condivisi):
 | Home conversazione + tile + momenti | In scope; parity obbligatoria |
 | Diario | In scope (tag contestuali + filtro Routine) |
 | Profilo / alimenti / digestione / agenda | In scope (catalogo, Scaduti, intro digestione) |
-| Tab Cerca = momenti + luoghi utili | In scope (non social) |
+| Tab Social = storie Momenti (UX Instagram) + luoghi utili | In scope v1 (niente TTL 24h; feed multi-cane fuori) |
 | Routine giornata oraria | In scope (DB + API + UI) |
 | Ricerca cani / social | **Post-P1** |
