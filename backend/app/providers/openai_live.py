@@ -27,6 +27,25 @@ _MAX_DOSSIER_CHARS = 2800
 _MAX_SDP_CHARS = 65_536
 
 
+def _normalize_sdp_offer(sdp_offer: str) -> str:
+    """Preserve a WHIP-friendly SDP blob for OpenAI GPT-Live WebRTC.
+
+    Do not ``.strip()`` the whole string: SDP parsers expect CRLF-terminated
+    lines including the final line, and stripping causes ``unmarshal SDP: EOF``.
+    """
+    raw = sdp_offer or ""
+    if not raw.strip():
+        return ""
+    # Normalize to \r\n line endings without dropping the final terminator.
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    if not text.endswith("\n"):
+        text += "\n"
+    text = text.replace("\n", "\r\n")
+    if not text.lstrip().startswith("v="):
+        return ""
+    return text
+
+
 def openai_voice_for_gender(gender: str | None) -> str:
     key = (gender or "FEMALE").upper()
     if key not in VOICE_BY_GENDER:
@@ -159,9 +178,18 @@ async def create_live_webrtc_session(
     if settings.realtime_kill_switch or settings.ai_kill_switch:
         raise RuntimeError("Live disabled by kill switch")
 
-    offer = (sdp_offer or "").strip()
+    # Never str()strip() the whole SDP: parsers (Go/pion) need trailing CRLF
+    # and return "unmarshal SDP: EOF" when the final line terminator is gone.
+    offer = _normalize_sdp_offer(sdp_offer)
     if not offer or len(offer) > _MAX_SDP_CHARS:
         raise ValueError("Invalid SDP offer")
+
+    logger.info(
+        "GPT-Live WebRTC offer ready bytes=%s lines=%s starts_v=%s",
+        len(offer),
+        offer.count("\n") + 1,
+        offer.startswith("v="),
+    )
 
     # Client delegation (default): dog dossier lives in Live instructions.
     # WebRTC negotiates audio format via SDP — omit audio.format.

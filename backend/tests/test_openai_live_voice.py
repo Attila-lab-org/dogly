@@ -2,10 +2,22 @@ from types import SimpleNamespace
 
 from app.providers.openai_live import (
     LIVE_MODEL,
+    _normalize_sdp_offer,
     build_live_instructions,
     compact_live_dossier,
     openai_voice_for_gender,
 )
+
+
+def test_normalize_sdp_offer_keeps_trailing_crlf() -> None:
+    offer = "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
+    normalized = _normalize_sdp_offer(offer)
+    assert normalized.startswith("v=")
+    assert normalized.endswith("\r\n")
+    # Regression: .strip() used to remove the final CRLF → OpenAI EOF.
+    assert _normalize_sdp_offer(offer.rstrip()).endswith("\r\n")
+    assert _normalize_sdp_offer("not-sdp") == ""
+    assert _normalize_sdp_offer("v=0\no=- 1\n") == "v=0\r\no=- 1\r\n"
 
 
 def test_voice_gender_maps_to_best_quality_voices() -> None:
@@ -97,6 +109,7 @@ def test_create_live_webrtc_session_posts_gpt_live_payload(monkeypatch) -> None:
     assert captured["json"]["session"]["audio"]["output"]["voice"] == "marin"
     assert captured["json"]["transport"]["type"] == "webrtc"
     assert "offer" in captured["json"]["transport"]["sdp"]
+    assert captured["json"]["transport"]["sdp"].endswith("\r\n")
     assert captured["headers"]["OpenAI-Safety-Identifier"] == "user-123"
 
 
