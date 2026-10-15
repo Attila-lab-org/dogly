@@ -19,7 +19,6 @@ import { api, ApiError } from '../../lib/apiClient';
 import {
   clearProtectedCache,
   queryClient,
-  queryKeys,
 } from '../../lib/queryClient';
 import {
   clearSession,
@@ -34,19 +33,21 @@ import { clearCareState } from '../care/store';
 import { clearPendingBehaviorUpload } from '../behavior/pendingUpload';
 import { clearRealtimeSessionHandoff } from '../realtime/sessionBridge';
 import { isApiConfigured } from './env';
+import { dogsQueryKey, type ApiDog } from '../dogs/api';
 import {
   resolveEntryRoute,
   type EntryRoute,
   type SessionState,
 } from './sessionRouting';
 
-type DogListResponse = { items: Array<{ id: string; name: string }> };
+type DogListResponse = { items: ApiDog[] };
 type DogLookupResult = {
   reachable: boolean;
   hasDog: boolean;
   primaryDogId: string | null;
   /** 401/403 dal backend: sessione non valida, va ri-autenticata. */
   authFailed: boolean;
+  dogs: ApiDog[];
 };
 
 export type SessionContextValue = {
@@ -88,6 +89,7 @@ async function fetchHasDog(): Promise<DogLookupResult> {
       hasDog: false,
       primaryDogId: null,
       authFailed: false,
+      dogs: [],
     };
   }
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -99,6 +101,7 @@ async function fetchHasDog(): Promise<DogLookupResult> {
         hasDog: list.items.length > 0,
         primaryDogId: first?.id ?? null,
         authFailed: false,
+        dogs: list.items,
       };
     } catch (error) {
       if (
@@ -112,6 +115,7 @@ async function fetchHasDog(): Promise<DogLookupResult> {
           hasDog: false,
           primaryDogId: null,
           authFailed: true,
+          dogs: [],
         };
       }
       if (attempt < 2) {
@@ -126,6 +130,7 @@ async function fetchHasDog(): Promise<DogLookupResult> {
     hasDog: false,
     primaryDogId: null,
     authFailed: false,
+      dogs: [],
   };
 }
 
@@ -192,9 +197,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setHasDog(result.hasDog);
     setPrimaryDogId(result.primaryDogId);
     if (result.hasDog && session.user.id) {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.dogs(session.user.id),
-      });
+      queryClient.setQueryData(dogsQueryKey(session.user.id), result.dogs);
     }
   }, [session?.user?.id, doSignOut]);
 
@@ -226,7 +229,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       resetConsentsForUser(next.user.id);
-      void hydrateConsents({ syncRemote: true, userId: next.user.id });
       const dogs = await fetchHasDog();
       if (dogs.authFailed) {
         // Token non valido: forza il sign-out.
@@ -243,6 +245,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setDogStatusUnknown(false);
       setHasDog(dogs.hasDog);
       setPrimaryDogId(dogs.primaryDogId);
+      queryClient.setQueryData(dogsQueryKey(next.user.id), dogs.dogs);
       void recoverAndDrainUploads(next.user.id).catch(() => undefined);
       const { registerDevicePushToken } = await import(
         '../notifications/pushToken'

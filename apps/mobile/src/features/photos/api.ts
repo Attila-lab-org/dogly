@@ -173,10 +173,10 @@ export async function fetchAlbum(albumId: string): Promise<PhotoAlbum> {
   return mapAlbum(album);
 }
 
-export async function fetchAlbumPhotos(albumId: string): Promise<AlbumPhoto[]> {
+export async function fetchAlbumPhotos(albumId: string, limit = 24): Promise<AlbumPhoto[]> {
   if (!apiConfigured()) return [];
   const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
-    `/v1/albums/${albumId}/photos`,
+    `/v1/albums/${albumId}/photos?limit=${limit}`,
   );
   return dedupeAlbumPhotos(body.items.map((photo) => mapPhoto(photo)));
 }

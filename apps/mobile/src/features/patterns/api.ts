@@ -45,7 +45,10 @@ function mapPattern(item: PatternDto): PersonalPattern {
   };
 }
 
-export function usePersonalPatterns(dogId: string) {
+export function usePersonalPatterns(
+  dogId: string,
+  options: { enabled?: boolean } = {},
+) {
   const { usingMockGate } = useSession();
   const live = isApiConfigured() && !usingMockGate;
   const query = useQuery({
@@ -56,7 +59,7 @@ export function usePersonalPatterns(dogId: string) {
       );
       return response.items.map(mapPattern);
     },
-    enabled: live && isPersistedId(dogId),
+    enabled: options.enabled !== false && live && isPersistedId(dogId),
   });
 
   return {

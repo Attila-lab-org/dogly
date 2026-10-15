@@ -172,7 +172,7 @@ async def list_photos(
     album_id: str,
     limit: int = 100,
 ) -> list[DogPhotoOut]:
-    limit = max(1, min(limit, 100))
+    limit = max(1, min(limit, 50))
     async with engine.connect() as conn:
         album = (
             await conn.execute(

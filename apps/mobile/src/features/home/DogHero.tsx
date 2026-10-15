@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
+  InteractionManager,
   Pressable,
   StyleSheet,
   Text,
@@ -116,8 +117,13 @@ export function DogHero({
   const reducedMotion = useReducedMotion();
   const { userId, usingMockGate } = useSession();
   const careEvents = useCareEvents(dogId, dogName);
-  const patternsQuery = usePersonalPatterns(dogId);
-  const lifestyle = useLifestyle(dogId);
+  const [secondaryReady, setSecondaryReady] = useState(false);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setSecondaryReady(true));
+    return () => task.cancel();
+  }, []);
+  const patternsQuery = usePersonalPatterns(dogId, { enabled: secondaryReady });
+  const lifestyle = useLifestyle(dogId, { enabled: secondaryReady });
   const realEnabled =
     Boolean(userId) && isApiConfigured() && !usingMockGate && isPersistedId(dogId);
   const digestiveQuery = useQuery({
@@ -129,7 +135,7 @@ export function DogHero({
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   useEffect(() => {
-    if (!realEnabled) return;
+    if (!realEnabled || !secondaryReady) return;
     let alive = true;
     void readDeviceLocationResult().then((result) => {
       if (!alive) return;
@@ -139,7 +145,7 @@ export function DogHero({
     return () => {
       alive = false;
     };
-  }, [realEnabled]);
+  }, [realEnabled, secondaryReady]);
 
   const weatherQuery = useQuery({
     queryKey: ['hero-weather', coords?.lat ?? 0, coords?.lng ?? 0],
@@ -149,7 +155,7 @@ export function DogHero({
       );
       return data ?? null;
     },
-    enabled: realEnabled && coords !== null,
+    enabled: realEnabled && secondaryReady && coords !== null,
     staleTime: 30 * 60 * 1000,
   });
   const weather: HeroWeather | null = useMemo(
@@ -168,12 +174,12 @@ export function DogHero({
   const foodsQuery = useQuery({
     queryKey: queryKeys.foods(userId ?? 'anon', dogId),
     queryFn: () => listFoods(dogId),
-    enabled: realEnabled,
+    enabled: realEnabled && secondaryReady,
   });
   const periodsQuery = useQuery({
     queryKey: [...queryKeys.foods(userId ?? 'anon', dogId), 'periods'],
     queryFn: () => listFeedingPeriods(dogId),
-    enabled: realEnabled,
+    enabled: realEnabled && secondaryReady,
   });
 
   const now = new Date();

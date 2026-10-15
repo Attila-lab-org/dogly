@@ -111,7 +111,7 @@ def list_photos(
         if p.album_id == album_id and p.owner_id == user_id and p.deleted_at is None
     ]
     photos.sort(key=lambda p: p.created_at, reverse=True)
-    return [_photo_out(p) for p in photos[: max(1, min(limit, 100))]]
+    return [_photo_out(p) for p in photos[: max(1, min(limit, 50))]]
 
 
 def get_photo(store: InMemoryStore, *, user_id: str, photo_id: str) -> DogPhotoOut:

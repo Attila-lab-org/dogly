@@ -5,13 +5,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
-  fetchAlbumPhotos,
   fetchDogPhotos,
-  getOrCreateMomentsAlbum,
 } from '@/features/photos/api';
 import { StoryHeader } from '@/features/social/StoryHeader';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -21,29 +19,26 @@ import { NearbyPlacesSection } from '@/features/social/NearbyPlacesSection';
 import { getLastSeenPhotoId } from '@/features/social/storySeen';
 
 export default function SocialScreen() {
+  const PAGE_SIZE = 24;
   const router = useRouter();
   const { dog } = useDogProfile();
   const reducedMotion = useReducedMotion();
   const [lastSeenId, setLastSeenId] = useState<string | null>(null);
 
-  const momentsQuery = useQuery({
-    queryKey: ['social-moments', dog.id],
-    queryFn: async () => {
-      try {
-        const album = await getOrCreateMomentsAlbum(dog.id);
-        const items = await fetchAlbumPhotos(album.id);
-        if (items.length > 0) return items;
-      } catch {
-        /* fallback sotto */
-      }
-      // Se Momenti è vuoto/non raggiungibile, usa le foto cane già in album.
-      return fetchDogPhotos(dog.id, 40);
-    },
+  const momentsQuery = useInfiniteQuery({
+    queryKey: ['social-moments', dog.id, PAGE_SIZE],
+    queryFn: ({ pageParam }) => fetchDogPhotos(dog.id, PAGE_SIZE, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
     enabled: Boolean(dog.id),
     retry: 1,
   });
 
-  const photos = useMemo(() => momentsQuery.data ?? [], [momentsQuery.data]);
+  const photos = useMemo(
+    () => (momentsQuery.data?.pages ?? []).flat(),
+    [momentsQuery.data],
+  );
 
   useEffect(() => {
     if (!dog.id) return;

@@ -165,7 +165,6 @@ async function hydrateCareEvents(dogId: string, dogName: string): Promise<void> 
     ];
     emit();
     // Riconcilia i promemoria locali con la fonte remota.
-    await cancelAllCareReminders();
     await syncCareReminders(dogId, dogName);
   } catch {
     hydratedDogs.delete(dogId);

@@ -16,13 +16,11 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
-  fetchAlbumPhotos,
   fetchDogPhotos,
-  getOrCreateMomentsAlbum,
 } from '@/features/photos/api';
 import { setLastSeenPhotoId } from '@/features/social/storySeen';
 import { typography } from '@/theme/tokens';
@@ -30,6 +28,7 @@ import { typography } from '@/theme/tokens';
 const STORY_MS = 5000;
 
 export default function StoryViewerScreen() {
+  const PAGE_SIZE = 24;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -47,23 +46,20 @@ export default function StoryViewerScreen() {
     ) || 0,
   );
 
-  const momentsQuery = useQuery({
-    queryKey: ['social-moments', dogId],
-    queryFn: async () => {
-      try {
-        const album = await getOrCreateMomentsAlbum(dogId);
-        const items = await fetchAlbumPhotos(album.id);
-        if (items.length > 0) return items;
-      } catch {
-        /* fallback sotto */
-      }
-      return fetchDogPhotos(dogId, 40);
-    },
+  const momentsQuery = useInfiniteQuery({
+    queryKey: ['social-moments', dogId, PAGE_SIZE],
+    queryFn: ({ pageParam }) => fetchDogPhotos(dogId, PAGE_SIZE, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
     enabled: Boolean(dogId),
     retry: 1,
   });
 
-  const photos = useMemo(() => momentsQuery.data ?? [], [momentsQuery.data]);
+  const photos = useMemo(
+    () => (momentsQuery.data?.pages ?? []).flat(),
+    [momentsQuery.data],
+  );
   const [index, setIndex] = useState(startIndex);
   const [paused, setPaused] = useState(false);
   const [progressPct, setProgressPct] = useState(0);
@@ -103,7 +99,13 @@ export default function StoryViewerScreen() {
     elapsedRef.current = 0;
     setProgressPct(0);
     if (current >= photos.length - 1) {
-      close();
+      if (momentsQuery.hasNextPage) {
+        void momentsQuery.fetchNextPage().then((result) => {
+          const lastPage = result.data?.pages[result.data.pages.length - 1];
+          if (lastPage?.length) setIndex(current + 1);
+          else close();
+        });
+      } else close();
       return;
     }
     setIndex(current + 1);

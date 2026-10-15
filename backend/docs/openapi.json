@@ -1149,7 +1149,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 50,
               "minimum": 1,
               "default": 12,
               "title": "Limit"
@@ -1288,9 +1288,9 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 50,
               "minimum": 1,
-              "default": 100,
+              "default": 24,
               "title": "Limit"
             }
           },
