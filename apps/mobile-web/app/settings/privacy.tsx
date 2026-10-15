@@ -83,8 +83,8 @@ const CONSENT_ROWS: ConsentRow[] = [
 ];
 
 
-const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL ?? 'https://dogly.app/privacy-beta';
-const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? 'https://dogly.app/terms-beta';
+const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL ?? 'https://dogly.app/privacy';
+const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL ?? 'https://dogly.app/terms';
 
 export default function PrivacyScreen() {
   const router = useRouter();
@@ -217,7 +217,7 @@ export default function PrivacyScreen() {
           <View style={[styles.iconWrap, { backgroundColor: '#E0F2FE' }]}>
             <Ionicons name="book-outline" size={18} color="#0284C7" />
           </View>
-          <Text style={styles.sectionTitle}>Documenti beta</Text>
+          <Text style={styles.sectionTitle}>Documenti</Text>
         </View>
         <Text style={styles.note}>
           Privacy Policy e Termini della closed beta sono sempre raggiungibili da qui.
@@ -229,7 +229,7 @@ export default function PrivacyScreen() {
           style={styles.exportButton}
         />
         <Button
-          title="Apri Termini beta"
+            title="Apri Termini"
           variant="outline"
           onPress={() => void Linking.openURL(TERMS_URL)}
           style={styles.exportButton}

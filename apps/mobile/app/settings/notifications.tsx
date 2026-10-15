@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Chip, ScreenContainer } from '@/components';
+import { Card, ScreenContainer } from '@/components';
 import {
   hydrateNotificationPreferences,
   setNotificationPreference,
@@ -23,8 +23,6 @@ const OPTIONS: Array<{
   key: keyof NotificationPreferences;
   title: string;
   description: string;
-  /** true = la preferenza viene salvata, ma nessun invio la usa ancora */
-  comingSoon?: boolean;
 }> = [
   {
     key: 'careReminders',
@@ -32,33 +30,9 @@ const OPTIONS: Array<{
     description: 'Vaccini, visite e altre scadenze.',
   },
   {
-    key: 'resultReady',
-    title: 'Risultati pronti',
-    description: 'Quando termina una nuova analisi.',
-    comingSoon: true,
-  },
-  {
     key: 'checkIn',
     title: 'Come sta oggi',
     description: 'Promemoria occasionali, senza messaggi ripetitivi.',
-  },
-  {
-    key: 'newPattern',
-    title: 'Nuove abitudini',
-    description: 'Quando emerge qualcosa di utile.',
-    comingSoon: true,
-  },
-  {
-    key: 'digestiveTrend',
-    title: 'Cambiamenti digestivi',
-    description: 'Quando notiamo una variazione importante.',
-    comingSoon: true,
-  },
-  {
-    key: 'weeklySummary',
-    title: 'Riepilogo settimanale',
-    description: 'Un riepilogo della settimana.',
-    comingSoon: true,
   },
 ];
 
@@ -119,10 +93,7 @@ export default function NotificationSettingsScreen() {
               </View>
               <Text style={styles.description}>{option.description}</Text>
             </View>
-            {option.comingSoon ? (
-              <Chip label="In arrivo" tone="neutral" />
-            ) : (
-              <Switch
+            <Switch
                 value={option.key === 'checkIn' ? prefs.smartReminders : preferences[option.key]}
                 onValueChange={async (value) => {
                   const saved = await setNotificationPreference(option.key, value);
@@ -143,7 +114,6 @@ export default function NotificationSettingsScreen() {
                 }
                 accessibilityLabel={option.title}
               />
-            )}
           </View>
         ))}
       </Card>
@@ -223,12 +193,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  comingSoonNote: {
-    marginTop: spacing.xxs,
-    color: colors.textMuted,
-    fontSize: typography.size.xs,
-    fontStyle: 'italic',
   },
   title: {
     color: colors.text,

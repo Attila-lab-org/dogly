@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Chip, ScreenContainer } from '@/components';
+import { Card, ScreenContainer } from '@/components';
 import {
   hydrateNotificationPreferences,
   setNotificationPreference,
@@ -26,8 +26,6 @@ const OPTIONS: Array<{
   iconColor: string;
   title: string;
   description: string;
-  /** true = la preferenza viene salvata, ma nessun invio la usa ancora */
-  comingSoon?: boolean;
 }> = [
   {
     key: 'careReminders',
@@ -38,48 +36,12 @@ const OPTIONS: Array<{
     description: 'Vaccini, visite e altre scadenze.',
   },
   {
-    key: 'resultReady',
-    icon: 'checkmark-circle-outline',
-    iconBg: colors.tealSoft,
-    iconColor: colors.teal,
-    title: 'Risultati pronti',
-    description: 'Quando termina una nuova analisi.',
-    comingSoon: true,
-  },
-  {
     key: 'checkIn',
     icon: 'heart-outline',
     iconBg: '#E0F2FE',
     iconColor: '#0284C7',
     title: 'Come sta oggi',
     description: 'Promemoria occasionali, senza messaggi ripetitivi.',
-  },
-  {
-    key: 'newPattern',
-    icon: 'sparkles-outline',
-    iconBg: colors.tealSoft,
-    iconColor: colors.teal,
-    title: 'Nuove abitudini',
-    description: 'Quando emerge qualcosa di utile.',
-    comingSoon: true,
-  },
-  {
-    key: 'digestiveTrend',
-    icon: 'nutrition-outline',
-    iconBg: '#E0F2FE',
-    iconColor: '#0284C7',
-    title: 'Cambiamenti digestivi',
-    description: 'Quando notiamo una variazione importante.',
-    comingSoon: true,
-  },
-  {
-    key: 'weeklySummary',
-    icon: 'newspaper-outline',
-    iconBg: colors.tealSoft,
-    iconColor: colors.teal,
-    title: 'Riepilogo settimanale',
-    description: 'Un riepilogo della settimana.',
-    comingSoon: true,
   },
 ];
 
@@ -149,9 +111,6 @@ export default function NotificationSettingsScreen() {
               </View>
               <Text style={styles.description}>{option.description}</Text>
             </View>
-            {option.comingSoon ? (
-              <Chip label="In arrivo" tone="neutral" />
-            ) : (
             <Switch
               value={option.key === 'checkIn' ? prefs.smartReminders : preferences[option.key]}
               onValueChange={async (value) => {
@@ -168,8 +127,7 @@ export default function NotificationSettingsScreen() {
               trackColor={{ false: colors.border, true: colors.teal }}
               thumbColor="#FFFFFF"
               accessibilityLabel={option.title}
-            />
-            )}
+              />
           </View>
         ))}
       </Card>
@@ -275,12 +233,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     flexWrap: 'wrap',
-  },
-  comingSoonNote: {
-    marginTop: spacing.xxs,
-    color: colors.textMuted,
-    fontSize: typography.size.xs,
-    fontStyle: 'italic',
   },
   title: {
     color: '#1A2B48',

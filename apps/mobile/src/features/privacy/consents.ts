@@ -10,7 +10,7 @@ import { consentsMock } from '../../mocks/secondary';
 import { getKeyValueStorage } from '../notifications/persistence';
 
 const STORAGE_KEY = 'dogly.consents.v1';
-export const POLICY_VERSION = 'privacy-beta/v1';
+export const POLICY_VERSION = 'privacy/v2';
 
 let consents: ConsentState = { ...consentsMock };
 let hydrated = false;

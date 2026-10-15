@@ -102,7 +102,7 @@ export async function setNotificationPreference(
       const notificationsEnabled = Object.values(next).some(Boolean);
       const { api } = require('../../lib/apiClient') as typeof import('../../lib/apiClient');
       await api.patch('/v1/me/consents', {
-        policy_version: 'privacy-beta/v1',
+        policy_version: 'privacy/v2',
         notifications: notificationsEnabled,
       });
     }

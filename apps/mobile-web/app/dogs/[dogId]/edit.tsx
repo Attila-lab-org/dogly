@@ -153,31 +153,6 @@ export default function DogEditScreen() {
     if (!uri) return;
     setPhotoUri(uri);
     setPendingPhotoUri(uri);
-    if (!dogId) {
-      notify('Foto non salvata', 'Profilo del cane non disponibile.');
-      return;
-    }
-
-    setUploadingPhoto(true);
-    try {
-      const savedUrl = await persistDogAvatar(dogId, uri);
-      if (savedUrl) setPhotoUri(savedUrl);
-      applyAvatarToCache(savedUrl);
-      if (userId) {
-        void queryClient.invalidateQueries({
-          queryKey: dogsQueryKey(userId),
-          refetchType: 'none',
-        });
-      }
-      setPendingPhotoUri(null);
-      notify('Foto salvata', 'La foto profilo è stata caricata.');
-    } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : 'Errore sconosciuto';
-      notify('Foto non salvata', detail);
-    } finally {
-      setUploadingPhoto(false);
-    }
   };
 
   const save = async () => {
@@ -382,8 +357,8 @@ export default function DogEditScreen() {
       </Pressable>
       <Text style={styles.photoStatus}>
         {uploadingPhoto
-          ? 'Caricamento foto in corso…'
-          : 'Tocca per cambiare la foto profilo'}
+          ? 'Salvataggio del profilo in corso…'
+          : 'Tocca per cambiare la foto · le modifiche si applicano con Salva profilo'}
       </Text>
 
       <Text style={styles.label}>Nome</Text>
@@ -521,7 +496,7 @@ export default function DogEditScreen() {
       </View>
 
       <Button
-        title="Salva"
+        title="Salva profilo"
         variant="secondary"
         loading={
           updateMutation.isPending || updateMe.isPending || uploadingPhoto

@@ -10,7 +10,6 @@ import { Button, Card, ScreenContainer } from '@/components';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { isPersistedId } from '@/lib/persistedId';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
 
@@ -30,7 +29,9 @@ export default function SettingsScreen() {
   // sottotitolo riflette lo stato reale, non sempre il mock.
   const { live, query, state: subscription } = useSubscriptionState();
   const { dog } = useDogProfile();
-  const dogId = isPersistedId(dog.id) ? dog.id : '';
+  // The edit screen also works for the local profile used before the first
+  // sync. Settings should never make the profile row look disabled.
+  const dogId = dog.id || '';
 
   const subscriptionSubtitle = (() => {
     if (live && query.isLoading) return 'Verifica del piano in corso…';
