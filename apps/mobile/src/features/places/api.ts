@@ -21,7 +21,7 @@ export type DeviceLocationResult =
 const LOCATION_TIMEOUT_MS = 6_000;
 /** Chat only needs weather optionally — never block the turn for GPS. */
 const CHAT_LOCATION_TIMEOUT_MS = 1_500;
-const PLACES_TIMEOUT_MS = 10_000;
+const PLACES_TIMEOUT_MS = 18_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => T): Promise<T> {
   return new Promise((resolve) => {
@@ -42,10 +42,13 @@ export function fetchNearbyPlaces(options: {
   lat: number;
   lng: number;
   kind?: 'PARK' | 'VET';
+  /** Default backend 8km; alza per zone sparse. */
+  radius_m?: number;
 }) {
   const params = new URLSearchParams({
     lat: String(options.lat),
     lng: String(options.lng),
+    radius_m: String(options.radius_m ?? 12_000),
   });
   if (options.kind) params.set('kind', options.kind);
   return api.get<{ items: NearbyPlace[]; location_label: string | null }>(

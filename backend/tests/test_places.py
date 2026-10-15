@@ -57,8 +57,10 @@ def test_overpass_query_builds_per_kind():
         lat=45.46, lng=9.19, kind=None, radius_m=5000
     )
     assert '["amenity"="veterinary"]' in both
+    assert '["healthcare"="veterinary"]' in both
     assert '["office"="veterinary"]' in both
-    assert '["leisure"~"^(dog_park|park|recreation_ground)$"]' in both
+    assert '["leisure"="dog_park"]' in both
+    assert '["leisure"~"^(park|recreation_ground)$"]' in both
     assert "(around:5000,45.46,9.19)" in both
 
     vet = places_domain._overpass_query_text(
@@ -79,17 +81,14 @@ def test_overpass_parses_nodes_ways_tags_and_sorts_by_distance():
         )
     )
     names = [item.name for item in items]
-    # way con center parsato, node parsato, fallback nome parco senza name
     assert "Area Cani Montanari" in names
     assert "Clinica San Barnaba" in names
     assert "Parco" in names
-    # fuori raggio e categoria irrilevante esclusi
     assert "Vet Lontano" not in names
     assert "Panificio" not in names
-    # ordinati per distanza crescente
-    distances = [item.distance_m for item in items]
-    assert distances == sorted(distances)
-    # telefono dai tag (contact:phone), normalizzato
+    # dog_park ha rank migliore: compare tra park items
+    park_items = [item for item in items if item.kind == "PARK"]
+    assert park_items[0].name == "Area Cani Montanari"
     dog_park = next(item for item in items if item.name == "Area Cani Montanari")
     assert dog_park.phone == "+39025550100"
     assert dog_park.kind == "PARK"
@@ -100,13 +99,13 @@ def test_overpass_parses_nodes_ways_tags_and_sorts_by_distance():
 
 @pytest.mark.asyncio
 async def test_search_nearby_uses_overpass_first(monkeypatch):
-    calls: list[int] = []
+    calls: list[tuple[str | None, int]] = []
 
     async def fake_overpass(*, lat, lng, kind, radius_m):
-        del lat, lng, kind
-        calls.append(radius_m)
+        del lat, lng
+        calls.append((kind, radius_m))
         return places_domain._parse_overpass(
-            OVERPASS_PAYLOAD, lat=45.46, lng=9.19, kind=None, radius_m=radius_m
+            OVERPASS_PAYLOAD, lat=45.46, lng=9.19, kind=kind, radius_m=radius_m
         )
 
     async def photon_should_not_run(**_kwargs):
@@ -115,13 +114,14 @@ async def test_search_nearby_uses_overpass_first(monkeypatch):
     monkeypatch.setattr(places_domain, "_fetch_overpass", fake_overpass)
     monkeypatch.setattr(places_domain, "_fetch_photon", photon_should_not_run)
     result = await places_domain.search_nearby(lat=45.46, lng=9.19)
-    assert calls == [5000]
-    assert len(result.items) == 3
+    # kind=None → fetch PARK e VET in parallelo
+    assert sorted(kind for kind, _ in calls) == ["PARK", "VET"]
+    assert {item.kind for item in result.items} == {"PARK", "VET"}
     assert result.items[0].distance_m <= result.items[-1].distance_m
 
 
 @pytest.mark.asyncio
-async def test_search_nearby_widens_radius_when_empty(monkeypatch):
+async def test_search_nearby_falls_back_to_photon_when_overpass_empty(monkeypatch):
     calls: list[int] = []
 
     async def fake_overpass(*, lat, lng, kind, radius_m):
@@ -129,10 +129,31 @@ async def test_search_nearby_widens_radius_when_empty(monkeypatch):
         calls.append(radius_m)
         return []
 
+    async def photon(*, lat: float, lng: float, kind: str, radius_m: int):
+        del lat, lng, radius_m
+        return [
+            _PlaceHit(
+                id=f"{kind.lower()}-1",
+                name="Clinica Test" if kind == "VET" else "Parco Test",
+                kind=kind,  # type: ignore[arg-type]
+                distance_m=400,
+                lat=45.46,
+                lng=9.19,
+                maps_url="https://maps.example/test",
+                osm_ref="N1",
+            )
+        ]
+
+    async def no_phones(items):
+        return items
+
     monkeypatch.setattr(places_domain, "_fetch_overpass", fake_overpass)
+    monkeypatch.setattr(places_domain, "_fetch_photon", photon)
+    monkeypatch.setattr(places_domain, "_enrich_vet_phones", no_phones)
     result = await places_domain.search_nearby(lat=45.46, lng=9.19, radius_m=4000)
-    assert calls == [4000, 20_000]
-    assert result.items == []
+    # widen Overpass per kind (PARK+VET) poi Photon
+    assert 4000 in calls and 20_000 in calls
+    assert {item.kind for item in result.items} == {"PARK", "VET"}
 
 
 @pytest.mark.asyncio
@@ -177,6 +198,34 @@ async def test_search_nearby_errors_when_everything_fails(monkeypatch):
     monkeypatch.setattr(places_domain, "_fetch_photon", photon_fail)
     with pytest.raises(ApiError):
         await places_domain.search_nearby(lat=45.46, lng=9.19)
+
+
+@pytest.mark.asyncio
+async def test_park_only_keeps_many_parks(monkeypatch):
+    async def fake_overpass(*, lat, lng, kind, radius_m):
+        del lat, lng, radius_m
+        assert kind == "PARK"
+        return [
+            _PlaceHit(
+                id=f"park-{i}",
+                name=f"Parco {i}",
+                kind="PARK",
+                distance_m=100 + i * 50,
+                lat=45.46 + i * 0.001,
+                lng=9.19,
+                maps_url="https://maps.example/p",
+            )
+            for i in range(25)
+        ]
+
+    async def photon_should_not_run(**_kwargs):
+        raise AssertionError("Photon non deve partire")
+
+    monkeypatch.setattr(places_domain, "_fetch_overpass", fake_overpass)
+    monkeypatch.setattr(places_domain, "_fetch_photon", photon_should_not_run)
+    result = await places_domain.search_nearby(lat=45.46, lng=9.19, kind="PARK")
+    assert len(result.items) == places_domain.RESULT_LIMIT
+    assert all(item.kind == "PARK" for item in result.items)
 
 
 def test_dedupe_by_name_and_rounded_coords():

@@ -1,13 +1,11 @@
-"""Nearby useful places: Overpass (POI per categoria OSM) primary, Photon fallback.
+"""Nearby useful places: Overpass (POI OSM) primary, Photon fallback.
 
-Photon è un geocoder, non un motore POI: restava come unica sorgente e
-restituiva risultati irrilevanti/lontani. Overpass interroga direttamente i
-tag OSM (amenity=veterinary, leisure=dog_park|park|recreation_ground) entro
-il raggio reale — niente chiavi, gratis, e i telefoni sono già nei tag.
-Se Overpass fallisce si ripiega sul geocoder Photon (con arricchimento
-telefoni Nominatim, che Overpass rende inutile nel ramo primario).
+Correzioni v1 Social:
+- con kind=None non far saturare i 12 slot dai leisure=park (i vet sparivano);
+- se Overpass risponde vuoto → Photon (prima solo su exception);
+- tag healthcare=veterinary + mirror Overpass;
+- priorità dog_park rispetto ai parchi generici.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -26,12 +24,17 @@ from app.contracts.errors import ApiError, ErrorCode
 Kind = Literal["PARK", "VET"]
 logger = logging.getLogger(__name__)
 
-OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter"
+OVERPASS_ENDPOINTS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+)
 PHOTON_ENDPOINT = "https://photon.komoot.io/api/"
 NOMINATIM_LOOKUP = "https://nominatim.openstreetmap.org/lookup"
 _USER_AGENT = "Dogly/1.0 (nearby places; contact=support@dogly.app)"
 
-RESULT_LIMIT = 12
+RESULT_LIMIT = 20
+PER_KIND_LIMIT = 12
+DEFAULT_RADIUS_M = 8_000
 
 
 @dataclass
@@ -104,23 +107,34 @@ def _overpass_query_text(
     parts: list[str] = []
     if kind in (None, "VET"):
         parts.append(f'nwr(around:{radius_m},{lat},{lng})["amenity"="veterinary"];')
+        parts.append(f'nwr(around:{radius_m},{lat},{lng})["healthcare"="veterinary"];')
         parts.append(f'nwr(around:{radius_m},{lat},{lng})["office"="veterinary"];')
     if kind in (None, "PARK"):
+        # dog_park prima; park/recreation_ground come riempimento.
+        parts.append(f'nwr(around:{radius_m},{lat},{lng})["leisure"="dog_park"];')
         parts.append(
             f'nwr(around:{radius_m},{lat},{lng})'
-            '["leisure"~"^(dog_park|park|recreation_ground)$"];'
+            '["leisure"~"^(park|recreation_ground)$"];'
         )
+        parts.append(f'nwr(around:{radius_m},{lat},{lng})["dog"="yes"]["leisure"="park"];')
     body = "\n  ".join(parts)
-    return f"[out:json][timeout:10];\n(\n  {body}\n);\nout center tags;"
+    return f"[out:json][timeout:15];\n(\n  {body}\n);\nout center tags;"
 
 
 def _overpass_hit_kind(tags: dict[str, Any]) -> Kind | None:
-    if str(tags.get("amenity") or "").casefold() == "veterinary":
+    amenity = str(tags.get("amenity") or "").casefold()
+    healthcare = str(tags.get("healthcare") or "").casefold()
+    office = str(tags.get("office") or "").casefold()
+    if "veterinar" in amenity or amenity == "veterinary":
         return "VET"
-    if str(tags.get("office") or "").casefold() == "veterinary":
+    if "veterinar" in healthcare or healthcare == "veterinary":
+        return "VET"
+    if "veterinar" in office or office == "veterinary":
         return "VET"
     leisure = str(tags.get("leisure") or "").casefold()
     if leisure in {"dog_park", "park", "recreation_ground"}:
+        return "PARK"
+    if str(tags.get("dog") or "").casefold() in {"yes", "designated"} and leisure:
         return "PARK"
     return None
 
@@ -133,6 +147,18 @@ def _overpass_name(tags: dict[str, Any], kind: Kind) -> str:
         return "Veterinario"
     leisure = str(tags.get("leisure") or "").casefold()
     return "Area cani" if leisure == "dog_park" else "Parco"
+
+
+def _park_rank(tags: dict[str, Any]) -> int:
+    """Più basso = più rilevante per un cane."""
+    leisure = str(tags.get("leisure") or "").casefold()
+    if leisure == "dog_park":
+        return 0
+    if str(tags.get("dog") or "").casefold() in {"yes", "designated"}:
+        return 1
+    if leisure == "recreation_ground":
+        return 2
+    return 3
 
 
 def _parse_overpass(
@@ -178,6 +204,11 @@ def _parse_overpass(
                 phone=phone,
             )
         )
+        # stash rank on object for park sorting via distance tweak below
+        if hit_kind == "PARK":
+            # Prefer dog parks without changing public distance_m much:
+            # sort key uses (rank, distance) in _dedupe_kind.
+            setattr(items[-1], "_park_rank", _park_rank(tags))
     return items
 
 
@@ -189,19 +220,30 @@ async def _fetch_overpass(
     radius_m: int,
 ) -> list[_PlaceHit]:
     query = _overpass_query_text(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        response = await client.post(
-            OVERPASS_ENDPOINT,
-            content=query,
-            headers={"User-Agent": _USER_AGENT},
-        )
-        response.raise_for_status()
-        payload = response.json()
-    return _parse_overpass(payload, lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+    last_error: Exception | None = None
+    for endpoint in OVERPASS_ENDPOINTS:
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                response = await client.post(
+                    endpoint,
+                    content=query,
+                    headers={"User-Agent": _USER_AGENT},
+                )
+                response.raise_for_status()
+                payload = response.json()
+            return _parse_overpass(
+                payload, lat=lat, lng=lng, kind=kind, radius_m=radius_m
+            )
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            logger.warning("Overpass endpoint failed (%s): %s", endpoint, exc)
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 # ---------------------------------------------------------------------------
-# Photon (fallback: geocoder, meno preciso sui POI per categoria)
+# Photon (fallback: geocoder)
 # ---------------------------------------------------------------------------
 
 
@@ -210,11 +252,15 @@ def _photon_kind(properties: dict[str, Any], requested: Kind) -> Kind | None:
     osm_key = str(properties.get("osm_key") or "").casefold()
     name = str(properties.get("name") or "").casefold()
     if requested == "VET":
+        if osm_value in {"university", "bus_stop", "school", "college"}:
+            return None
         if "veterinar" in osm_value or osm_value in {"veterinary", "animal_boarding"}:
             return "VET"
         if "veterinar" in name or "clinica veterinaria" in name or "ambulatorio" in name:
             return "VET"
-        if osm_key in {"amenity", "healthcare", "office"}:
+        if osm_key in {"amenity", "healthcare", "office"} and "veterinar" in (
+            osm_value + name
+        ):
             return "VET"
         return None
     if requested == "PARK":
@@ -302,13 +348,13 @@ async def _fetch_photon(
     radius_m: int,
 ) -> list[_PlaceHit]:
     queries = (
-        ("veterinario", "clinica veterinaria", "veterinary")
+        ("clinica veterinaria", "veterinario", "ambulatorio veterinario")
         if kind == "VET"
-        else ("parco cani", "area cani", "dog park", "sgambamento cani")
+        else ("area cani", "parco cani", "dog park", "sgambamento cani", "parco")
     )
-    max_distance = max(radius_m, 12_000)
+    max_distance = max(radius_m, 15_000)
     bbox = _bbox(lat, lng, max_distance)
-    async with httpx.AsyncClient(timeout=6.0) as client:
+    async with httpx.AsyncClient(timeout=8.0) as client:
         batches = await asyncio.gather(
             *[
                 _photon_query(
@@ -335,7 +381,7 @@ async def _fetch_photon(
 
 async def _enrich_vet_phones(items: list[_PlaceHit]) -> list[_PlaceHit]:
     """Attach phone numbers for vets via Nominatim extratags (ramo Photon)."""
-    vets = [item for item in items if item.kind == "VET" and item.osm_ref]
+    vets = [item for item in items if item.kind == "VET" and item.osm_ref and not item.phone]
     if not vets:
         return items
     refs = ",".join(item.osm_ref for item in vets[:8] if item.osm_ref)
@@ -388,7 +434,11 @@ async def _enrich_vet_phones(items: list[_PlaceHit]) -> list[_PlaceHit]:
 
 
 def _dedupe(items: list[_PlaceHit], *, limit: int = RESULT_LIMIT) -> list[_PlaceHit]:
-    items = sorted(items, key=lambda item: item.distance_m)
+    def sort_key(item: _PlaceHit) -> tuple[int, int]:
+        rank = int(getattr(item, "_park_rank", 0)) if item.kind == "PARK" else 0
+        return (rank, item.distance_m)
+
+    items = sorted(items, key=sort_key)
     seen: set[tuple[str, str, int, int]] = set()
     unique: list[_PlaceHit] = []
     for item in items:
@@ -405,6 +455,14 @@ def _dedupe(items: list[_PlaceHit], *, limit: int = RESULT_LIMIT) -> list[_Place
         if len(unique) >= limit:
             break
     return unique
+
+
+def _merge_balanced(parks: list[_PlaceHit], vets: list[_PlaceHit]) -> list[_PlaceHit]:
+    """Quota ampia a entrambe: i park non soffocano i vet e viceversa."""
+    parks_u = _dedupe(parks, limit=PER_KIND_LIMIT)
+    vets_u = _dedupe(vets, limit=PER_KIND_LIMIT)
+    merged = parks_u + vets_u
+    return sorted(merged, key=lambda item: item.distance_m)
 
 
 async def _search_photon(
@@ -429,13 +487,22 @@ async def _search_photon(
             return []
 
     batches = await asyncio.gather(*(one(current, radius_m) for current in kinds))
-    unique = _dedupe([item for batch in batches for item in batch])
+    if kind is None:
+        unique = _merge_balanced(
+            [item for item in batches[0]],
+            [item for item in batches[1]],
+        )
+    else:
+        unique = _dedupe([item for batch in batches for item in batch])
 
     # Expand once if the first pass is empty (coarse GPS / sparse OSM).
     if not unique and not provider_errors:
         wide = max(radius_m * 2, 20_000)
         batches = await asyncio.gather(*(one(current, wide) for current in kinds))
-        unique = _dedupe([item for batch in batches for item in batch])
+        if kind is None:
+            unique = _merge_balanced(batches[0], batches[1])
+        else:
+            unique = _dedupe([item for batch in batches for item in batch])
 
     if not unique and provider_errors:
         raise ApiError(
@@ -451,27 +518,60 @@ async def _search_photon(
     )
 
 
+async def _overpass_for_kind(
+    *,
+    lat: float,
+    lng: float,
+    kind: Kind,
+    radius_m: int,
+) -> list[_PlaceHit]:
+    items = await _fetch_overpass(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+    if items:
+        return items
+    wide = max(radius_m * 2, 20_000)
+    return await _fetch_overpass(lat=lat, lng=lng, kind=kind, radius_m=wide)
+
+
 async def search_nearby(
     *,
     lat: float,
     lng: float,
     kind: Kind | None = None,
-    radius_m: int = 5000,
+    radius_m: int = DEFAULT_RADIUS_M,
 ) -> NearbyPlacesResponse:
+    overpass_ok = False
     try:
-        items = _dedupe(
-            await _fetch_overpass(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
-        )
-        if not items:
-            # Expand once (zone con OSM rado): stessa sorgente, raggio doppio.
-            wide = max(radius_m * 2, 20_000)
-            items = _dedupe(
-                await _fetch_overpass(lat=lat, lng=lng, kind=kind, radius_m=wide)
+        if kind is None:
+            parks, vets = await asyncio.gather(
+                _overpass_for_kind(lat=lat, lng=lng, kind="PARK", radius_m=radius_m),
+                _overpass_for_kind(lat=lat, lng=lng, kind="VET", radius_m=radius_m),
             )
-        return NearbyPlacesResponse(
-            items=[item.to_out() for item in items],
-            location_label=None,
+            overpass_ok = True
+            unique = _merge_balanced(parks, vets)
+        else:
+            items = await _overpass_for_kind(
+                lat=lat, lng=lng, kind=kind, radius_m=radius_m
+            )
+            overpass_ok = True
+            unique = _dedupe(items, limit=RESULT_LIMIT)
+
+        if unique:
+            return NearbyPlacesResponse(
+                items=[item.to_out() for item in unique],
+                location_label=None,
+            )
+        logger.info(
+            "Overpass nearby empty (lat=%s lng=%s kind=%s) → Photon",
+            lat,
+            lng,
+            kind,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Overpass nearby failed, fallback to Photon: %s", exc)
-    return await _search_photon(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+        overpass_ok = False
+
+    # Vuoto o errore Overpass → Photon (prima il vuoto non faceva fallback).
+    photon = await _search_photon(lat=lat, lng=lng, kind=kind, radius_m=radius_m)
+    if photon.items or not overpass_ok:
+        return photon
+    return photon

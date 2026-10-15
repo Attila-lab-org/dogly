@@ -70,10 +70,17 @@ export function NearbyPlacesSection() {
   }, [locationTick]);
 
   const placesQuery = useQuery({
-    queryKey: ['nearby-places', coords?.lat, coords?.lng],
-    queryFn: () => fetchNearbyPlaces({ lat: coords!.lat, lng: coords!.lng }),
+    queryKey: ['nearby-places', coords?.lat, coords?.lng, placeFilter],
+    queryFn: () =>
+      fetchNearbyPlaces({
+        lat: coords!.lat,
+        lng: coords!.lng,
+        // Filtro server-side: così "Parchi" non è un sottoinsieme di 12 misti.
+        kind: placeFilter === 'ALL' ? undefined : placeFilter,
+        radius_m: 12_000,
+      }),
     enabled: Boolean(coords),
-    retry: 0,
+    retry: 1,
   });
 
   useEffect(() => {
@@ -81,20 +88,13 @@ export function NearbyPlacesSection() {
       setPlacesTimedOut(false);
       return;
     }
-    const timer = setTimeout(() => setPlacesTimedOut(true), 8_000);
+    const timer = setTimeout(() => setPlacesTimedOut(true), 15_000);
     return () => clearTimeout(timer);
   }, [coords, placesQuery.isFetching]);
 
-  const places = useMemo(
+  const filteredPlaces = useMemo(
     () => placesQuery.data?.items ?? [],
     [placesQuery.data],
-  );
-  const filteredPlaces = useMemo(
-    () =>
-      placeFilter === 'ALL'
-        ? places
-        : places.filter((place) => place.kind === placeFilter),
-    [places, placeFilter],
   );
 
   const openMaps = (query: string) => {
