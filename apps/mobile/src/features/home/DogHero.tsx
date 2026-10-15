@@ -12,11 +12,12 @@ import {
   View,
   type ImageSourcePropType,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useReducedMotion } from 'react-native-reanimated';
-import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
 import { useSession } from '../auth/SessionProvider';
 import { isApiConfigured } from '../auth/env';
 import { isPersistedId } from '../../lib/persistedId';
@@ -47,6 +48,14 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DOG_PHOTO: ImageSourcePropType = require('../../../assets/images/rocky-avatar.png');
+
+/** Anelli stile Instagram: ruotano a ogni cambio consiglio per invitare il tap. */
+const STORY_RINGS: ReadonlyArray<readonly [string, string, string, string]> = [
+  ['#F58529', '#DD2A7B', '#8134AF', '#515BD4'],
+  ['#22D3EE', '#2DAAAB', '#0050D8', '#7C3AED'],
+  ['#FBBF24', '#F97316', '#EF4444', '#EC4899'],
+  ['#34D399', '#14B8A6', '#0EA5E9', '#6366F1'],
+];
 
 interface ApiWeatherCurrent {
   temperature_c: number;
@@ -340,12 +349,8 @@ export function DogHero({
     setTapLine(randomAffectionateLine());
   };
 
-  const openTipOrAdvance = () => {
-    if (tip?.route) {
-      router.push(tip.route as never);
-      return;
-    }
-    advanceTip();
+  const openAsk = () => {
+    router.push('/ask' as never);
   };
 
   const onPhotoLongPress = () => {
@@ -361,6 +366,7 @@ export function DogHero({
   const photoSource = photoUri
     ? ({ uri: photoUri } as const)
     : DEFAULT_DOG_PHOTO;
+  const ringColors = STORY_RINGS[tipIndex % STORY_RINGS.length];
 
   const tempText =
     weather != null ? `${Math.round(weather.temperatureC)}°` : '—';
@@ -376,9 +382,22 @@ export function DogHero({
           onPress={advanceTip}
           onLongPress={onPhotoLongPress}
           delayLongPress={450}
-          style={styles.photoWrap}
+          style={styles.photoHit}
         >
-          <Image source={photoSource} style={styles.photo} resizeMode="cover" />
+          <LinearGradient
+            colors={[...ringColors]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.photoRing}
+          >
+            <View style={styles.photoInner}>
+              <Image
+                source={photoSource}
+                style={styles.photo}
+                resizeMode="cover"
+              />
+            </View>
+          </LinearGradient>
         </Pressable>
 
         <View style={styles.copy}>
@@ -386,7 +405,7 @@ export function DogHero({
             <Ionicons
               name={dayIcon(dayPart)}
               size={14}
-              color="#F5C518"
+              color={colors.iconHighlight}
             />
             <Text style={styles.eyebrow}>Oggi per {dogName}</Text>
           </View>
@@ -404,19 +423,19 @@ export function DogHero({
       <View style={styles.metrics}>
         <Metric
           icon="thermometer-outline"
-          iconColor="#7DD3FC"
+          iconColor={colors.primaryBright}
           value={tempText}
           label="Temperatura"
         />
         <Metric
           icon="water-outline"
-          iconColor="#E2E8F0"
+          iconColor={colors.primary}
           value={humidityText}
           label="Umidità"
         />
         <Metric
           icon="leaf-outline"
-          iconColor="#4ADE80"
+          iconColor={colors.accent}
           value={airText}
           label="Qualità aria"
         />
@@ -424,18 +443,14 @@ export function DogHero({
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={
-          tip.route
-            ? `Apri consiglio di DOGly: ${tip.adviceLine ?? tip.dogLine}`
-            : 'Mostra il prossimo consiglio di DOGly'
-        }
-        onPress={openTipOrAdvance}
+        accessibilityLabel={`Parla con DOGly di ${dogName}`}
+        onPress={openAsk}
         style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
       >
         <View style={styles.ctaPaw}>
           <Ionicons name="paw" size={14} color="#FFFFFF" />
         </View>
-        <Text style={styles.ctaText}>Consiglio di DOGly</Text>
+        <Text style={styles.ctaText}>Parla con DOGly</Text>
         <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
       </Pressable>
     </View>
@@ -466,22 +481,39 @@ function Metric({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#0E1726',
-    borderRadius: 28,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   topRow: {
     flexDirection: 'row',
     gap: spacing.md,
     alignItems: 'flex-start',
   },
-  photoWrap: {
-    width: 118,
-    height: 138,
-    borderRadius: 22,
+  photoHit: {
+    width: 122,
+    height: 142,
+  },
+  photoRing: {
+    width: 122,
+    height: 142,
+    borderRadius: 26,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 23,
     overflow: 'hidden',
-    backgroundColor: '#1A2740',
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   photo: {
     width: '100%',
@@ -499,18 +531,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    color: 'rgba(255,255,255,0.92)',
+    color: colors.textSecondary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
   headline: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     lineHeight: 26,
     fontWeight: typography.weight.bold,
   },
   support: {
-    color: 'rgba(255,255,255,0.78)',
+    color: colors.textSecondary,
     fontSize: typography.size.sm,
     lineHeight: 20,
   },
@@ -519,10 +551,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: 2,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
   },
   metric: {
     flex: 1,
     gap: 2,
+    paddingHorizontal: spacing.xs,
   },
   metricTop: {
     flexDirection: 'row',
@@ -530,19 +566,19 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   metricValue: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
   metricLabel: {
-    color: 'rgba(255,255,255,0.55)',
+    color: colors.textMuted,
     fontSize: 11,
     marginLeft: 21,
   },
   cta: {
     minHeight: 52,
     borderRadius: 999,
-    backgroundColor: '#0F3D42',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
@@ -553,13 +589,13 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#1FA8A0',
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaText: {
     flex: 1,
-    color: '#FFFFFF',
+    color: colors.textOnPrimary,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },

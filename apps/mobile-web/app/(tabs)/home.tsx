@@ -14,7 +14,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
-import { HomeConversation } from '@/features/home/HomeConversation';
 import { DogHero } from '@/features/home/DogHero';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useHomeData } from '@/features/home/useHomeData';
@@ -146,15 +145,11 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          <Animated.View key={dog.id} entering={sceneEnter(90)}>
-            <HomeConversation dogId={dog.id} dogName={dog.name} offline={network.offline} />
-          </Animated.View>
-
-          <Animated.View entering={sceneEnter(180)}>
+          <Animated.View entering={sceneEnter(90)}>
             <DogCareOverview dogId={dog.id} dogName={dog.name} compact />
           </Animated.View>
 
-          <Animated.View entering={sceneEnter(270)}>
+          <Animated.View entering={sceneEnter(180)}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Momenti recenti</Text>
