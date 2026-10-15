@@ -19,20 +19,40 @@ function PlayIcon() {
 export default function StoreButtons() {
   return (
     <div className="store-buttons">
-      <a className="store-button" href={APP_STORE_URL}>
-        <AppleIcon />
-        <span>
-          <small>Scarica su</small>
-          App Store
+      {APP_STORE_URL ? (
+        <a className="store-button" href={APP_STORE_URL} target="_blank" rel="noopener noreferrer">
+          <AppleIcon />
+          <span>
+            <small>Scarica su</small>
+            App Store
+          </span>
+        </a>
+      ) : (
+        <span className="store-button" aria-disabled="true" title="Link App Store non ancora configurato">
+          <AppleIcon />
+          <span>
+            <small>Disponibile presto</small>
+            App Store
+          </span>
         </span>
-      </a>
-      <a className="store-button" href={PLAY_STORE_URL}>
-        <PlayIcon />
-        <span>
-          <small>Disponibile su</small>
-          Google Play
+      )}
+      {PLAY_STORE_URL ? (
+        <a className="store-button" href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+          <PlayIcon />
+          <span>
+            <small>Disponibile su</small>
+            Google Play
+          </span>
+        </a>
+      ) : (
+        <span className="store-button" aria-disabled="true" title="Link Google Play non ancora configurato">
+          <PlayIcon />
+          <span>
+            <small>Disponibile presto</small>
+            Google Play
+          </span>
         </span>
-      </a>
+      )}
     </div>
   );
 }
