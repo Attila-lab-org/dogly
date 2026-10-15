@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -56,6 +55,7 @@ export default function DailyRoutineScreen() {
   const [duration, setDuration] = useState('30');
   const [kind, setKind] = useState<DailyActivityKind>('WALK');
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const query = useQuery({
     queryKey: ['daily-activities', dogId, selectedDay],
@@ -80,6 +80,7 @@ export default function DailyRoutineScreen() {
       });
     },
     onSuccess: async () => {
+      setPendingDelete(null);
       setComposerOpen(false);
       setTitle('');
       setError(null);
@@ -177,14 +178,7 @@ export default function DailyRoutineScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Elimina ${item.title}`}
                     disabled={removeMutation.isPending}
-                    onPress={() => Alert.alert(
-                      'Rimuovere questa attività?',
-                      `${item.title} verrà tolta dalla routine di ${dog.name}.`,
-                      [
-                        { text: 'Annulla', style: 'cancel' },
-                        { text: 'Rimuovi', style: 'destructive', onPress: () => removeMutation.mutate(item.id) },
-                      ],
-                    )}
+                    onPress={() => setPendingDelete({ id: item.id, title: item.title })}
                     hitSlop={10}
                   >
                     <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
@@ -263,6 +257,16 @@ export default function DailyRoutineScreen() {
               onPress={() => createMutation.mutate()}
             />
             <Button title="Annulla" variant="outline" onPress={() => setComposerOpen(false)} />
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={pendingDelete !== null} animationType="fade" transparent onRequestClose={() => { if (!removeMutation.isPending) setPendingDelete(null); }}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.modalTitle}>Rimuovere attività?</Text>
+            <Text style={styles.confirmText}>{pendingDelete?.title} verrà tolta dalla giornata.</Text>
+            <Button title="Rimuovi attività" loading={removeMutation.isPending} onPress={() => { if (pendingDelete) removeMutation.mutate(pendingDelete.id); }} />
+            <Button title="Annulla" variant="outline" disabled={removeMutation.isPending} onPress={() => setPendingDelete(null)} />
           </View>
         </View>
       </Modal>
@@ -350,6 +354,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
   },
+  confirmCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.lg, gap: spacing.md, width: '90%', maxWidth: 420, alignSelf: 'center' },
+  confirmText: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
   modalTitle: { fontSize: typography.size.lg, fontWeight: '700', color: colors.text },
   kindRow: { gap: 8 },
   kindChip: {
