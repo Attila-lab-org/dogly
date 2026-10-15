@@ -24,20 +24,29 @@ export function newGameRequestId(): string {
   return `crid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export type GameId = 'squirrel' | 'agility' | 'sniff';
+
+export const GAME_LABELS: Record<GameId, string> = {
+  squirrel: 'Scoiattolo!',
+  agility: 'Agility Oreo',
+  sniff: 'Fiuto da campione',
+};
+
 export async function submitGameScore(
   dogId: string,
   score: number,
+  game: GameId = 'squirrel',
 ): Promise<void> {
   await api.post('/v1/games/scores', {
     dog_id: dogId,
-    game: 'squirrel',
+    game,
     score,
     client_request_id: newGameRequestId(),
   });
 }
 
 export async function fetchGameLeaderboard(
-  game = 'squirrel',
+  game: GameId = 'squirrel',
 ): Promise<GameLeaderboard> {
   return api.get<GameLeaderboard>(`/v1/games/leaderboard?game=${game}`);
 }

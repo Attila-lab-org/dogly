@@ -1149,7 +1149,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 60,
+              "maximum": 100,
               "minimum": 1,
               "default": 12,
               "title": "Limit"
@@ -1792,7 +1792,11 @@
             "in": "query",
             "required": false,
             "schema": {
-              "const": "squirrel",
+              "enum": [
+                "squirrel",
+                "agility",
+                "sniff"
+              ],
               "type": "string",
               "default": "squirrel",
               "title": "Game"
@@ -10508,7 +10512,11 @@
           },
           "game": {
             "type": "string",
-            "const": "squirrel",
+            "enum": [
+              "squirrel",
+              "agility",
+              "sniff"
+            ],
             "title": "Game",
             "default": "squirrel"
           },

@@ -2,7 +2,7 @@
  * Classifica settimanale "Giochi del quartiere" (azzera il lunedì).
  * Mio cane evidenziato; empty state onesto se nessun punteggio.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -13,7 +13,12 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isApiConfigured } from '@/features/auth/env';
 import { isPersistedId } from '@/lib/persistedId';
-import { fetchGameLeaderboard, type LeaderboardEntry } from '@/features/games/api';
+import {
+  GAME_LABELS,
+  fetchGameLeaderboard,
+  type GameId,
+  type LeaderboardEntry,
+} from '@/features/games/api';
 import { SquirrelArt } from '@/features/games/squirrelArt';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 
@@ -47,15 +52,18 @@ function Row({ entry }: { entry: LeaderboardEntry }) {
   );
 }
 
+const GAME_TABS: GameId[] = ['squirrel', 'agility', 'sniff'];
+
 export default function LeaderboardScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
+  const [game, setGame] = useState<GameId>('squirrel');
   const enabled =
     Boolean(userId) && isApiConfigured() && !usingMockGate && isPersistedId(dog.id);
   const leaderboard = useQuery({
-    queryKey: ['games-leaderboard', 'squirrel'],
-    queryFn: () => fetchGameLeaderboard(),
+    queryKey: ['games-leaderboard', game],
+    queryFn: () => fetchGameLeaderboard(game),
     enabled,
     staleTime: 60_000,
   });
@@ -68,9 +76,27 @@ export default function LeaderboardScreen() {
     <ScreenContainer scroll>
       <StackScreenHeader title="Classifica della settimana" />
       <Text style={styles.intro}>
-        I migliori acchiappa-scoiattoli del quartiere. La classifica si
-        azzera lunedì.
+        {`I campioni del quartiere a ${GAME_LABELS[game]}. La classifica si azzera lunedì.`}
       </Text>
+
+      <View style={styles.tabs}>
+        {GAME_TABS.map((tab) => {
+          const active = game === tab;
+          return (
+            <Pressable
+              key={tab}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() => setGame(tab)}
+              style={[styles.tab, active && styles.tabActive]}
+            >
+              <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                {GAME_LABELS[tab]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {!enabled ? (
         <View style={styles.emptyCard}>
@@ -94,12 +120,12 @@ export default function LeaderboardScreen() {
           <SquirrelArt size={84} />
           <Text style={styles.emptyTitle}>Sii il primo della settimana!</Text>
           <Text style={styles.emptyText}>
-            Nessun punteggio ancora: una partita a Scoiattolo! e siete in vetta.
+            {`Nessun punteggio ancora: una partita a ${GAME_LABELS[game]} e siete in vetta.`}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Gioca a Scoiattolo!"
-            onPress={() => router.push('/games/squirrel' as never)}
+            accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}
+            onPress={() => router.push(`/games/${game}` as never)}
             style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
           >
             <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
@@ -124,6 +150,24 @@ export default function LeaderboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  tab: {
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surfaceMuted,
+  },
+  tabActive: { backgroundColor: colors.accent },
+  tabText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
+  tabTextActive: { color: colors.textOnPrimary },
   intro: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,

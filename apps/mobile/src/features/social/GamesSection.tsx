@@ -3,7 +3,7 @@
  * anteprima classifica settimanale (prime 3 posizioni) e CTA per giocare.
  * Senza sessione la classifica resta onestamente vuota.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +12,12 @@ import { CuteIcon } from '../../components/CuteIcon';
 import { useSession } from '../auth/SessionProvider';
 import { isApiConfigured } from '../auth/env';
 import { isPersistedId } from '../../lib/persistedId';
-import { fetchGameLeaderboard, type LeaderboardEntry } from '../games/api';
+import {
+  GAME_LABELS,
+  fetchGameLeaderboard,
+  type GameId,
+  type LeaderboardEntry,
+} from '../games/api';
 import { SquirrelArt } from '../games/squirrelArt';
 import { useDogProfile } from '../core/useDogProfile';
 
@@ -33,15 +38,18 @@ function LeaderboardAvatar({ entry }: { entry: LeaderboardEntry }) {
   );
 }
 
+const GAME_TABS: GameId[] = ['squirrel', 'agility', 'sniff'];
+
 export function GamesSection() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
+  const [game, setGame] = useState<GameId>('squirrel');
   const enabled =
     Boolean(userId) && isApiConfigured() && !usingMockGate && isPersistedId(dog.id);
   const leaderboard = useQuery({
-    queryKey: ['games-leaderboard', 'squirrel'],
-    queryFn: () => fetchGameLeaderboard(),
+    queryKey: ['games-leaderboard', game],
+    queryFn: () => fetchGameLeaderboard(game),
     enabled,
     staleTime: 60_000,
   });
@@ -62,17 +70,36 @@ export function GamesSection() {
       </View>
 
       <View style={styles.card}>
+        <View style={styles.tabs}>
+          {GAME_TABS.map((tab) => {
+            const active = game === tab;
+            return (
+              <Pressable
+                key={tab}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => setGame(tab)}
+                style={[styles.tab, active && styles.tabActive]}
+              >
+                <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                  {GAME_LABELS[tab]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Gioca a Scoiattolo!"
-          onPress={() => router.push('/games/squirrel' as never)}
+          accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}
+          onPress={() => router.push(`/games/${game}` as never)}
           style={({ pressed }) => [styles.gameRow, pressed && styles.pressed]}
         >
           <SquirrelArt size={64} />
           <View style={styles.gameCopy}>
-            <Text style={styles.gameTitle}>Scoiattolo!</Text>
+            <Text style={styles.gameTitle}>{GAME_LABELS[game]}</Text>
             <Text style={styles.gameText}>
-              30 secondi a caccia di scoiattoli con {dog.name}.
+              Una partita veloce insieme a {dog.name}.
             </Text>
           </View>
           <View style={styles.playChip}>
@@ -124,6 +151,20 @@ export function GamesSection() {
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  tabs: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  tab: {
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surfaceMuted,
+  },
+  tabActive: { backgroundColor: colors.accent },
+  tabText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
+  tabTextActive: { color: colors.textOnPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

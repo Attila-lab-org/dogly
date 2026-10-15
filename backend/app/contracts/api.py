@@ -706,9 +706,12 @@ class DiaryPage(CursorPage):
 # ---------------------------------------------------------------------------
 
 
+GameId = Literal["squirrel", "agility", "sniff"]
+
+
 class GameScoreCreate(BaseModel):
     dog_id: str
-    game: Literal["squirrel"] = "squirrel"
+    game: GameId = "squirrel"
     score: int = Field(ge=0, le=500)
     client_request_id: str = Field(min_length=8, max_length=128)
 

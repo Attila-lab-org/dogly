@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from fastapi import APIRouter, Query
 
 from app.api.deps import IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
+    GameId,
     GameLeaderboardResponse,
     GameScoreCreate,
     GameScoreOut,
@@ -70,7 +69,7 @@ async def submit_game_score(
 async def get_game_leaderboard(
     state: StateDep,
     user_id: UserIdDep,
-    game: Literal["squirrel"] = Query(default="squirrel"),
+    game: GameId = Query(default="squirrel"),
 ) -> GameLeaderboardResponse:
     week_start = games_domain.current_week_start()
     if state.engine is not None:
