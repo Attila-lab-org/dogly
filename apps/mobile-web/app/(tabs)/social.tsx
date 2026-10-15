@@ -10,6 +10,7 @@ import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   fetchAlbumPhotos,
+  fetchDogPhotos,
   getOrCreateMomentsAlbum,
 } from '@/features/photos/api';
 import { StoryRail } from '@/features/social/StoryRail';
@@ -24,10 +25,18 @@ export default function SocialScreen() {
   const momentsQuery = useQuery({
     queryKey: ['social-moments', dog.id],
     queryFn: async () => {
-      const album = await getOrCreateMomentsAlbum(dog.id);
-      return fetchAlbumPhotos(album.id);
+      try {
+        const album = await getOrCreateMomentsAlbum(dog.id);
+        const items = await fetchAlbumPhotos(album.id);
+        if (items.length > 0) return items;
+      } catch {
+        /* fallback sotto */
+      }
+      // Se Momenti è vuoto/non raggiungibile, usa le foto cane già in album.
+      return fetchDogPhotos(dog.id, 40);
     },
     enabled: Boolean(dog.id),
+    retry: 1,
   });
 
   const photos = useMemo(() => momentsQuery.data ?? [], [momentsQuery.data]);
@@ -53,8 +62,9 @@ export default function SocialScreen() {
 
   const openStory = useCallback(
     (startIndex: number) => {
+      if (!dog.id) return;
       router.push({
-        pathname: '/social/story',
+        pathname: '/story/viewer',
         params: {
           dogId: dog.id,
           startIndex: String(startIndex),

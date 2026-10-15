@@ -1,5 +1,8 @@
 /**
  * Rail storie stile Instagram alimentato dai Momenti del cane.
+ *
+ * Su web il file picker deve partire nello stesso gesto del tap
+ * (pickWebImage diretto, niente Alert).
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -7,7 +10,6 @@ import {
   Alert,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,13 +17,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { colors, spacing, typography } from '@/theme/tokens';
+import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
   getOrCreateMomentsAlbum,
   uploadAlbumPhoto,
 } from '@/features/photos/api';
 import { pickAlbumPhoto, takeStoryPhoto } from '@/features/photos/share';
+import { pickWebImage } from '@/features/photos/webPickImage';
 import type { AlbumPhoto } from '@/features/photos/types';
 
 const RING = 78;
@@ -50,11 +53,14 @@ export function StoryRail({
 }: Props) {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(false);
   const hasStories = photos.length > 0;
+  const isBusy = busy || uploading;
 
   const uploadUri = useCallback(
     async (uri: string) => {
       setBusy(true);
+      setChooserOpen(false);
       try {
         const album = await getOrCreateMomentsAlbum(dogId);
         await uploadAlbumPhoto(album.id, uri, {
@@ -62,6 +68,7 @@ export function StoryRail({
           visibility: 'PRIVATE',
         });
         await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['social-moments', dogId] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dogId] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
@@ -79,91 +86,177 @@ export function StoryRail({
     [dogId, dogName, onUploaded, queryClient],
   );
 
-  const addStory = useCallback(() => {
-    if (busy || uploading) return;
-    const runCamera = async () => {
-      const uri = await takeStoryPhoto();
-      if (uri) await uploadUri(uri);
-    };
-    const runGallery = async () => {
-      const uri = await pickAlbumPhoto();
-      if (uri) await uploadUri(uri);
-    };
+  /** Web: pickWebImage nello stesso stack del tap. Native: share helpers. */
+  const runCamera = useCallback(() => {
+    if (isBusy) return;
     if (Platform.OS === 'web') {
-      Alert.alert('Aggiungi alla storia', 'Scegli come aggiungere un momento.', [
-        { text: 'Fotocamera', onPress: () => void runCamera() },
-        { text: 'Galleria', onPress: () => void runGallery() },
-        { text: 'Annulla', style: 'cancel' },
-      ]);
+      void pickWebImage({ capture: true }).then((picked) => {
+        if (picked?.uri) void uploadUri(picked.uri);
+      });
+      return;
+    }
+    void takeStoryPhoto().then((uri) => {
+      if (uri) void uploadUri(uri);
+    });
+  }, [isBusy, uploadUri]);
+
+  const runGallery = useCallback(() => {
+    if (isBusy) return;
+    if (Platform.OS === 'web') {
+      void pickWebImage().then((picked) => {
+        if (picked?.uri) void uploadUri(picked.uri);
+      });
+      return;
+    }
+    void pickAlbumPhoto().then((uri) => {
+      if (uri) void uploadUri(uri);
+    });
+  }, [isBusy, uploadUri]);
+
+  const openChooser = useCallback(() => {
+    if (isBusy) return;
+    if (Platform.OS === 'web') {
+      setChooserOpen((open) => !open);
       return;
     }
     Alert.alert('Aggiungi alla storia', undefined, [
-      { text: 'Fotocamera', onPress: () => void runCamera() },
-      { text: 'Galleria', onPress: () => void runGallery() },
+      { text: 'Fotocamera', onPress: runCamera },
+      { text: 'Galleria', onPress: runGallery },
       { text: 'Annulla', style: 'cancel' },
     ]);
-  }, [busy, uploadUri, uploading]);
+  }, [isBusy, runCamera, runGallery]);
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-    >
-      <View style={styles.item}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            hasStories
-              ? `Apri le storie di ${dogName}`
-              : `Aggiungi la prima storia di ${dogName}`
-          }
-          onPress={() => (hasStories ? onOpenStory(0) : addStory())}
-          style={({ pressed }) => [styles.ringHit, pressed && styles.pressed]}
-        >
-          {hasStories && hasUnseen ? (
-            <LinearGradient
-              colors={['#F58529', '#DD2A7B', '#8134AF', '#515BD4']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.ringGradient}
+    <View style={styles.wrap}>
+      <View style={styles.row}>
+        <View style={styles.item}>
+          <View style={styles.ringHit}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                hasStories
+                  ? `Apri le storie di ${dogName}`
+                  : `Aggiungi la prima storia di ${dogName}`
+              }
+              onPress={() => {
+                if (hasStories) {
+                  setChooserOpen(false);
+                  onOpenStory(0);
+                  return;
+                }
+                if (Platform.OS === 'web') {
+                  runGallery();
+                  return;
+                }
+                openChooser();
+              }}
+              style={({ pressed }) => [styles.ringPress, pressed && styles.pressed]}
             >
-              <View style={styles.ringInner}>
-                <DogAvatar photoUri={dogPhotoUri} dogName={dogName} size={AVATAR} />
-              </View>
-            </LinearGradient>
-          ) : (
-            <View style={[styles.ringFlat, hasStories && styles.ringSeen]}>
-              <DogAvatar photoUri={dogPhotoUri} dogName={dogName} size={AVATAR} />
-            </View>
-          )}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Aggiungi una storia"
-            onPress={addStory}
-            disabled={busy || uploading}
-            style={styles.badgePlus}
-          >
-            {busy || uploading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Ionicons name="add" size={16} color="#FFFFFF" />
-            )}
-          </Pressable>
-        </Pressable>
-        <Text style={styles.label} numberOfLines={1}>
-          La tua storia
-        </Text>
+              {hasStories && hasUnseen ? (
+                <LinearGradient
+                  colors={['#F58529', '#DD2A7B', '#8134AF', '#515BD4']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.ringGradient}
+                  pointerEvents="none"
+                >
+                  <View style={styles.ringInner} pointerEvents="none">
+                    <DogAvatar
+                      photoUri={dogPhotoUri}
+                      dogName={dogName}
+                      size={AVATAR}
+                    />
+                  </View>
+                </LinearGradient>
+              ) : (
+                <View
+                  style={[styles.ringFlat, hasStories && styles.ringSeen]}
+                  pointerEvents="none"
+                >
+                  <DogAvatar
+                    photoUri={dogPhotoUri}
+                    dogName={dogName}
+                    size={AVATAR}
+                  />
+                </View>
+              )}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Aggiungi una storia"
+              onPress={openChooser}
+              disabled={isBusy}
+              hitSlop={10}
+              style={styles.badgePlus}
+            >
+              {isBusy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="add" size={16} color="#FFFFFF" />
+              )}
+            </Pressable>
+          </View>
+          <Text style={styles.label} numberOfLines={1}>
+            La tua storia
+          </Text>
+        </View>
       </View>
-    </ScrollView>
+
+      {chooserOpen ? (
+        <View style={styles.chooser}>
+          <Text style={styles.chooserTitle}>Aggiungi alla storia</Text>
+          <View style={styles.chooserRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scatta con la fotocamera"
+              onPress={runCamera}
+              disabled={isBusy}
+              style={({ pressed }) => [
+                styles.chooserBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="camera-outline" size={18} color={colors.primary} />
+              <Text style={styles.chooserBtnText}>Fotocamera</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scegli dalla galleria"
+              onPress={runGallery}
+              disabled={isBusy}
+              style={({ pressed }) => [
+                styles.chooserBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="images-outline" size={18} color={colors.primary} />
+              <Text style={styles.chooserBtnText}>Galleria</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annulla"
+              onPress={() => setChooserOpen(false)}
+              style={({ pressed }) => [
+                styles.chooserCancel,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.chooserCancelText}>Annulla</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: { gap: spacing.sm },
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    gap: spacing.md,
+    flexDirection: 'row',
     alignItems: 'flex-start',
   },
   item: {
@@ -172,6 +265,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   ringHit: {
+    width: RING,
+    height: RING,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringPress: {
     width: RING,
     height: RING,
     alignItems: 'center',
@@ -209,9 +308,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    zIndex: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.primary,
     borderWidth: 2,
     borderColor: colors.background,
@@ -224,6 +324,49 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
     textAlign: 'center',
     maxWidth: RING + 8,
+  },
+  chooser: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  chooserTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  chooserRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  chooserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: colors.primarySoft,
+  },
+  chooserBtnText: {
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  chooserCancel: {
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+  },
+  chooserCancelText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
   },
   pressed: { opacity: 0.88 },
 });

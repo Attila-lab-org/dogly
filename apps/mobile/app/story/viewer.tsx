@@ -1,6 +1,6 @@
 /**
  * Story viewer Instagram-style: progress, tap L/R, hold pause, auto-advance.
- * Consumo storytelling (Momenti) — non il photo viewer album.
+ * Route: /story/viewer (fuori da /social per evitare conflitto con tab Social).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -21,6 +21,7 @@ import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   fetchAlbumPhotos,
+  fetchDogPhotos,
   getOrCreateMomentsAlbum,
 } from '@/features/photos/api';
 import { setLastSeenPhotoId } from '@/features/social/storySeen';
@@ -49,10 +50,17 @@ export default function StoryViewerScreen() {
   const momentsQuery = useQuery({
     queryKey: ['social-moments', dogId],
     queryFn: async () => {
-      const album = await getOrCreateMomentsAlbum(dogId);
-      return fetchAlbumPhotos(album.id);
+      try {
+        const album = await getOrCreateMomentsAlbum(dogId);
+        const items = await fetchAlbumPhotos(album.id);
+        if (items.length > 0) return items;
+      } catch {
+        /* fallback sotto */
+      }
+      return fetchDogPhotos(dogId, 40);
     },
     enabled: Boolean(dogId),
+    retry: 1,
   });
 
   const photos = useMemo(() => momentsQuery.data ?? [], [momentsQuery.data]);
@@ -87,7 +95,7 @@ export default function StoryViewerScreen() {
 
   const close = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/social' as never);
+    else router.replace('/social' as never);
   }, [router]);
 
   const goNext = useCallback(() => {
@@ -180,8 +188,8 @@ export default function StoryViewerScreen() {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
       <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      <View style={[styles.scrimTop, { height: insets.top + 72 }]} />
-      <View style={[styles.scrimBottom, { height: insets.bottom + 40 }]} />
+      <View style={[styles.scrimTop, { height: insets.top + 72 }]} pointerEvents="none" />
+      <View style={[styles.scrimBottom, { height: insets.bottom + 40 }]} pointerEvents="none" />
 
       <Pressable
         style={[StyleSheet.absoluteFill, styles.gestureLayer]}

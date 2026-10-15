@@ -34,7 +34,7 @@ Elenco corrente (percorsi relativi a `app/` o `src/` condivisi):
 - `app/(tabs)/diary.tsx`
 - `app/(tabs)/rocky.tsx`
 - `app/(tabs)/social.tsx`
-- `app/social/story.tsx`
+- `app/story/viewer.tsx`
 - `src/features/social/*`
 - `app/care/index.tsx`
 - `app/digestive/index.tsx`

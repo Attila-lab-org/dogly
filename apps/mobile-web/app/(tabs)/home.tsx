@@ -67,7 +67,7 @@ export default function HomeScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Apri Social"
-                onPress={() => router.push('/(tabs)/social' as never)}
+                onPress={() => router.push('/social' as never)}
                 hitSlop={12}
                 style={styles.headerIcon}
               >

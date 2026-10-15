@@ -135,6 +135,14 @@ function RootLayout() {
               }}
             >
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="story/viewer"
+                options={{
+                  presentation: 'fullScreenModal',
+                  animation: 'fade',
+                  contentStyle: { backgroundColor: '#000000' },
+                }}
+              />
               <Stack.Screen name="auth/callback" />
               <Stack.Screen name="connection-error" />
               <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />

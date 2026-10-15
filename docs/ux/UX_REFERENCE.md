@@ -54,7 +54,7 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 | Onboarding | `onboarding/dog` | Nome, meta, foto opzionale |
 | Home | `(tabs)/home` | Conversazione + accessi rapidi; shortcut a Social |
 | Social | `(tabs)/social` | Rail storie (Momenti) + luoghi utili sotto |
-| Story viewer | `social/story` | Fullscreen Instagram: progress, tap L/R, hold pause |
+| Story viewer | `story/viewer` | Fullscreen Instagram: progress, tap L/R, hold pause |
 | Diario | `(tabs)/diary`, `diary/event/[id]` | Behavior + digestione; accesso dall’icona Home |
 | Profilo | `(tabs)/rocky` (titolo dinamico) | Hub cane + album preview |
 | Edit profilo | `dogs/[dogId]/edit` | Modifica meta e avatar |
