@@ -359,8 +359,8 @@ export function DogHero({
 
   if (!tip) return null;
 
+  // Solo la voce del cane: senza consiglio sotto (più pulito, più forte).
   const headline = joyful ? JOYFUL_LINE : (tapLine ?? tip.dogLine);
-  const support = !joyful && !tapLine ? tip.adviceLine : undefined;
   const ringColors = STORY_RINGS[tipIndex % STORY_RINGS.length];
 
   const tempText =
@@ -409,11 +409,6 @@ export function DogHero({
           <Text style={styles.headline} numberOfLines={3}>
             {headline}
           </Text>
-          {support ? (
-            <Text style={styles.support} numberOfLines={3}>
-              {support}
-            </Text>
-          ) : null}
         </View>
       </View>
 
@@ -544,11 +539,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 26,
     fontWeight: typography.weight.bold,
-  },
-  support: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: 20,
   },
   metrics: {
     flexDirection: 'row',
