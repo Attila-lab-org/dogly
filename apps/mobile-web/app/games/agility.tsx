@@ -1,15 +1,16 @@
 /**
- * "Agility Oreo" — runner: il cane corre verso destra, gli ostacoli
- * arrivano da destra (muretto/birilli = salta; tunnel = NON saltare).
- * Tap (o spazio su web) = salto parabolico; collisione = fine buffa.
- * Oreo telecronista sopra il campo. Logica pura in
- * features/games/agilityLogic.ts (RNG iniettato, test dedicati).
+ * "Agility Oreo" — runner rifatto: mondo in parallasse a 3 strati che
+ * scorre (il cane sta fermo, è il mondo a muoversi), cane MascotBuddy con
+ * bob di corsa e salto squash&stretch (+ polvere all'atterraggio), ossi
+ * bonus in arcata, ostacoli con bandierine e tunnel semi-trasparente,
+ * near-miss "Per un pelo!", crash con rallenty. Telecronista MascotBuddy.
+ * Logica pura in features/games/agilityLogic.ts (RNG iniettato, test).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import Animated, {
   Easing,
   type SharedValue,
@@ -17,7 +18,6 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -26,7 +26,7 @@ import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { DogAvatar } from '@/features/core/components';
-import { BuddyMascot, type BuddyExpression } from '@/features/mascot/BuddyMascot';
+import { MascotBuddy, type BuddyExpression } from '@/features/mascot/MascotBuddy';
 import {
   AGILITY_COMBO_LINE,
   AGILITY_JUMP_LINES,
@@ -39,16 +39,22 @@ import {
   JUMP_HEIGHT_U,
   OBSTACLE_DIMS,
   agilityEndgameLine,
+  boneCollected,
+  bonusBoneX,
   buildAgilitySchedule,
+  buildBonusArcs,
   collides,
   isCleared,
   isCombo,
+  isNearMiss,
   jumpHeightAt,
   loadAgilityBest,
   obstacleX,
   pointsForClear,
   saveAgilityBest,
+  speedAt,
   type AgilityObstacle,
+  type BonusArc,
   type ObstacleKind,
 } from '@/features/games/agilityLogic';
 import { fetchGameLeaderboard, submitGameScore } from '@/features/games/api';
@@ -61,10 +67,46 @@ import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 type Phase = 'intro' | 'playing' | 'done';
 
 const TICK_MS = 50;
-const GROUND_Y = 26;
+const GROUND_Y = 30;
 const UNIT_H = 5.2;
+const CRASH_SLOWMO_MS = 320;
 
-/** Ostacoli da agility in SVG duotone. */
+const FAR_HILLS =
+  'M0 30 C120 10 240 38 380 24 C500 14 620 34 760 22 L760 90 L0 90 Z';
+const NEAR_HILLS =
+  'M0 48 C160 30 320 54 480 44 C600 36 700 50 760 44 L760 90 L0 90 Z';
+
+/** Strato di parallasse: scorre con fattore proprio, loop su 760u. */
+function ParallaxLayer({
+  worldX,
+  factor,
+  children,
+}: {
+  worldX: SharedValue<number>;
+  factor: number;
+  children: React.ReactNode;
+}) {
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: (worldX.value * factor) % 380 }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[styles.parallax, style]}>
+      {children}
+      <View style={styles.parallaxClone}>{children}</View>
+    </Animated.View>
+  );
+}
+
+function CloudPuff({ top, left, scale }: { top: number; left: number; scale: number }) {
+  return (
+    <View style={[styles.cloud, { top, left, transform: [{ scale }] }]} pointerEvents="none">
+      <View style={styles.cloudBump} />
+      <View style={styles.cloudBase} />
+    </View>
+  );
+}
+
+/** Ostacoli: muretto con bandierine, birilli arancio/bianchi, tunnel soft. */
 function ObstacleArt({ kind }: { kind: ObstacleKind }) {
   const spec = OBSTACLE_DIMS[kind];
   const w = spec.w * 8;
@@ -75,6 +117,7 @@ function ObstacleArt({ kind }: { kind: ObstacleKind }) {
         <Path
           d={`M4 ${h} V${h * 0.45} C4 ${h * 0.2} ${w * 0.2} 4 ${w / 2} 4 C${w * 0.8} 4 ${w - 4} ${h * 0.2} ${w - 4} ${h * 0.45} V${h} Z`}
           fill={colors.primarySoft}
+          fillOpacity={0.55}
           stroke={colors.text}
           strokeWidth={3}
         />
@@ -89,11 +132,18 @@ function ObstacleArt({ kind }: { kind: ObstacleKind }) {
     const cone = (x: number) => (
       <Path
         key={x}
-        d={`M${x} ${h} L${x + w * 0.14} ${h * 0.15} L${x + w * 0.28} ${h} Z`}
+        d={`M${x} ${h} L${x + w * 0.14} ${h * 0.12} L${x + w * 0.28} ${h} Z`}
         fill="#F5A623"
         stroke={colors.text}
         strokeWidth={2.4}
         strokeLinejoin="round"
+      />
+    );
+    const stripe = (x: number) => (
+      <Path
+        key={`s${x}`}
+        d={`M${x + w * 0.06} ${h * 0.62} l${w * 0.16} 0 l${w * 0.02} ${h * 0.16} l-${w * 0.2} 0 Z`}
+        fill="#FFFFFF"
       />
     );
     return (
@@ -101,64 +151,131 @@ function ObstacleArt({ kind }: { kind: ObstacleKind }) {
         {cone(2)}
         {cone(w * 0.36)}
         {cone(w * 0.7)}
+        {stripe(2)}
+        {stripe(w * 0.36)}
+        {stripe(w * 0.7)}
       </Svg>
     );
   }
   return (
-    <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <Rect x={2} y={h * 0.1} width={4} height={h} fill={colors.text} />
-      <Rect x={w - 6} y={h * 0.1} width={4} height={h} fill={colors.text} />
-      <Rect x={0} y={h * 0.25} width={w} height={7} rx={3} fill={colors.accent} />
-      <Rect x={0} y={h * 0.55} width={w} height={7} rx={3} fill={colors.textOnPrimary} stroke={colors.text} strokeWidth={2} />
+    <Svg width={w} height={h + 14} viewBox={`0 0 ${w} ${h + 14}`}>
+      <Rect x={2} y={14} width={4} height={h} fill={colors.text} />
+      <Rect x={w - 6} y={14} width={4} height={h} fill={colors.text} />
+      <Rect x={0} y={h * 0.3} width={w} height={7} rx={3} fill={colors.accent} />
+      <Rect x={0} y={h * 0.62} width={w} height={7} rx={3} fill={colors.textOnPrimary} stroke={colors.text} strokeWidth={2} />
+      {/* bandierine */}
+      <Path d={`M4 14 v-12 l10 4 Z`} fill="#FF8B74" stroke={colors.text} strokeWidth={1.6} />
+      <Path d={`M${w - 4} 14 v-12 l-10 4 Z`} fill="#F6C94C" stroke={colors.text} strokeWidth={1.6} />
     </Svg>
   );
 }
 
-/** Il cane che corre: avatar in cerchio con bob di corsa; salta al tap. */
+/** Ossicino bonus SVG. */
+function BonusBoneArt() {
+  return (
+    <Svg width={26} height={18} viewBox="0 0 34 22">
+      <Path
+        d="M7 3 C4 0 0 3 2 7 C0 10 4 13 7 10 L25 10 C28 13 32 10 30 7 C32 3 28 0 25 3 Z"
+        fill="#FFF6EC"
+        stroke={colors.text}
+        strokeWidth={2.2}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Polvere all'atterraggio. */
+function LandingDust({ tick }: { tick: number }) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = 0;
+    progress.value = withTiming(1, { duration: 380, easing: Easing.out(Easing.quad) });
+  }, [tick, progress]);
+  const left = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+    transform: [
+      { translateX: -18 * progress.value },
+      { translateY: -6 * progress.value },
+      { scale: 0.6 + progress.value * 0.7 },
+    ],
+  }));
+  const right = useAnimatedStyle(() => ({
+    opacity: 1 - progress.value,
+    transform: [
+      { translateX: 18 * progress.value },
+      { translateY: -6 * progress.value },
+      { scale: 0.6 + progress.value * 0.7 },
+    ],
+  }));
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[styles.dust, left]} />
+      <Animated.View pointerEvents="none" style={[styles.dust, right]} />
+    </>
+  );
+}
+
+/** Il cane che corre: bob + tilt; salto con squash&stretch. */
 function RunningDog({
   photoUri,
   dogName,
   jumpY,
   crashed,
+  inTunnel,
   reducedMotion,
 }: {
   photoUri: string | null;
   dogName: string;
   jumpY: SharedValue<number>;
   crashed: boolean;
+  inTunnel: boolean;
   reducedMotion: boolean;
 }) {
   const bob = useSharedValue(0);
   useEffect(() => {
     if (reducedMotion || crashed) return;
-    bob.value = withRepeat(
-      withSequence(
-        withTiming(-4, { duration: 130, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 130, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      true,
+    bob.value = withSequence(
+      withTiming(1, { duration: 110, easing: Easing.inOut(Easing.sin) }),
     );
+    const interval = setInterval(() => {
+      bob.value = 0;
+      bob.value = withTiming(1, { duration: 220, easing: Easing.inOut(Easing.sin) });
+    }, 240);
+    return () => clearInterval(interval);
   }, [reducedMotion, crashed, bob]);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: bob.value - jumpY.value * UNIT_H }],
-  }));
+
+  const style = useAnimatedStyle(() => {
+    const y = jumpY.value;
+    const airborne = y > 0.5;
+    const rising = airborne && y < JUMP_HEIGHT_U * 0.75;
+    return {
+      opacity: inTunnel ? 0.4 : 1,
+      transform: [
+        { translateY: -y * UNIT_H - bob.value * 5 },
+        { rotate: crashed ? '0deg' : `${airborne ? -6 : 3}deg` },
+        { scaleY: rising ? 1.12 : airborne ? 1 : 0.98 },
+        { scaleX: rising ? 0.94 : 1 },
+      ],
+    };
+  }, [inTunnel, crashed]);
+
   return (
     <Animated.View pointerEvents="none" style={[styles.dog, style]}>
       {crashed ? (
-        <BuddyMascot size={72} expression="sad" animate={false} />
+        <MascotBuddy size={76} expression="sad" animate={false} />
       ) : photoUri ? (
         <View style={styles.dogRing}>
           <DogAvatar size={56} photoUri={photoUri} dogName={dogName} />
         </View>
       ) : (
-        <BuddyMascot size={72} expression="happy" />
+        <MascotBuddy size={76} expression="happy" />
       )}
     </Animated.View>
   );
 }
 
-/** Buddy telecronista (stesso pattern di Scoiattolo!). */
+/** Buddy telecronista (pattern condiviso). */
 function Commentator({
   line,
   expression,
@@ -169,7 +286,7 @@ function Commentator({
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        <BuddyMascot size={46} expression={expression} />
+        <MascotBuddy size={46} expression={expression} />
       </View>
       {line ? (
         <Animated.View
@@ -200,7 +317,12 @@ export default function AgilityGameScreen() {
   const [best, setBest] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [activeObstacles, setActiveObstacles] = useState<AgilityObstacle[]>([]);
+  const [activeArcs, setActiveArcs] = useState<BonusArc[]>([]);
+  const [collectedBones, setCollectedBones] = useState<ReadonlySet<string>>(new Set());
   const [crashed, setCrashed] = useState(false);
+  const [inTunnel, setInTunnel] = useState(false);
+  const [nearMiss, setNearMiss] = useState<{ id: number } | null>(null);
+  const [landingTick, setLandingTick] = useState(0);
   const [commentary, setCommentary] = useState<{ id: number; text: string } | null>(null);
   const [expression, setExpression] = useState<BuddyExpression>('focused');
   const [weekRank, setWeekRank] = useState<number | null>(null);
@@ -210,18 +332,27 @@ export default function AgilityGameScreen() {
   const [shownScore, setShownScore] = useState(0);
 
   const schedule = useRef<AgilityObstacle[]>([]);
+  const arcs = useRef<BonusArc[]>([]);
   const startedAt = useRef(0);
+  const crashAt = useRef<number | null>(null);
   const jumpStart = useRef<number | null>(null);
   const clearedIds = useRef<Set<number>>(new Set());
   const streak = useRef(0);
   const commentarySeq = useRef(0);
   const commentaryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fieldWidth = useRef(360);
+  const nearMissSeq = useRef(0);
 
   const jumpAnim = useSharedValue(0);
+  const worldX = useSharedValue(0);
 
   useEffect(() => {
     void loadAgilityBest(dog.id).then(setBest);
+    return () => {
+      timeouts.current.forEach(clearTimeout);
+      if (commentaryTimer.current) clearTimeout(commentaryTimer.current);
+    };
   }, [dog.id]);
 
   const say = (text: string, next: BuddyExpression = 'focused') => {
@@ -230,6 +361,10 @@ export default function AgilityGameScreen() {
     setExpression(next);
     if (commentaryTimer.current) clearTimeout(commentaryTimer.current);
     commentaryTimer.current = setTimeout(() => setCommentary(null), 1800);
+  };
+
+  const later = (ms: number, fn: () => void) => {
+    timeouts.current.push(setTimeout(fn, ms));
   };
 
   const finish = () => {
@@ -255,16 +390,25 @@ export default function AgilityGameScreen() {
   };
 
   const startGame = () => {
+    timeouts.current.forEach(clearTimeout);
+    timeouts.current = [];
     schedule.current = buildAgilitySchedule(Math.random);
+    arcs.current = buildBonusArcs(schedule.current, Math.random);
     startedAt.current = Date.now();
+    crashAt.current = null;
     jumpStart.current = null;
     clearedIds.current = new Set();
     streak.current = 0;
     jumpAnim.value = 0;
+    worldX.value = 0;
     setScore(0);
     setElapsed(0);
     setActiveObstacles([]);
+    setActiveArcs([]);
+    setCollectedBones(new Set());
     setCrashed(false);
+    setInTunnel(false);
+    setNearMiss(null);
     setWeekRank(null);
     setShareDone(false);
     setPhase('playing');
@@ -275,6 +419,7 @@ export default function AgilityGameScreen() {
     if (phase !== 'playing' || crashed) return;
     const now = Date.now() - startedAt.current;
     if (jumpStart.current !== null && now - jumpStart.current < JUMP_MS) return;
+    const wasGrounded = jumpStart.current === null || now - jumpStart.current >= JUMP_MS;
     jumpStart.current = now;
     if (!reducedMotion) {
       jumpAnim.value = 0;
@@ -282,6 +427,9 @@ export default function AgilityGameScreen() {
         withTiming(JUMP_HEIGHT_U, { duration: JUMP_MS / 2, easing: Easing.out(Easing.quad) }),
         withTiming(0, { duration: JUMP_MS / 2, easing: Easing.in(Easing.quad) }),
       );
+      if (wasGrounded) {
+        later(JUMP_MS, () => setLandingTick((tick) => tick + 1));
+      }
     }
     say(AGILITY_JUMP_LINES[Math.floor(Math.random() * AGILITY_JUMP_LINES.length)], 'happy');
   };
@@ -299,19 +447,25 @@ export default function AgilityGameScreen() {
     return () => document.removeEventListener('keydown', onKey);
   });
 
-  // Driver di gioco (JS thread, tick 50ms): spawn, clear, collisioni.
+  // Driver di gioco (JS thread, tick 50ms): mondo, ostacoli, ossi, collisioni.
   useEffect(() => {
     if (phase !== 'playing') return;
     const timer = setInterval(() => {
       const now = Date.now() - startedAt.current;
       setElapsed(now);
-      if (now >= AGILITY_MAX_MS) {
+      if (now >= AGILITY_MAX_MS && !crashed) {
         clearInterval(timer);
         finish();
         return;
       }
+      // Rallenty sul crash prima della fine.
+      const slowmo =
+        crashAt.current !== null && now - crashAt.current < CRASH_SLOWMO_MS ? 0.25 : 1;
+      worldX.value = -(now / 1000) * speedAt(now) * slowmo;
+
+      const dogY = jumpHeightAt(jumpStart.current, now);
+
       if (!crashed) {
-        const dogY = jumpHeightAt(jumpStart.current, now);
         for (const obstacle of schedule.current) {
           if (
             obstacle.spawnAtMs <= now &&
@@ -319,15 +473,40 @@ export default function AgilityGameScreen() {
             collides(dogY, obstacle, now)
           ) {
             clearedIds.current.add(obstacle.id);
+            crashAt.current = now;
             setCrashed(true);
             say('Ahi! Mi siedo un attimo…', 'sad');
             clearInterval(timer);
-            setTimeout(finish, 900);
+            later(900, finish);
             return;
           }
         }
+        // Dentro il tunnel (a terra): cane semi-trasparente.
+        const tunnel = schedule.current.find(
+          (obstacle) =>
+            obstacle.kind === 'tunnel' &&
+            obstacle.spawnAtMs <= now &&
+            !clearedIds.current.has(obstacle.id) &&
+            obstacleX(obstacle, now) < DOG_X + DOG_W &&
+            obstacleX(obstacle, now) + OBSTACLE_DIMS.tunnel.w > DOG_X,
+        );
+        setInTunnel(Boolean(tunnel) && dogY <= 2);
+
+        // Ossi bonus.
+        for (const arc of arcs.current) {
+          for (let b = 0; b < arc.bones.length; b += 1) {
+            const key = `${arc.id}:${b}`;
+            const bone = arc.bones[b];
+            const x = bonusBoneX(arc, bone, now);
+            if (!collectedBones.has(key) && x > -6 && boneCollected(dogY, bone.y, x)) {
+              setCollectedBones((previous) => new Set(previous).add(key));
+              setScore((value) => value + 1);
+            }
+          }
+        }
       }
-      // Clear e punteggio.
+
+      // Clear, punteggio, near-miss.
       for (const obstacle of schedule.current) {
         if (
           obstacle.spawnAtMs <= now &&
@@ -338,10 +517,16 @@ export default function AgilityGameScreen() {
           const points = pointsForClear(streak.current);
           streak.current += 1;
           setScore((value) => value + points);
+          if (isNearMiss(dogY, obstacle.kind)) {
+            nearMissSeq.current += 1;
+            setNearMiss({ id: nearMissSeq.current });
+            later(700, () => setNearMiss(null));
+          }
           if (isCombo(streak.current - 1)) say(AGILITY_COMBO_LINE, 'celebrate');
           else if (obstacle.kind === 'tunnel') say(AGILITY_TUNNEL_LINE, 'happy');
         }
       }
+
       setActiveObstacles(
         schedule.current.filter(
           (obstacle) =>
@@ -350,9 +535,12 @@ export default function AgilityGameScreen() {
             obstacleX(obstacle, now) > -20,
         ),
       );
+      setActiveArcs(
+        arcs.current.filter((arc) => bonusBoneX(arc, { dx: 0, y: 0 }, now) > -24),
+      );
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [phase, crashed, dog.id, realEnabled]);
+  }, [phase, crashed, dog.id, realEnabled, collectedBones]);
 
   // Count-up finale.
   useEffect(() => {
@@ -389,8 +577,8 @@ export default function AgilityGameScreen() {
           <Text style={styles.introTitle}>Corri e salta!</Text>
           <Text style={styles.introText}>
             Muretti e birilli si saltano con un tap.{'\n'}
-            Il tunnel NO: ci passi sotto da solo.{'\n'}
-            Cinque di fila e i punti raddoppiano!
+            Il tunnel NO: ci passi dentro da solo.{'\n'}
+            Raccogli gli ossicini in salto: valgono punti!
           </Text>
           {best > 0 ? (
             <Text style={styles.introBest}>Il vostro record: {best} punti</Text>
@@ -428,39 +616,94 @@ export default function AgilityGameScreen() {
             }}
           >
             <LinearGradient
-              colors={['#D9ECFB', '#E7F5EE', '#DFF3EC']}
+              colors={['#BFE3F7', '#DDF0FB', '#EAF7F1']}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
+
+            {/* strato lontano: nuvole */}
+            <ParallaxLayer worldX={worldX} factor={0.12}>
+              <CloudPuff top={18} left={40} scale={0.8} />
+              <CloudPuff top={34} left={230} scale={1.05} />
+              <CloudPuff top={10} left={420} scale={0.7} />
+            </ParallaxLayer>
+            {/* colline lontane */}
+            <ParallaxLayer worldX={worldX} factor={0.32}>
+              <Svg width={760} height={90} viewBox="0 0 760 90" style={styles.hillsFar}>
+                <Path d={FAR_HILLS} fill="#A9DCCF" />
+              </Svg>
+            </ParallaxLayer>
+            {/* primo piano */}
+            <ParallaxLayer worldX={worldX} factor={1}>
+              <Svg width={760} height={90} viewBox="0 0 760 90" style={styles.hillsNear}>
+                <Path d={NEAR_HILLS} fill="#74C4A9" />
+              </Svg>
+            </ParallaxLayer>
+
             <View style={styles.groundLine} pointerEvents="none" />
 
-            {activeObstacles.map((obstacle) => {
-              const spec = OBSTACLE_DIMS[obstacle.kind];
-              return (
-                <View
-                  key={obstacle.id}
-                  pointerEvents="none"
-                  style={[
-                    styles.obstacle,
-                    {
-                      left: obstacleX(obstacle, elapsed) * unitX,
-                      bottom: GROUND_Y,
-                    },
-                  ]}
-                >
-                  <ObstacleArt kind={obstacle.kind} />
-                </View>
-              );
-            })}
+            {/* ossi bonus */}
+            {activeArcs.map((arc) =>
+              arc.bones.map((bone, b) => {
+                const key = `${arc.id}:${b}`;
+                if (collectedBones.has(key)) return null;
+                const x = bonusBoneX(arc, bone, elapsed);
+                if (x < -6 || x > 110) return null;
+                return (
+                  <View
+                    key={key}
+                    pointerEvents="none"
+                    style={[
+                      styles.bone,
+                      { left: x * unitX, bottom: GROUND_Y + bone.y * UNIT_H },
+                    ]}
+                  >
+                    <BonusBoneArt />
+                  </View>
+                );
+              }),
+            )}
+
+            {/* ostacoli */}
+            {activeObstacles.map((obstacle) => (
+              <View
+                key={obstacle.id}
+                pointerEvents="none"
+                style={[
+                  styles.obstacle,
+                  { left: obstacleX(obstacle, elapsed) * unitX, bottom: GROUND_Y },
+                ]}
+              >
+                <ObstacleArt kind={obstacle.kind} />
+              </View>
+            ))}
+
+            {landingTick > 0 && !reducedMotion ? (
+              <View pointerEvents="none" style={styles.dustAnchor}>
+                <LandingDust tick={landingTick} />
+              </View>
+            ) : null}
 
             <RunningDog
               photoUri={dog.photoUri}
               dogName={dog.name}
               jumpY={jumpAnim}
               crashed={crashed}
+              inTunnel={inTunnel}
               reducedMotion={reducedMotion}
             />
+
+            {nearMiss ? (
+              <Animated.View
+                key={nearMiss.id}
+                entering={FadeIn.duration(140)}
+                style={styles.nearMiss}
+                pointerEvents="none"
+              >
+                <Text style={styles.nearMissText}>Per un pelo!</Text>
+              </Animated.View>
+            ) : null}
           </Pressable>
         </View>
       ) : null}
@@ -492,7 +735,7 @@ export default function AgilityGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
-          <BuddyMascot size={88} expression={score > 8 ? 'celebrate' : 'sad'} />
+          <MascotBuddy size={88} expression={score > 8 ? 'celebrate' : 'sad'} />
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{agilityEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>
@@ -587,18 +830,47 @@ const styles = StyleSheet.create({
   hudScoreText: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
   hudTime: { color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
   field: {
-    height: 300,
+    height: 320,
     borderRadius: radius.lg,
     overflow: 'hidden',
     ...shadows.card,
   },
+  parallax: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: '200%',
+    flexDirection: 'row',
+  },
+  parallaxClone: { position: 'absolute', left: 380, top: 0, bottom: 0, right: 0 },
+  cloud: { position: 'absolute', width: 56, height: 20 },
+  cloudBase: {
+    position: 'absolute',
+    bottom: 0,
+    width: 56,
+    height: 13,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  cloudBump: {
+    position: 'absolute',
+    bottom: 8,
+    left: 14,
+    width: 26,
+    height: 22,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  hillsFar: { position: 'absolute', bottom: 20, left: 0 },
+  hillsNear: { position: 'absolute', bottom: -4, left: 0 },
   groundLine: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: GROUND_Y,
     height: 4,
-    backgroundColor: '#74C4A9',
+    backgroundColor: '#5FAE95',
   },
   dog: {
     position: 'absolute',
@@ -615,6 +887,34 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
   obstacle: { position: 'absolute' },
+  bone: { position: 'absolute' },
+  dustAnchor: {
+    position: 'absolute',
+    left: DOG_X * 3.4 + 20,
+    bottom: GROUND_Y,
+  },
+  dust: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(190, 160, 120, 0.55)',
+  },
+  nearMiss: {
+    position: 'absolute',
+    top: '30%',
+    alignSelf: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    ...shadows.card,
+  },
+  nearMissText: {
+    color: colors.accent,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
   commentator: {
     flexDirection: 'row',
     alignItems: 'center',

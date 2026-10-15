@@ -8,22 +8,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CuteIcon as PawIcon } from '@/components/CuteIcon';
 import { useRouter } from 'expo-router';
 import Animated, {
   Easing,
+  type SharedValue,
   FadeIn,
-  ZoomIn,
+  SlideInDown,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { BuddyMascot, type BuddyExpression } from '@/features/mascot/BuddyMascot';
+import { MascotBuddy, type BuddyExpression } from '@/features/mascot/MascotBuddy';
 import { MatchPiece } from '@/features/games/matchPieces';
 import {
   MATCH_BLITZ_MS,
@@ -72,7 +76,7 @@ function Commentator({
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        <BuddyMascot size={46} expression={expression} />
+        <MascotBuddy size={46} expression={expression} />
       </View>
       {line ? (
         <Animated.View
@@ -90,7 +94,58 @@ function Commentator({
   );
 }
 
-/** Cella della griglia: pop-in scaglionato per riga al cambio tessera. */
+/** Mini-burst di zampine quando una tessera scoppia. */
+function ClearBurst({ cellSize, seed }: { cellSize: number; seed: number }) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: 480, easing: Easing.out(Easing.quad) });
+  }, [progress]);
+  const particles = useMemo(() => {
+    const rand = (n: number) => {
+      const x = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    return Array.from({ length: 5 }, (_, i) => ({
+      dx: (rand(i) - 0.5) * cellSize * 1.7,
+      dy: -(rand(i + 5) * cellSize * 1.1 + 8),
+      delay: i * 28,
+    }));
+  }, [cellSize, seed]);
+  return (
+    <>
+      {particles.map((particle, i) => (
+        <BurstPaw key={i} progress={progress} particle={particle} />
+      ))}
+    </>
+  );
+}
+
+function BurstPaw({
+  progress,
+  particle,
+}: {
+  progress: SharedValue<number>;
+  particle: { dx: number; dy: number; delay: number };
+}) {
+  const style = useAnimatedStyle(() => {
+    const local = Math.min(1, Math.max(0, progress.value * 1.3 - particle.delay / 480));
+    return {
+      opacity: 1 - local,
+      transform: [
+        { translateX: particle.dx * local },
+        { translateY: particle.dy * local },
+        { scale: 1 - local * 0.5 },
+      ],
+    };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute' }, style]}>
+      <PawIcon name="paw" size={10} color={colors.accent} secondary={colors.accent} />
+    </Animated.View>
+  );
+}
+
+/** Cella della griglia: caduta dall'alto, pulse allo swap, wiggle se invalida. */
 function Cell({
   index,
   piece,
@@ -98,6 +153,8 @@ function Cell({
   selected,
   clearing,
   boardTick,
+  pulseTick,
+  invalidTick,
   reducedMotion,
   onPress,
 }: {
@@ -107,21 +164,42 @@ function Cell({
   selected: boolean;
   clearing: boolean;
   boardTick: number;
+  pulseTick: number;
+  invalidTick: number;
   reducedMotion: boolean;
   onPress: () => void;
 }) {
   const wiggle = useSharedValue(0);
+  const pulse = useSharedValue(0);
+
   useEffect(() => {
-    if (!clearing || reducedMotion) return;
+    if (!invalidTick || reducedMotion) return;
+    wiggle.value = 0;
     wiggle.value = withSequence(
-      withTiming(1.15, { duration: 100 }),
-      withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) }),
+      withTiming(-7, { duration: 70 }),
+      withTiming(7, { duration: 90 }),
+      withTiming(-6, { duration: 90 }),
+      withTiming(0, { duration: 70 }),
     );
-  }, [clearing, reducedMotion, wiggle]);
+  }, [invalidTick, reducedMotion, wiggle]);
+
+  useEffect(() => {
+    if (!pulseTick || reducedMotion) return;
+    pulse.value = 0;
+    pulse.value = withSequence(
+      withSpring(1.14, { damping: 6, stiffness: 260 }),
+      withSpring(1, { damping: 9, stiffness: 200 }),
+    );
+  }, [pulseTick, reducedMotion, pulse]);
+
   const style = useAnimatedStyle(() => ({
-    opacity: clearing ? Math.max(0, 1.15 - wiggle.value * 2) : 1,
-    transform: [{ scale: clearing ? 1.15 - wiggle.value : selected ? 1.1 : 1 }],
+    opacity: clearing ? Math.max(0, 1 - pulse.value) : 1,
+    transform: [
+      { scale: clearing ? 1.15 - pulse.value : Math.max(pulse.value, selected ? 1.1 : 1) },
+      { rotate: `${wiggle.value}deg` },
+    ],
   }));
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -133,16 +211,110 @@ function Cell({
         selected && styles.cellSelected,
       ]}
     >
+      {clearing && !reducedMotion ? <ClearBurst cellSize={cellSize} seed={index + 1} /> : null}
       <Animated.View
         key={`${boardTick}:${piece}`}
         entering={
-          reducedMotion ? undefined : ZoomIn.duration(220).delay(rowOf(index) * 28)
+          reducedMotion
+            ? undefined
+            : SlideInDown.duration(240).delay(rowOf(index) * 34)
         }
         style={style}
       >
         <MatchPiece type={piece} size={cellSize * 0.78} />
       </Animated.View>
     </Pressable>
+  );
+}
+
+/** Sweep luminoso del razzo lungo riga o colonna. */
+function RocketSweep({
+  row,
+  col,
+  boardWidth,
+  cellSize,
+}: {
+  row: number | null;
+  col: number | null;
+  boardWidth: number;
+  cellSize: number;
+}) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.quad) });
+  }, [progress]);
+  const horizontalStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -boardWidth + progress.value * boardWidth * 2 }],
+    opacity: 1 - progress.value * 0.5,
+  }));
+  const verticalStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -boardWidth + progress.value * boardWidth * 2 }],
+    opacity: 1 - progress.value * 0.5,
+  }));
+  return (
+    <>
+      {row !== null ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.sweep,
+            { top: row * cellSize, height: cellSize, width: boardWidth * 0.6 },
+            horizontalStyle,
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.95)', 'rgba(20,184,166,0.5)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      ) : null}
+      {col !== null ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.sweep,
+            { left: col * cellSize, width: cellSize, height: boardWidth * 0.6, top: -boardWidth * 0.3 },
+            verticalStyle,
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.95)', 'rgba(20,184,166,0.5)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      ) : null}
+    </>
+  );
+}
+
+/** Barra tempo che pulsa corallo sotto i 10 secondi. */
+function TimeBarFill({ fraction, urgent }: { fraction: number; urgent: boolean }) {
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    if (!urgent) return;
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(0.55, { duration: 380, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: 380, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    );
+  }, [urgent, pulse]);
+  const style = useAnimatedStyle(() => ({ opacity: urgent ? pulse.value : 1 }));
+  return (
+    <Animated.View
+      style={[
+        styles.timeBarFill,
+        { width: `${fraction * 100}%` },
+        urgent && styles.timeBarFillUrgent,
+        style,
+      ]}
+    />
   );
 }
 
@@ -165,7 +337,11 @@ export default function MatchGameScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [commentary, setCommentary] = useState<{ id: number; text: string } | null>(null);
   const [expression, setExpression] = useState<BuddyExpression>('focused');
-  const [scorePopup, setScorePopup] = useState<{ id: number; text: string } | null>(null);
+  const [scorePopup, setScorePopup] = useState<{ id: number; text: string; index: number | null } | null>(null);
+  const [pulse, setPulse] = useState<{ a: number; b: number; tick: number } | null>(null);
+  const [invalid, setInvalid] = useState<{ index: number; tick: number } | null>(null);
+  const [rocket, setRocket] = useState<{ row: number | null; col: number | null; tick: number } | null>(null);
+  const shake = useSharedValue(0);
   const [weekRank, setWeekRank] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -197,9 +373,9 @@ export default function MatchGameScreen() {
     commentaryTimer.current = setTimeout(() => setCommentary(null), 1800);
   };
 
-  const popup = (text: string) => {
+  const popup = (text: string, index: number | null = null) => {
     popupSeq.current += 1;
-    setScorePopup({ id: popupSeq.current, text });
+    setScorePopup({ id: popupSeq.current, text, index });
     const id = popupSeq.current;
     timeouts.current.push(
       setTimeout(
@@ -227,6 +403,9 @@ export default function MatchGameScreen() {
     setElapsed(0);
     setWeekRank(null);
     setShareDone(false);
+    setPulse(null);
+    setInvalid(null);
+    setRocket(null);
     setPhase('playing');
     say(MATCH_START_LINE, 'focused');
   };
@@ -289,9 +468,27 @@ export default function MatchGameScreen() {
     setClearing(cells);
     const points = chainScore(cells.size, chainIndex);
     setScore((value) => value + points);
-    popup(`+${points}`);
-    if (rockets > 0) say(MATCH_ROCKET_LINE, 'celebrate');
-    else if (chainIndex >= 1) {
+    const anchor = cells.size > 0 ? Math.min(...cells) : null;
+    popup(`+${points}`, anchor);
+    if (rockets > 0) {
+      const first = anchor ?? 0;
+      const isRow = rowOf(first) >= 0 && cells.has(indexOf(rowOf(first), (first + 1) % MATCH_COLS));
+      setRocket({
+        row: isRow ? rowOf(first) : null,
+        col: isRow ? null : first % MATCH_COLS,
+        tick: Date.now(),
+      });
+      if (!reducedMotion) {
+        shake.value = 0;
+        shake.value = withSequence(
+          withTiming(-3, { duration: 40 }),
+          withTiming(3, { duration: 40 }),
+          withTiming(0, { duration: 40 }),
+        );
+      }
+      say('RAZZO!', 'celebrate');
+      timeouts.current.push(setTimeout(() => setRocket(null), 520));
+    } else if (chainIndex >= 1) {
       say(
         MATCH_CHAIN_LINES[Math.min(chainIndex - 1, MATCH_CHAIN_LINES.length - 1)],
         'celebrate',
@@ -316,10 +513,12 @@ export default function MatchGameScreen() {
       return;
     }
     if (!isValidSwap(boardRef.current, selected, index)) {
-      // swap non valido: solo deseleziona (il feedback è il mancato match)
+      // swap non valido: wiggle e deseleziona
+      setInvalid({ index: selected, tick: Date.now() });
       setSelected(null);
       return;
     }
+    setPulse({ a: selected, b: index, tick: Date.now() });
     const next = swapCells(boardRef.current, selected, index);
     setSelected(null);
     setBoard(next);
@@ -344,6 +543,10 @@ export default function MatchGameScreen() {
     }, 45);
     return () => clearInterval(timer);
   }, [phase, score, reducedMotion]);
+
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }],
+  }));
 
   const remainingSeconds = Math.max(0, Math.ceil((MATCH_BLITZ_MS - elapsed) / 1000));
   const timeFraction = 1 - Math.min(1, elapsed / MATCH_BLITZ_MS);
@@ -391,12 +594,12 @@ export default function MatchGameScreen() {
               <Text style={styles.hudScoreText}>{score}</Text>
             </View>
             <View style={styles.timeBarTrack} accessibilityLabel={`${remainingSeconds} secondi rimasti`}>
-              <View style={[styles.timeBarFill, { width: `${timeFraction * 100}%` }]} />
+              <TimeBarFill fraction={timeFraction} urgent={remainingSeconds <= 10 && remainingSeconds > 0} />
             </View>
             <Text style={styles.hudTime}>{remainingSeconds}s</Text>
           </View>
 
-          <View style={styles.boardWrap}>
+          <Animated.View style={[styles.boardWrap, shakeStyle]}>
             <LinearGradient
               colors={['#DFF3EC', '#EAF7F1', '#FFF6E8']}
               start={{ x: 0, y: 0 }}
@@ -418,22 +621,40 @@ export default function MatchGameScreen() {
                   selected={selected === index}
                   clearing={clearing.has(index)}
                   boardTick={boardTick}
+                  pulseTick={pulse && (pulse.a === index || pulse.b === index) ? pulse.tick : 0}
+                  invalidTick={invalid && invalid.index === index ? invalid.tick : 0}
                   reducedMotion={reducedMotion}
                   onPress={() => onCellPress(index)}
                 />
               ))}
             </View>
+            {rocket ? (
+              <RocketSweep
+                key={rocket.tick}
+                row={rocket.row}
+                col={rocket.col}
+                boardWidth={cellSize * MATCH_COLS}
+                cellSize={cellSize}
+              />
+            ) : null}
             {scorePopup ? (
               <Animated.View
                 key={scorePopup.id}
                 entering={FadeIn.duration(160)}
-                style={styles.scorePopup}
+                style={[
+                  styles.scorePopup,
+                  scorePopup.index !== null && {
+                    position: 'absolute',
+                    top: rowOf(scorePopup.index) * cellSize,
+                    left: (scorePopup.index % MATCH_COLS) * cellSize - spacing.sm,
+                  },
+                ]}
                 pointerEvents="none"
               >
                 <Text style={styles.scorePopupText}>{scorePopup.text}</Text>
               </Animated.View>
             ) : null}
-          </View>
+          </Animated.View>
         </View>
       ) : null}
 
@@ -464,7 +685,7 @@ export default function MatchGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
-          <BuddyMascot size={88} expression={score > 40 ? 'celebrate' : 'sad'} />
+          <MascotBuddy size={88} expression={score > 40 ? 'celebrate' : 'sad'} />
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{matchEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>
@@ -565,6 +786,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   timeBarFill: { height: '100%', borderRadius: radius.full, backgroundColor: colors.accent },
+  timeBarFillUrgent: { backgroundColor: colors.danger },
+  sweep: { position: 'absolute' },
   hudTime: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,

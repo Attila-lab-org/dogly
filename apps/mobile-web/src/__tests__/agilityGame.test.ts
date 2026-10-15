@@ -7,11 +7,15 @@ import {
   AGILITY_MAX_MS,
   DOG_H,
   OBSTACLE_DIMS,
+  boneCollected,
+  bonusBoneX,
+  buildBonusArcs,
   agilityEndgameLine,
   buildAgilitySchedule,
   collides,
   isCleared,
   isCombo,
+  isNearMiss,
   jumpHeightAt,
   loadAgilityBest,
   minGapMs,
@@ -133,6 +137,44 @@ describe('combo scoring', () => {
     expect(pointsForClear(9)).toBe(2);
     expect(isCombo(5)).toBe(true);
     expect(isCombo(4)).toBe(false);
+  });
+});
+
+describe('bonus bones and near-miss', () => {
+  it('arcs spawn inside obstacle gaps with 2-3 bones at jump height', () => {
+    const obstacles = buildAgilitySchedule(Math.random);
+    const arcs = buildBonusArcs(obstacles, Math.random);
+    for (const arc of arcs) {
+      expect(arc.bones.length).toBeGreaterThanOrEqual(2);
+      expect(arc.bones.length).toBeLessThanOrEqual(3);
+      for (const bone of arc.bones) {
+        expect(bone.y).toBeGreaterThanOrEqual(10);
+        expect(bone.y).toBeLessThanOrEqual(23);
+      }
+      // ogni arcata sta dentro un gap reale tra due ostacoli consecutivi
+      const insideGap = obstacles.some(
+        (obstacle, index) =>
+          index + 1 < obstacles.length &&
+          arc.spawnAtMs > obstacle.spawnAtMs &&
+          arc.spawnAtMs < obstacles[index + 1].spawnAtMs,
+      );
+      expect(insideGap).toBe(true);
+    }
+  });
+
+  it('bones are collected only when jumping through them', () => {
+    expect(boneCollected(20, 20, 20)).toBe(true);
+    expect(boneCollected(0, 20, 20)).toBe(false);
+    expect(boneCollected(20, 20, 60)).toBe(false);
+    expect(boneCollected(14, 20, 20)).toBe(false);
+  });
+
+  it('near-miss triggers only within 2u of the obstacle top, never on tunnel', () => {
+    expect(isNearMiss(OBSTACLE_DIMS.hurdle.h + 1, 'hurdle')).toBe(true);
+    expect(isNearMiss(OBSTACLE_DIMS.hurdle.h + 4, 'hurdle')).toBe(false);
+    expect(isNearMiss(0, 'hurdle')).toBe(false);
+    expect(isNearMiss(OBSTACLE_DIMS.cones.h + 1, 'cones')).toBe(true);
+    expect(isNearMiss(OBSTACLE_DIMS.cones.h + 1, 'tunnel')).toBe(false);
   });
 });
 

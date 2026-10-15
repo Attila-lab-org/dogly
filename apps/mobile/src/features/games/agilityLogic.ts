@@ -128,6 +128,71 @@ export function isCombo(streakBefore: number): boolean {
   return streakBefore >= 5;
 }
 
+/* ------------------------------------------------------------------ */
+/* Ossi bonus in arcata (da raccogliere in salto) e near-miss.          */
+/* ------------------------------------------------------------------ */
+
+export interface BonusBone {
+  /** Offset orizzontale (u) rispetto al punto di spawn dell'arcata. */
+  dx: number;
+  /** Altezza (u) del bocconcino: si raccoglie solo saltando. */
+  y: number;
+}
+
+export interface BonusArc {
+  id: number;
+  spawnAtMs: number;
+  speed: number;
+  bones: BonusBone[];
+}
+
+/** Arcate di 2-3 ossi nei gap tra ostacoli (~40% dei gap), quota salto. */
+export function buildBonusArcs(
+  obstacles: AgilityObstacle[],
+  rng: () => number,
+): BonusArc[] {
+  const arcs: BonusArc[] = [];
+  for (let i = 0; i < obstacles.length - 1; i += 1) {
+    if (rng() > 0.4) continue;
+    const gapStart = obstacles[i].spawnAtMs;
+    const gapEnd = obstacles[i + 1].spawnAtMs;
+    const mid = gapStart + (gapEnd - gapStart) / 2;
+    const speed = speedAt(mid);
+    const count = 2 + Math.floor(rng() * 2);
+    const bones: BonusBone[] = Array.from({ length: count }, (_, b) => {
+      const u = count === 1 ? 0.5 : b / (count - 1);
+      return {
+        dx: 4 + u * 14,
+        y: 10 + Math.sin(u * Math.PI) * 12,
+      };
+    });
+    arcs.push({ id: arcs.length, spawnAtMs: Math.round(mid), speed, bones });
+  }
+  return arcs;
+}
+
+/** X di un osso bonus (stesso moto degli ostacoli). */
+export function bonusBoneX(arc: BonusArc, bone: BonusBone, nowMs: number): number {
+  const elapsed = Math.max(0, nowMs - arc.spawnAtMs);
+  return AGILITY_FIELD_W + bone.dx - (elapsed / 1000) * arc.speed;
+}
+
+/** Osso raccolto: overlap orizzontale col cane e cane abbastanza in alto. */
+export function boneCollected(dogY: number, boneY: number, boneX: number): boolean {
+  const overlapX = boneX > DOG_X - 2 && boneX < DOG_X + DOG_W + 2;
+  return overlapX && dogY >= boneY - 5;
+}
+
+/**
+ * Near-miss: l'ostacolo passa sotto il cane a meno di 2u (~10%) dal
+ * contatto — il cane era in aria ma di pochissimo.
+ */
+export function isNearMiss(dogYAtClear: number, kind: ObstacleKind): boolean {
+  if (kind === 'tunnel') return false;
+  const margin = dogYAtClear - OBSTACLE_DIMS[kind].h;
+  return dogYAtClear > 0 && margin <= 2;
+}
+
 /** Frase di Oreo in prima persona per fascia di punteggio. */
 export function agilityEndgameLine(score: number): string {
   if (score <= 8) return 'Mi sono fermato a annusare i birilli…';

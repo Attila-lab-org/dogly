@@ -26,7 +26,7 @@ import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { BuddyMascot, type BuddyExpression } from '@/features/mascot/BuddyMascot';
+import { MascotBuddy, type BuddyExpression } from '@/features/mascot/MascotBuddy';
 import { SquirrelArt, type SquirrelArtVariant } from '@/features/games/squirrelArt';
 import {
   COMMENTARY_FINAL_SECONDS,
@@ -179,7 +179,7 @@ function Commentator({
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        <BuddyMascot size={46} expression={expression} />
+        <MascotBuddy size={46} expression={expression} />
       </View>
       {line ? (
         <Animated.View
@@ -571,7 +571,7 @@ export default function SquirrelGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
-          <BuddyMascot size={88} expression={score > 5 ? 'celebrate' : 'sad'} />
+          <MascotBuddy size={88} expression={score > 5 ? 'celebrate' : 'sad'} />
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{squirrelEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>
