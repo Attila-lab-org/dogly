@@ -16,12 +16,12 @@ import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { CuteIcon } from '@/components/CuteIcon';
 import { DogHero } from '@/features/home/DogHero';
+import { HomeNextAction } from '@/features/home/HomeNextAction';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { insightToneLabel } from '@/features/home/api';
 import type { InsightTone, LastInsight } from '@/features/core/types';
-import { DogCareOverview } from '@/features/dogs/DogCareOverview';
 import { useQuery } from '@tanstack/react-query';
 import { fetchDogPhotos } from '@/features/photos/api';
 import { isPersistedId } from '@/lib/persistedId';
@@ -147,7 +147,7 @@ export default function HomeScreen() {
           ) : null}
 
           <Animated.View entering={sceneEnter(90)}>
-            <DogCareOverview dogId={dog.id} dogName={dog.name} compact />
+            <HomeNextAction dogId={dog.id} dogName={dog.name} />
           </Animated.View>
 
           <Animated.View entering={sceneEnter(180)}>
@@ -190,16 +190,7 @@ export default function HomeScreen() {
               <InsightCard
                 key={insight.eventId}
                 insight={insight}
-                onPress={() =>
-                  router.push({
-                    pathname: '/ask',
-                    params: {
-                      eventId: insight.eventId,
-                      source: 'behavior',
-                      intent: 'revisit',
-                    },
-                  } as never)
-                }
+                onPress={() => router.push('/(tabs)/diary' as never)}
               />
             ))}
           </> : null}

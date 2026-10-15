@@ -16,14 +16,13 @@ import { feedingPeriodsMock, foodProductsMock } from '../../mocks/secondary';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { digestiveSummaryLabel, foodSummary, routineSummary } from './profileSummary';
 
+/** Hub cura sul profilo cane (Oreo) — non usare in Home. */
 export function DogCareOverview({
   dogId,
   dogName,
-  compact = false,
 }: {
   dogId: string;
   dogName: string;
-  compact?: boolean;
 }) {
   const router = useRouter();
   const { userId, usingMockGate } = useSession();
@@ -81,12 +80,9 @@ export function DogCareOverview({
 
   return (
     <View style={styles.section}>
-      {!compact ? (
-        <Text style={styles.heading}>Ogni giorno con {dogName}</Text>
-      ) : null}
+      <Text style={styles.heading}>Ogni giorno con {dogName}</Text>
       <View style={styles.card}>
         <CareRow
-          compact={compact}
           tone="food"
           icon="nutrition-outline"
           title="Alimentazione"
@@ -94,10 +90,9 @@ export function DogCareOverview({
           onPress={() => router.push('/nutrition/foods')}
         />
         <CareRow
-          compact={compact}
           tone="wellness"
           icon="heart-outline"
-          title={compact ? 'Benessere' : 'Digestione'}
+          title="Digestione"
           detail={digestiveSummaryLabel(
             digestive.data,
             enabled && digestive.isLoading,
@@ -106,7 +101,6 @@ export function DogCareOverview({
           onPress={() => router.push('/digestive' as never)}
         />
         <CareRow
-          compact={compact}
           tone="routine"
           icon="walk-outline"
           title="Routine"
@@ -114,7 +108,6 @@ export function DogCareOverview({
           onPress={() => router.push(`/dogs/${dogId}/routine` as never)}
         />
         <CareRow
-          compact={compact}
           tone="agenda"
           icon="calendar-outline"
           title="Agenda"
@@ -144,14 +137,12 @@ function CareRow({
   title,
   detail,
   onPress,
-  compact,
   tone,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   detail: string;
   onPress: () => void;
-  compact: boolean;
   tone: keyof typeof tones;
 }) {
   return (
@@ -161,7 +152,7 @@ function CareRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        compact && { backgroundColor: tones[tone].background },
+        { backgroundColor: tones[tone].background },
         pressed && styles.pressed,
       ]}
     >
@@ -170,6 +161,9 @@ function CareRow({
       </View>
       <Text style={styles.title} numberOfLines={1}>
         {title}
+      </Text>
+      <Text style={styles.detail} numberOfLines={2}>
+        {detail}
       </Text>
     </Pressable>
   );
@@ -190,11 +184,10 @@ const styles = StyleSheet.create({
     minHeight: 108,
     padding: 14,
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
   icon: {
     width: 44,
@@ -208,6 +201,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
     fontWeight: typography.weight.semibold,
+  },
+  detail: {
+    alignSelf: 'stretch',
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
   },
   pressed: { opacity: 0.78 },
 });
