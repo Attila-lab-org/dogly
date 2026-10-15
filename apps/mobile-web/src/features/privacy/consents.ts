@@ -9,11 +9,11 @@ import type { ConsentState } from '../secondary/types';
 import { consentsMock } from '../../mocks/secondary';
 import { getKeyValueStorage } from '../notifications/persistence';
 
-const STORAGE_KEY_PREFIX = 'dogly.consents.v1';
+const CONSENTS_STORAGE_NAMESPACE = 'dogly.consents.v1';
 let activeUserId: string | null = null;
 let accountGeneration = 0;
 function storageKey(userId = activeUserId) {
-  return `${STORAGE_KEY_PREFIX}.${userId ?? 'anonymous'}`;
+  return `${CONSENTS_STORAGE_NAMESPACE}.${userId ?? 'anonymous'}`;
 }
 export const POLICY_VERSION = 'privacy/v2';
 
