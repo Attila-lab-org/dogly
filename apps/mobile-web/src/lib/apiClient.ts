@@ -155,7 +155,7 @@ export async function apiRequest<T>(
 
     let code = 'UNKNOWN';
     let message = `Errore API (${response.status})`;
-    let retryable = false;
+    let retryable = response.status === 429 || response.status >= 500;
     let correlationId: string | null = null;
     // FIX: keep retryable and correlation_id from the server body so the UI
     // can show retry CTAs and support can correlate by request id.
@@ -172,10 +172,6 @@ export async function apiRequest<T>(
     // over the body's correlation_id when both are present.
     const headerRid = response.headers.get('X-Request-ID');
     if (headerRid) correlationId = headerRid;
-    // 429 / 5xx are retryable by convention when the body doesn't say.
-    if (!retryable && (response.status === 429 || response.status >= 500)) {
-      retryable = true;
-    }
     throw new ApiError(response.status, code, message, retryable, correlationId);
   }
 
