@@ -557,17 +557,17 @@ class OpenPetFoodFactsClient:
         return found
 
     async def search_products(
-        self, query: str, *, limit: int = 20
+        self, query: str, *, limit: int = 40
     ) -> list[ExternalFoodCandidate]:
         cleaned = " ".join(query.split())
         if len(cleaned) < 1:
             return []
-        cache_key = cleaned.casefold()
+        cache_key = f"{cleaned.casefold()}|{limit}"
         if cache_key in self._search_cache:
             return [
                 item.model_copy(deep=True) for item in self._search_cache[cache_key]
             ]
-        page_size = 24
+        page_size = 48
         products = await self._search_page(cleaned, page_size=page_size)
         tokens = _query_tokens(cleaned)
         usable = [
@@ -575,6 +575,44 @@ class OpenPetFoodFactsClient:
             for item in products
             if _candidate_from_product(item) is not None and _dog_preference(item) < 3
         ]
+        # Only walk further OPFF pages when the first page was full but sparse
+        # after dog filtering — avoids hammering thin queries.
+        source_page = 2
+        while (
+            len(usable) < min(limit, 16)
+            and source_page <= 3
+            and len(products) >= page_size
+        ):
+            extra = await self._search_page(
+                cleaned,
+                page_size=page_size,
+                page=source_page,
+            )
+            if not extra:
+                break
+            seen = {
+                str(item.get("code") or "")
+                for item in products
+                if item.get("code")
+            }
+            added = 0
+            for item in extra:
+                code = str(item.get("code") or "")
+                if code and code in seen:
+                    continue
+                if code:
+                    seen.add(code)
+                products.append(item)
+                added += 1
+            usable = [
+                item
+                for item in products
+                if _candidate_from_product(item) is not None
+                and _dog_preference(item) < 3
+            ]
+            if added == 0 or len(extra) < page_size // 2:
+                break
+            source_page += 1
         if len(usable) < 8 and tokens:
             fallback_query = tokens[0]
             fallback_page = 1 if len(tokens) >= 2 else 2
@@ -605,40 +643,79 @@ class OpenPetFoodFactsClient:
         self, *, query: str = "", brand: str = "", food_form: str | None = None,
         page: int = 1, page_size: int = 20,
     ) -> tuple[list[ExternalFoodCandidate], int | None]:
-        """Page the source itself, including an initial dog-food category page."""
+        """Page OPFF dog-food categories, backfilling until we have page_size usable rows."""
         category = {
             "crocchette": "en:dry-dog-food",
             "umido": "en:wet-dog-food",
             "snack": "en:dog-treats",
         }.get(food_form, "en:dog-food")
-        params = {
-            "action": "process", "json": "1", "search_terms": query,
-            "tagtype_0": "categories", "tag_contains_0": "contains",
-            "tag_0": category, "page": str(page), "page_size": str(page_size),
-            "sort_by": "unique_scans_n",
-        }
-        if brand:
-            params.update({
-                "tagtype_1": "brands", "tag_contains_1": "contains", "tag_1": brand,
-            })
-        payload = await self._request_json(_SEARCH_URL, params=params)
-        products = payload.get("products")
-        if not isinstance(products, list):
-            raise TimeoutError("Open Pet Food Facts returned no product page")
-        # Continuation follows the raw source page even if unusable rows are removed.
-        count = payload.get("count")
-        has_more = (
-            page * page_size < int(count)
-            if str(count).isdigit()
-            else len(products) >= page_size
+        # Wider OPFF pages so cat/junk filtering still leaves enough dog rows.
+        fetch_size = max(page_size * 2, 40)
+        collected: list[dict[str, Any]] = []
+        source_page = max(1, page)
+        total_count: int | None = None
+        last_batch_len = 0
+        # Up to 3 OPFF pages per client page to offset filtering.
+        for _ in range(3):
+            params = {
+                "action": "process",
+                "json": "1",
+                "search_terms": query,
+                "tagtype_0": "categories",
+                "tag_contains_0": "contains",
+                "tag_0": category,
+                "page": str(source_page),
+                "page_size": str(fetch_size),
+                "sort_by": "unique_scans_n",
+            }
+            if brand:
+                params.update({
+                    "tagtype_1": "brands",
+                    "tag_contains_1": "contains",
+                    "tag_1": brand,
+                })
+            payload = await self._request_json(_SEARCH_URL, params=params)
+            products = payload.get("products")
+            if not isinstance(products, list):
+                raise TimeoutError("Open Pet Food Facts returned no product page")
+            count = payload.get("count")
+            if str(count).isdigit():
+                total_count = int(count)
+            last_batch_len = len(products)
+            for item in products:
+                if isinstance(item, dict):
+                    collected.append(item)
+            # Keep clear dog foods and ambiguous dog+cat; drop cat-only.
+            usable = [item for item in collected if _dog_preference(item) < 3]
+            candidates = self._candidates_from_products(
+                usable, query=query, limit=page_size
+            )
+            source_has_more = (
+                source_page * fetch_size < total_count
+                if total_count is not None
+                else last_batch_len >= fetch_size
+            )
+            if len(candidates) >= page_size or not source_has_more:
+                # Client cursor advances by logical page_size, not fetch_size.
+                client_has_more = (
+                    page * page_size < total_count
+                    if total_count is not None
+                    else source_has_more
+                )
+                return (
+                    candidates,
+                    page + 1 if client_has_more else None,
+                )
+            source_page += 1
+        usable = [item for item in collected if _dog_preference(item) < 3]
+        client_has_more = (
+            page * page_size < total_count
+            if total_count is not None
+            else last_batch_len >= fetch_size
         )
-        usable = [
-            item for item in products
-            if isinstance(item, dict) and _dog_preference(item) < 2
-        ]
         return (
             self._candidates_from_products(usable, query=query, limit=page_size),
-            page + 1 if has_more else None,
+            page + 1 if client_has_more else None,
         )
 
     async def _request_json(

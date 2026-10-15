@@ -281,7 +281,8 @@ async def test_browse_products_pages_source_and_applies_food_filters():
         assert query["tag_0"] == "en:dry-dog-food"
         assert query["tag_1"] == "Acme"
         assert query["page"] == "2"
-        assert query["page_size"] == "2"
+        # Browse requests a wider OPFF page so dog-filters still leave enough rows.
+        assert int(query["page_size"]) >= 2
         return httpx.Response(
             200,
             json={

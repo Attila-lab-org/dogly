@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -28,12 +29,23 @@ import {
   verifyFood,
   type ExternalFoodCandidate,
 } from '@/features/nutrition/api';
+import {
+  FoodShelfCard,
+  useShelfCardWidth,
+} from '@/features/nutrition/FoodShelfCard';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { scheduleCatalogSearch } from '@/features/nutrition/catalogSearch';
 import { queryKeys } from '@/lib/queryClient';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 
-type Step = 'identify' | 'results' | 'details';
+type Step = 'identify' | 'details';
+
+const FILTERS: { value: string; label: string }[] = [
+  { value: '', label: 'Tutti' },
+  { value: 'crocchette', label: 'Crocchette' },
+  { value: 'umido', label: 'Umido' },
+  { value: 'snack', label: 'Snack' },
+];
 
 const firstParam = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] ?? '' : value ?? '';
@@ -43,24 +55,23 @@ export default function NewFoodScreen() {
   const params = useLocalSearchParams<{
     photoFoodId?: string | string[];
     photoQuery?: string | string[];
-    scannedBarcode?: string | string[];
+    catalogBarcode?: string | string[];
   }>();
   const photoFoodId = firstParam(params.photoFoodId);
   const photoQuery = firstParam(params.photoQuery);
-  const scannedBarcode = firstParam(params.scannedBarcode);
+  const catalogBarcode = firstParam(params.catalogBarcode);
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
   const { userId } = useSession();
+  const cardWidth = useShelfCardWidth();
   const photoStarted = useRef(false);
-  const barcodeStarted = useRef(false);
+  const catalogPickStarted = useRef(false);
   const feedingOperationIdRef = useRef<string | null>(null);
 
   const [step, setStep] = useState<Step>('identify');
   const [query, setQuery] = useState(photoQuery);
   const [hits, setHits] = useState<ExternalFoodCandidate[]>([]);
   const [selected, setSelected] = useState<ExternalFoodCandidate | null>(null);
-  const [exactBarcode, setExactBarcode] = useState<string | null>(null);
-  const [barcode, setBarcode] = useState('');
   const [manual, setManual] = useState(false);
   const [brand, setBrand] = useState('');
   const [name, setName] = useState('');
@@ -75,6 +86,7 @@ export default function NewFoodScreen() {
   const [foodForm, setFoodForm] = useState('');
   const [catalogNextPage, setCatalogNextPage] = useState<number | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   const photoFoodQuery = useQuery({
     queryKey: ['nutrition-photo-food', photoFoodId],
@@ -82,47 +94,51 @@ export default function NewFoodScreen() {
     enabled: Boolean(photoFoodId),
   });
 
-  const [searching, setSearching] = useState(false);
-
   useEffect(() => {
     const cleaned = query.trim();
     setMessage(null);
     setSearching(false);
-    if (step !== 'identify' || !cleaned || !dog.id) return;
+    if (step !== 'identify' || !cleaned || !dog.id || catalogBarcode) return;
     setHits([]);
     setCatalogNextPage(null);
     setSearching(true);
     return scheduleCatalogSearch(
-      () => browseFoodCatalog({ dogId: dog.id, query: cleaned, foodForm }),
+      () => searchFoodsByName({ dogId: dog.id, query: cleaned }),
       (result) => {
-        setHits(result.items.map((item) => ({ ...item, lookup_id: '' })));
-        setCatalogNextPage(result.next_page);
-        setExactBarcode(null);
+        setHits(result.items);
+        setCatalogNextPage(null);
         if (!result.items.length) {
-          setMessage(`Nessun risultato nel catalogo per “${cleaned}”. Prova con la marca completa oppure fotografa la confezione.`);
+          setMessage(
+            `Nessun risultato per “${cleaned}”. Prova la marca completa oppure fotografa la confezione.`,
+          );
         }
       },
       () => {
-        setMessage('Il catalogo non è raggiungibile adesso. Puoi usare una foto o inserire il nome.');
+        setMessage(
+          'Il catalogo non è raggiungibile adesso. Puoi usare una foto o inserire il nome.',
+        );
       },
       () => setSearching(false),
     );
-  }, [dog.id, foodForm, query, step]);
+  }, [catalogBarcode, dog.id, query, step]);
 
   useEffect(() => {
-    if (step !== 'identify' || query.trim() || !dog.id) return;
+    if (step !== 'identify' || query.trim() || !dog.id || catalogBarcode) return;
     let active = true;
     setCatalogLoading(true);
     setCatalogNextPage(null);
-    void browseFoodCatalog({ dogId: dog.id, foodForm })
+    void browseFoodCatalog({ dogId: dog.id, foodForm, pageSize: 40 })
       .then((result) => {
         if (!active) return;
         setHits(result.items.map((item) => ({ ...item, lookup_id: '' })));
         setCatalogNextPage(result.next_page);
-        setExactBarcode(null);
       })
       .catch(() => {
-        if (active) setMessage('Il catalogo non è raggiungibile adesso. Puoi cercare per nome, usare una foto o inserire il nome.');
+        if (active) {
+          setMessage(
+            'Il catalogo non è raggiungibile adesso. Puoi cercare per nome, usare una foto o inserire il nome.',
+          );
+        }
       })
       .finally(() => {
         if (active) setCatalogLoading(false);
@@ -130,7 +146,7 @@ export default function NewFoodScreen() {
     return () => {
       active = false;
     };
-  }, [dog.id, foodForm, query, step]);
+  }, [catalogBarcode, dog.id, foodForm, query, step]);
 
   useEffect(() => {
     if (!photoFoodId || photoStarted.current || photoFoodQuery.isLoading) return;
@@ -150,56 +166,6 @@ export default function NewFoodScreen() {
     }
   }, [photoFoodId, photoFoodQuery.data, photoFoodQuery.isLoading, photoQuery]);
 
-  const findBarcode = async (raw = barcode) => {
-    const cleaned = raw.replace(/\D/g, '');
-    if (cleaned.length < 8 || !dog.id || working) return;
-    setWorking(true);
-    setMessage(null);
-    try {
-      const exact = await lookupFoodByBarcode({ dogId: dog.id, barcode: cleaned });
-      const relatedQuery = [exact.brand, exact.name].filter(Boolean).join(' ');
-      const related =
-        relatedQuery.length >= 2
-          ? await searchFoodsByName({ dogId: dog.id, query: relatedQuery })
-          : { items: [] };
-      const catalogExact = related.items.find(
-        (item) => item.barcode === exact.barcode,
-      );
-      const resolvedExact = catalogExact
-        ? {
-            ...catalogExact,
-            ...exact,
-            brand: exact.brand ?? catalogExact.brand,
-            name: exact.name ?? catalogExact.name,
-            variant: exact.variant ?? catalogExact.variant,
-            package_size: exact.package_size ?? catalogExact.package_size,
-            food_form: exact.food_form ?? catalogExact.food_form,
-            image_url: exact.image_url ?? catalogExact.image_url,
-          }
-        : exact;
-      const merged = [resolvedExact, ...related.items].filter(
-        (item, index, all) =>
-          all.findIndex((other) => other.barcode === item.barcode) === index,
-      );
-      setHits(merged);
-      setExactBarcode(exact.barcode);
-      setSelected(null);
-      setStep('results');
-    } catch {
-      setMessage('Codice non riconosciuto. Prova con marca e nome.');
-      setStep('identify');
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!scannedBarcode || barcodeStarted.current || photoFoodId) return;
-    barcodeStarted.current = true;
-    setBarcode(scannedBarcode);
-    void findBarcode(scannedBarcode);
-  }, [photoFoodId, scannedBarcode]);
-
   const choose = (item: ExternalFoodCandidate) => {
     setSelected(item);
     setManual(false);
@@ -208,6 +174,37 @@ export default function NewFoodScreen() {
     setStep('details');
     setMessage(null);
   };
+
+  useEffect(() => {
+    if (!catalogBarcode || catalogPickStarted.current || !dog.id) return;
+    catalogPickStarted.current = true;
+    let active = true;
+    setWorking(true);
+    setMessage(null);
+    void lookupFoodByBarcode({ dogId: dog.id, barcode: catalogBarcode })
+      .then((exact) => {
+        if (!active) return;
+        setSelected(exact);
+        setManual(false);
+        setBrand(exact.brand ?? '');
+        setName(exact.name ?? '');
+        setStep('details');
+        setMessage(null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setMessage(
+          'Non trovo più questo prodotto. Cerca per nome o fotografa la confezione.',
+        );
+        setStep('identify');
+      })
+      .finally(() => {
+        if (active) setWorking(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [catalogBarcode, dog.id]);
 
   const startManual = () => {
     setSelected(null);
@@ -300,145 +297,179 @@ export default function NewFoodScreen() {
     }
   };
 
+  const selectedMeta = selected ? uniqueProductMeta(selected) : [];
+
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title={`Cibo di ${dog.name}`} />
 
       {step === 'identify' ? (
         <>
-          <Text style={styles.title}>Cibo di {dog.name}</Text>
-          <Text style={styles.subtitle}>
-            Cerca per nome oppure fotografa la confezione. Prima di salvare
-            sceglierai sempre tu il prodotto giusto.
+          <Text style={styles.hero}>Il cibo di {dog.name}</Text>
+          <Text style={styles.lead}>
+            Cerca o scegli tra i più usati. Un tap e confermi.
           </Text>
 
           <View style={styles.searchRow}>
+            <Ionicons name="search-outline" size={20} color={colors.textMuted} />
             <TextInput
               accessibilityLabel="Marca o nome dell’alimento"
               value={query}
               onChangeText={setQuery}
-              placeholder="Marca o nome"
+              placeholder="Cerca marca o nome…"
               placeholderTextColor={colors.textMuted}
               returnKeyType="search"
-              style={[styles.input, styles.searchInput]}
+              autoFocus={!catalogBarcode && !photoFoodId}
+              style={styles.searchInput}
             />
-          </View>
-
-          <View style={styles.filterRow} accessibilityLabel="Filtra per tipo di alimento">
-            {[
-              ['', 'Tutti'],
-              ['crocchette', 'Crocchette'],
-              ['umido', 'Umido'],
-              ['snack', 'Snack'],
-            ].map(([value, label]) => (
+            {query ? (
               <Pressable
-                key={value || 'all'}
                 accessibilityRole="button"
-                accessibilityState={{ selected: foodForm === value }}
-                onPress={() => setFoodForm(value)}
-                style={[styles.filterChip, foodForm === value && styles.filterChipActive]}
+                accessibilityLabel="Pulisci ricerca"
+                onPress={() => setQuery('')}
+                hitSlop={8}
               >
-                <Text style={[styles.filterLabel, foodForm === value && styles.filterLabelActive]}>{label}</Text>
+                <Ionicons name="close-circle" size={20} color={colors.textMuted} />
               </Pressable>
-            ))}
+            ) : null}
           </View>
 
-          {searching ? <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>Cerco nel catalogo…</Text> : null}
-          {!searching && catalogLoading ? <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>Carico gli alimenti disponibili…</Text> : null}
+          <View style={styles.filters}>
+            {FILTERS.map((filter) => {
+              const selectedFilter = foodForm === filter.value;
+              return (
+                <Pressable
+                  key={filter.value || 'all'}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedFilter }}
+                  onPress={() => setFoodForm(filter.value)}
+                  style={[styles.chip, selectedFilter && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, selectedFilter && styles.chipTextActive]}>
+                    {filter.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.count}>
+            {searching
+              ? 'Cerco nel catalogo…'
+              : catalogLoading
+                ? 'Carico lo scaffale…'
+                : query.trim()
+                  ? `${hits.length} risultat${hits.length === 1 ? 'o' : 'i'}`
+                  : 'Tra i più usati'}
+          </Text>
+
           {hits.length > 0 ? (
-            <View style={styles.results}>
-              <View style={styles.resultsHeader}><Text style={styles.resultsTitle}>Risultati ({hits.length})</Text><Text style={styles.sortLabel}>Ordina ↑</Text></View>
+            <View style={styles.grid}>
               {hits.map((item) => (
-                <CandidateCard key={item.lookup_id || item.barcode} item={item} exact={false} onPress={() => choose(item)} />
-              ))}
-              {!query.trim() && catalogNextPage ? (
-                <Button
-                  title="Mostra altri alimenti"
-                  loading={catalogLoading}
-                  onPress={() => {
-                    setCatalogLoading(true);
-                    void browseFoodCatalog({ dogId: dog.id, foodForm, page: catalogNextPage })
-                      .then((result) => {
-                        setHits((current) => [...current, ...result.items.map((item) => ({ ...item, lookup_id: '' }))]);
-                        setCatalogNextPage(result.next_page);
-                      })
-                      .catch(() => setMessage('Non riesco a caricare altri alimenti adesso.'))
-                      .finally(() => setCatalogLoading(false));
-                  }}
+                <FoodShelfCard
+                  key={item.lookup_id || item.barcode || `${item.brand}-${item.name}`}
+                  item={item}
+                  width={cardWidth}
+                  onPress={() => choose(item)}
                 />
-              ) : null}
+              ))}
             </View>
           ) : null}
 
-          <Text style={styles.or}>oppure</Text>
-          <MethodButton
-            icon="camera-outline"
-            title="Usa una foto"
-            subtitle="Fotografa marca e nome"
-            onPress={() => router.push('/nutrition/foods/scan')}
-          />
-          <MethodButton
-            icon="barcode-outline"
-            title="Scansiona il codice"
-            subtitle="Inquadra il codice a barre"
-            onPress={() => router.push('/nutrition/foods/barcode' as never)}
-          />
-          <Pressable
-            accessibilityRole="button"
-            onPress={startManual}
-            style={styles.textAction}
-          >
-            <Text style={styles.textActionLabel}>Non lo trovo, lo inserisco io</Text>
-          </Pressable>
-        </>
-      ) : null}
+          {!query.trim() && catalogNextPage ? (
+            <Button
+              title="Mostra altri"
+              loading={catalogLoading}
+              variant="outline"
+              onPress={() => {
+                setCatalogLoading(true);
+                void browseFoodCatalog({
+                  dogId: dog.id,
+                  foodForm,
+                  page: catalogNextPage,
+                  pageSize: 40,
+                })
+                  .then((result) => {
+                    setHits((current) => [
+                      ...current,
+                      ...result.items.map((item) => ({ ...item, lookup_id: '' })),
+                    ]);
+                    setCatalogNextPage(result.next_page);
+                  })
+                  .catch(() => setMessage('Non riesco a caricare altri alimenti adesso.'))
+                  .finally(() => setCatalogLoading(false));
+              }}
+            />
+          ) : null}
 
-      {step === 'results' ? (
-        <>
-          <Text style={styles.title}>Scegli quello giusto</Text>
-          <Text style={styles.subtitle}>
-            Controlla foto, marca, nome e formato sulla tua confezione.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setStep('identify');
-              setHits([]);
-            }}
-            style={styles.textAction}
-          >
-            <Text style={styles.textActionLabel}>Cambia ricerca</Text>
-          </Pressable>
-          <View style={styles.results}>
-            {hits.map((item) => (
-              <CandidateCard
-                key={item.lookup_id || item.barcode}
-                item={item}
-                exact={item.barcode === exactBarcode}
-                onPress={() => choose(item)}
-              />
-            ))}
+          <View style={styles.fallbackBlock}>
+            <Text style={styles.or}>Non lo trovi?</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/nutrition/foods/scan')}
+              style={styles.photoCta}
+            >
+              <View style={styles.photoIcon}>
+                <Ionicons name="camera-outline" size={22} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.photoTitle}>Fotografa la confezione</Text>
+                <Text style={styles.photoSub}>Solo se non è in catalogo</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={startManual}
+              style={styles.textAction}
+            >
+              <Text style={styles.textActionLabel}>Inseriscilo a mano</Text>
+            </Pressable>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={startManual}
-            style={styles.textAction}
-          >
-            <Text style={styles.textActionLabel}>
-              Nessuno di questi, lo inserisco io
-            </Text>
-          </Pressable>
         </>
       ) : null}
 
       {step === 'details' ? (
         <>
-          <Text style={styles.title}>
-            {manual ? 'Inserisci l’alimento' : 'Hai scelto questo'}
+          <Text style={styles.confirmEyebrow}>
+            {manual ? 'Inserimento' : 'Conferma'}
           </Text>
-          {selected ? (
-            <CandidateCard item={selected} exact={selected.barcode === exactBarcode} onPress={() => setPreviewItem(selected)} />
+          <Text style={styles.hero}>
+            {manual ? 'Inserisci l’alimento' : 'È questo?'}
+          </Text>
+
+          {selected && !manual ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Anteprima prodotto"
+              onPress={() => setPreviewItem(selected)}
+              style={styles.heroPack}
+            >
+              {selected.image_url ? (
+                <Image source={{ uri: selected.image_url }} style={styles.heroImage} />
+              ) : (
+                <LinearGradient
+                  colors={['#CCFBF1', '#DBEAFE']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.heroFallback}
+                >
+                  <Ionicons name="nutrition-outline" size={56} color={colors.accent} />
+                </LinearGradient>
+              )}
+              <View style={styles.heroInfo}>
+                {selected.brand ? (
+                  <Text style={styles.heroBrand}>{selected.brand}</Text>
+                ) : null}
+                <Text style={styles.heroName}>{selected.name}</Text>
+                {selectedMeta.length > 0 ? (
+                  <Text style={styles.heroMeta}>{selectedMeta.join(' · ')}</Text>
+                ) : null}
+                <Text style={styles.heroPeek}>Dettagli prodotto ›</Text>
+              </View>
+            </Pressable>
           ) : null}
+
           {manual ? (
             <View style={styles.manualFields}>
               <Text style={styles.fieldLabel}>Marca</Text>
@@ -465,7 +496,7 @@ export default function NewFoodScreen() {
           {!manual ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => setStep(hits.length ? 'results' : 'identify')}
+              onPress={() => setStep('identify')}
               style={styles.textAction}
             >
               <Text style={styles.textActionLabel}>Scegli un altro alimento</Text>
@@ -487,10 +518,12 @@ export default function NewFoodScreen() {
               thumbColor={activeNow ? colors.accent : colors.textMuted}
             />
           </View>
+
           {activeNow ? (
             <>
               <Text style={styles.fieldLabel}>
-                Quanto ne mangia al giorno? <Text style={styles.optional}>Facoltativo</Text>
+                Quanto ne mangia al giorno?{' '}
+                <Text style={styles.optional}>Facoltativo</Text>
               </Text>
               <TextInput
                 accessibilityLabel="Quantità giornaliera"
@@ -536,8 +569,9 @@ export default function NewFoodScreen() {
               ) : null}
             </>
           ) : null}
+
           <Button
-            title={`Salva per ${dog.name}`}
+            title={manual ? `Salva per ${dog.name}` : `Sì, è questo · Salva`}
             loading={working}
             disabled={!name.trim()}
             onPress={() => void save()}
@@ -545,12 +579,25 @@ export default function NewFoodScreen() {
         </>
       ) : null}
 
-      {working ? <Text style={styles.status}>Sto cercando…</Text> : null}
+      {working && step === 'identify' ? (
+        <Text style={styles.status}>Sto caricando il prodotto…</Text>
+      ) : null}
       {message ? <Text style={styles.message}>{message}</Text> : null}
-      <Modal visible={Boolean(previewItem)} transparent animationType="fade" onRequestClose={() => setPreviewItem(null)}>
+
+      <Modal
+        visible={Boolean(previewItem)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewItem(null)}
+      >
         <Pressable style={styles.previewBackdrop} onPress={() => setPreviewItem(null)}>
-          <Pressable style={styles.previewCard} onPress={(event) => event.stopPropagation()}>
-            {previewItem?.image_url ? <Image source={{ uri: previewItem.image_url }} style={styles.previewImage} /> : null}
+          <Pressable
+            style={styles.previewCard}
+            onPress={(event) => event.stopPropagation()}
+          >
+            {previewItem?.image_url ? (
+              <Image source={{ uri: previewItem.image_url }} style={styles.previewImage} />
+            ) : null}
             <Text style={styles.previewBrand}>{previewItem?.brand}</Text>
             <Text style={styles.previewName}>{previewItem?.name}</Text>
             {previewItem && uniqueProductMeta(previewItem).length > 0 ? (
@@ -558,102 +605,52 @@ export default function NewFoodScreen() {
                 {uniqueProductMeta(previewItem).join(' · ')}
               </Text>
             ) : null}
-            {previewItem?.attribution ? <Text style={styles.productMeta}>Fonte: Open Pet Food Facts</Text> : null}
+            {previewItem?.attribution ? (
+              <Text style={styles.productMeta}>Fonte: Open Pet Food Facts</Text>
+            ) : null}
             {previewItem?.ingredients_raw ? (
               <View style={styles.previewAnalysis}>
                 <Text style={styles.previewAnalysisTitle}>Ingredienti</Text>
-                <Text>{previewItem.ingredients_raw}</Text>
+                <Text style={styles.previewBody}>{previewItem.ingredients_raw}</Text>
               </View>
             ) : null}
-            {previewItem?.guaranteed_analysis && Object.keys(previewItem.guaranteed_analysis).length > 0 ? (
+            {previewItem?.guaranteed_analysis &&
+            Object.keys(previewItem.guaranteed_analysis).length > 0 ? (
               <View style={styles.previewAnalysis}>
                 <Text style={styles.previewAnalysisTitle}>Informazioni del prodotto</Text>
-                {previewItem.guaranteed_analysis.crude_protein_min != null ? <Text>Proteine {previewItem.guaranteed_analysis.crude_protein_min}%</Text> : null}
-                {previewItem.guaranteed_analysis.crude_fat_min != null ? <Text>Grassi {previewItem.guaranteed_analysis.crude_fat_min}%</Text> : null}
-                {previewItem.guaranteed_analysis.crude_fiber_max != null ? <Text>Fibre {previewItem.guaranteed_analysis.crude_fiber_max}%</Text> : null}
-                {previewItem.guaranteed_analysis.moisture_max != null ? <Text>Umidità {previewItem.guaranteed_analysis.moisture_max}%</Text> : null}
-                {(previewItem.guaranteed_analysis.calories ?? previewItem.calories) ? <Text>Calorie {previewItem.guaranteed_analysis.calories ?? previewItem.calories}</Text> : null}
-                {Object.entries(previewItem.guaranteed_analysis.additional_nutrition ?? {}).map(([key, value]) => (
-                  <Text key={key}>{key.replace(/_/g, ' ')} {Array.isArray(value) ? value.join(', ') : String(value)}</Text>
-                ))}
+                {previewItem.guaranteed_analysis.crude_protein_min != null ? (
+                  <Text style={styles.previewBody}>
+                    Proteine {previewItem.guaranteed_analysis.crude_protein_min}%
+                  </Text>
+                ) : null}
+                {previewItem.guaranteed_analysis.crude_fat_min != null ? (
+                  <Text style={styles.previewBody}>
+                    Grassi {previewItem.guaranteed_analysis.crude_fat_min}%
+                  </Text>
+                ) : null}
+                {previewItem.guaranteed_analysis.crude_fiber_max != null ? (
+                  <Text style={styles.previewBody}>
+                    Fibre {previewItem.guaranteed_analysis.crude_fiber_max}%
+                  </Text>
+                ) : null}
+                {previewItem.guaranteed_analysis.moisture_max != null ? (
+                  <Text style={styles.previewBody}>
+                    Umidità {previewItem.guaranteed_analysis.moisture_max}%
+                  </Text>
+                ) : null}
+                {(previewItem.guaranteed_analysis.calories ?? previewItem.calories) ? (
+                  <Text style={styles.previewBody}>
+                    Calorie{' '}
+                    {previewItem.guaranteed_analysis.calories ?? previewItem.calories}
+                  </Text>
+                ) : null}
               </View>
             ) : null}
-            {previewItem?.guaranteed_analysis && Object.keys(previewItem.guaranteed_analysis).length === 0 && previewItem.calories ? (
-              <View style={styles.previewAnalysis}>
-                <Text style={styles.previewAnalysisTitle}>Informazioni del prodotto</Text>
-                <Text>Calorie {previewItem.calories}</Text>
-              </View>
-            ) : null}
-            <Button title="Scegli questo alimento" onPress={() => { if (previewItem) choose(previewItem); setPreviewItem(null); }} />
+            <Button title="Chiudi" variant="outline" onPress={() => setPreviewItem(null)} />
           </Pressable>
         </Pressable>
       </Modal>
     </ScreenContainer>
-  );
-}
-
-function MethodButton({
-  icon,
-  title,
-  subtitle,
-  onPress,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.method}>
-      <View style={styles.methodIcon}>
-        <Ionicons name={icon} size={22} color={colors.accent} />
-      </View>
-      <View style={styles.methodCopy}>
-        <Text style={styles.methodTitle}>{title}</Text>
-        <Text style={styles.methodSubtitle}>{subtitle}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function CandidateCard({
-  item,
-  exact = false,
-  onPress,
-}: {
-  item: ExternalFoodCandidate;
-  exact?: boolean;
-  onPress?: () => void;
-}) {
-  const content = (
-    <>
-      {item.image_url ? (
-        <Image source={{ uri: item.image_url }} style={styles.productImage} />
-      ) : (
-        <View style={styles.productImageFallback}>
-          <Ionicons name="nutrition-outline" size={24} color={colors.accent} />
-        </View>
-      )}
-      <View style={styles.productCopy}>
-        {exact ? <Text style={styles.exact}>Corrisponde al codice</Text> : null}
-        {item.brand ? <Text style={styles.productBrand}>{item.brand}</Text> : null}
-        <Text style={styles.productName}>{item.name}</Text>
-        {item.variant ? <Text style={styles.productMeta}>{item.variant}</Text> : null}
-        {onPress ? <Text style={styles.productAction}>Tocca per verificare questo alimento</Text> : null}
-      </View>
-      {onPress ? (
-        <View style={styles.addCircle}><Ionicons name="add" size={22} color="#FFFFFF" /></View>
-      ) : (
-        <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-      )}
-    </>
-  );
-  return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.product}>
-      {content}
-    </Pressable>
-  ) : (
-    <View style={[styles.product, styles.productSelected]}>{content}</View>
   );
 }
 
@@ -671,66 +668,102 @@ function uniqueProductMeta(item: ExternalFoodCandidate): string[] {
 
 const styles = StyleSheet.create({
   content: { gap: spacing.md, paddingBottom: spacing.xxxl },
-  title: {
+  hero: {
     color: colors.text,
-    fontSize: typography.size.xl,
+    fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
+    letterSpacing: -0.4,
   },
-  subtitle: {
+  confirmEyebrow: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  lead: {
     color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-    marginBottom: spacing.sm,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * 1.35,
+    marginTop: -4,
   },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  searchInput: { flex: 1, minWidth: 0 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  filterChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surface },
-  filterChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  filterLabel: { color: colors.textSecondary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold },
-  filterLabelActive: { color: colors.accent },
-  input: {
-    minHeight: 52,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: radius.md,
     backgroundColor: colors.surface,
+    borderRadius: 18,
+    paddingHorizontal: spacing.md,
+    minHeight: 54,
+  },
+  searchInput: {
+    flex: 1,
     color: colors.text,
     fontSize: typography.size.md,
+    paddingVertical: 12,
   },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.text,
+    borderColor: colors.text,
+  },
+  chipText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: typography.weight.semibold,
+  },
+  chipTextActive: { color: '#FFFFFF' },
+  count: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: typography.weight.bold,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  fallbackBlock: { gap: spacing.sm, marginTop: spacing.sm },
   or: {
     color: colors.textSecondary,
     fontSize: typography.size.xs,
     textAlign: 'center',
-    marginVertical: spacing.xs,
   },
-  method: {
+  photoCta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: 18,
     backgroundColor: colors.surface,
   },
-  methodIcon: {
-    width: 40,
-    height: 40,
+  photoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
     backgroundColor: colors.accentSoft,
   },
-  methodCopy: { flex: 1 },
-  methodTitle: {
+  photoTitle: {
     color: colors.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
-  methodSubtitle: {
+  photoSub: {
     color: colors.textSecondary,
     fontSize: typography.size.xs,
     marginTop: 2,
@@ -741,72 +774,52 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
-  results: { gap: spacing.sm },
-  resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
-  resultsTitle: { color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
-  sortLabel: { color: colors.textSecondary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold },
-  searchStatus: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
-  previewBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(15,35,65,0.48)' },
-  previewCard: { width: '100%', maxWidth: 360, padding: spacing.lg, gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.surface },
-  previewImage: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
-  previewBrand: { color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
-  previewName: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold },
-  previewAnalysis: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, gap: spacing.xs },
-  previewAnalysisTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.semibold },
-  product: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    minHeight: 98,
+  heroPack: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
   },
-  productSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
-  },
-  productImage: {
-    width: 82,
-    height: 82,
-    borderRadius: radius.md,
+  heroImage: {
+    width: '100%',
+    aspectRatio: 1.05,
     backgroundColor: colors.surfaceMuted,
   },
-  productImageFallback: {
-    width: 82,
-    height: 82,
+  heroFallback: {
+    width: '100%',
+    aspectRatio: 1.05,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.sm,
-    backgroundColor: colors.accentSoft,
   },
-  productCopy: { flex: 1 },
-  exact: {
+  heroInfo: {
+    padding: spacing.lg,
+    gap: 4,
+  },
+  heroBrand: {
     color: colors.accent,
-    fontSize: typography.size.xs,
+    fontSize: 12,
     fontWeight: typography.weight.bold,
-    marginBottom: 2,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
-  productBrand: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.semibold,
-  },
-  productName: {
+  heroName: {
     color: colors.text,
-    fontSize: typography.size.md,
+    fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
+    lineHeight: typography.size.xl * 1.25,
+  },
+  heroMeta: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
     marginTop: 2,
   },
-  productMeta: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    marginTop: 3,
+  heroPeek: {
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+    marginTop: 8,
   },
-  productAction: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold, marginTop: spacing.xs },
-  addCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   manualFields: { gap: spacing.sm },
   fieldLabel: {
     color: colors.text,
@@ -818,12 +831,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: typography.weight.regular,
   },
+  input: {
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: typography.size.md,
+  },
   currentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: 18,
     backgroundColor: colors.primarySoft,
   },
   currentCopy: { flex: 1 },
@@ -853,7 +877,59 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
     padding: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: 16,
     backgroundColor: colors.surfaceMuted,
+  },
+  previewBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    backgroundColor: 'rgba(15,35,65,0.48)',
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 360,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+  },
+  previewImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+  },
+  previewBrand: {
+    color: colors.accent,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    textTransform: 'uppercase',
+  },
+  previewName: {
+    color: colors.text,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
+  },
+  productMeta: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+  },
+  previewAnalysis: {
+    padding: spacing.md,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceMuted,
+    gap: spacing.xs,
+  },
+  previewAnalysisTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  previewBody: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
   },
 });

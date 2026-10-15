@@ -229,7 +229,7 @@ export async function browseFoodCatalog(options: {
     q: options.query?.trim() ?? '',
     brand: options.brand?.trim() ?? '',
     page: String(options.page ?? 1),
-    page_size: String(options.pageSize ?? 20),
+    page_size: String(options.pageSize ?? 40),
   });
   if (options.foodForm) params.set('food_form', options.foodForm);
   return api.get(`/v1/nutrition/catalog?${params.toString()}`);
