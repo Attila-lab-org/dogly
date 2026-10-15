@@ -140,7 +140,10 @@ class Settings(BaseSettings):
     # via the CORS_ORIGINS env var.
     cors_origins: str = (
         "http://localhost:8083,http://127.0.0.1:8083,"
-        "http://localhost:8081,http://127.0.0.1:8081"
+        "http://localhost:8081,http://127.0.0.1:8081,"
+        "https://dogly-eight.vercel.app,"
+        "https://dogly-l2g6.vercel.app,"
+        "https://dogly-web.vercel.app"
     )
 
     @model_validator(mode="after")

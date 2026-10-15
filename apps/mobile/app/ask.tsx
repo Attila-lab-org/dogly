@@ -48,25 +48,20 @@ import {
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; retryRequestId?: string; attachmentUri?: string };
 
-/** Se il messaggio lascia l’episodio pinnato, la chat torna libera. */
+/** Unpin solo su cambio discorso esplicito — non su messaggi lunghi generici. */
 function looksLikeTopicChange(text: string): boolean {
   const t = text.trim().toLocaleLowerCase('it-IT');
-  if (t.length < 10) return false;
+  if (t.length < 12) return false;
   if (
-    /approfond|perch[eé]|questo momento|questa analisi|la foto|il video|le feci|digest|cacca|abbaia|comportament|s[iì]\b|ok\b|va bene|dimmi di pi[uù]|e poi|cosa (hai|significa|vuol)/i.test(
+    /approfond|questo momento|questa analisi|la foto|il video|le feci|digest|cacca|abbaia|comportament|perch[eé]|cosa (hai visto|significa|vuol dire)/i.test(
       t,
     )
   ) {
     return false;
   }
-  if (
-    /parliamo di|cambiando|altra cosa|un['’ ]altra|invece\b|vorrei sapere|domanda diversa|del cibo|della passeggiata|del veterinario|dove (posso|trovo)|intorno a|parco|agenda|promemoria/i.test(
-      t,
-    )
-  ) {
-    return true;
-  }
-  return t.length > 90;
+  return /parliamo (di|di altro)|cambiando argomento|altra cosa|un['’ ]altra domanda|invece (parliamo|dimmi)|domanda diversa|lasciamo stare|basta (così|con questo)|passiamo a|del cibo che|della passeggiata|del veterinario|agenda|promemoria|intorno a (casa|noi)/i.test(
+    t,
+  );
 }
 
 export default function AskScreen() {
@@ -108,6 +103,8 @@ export default function AskScreen() {
   );
   const dictationRef = useRef<DictationHandle | null>(null);
   const analysisDoneRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>(messages);
+  messagesRef.current = messages;
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
   const [momentsBusy, setMomentsBusy] = useState<string | null>(null);
   const [savedToMoments, setSavedToMoments] = useState<Record<string, boolean>>({});
@@ -175,16 +172,18 @@ export default function AskScreen() {
         const analysisSource = digestiveHandoff ? 'digestive' : 'behavior';
         setPinnedAnalysis({ eventId, source: analysisSource });
         if (isRevisit) {
-          // GPT vede l’analisi pinnata e apre invitandoti ad approfondire QUELLA.
-          const text = digestiveHandoff
-            ? `Dal diario riprendiamo questa analisi di ${dog.name}. Hai i dettagli dell’episodio: invita ad approfondirla restando su questa lettura.`
-            : `Dal diario riprendiamo questo momento di ${dog.name}. Hai i dettagli dell’episodio: invita ad approfondirlo restando su questa lettura.`;
-          const turn = await createRealtimeTurn(next.id, text, undefined, {
+          const bridgeText = digestiveHandoff
+            ? `Riprendiamo questa analisi di ${dog.name} dal diario.`
+            : `Riprendiamo questo momento di ${dog.name} dal diario.`;
+          const invite = digestiveHandoff
+            ? `Vuoi approfondire questa analisi di ${dog.name}?`
+            : `Vuoi approfondire questo momento di ${dog.name}?`;
+          const turn = await createRealtimeTurn(next.id, bridgeText, invite, {
             eventId,
             source: analysisSource,
           });
           if (!mounted.current) return;
-          setMessages([
+          const nextMessages: Message[] = [
             ...(resumed?.messages ?? []),
             {
               id: turn.id,
@@ -192,7 +191,9 @@ export default function AskScreen() {
               text: turn.assistant_text,
               turn,
             },
-          ]);
+          ];
+          setMessages(nextMessages);
+          await rememberRealtimeSession(next, nextMessages);
         } else {
           const text = digestiveHandoff
             ? 'Ho caricato la foto richiesta.'
@@ -254,16 +255,25 @@ export default function AskScreen() {
               continue;
             }
             markDigestiveUploadCompletedForEvent(pendingAnalysis.eventId);
-            if (isFailedDigestiveStatus(event.status)) {
+            if (
+              isFailedDigestiveStatus(event.status) ||
+              event.status === 'INSUFFICIENT_IMAGE' ||
+              event.status === 'REJECTED_QUALITY'
+            ) {
               if (cancelled || !mounted.current) return;
               setMediaPhase(null);
               setPendingAnalysis(null);
+              setPinnedAnalysis(null);
               setMessages((current) => [
                 ...current,
                 {
                   id: 'analyze-fail-' + pendingAnalysis.eventId,
                   role: 'assistant',
-                  text: 'Non sono riuscito a leggere questa foto. Puoi scattarne un’altra più chiara?',
+                  text:
+                    event.status === 'INSUFFICIENT_IMAGE' ||
+                    event.status === 'REJECTED_QUALITY'
+                      ? 'Questa foto non è abbastanza chiara. Puoi scattarne un’altra con più luce, da vicino e dall’alto?'
+                      : 'Non sono riuscito a leggere questa foto. Puoi scattarne un’altra più chiara?',
                 },
               ]);
               return;
@@ -277,17 +287,22 @@ export default function AskScreen() {
             markUploadCompletedForEvent(pendingAnalysis.eventId);
             if (
               event.status === 'FAILED_TERMINAL' ||
-              event.status === 'CANCELLED'
+              event.status === 'CANCELLED' ||
+              event.status === 'REJECTED_QUALITY'
             ) {
               if (cancelled || !mounted.current) return;
               setMediaPhase(null);
               setPendingAnalysis(null);
+              setPinnedAnalysis(null);
               setMessages((current) => [
                 ...current,
                 {
                   id: 'analyze-fail-' + pendingAnalysis.eventId,
                   role: 'assistant',
-                  text: 'Non sono riuscito a leggere questo video. Puoi riprovare dalla chat?',
+                  text:
+                    event.status === 'REJECTED_QUALITY'
+                      ? 'Questo video non è abbastanza chiaro. Puoi rifarne uno breve, fermo e ben illuminato?'
+                      : 'Non sono riuscito a leggere questo video. Puoi riprovare dalla chat?',
                 },
               ]);
               return;
@@ -313,7 +328,7 @@ export default function AskScreen() {
                   item.id.startsWith('digest-up-') ||
                   item.id.startsWith('video-up-')),
             );
-            return [
+            const nextMessages: Message[] = [
               ...current,
               ...(hasUserUpload
                 ? []
@@ -331,6 +346,9 @@ export default function AskScreen() {
                 turn,
               },
             ];
+            messagesRef.current = nextMessages;
+            void rememberRealtimeSession(session, nextMessages);
+            return nextMessages;
           });
           setPinnedAnalysis({
             eventId: pendingAnalysis.eventId,
@@ -440,27 +458,30 @@ export default function AskScreen() {
         setMediaPhase(null);
         return;
       }
-      setMessages((current) => [
-        ...current,
-        {
-          id: 'digest-up-' + Date.now(),
-          role: 'user',
-          text: 'Ho caricato la foto richiesta.',
-          attachmentUri: uri,
-        },
-      ]);
+      const uploadMsg: Message = {
+        id: 'digest-up-' + Date.now(),
+        role: 'user',
+        text: 'Ho caricato la foto richiesta.',
+        attachmentUri: uri,
+      };
+      const withUpload = [...messagesRef.current, uploadMsg];
+      setMessages(withUpload);
+      messagesRef.current = withUpload;
       if (usingMockGate) {
         setMediaPhase('analyzing');
         await new Promise((r) => setTimeout(r, 1200));
         setMediaPhase(null);
-        setMessages((current) => [
-          ...current,
+        const mockMessages: Message[] = [
+          ...withUpload,
           {
             id: 'digest-mock-' + Date.now(),
             role: 'assistant',
             text: `Ho guardato la foto. Dimmi pure cosa vuoi approfondire sulla digestione di ${dog.name}.`,
           },
-        ]);
+        ];
+        setMessages(mockMessages);
+        messagesRef.current = mockMessages;
+        await rememberRealtimeSession(session, mockMessages);
         return;
       }
       const { eventId: digestiveEventId } = await enqueueAndUploadDigestivePhoto({
@@ -471,7 +492,7 @@ export default function AskScreen() {
       if (!mounted.current) return;
       setMediaPhase('analyzing');
       setPendingAnalysis({ eventId: digestiveEventId, source: 'digestive' });
-      await rememberRealtimeSession(session, messages);
+      await rememberRealtimeSession(session, withUpload);
     } catch (err) {
       setMediaPhase(null);
       if (isQuotaExhaustedError(err) && purchasesEnabled) {
@@ -484,7 +505,6 @@ export default function AskScreen() {
     analyzing,
     dog.id,
     dog.name,
-    messages,
     router,
     sending,
     session,
@@ -541,27 +561,30 @@ export default function AskScreen() {
       if (!session || !userId || !dog.id) return;
       setError(null);
       setMediaPhase('uploading');
-      setMessages((current) => [
-        ...current,
-        {
-          id: 'video-up-' + Date.now(),
-          role: 'user',
-          text: 'Ho caricato il video richiesto.',
-        },
-      ]);
+      const uploadMsg: Message = {
+        id: 'video-up-' + Date.now(),
+        role: 'user',
+        text: 'Ho caricato il video richiesto.',
+      };
+      const withUpload = [...messagesRef.current, uploadMsg];
+      setMessages(withUpload);
+      messagesRef.current = withUpload;
       try {
         if (usingMockGate) {
           setMediaPhase('analyzing');
           await new Promise((r) => setTimeout(r, 1200));
           setMediaPhase(null);
-          setMessages((current) => [
-            ...current,
+          const mockMessages: Message[] = [
+            ...withUpload,
             {
               id: 'video-mock-' + Date.now(),
               role: 'assistant',
               text: `Ho guardato il video di ${dog.name}. Dimmi pure cosa vuoi approfondire.`,
             },
-          ]);
+          ];
+          setMessages(mockMessages);
+          messagesRef.current = mockMessages;
+          await rememberRealtimeSession(session, mockMessages);
           return;
         }
         const { eventId: behaviorEventId } = await enqueueAndUploadBehaviorClip({
@@ -575,7 +598,7 @@ export default function AskScreen() {
         if (!mounted.current) return;
         setMediaPhase('analyzing');
         setPendingAnalysis({ eventId: behaviorEventId, source: 'behavior' });
-        await rememberRealtimeSession(session, messages);
+        await rememberRealtimeSession(session, withUpload);
       } catch (err) {
         setMediaPhase(null);
         if (isQuotaExhaustedError(err) && purchasesEnabled) {
@@ -585,7 +608,7 @@ export default function AskScreen() {
         setError('Non sono riuscito a caricare il video. Riprova.');
       }
     },
-    [dog.id, dog.name, messages, router, session, userId, usingMockGate],
+    [dog.id, dog.name, router, session, userId, usingMockGate],
   );
 
   const pickVideo = useCallback(async () => {
@@ -602,13 +625,13 @@ export default function AskScreen() {
 
   const openVideoCapture = useCallback(async () => {
     if (sending || analyzing || !session) return;
-    await rememberRealtimeSession(session, messages);
+    await rememberRealtimeSession(session, messagesRef.current);
     // Dopo lo scatto, uploading torna in Ask con intent=analyzing (niente processing).
     router.push({
       pathname: '/behavior/capture',
       params: { from: 'ask', sessionId: session.id },
     } as never);
-  }, [analyzing, messages, router, sending, session]);
+  }, [analyzing, router, sending, session]);
 
   const appendTranscript = useCallback((text: string) => {
     setDraft((current) => `${current}${current ? ' ' : ''}${text}`.slice(0, 4000));
