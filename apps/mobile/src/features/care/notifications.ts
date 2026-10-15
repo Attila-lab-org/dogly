@@ -101,7 +101,11 @@ export async function cancelCareReminder(notificationId: string | null) {
   if (!notificationId || !notificationsAvailable) return;
   const Notifications = await loadNotifications();
   if (!Notifications) return;
-  await Notifications.cancelScheduledNotificationAsync(notificationId);
+  try {
+    await Notifications.cancelScheduledNotificationAsync(notificationId);
+  } catch {
+    // A stale scheduler id must never abort the care-event rollback path.
+  }
 }
 
 /**

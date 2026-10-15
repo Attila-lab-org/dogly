@@ -351,8 +351,7 @@ export async function removeCareEvent(
     emit();
     if (
       event.status === 'SCHEDULED' &&
-      event.reminderEnabled &&
-      !event.notificationId
+      event.reminderEnabled
     ) {
       const id = await scheduleCareReminder(event, dogName);
       if (id) {

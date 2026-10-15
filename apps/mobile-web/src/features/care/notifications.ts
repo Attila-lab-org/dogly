@@ -101,7 +101,11 @@ export async function cancelCareReminder(notificationId: string | null) {
   if (!notificationId || !notificationsAvailable) return;
   const Notifications = await loadNotifications();
   if (!Notifications) return;
-  await Notifications.cancelScheduledNotificationAsync(notificationId);
+  try {
+    await Notifications.cancelScheduledNotificationAsync(notificationId);
+  } catch {
+    // A stale scheduler id must never abort the care-event rollback path.
+  }
 }
 
 /**
@@ -128,12 +132,15 @@ export async function cancelAllCareReminders(): Promise<void> {
 export async function rescheduleCareReminders(
   events: CareEvent[],
   dogName: string,
-): Promise<void> {
-  if (!notificationsAvailable) return;
+): Promise<Record<string, string>> {
+  const notificationIds: Record<string, string> = {};
+  if (!notificationsAvailable) return notificationIds;
   for (const event of events) {
     if (event.status !== 'SCHEDULED' || !event.reminderEnabled) continue;
-    await scheduleCareReminder(event, dogName);
+    const notificationId = await scheduleCareReminder(event, dogName);
+    if (notificationId) notificationIds[event.id] = notificationId;
   }
+  return notificationIds;
 }
 
 async function loadNotifications() {
