@@ -1,15 +1,21 @@
+/**
+ * Dettaglio album — stessa griglia Instagram, + in header.
+ */
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, EmptyState, ErrorState, ScreenContainer } from '@/components';
+import { Ionicons } from '@expo/vector-icons';
+import { EmptyState, ErrorState, ScreenContainer } from '@/components';
 import { colors, spacing } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import {
-  PhotoGrid,
-  PrivacyNoticeBanner,
-} from '@/features/photos/components';
-import { PHOTO_COPY } from '@/features/photos/copy';
+import { PhotoGrid } from '@/features/photos/components';
 import { pickAlbumPhoto } from '@/features/photos/share';
 import {
   fetchAlbum,
@@ -37,6 +43,25 @@ export default function AlbumDetailScreen() {
   });
   const album = albumQuery.data;
   const photos = photosQuery.data ?? [];
+
+  const addPhoto = async () => {
+    if (!albumId) return;
+    const uri = await pickAlbumPhoto();
+    if (!uri) return;
+    setUploading(true);
+    try {
+      await uploadAlbumPhoto(albumId, uri);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['gallery-photos', albumId] }),
+        queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
+        queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dogId] }),
+      ]);
+    } catch {
+      Alert.alert('Foto non salvata', 'Il caricamento non è riuscito. Riprova.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (albumQuery.isLoading) {
     return (
@@ -71,23 +96,42 @@ export default function AlbumDetailScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer padded={false}>
       <PhotoGrid
         photos={photos}
         header={
-          <>
-            <StackScreenHeader title={album.title} />
-            <PrivacyNoticeBanner text={PHOTO_COPY.privateDefault} />
-          </>
+          <View style={styles.headerPad}>
+            <StackScreenHeader
+              title={album.title}
+              right={
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Aggiungi foto"
+                  disabled={uploading}
+                  onPress={() => void addPhoto()}
+                  hitSlop={8}
+                  style={styles.iconBtn}
+                >
+                  {uploading ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="add" size={28} color={colors.text} />
+                  )}
+                </Pressable>
+              }
+            />
+          </View>
         }
         empty={
           photosQuery.isLoading ? (
-            <ActivityIndicator color={colors.primary} />
+            <ActivityIndicator color={colors.primary} style={styles.emptyPad} />
           ) : (
-            <EmptyState
-              title="Qui iniziano i suoi momenti"
-              message="Aggiungi una foto che vuoi conservare di questo album."
-            />
+            <View style={styles.emptyPad}>
+              <EmptyState
+                title="Qui iniziano i suoi momenti"
+                message="Tocca + in alto per aggiungere una foto."
+              />
+            </View>
           )
         }
         onPressPhoto={(photo) =>
@@ -95,51 +139,20 @@ export default function AlbumDetailScreen() {
             `/dogs/${dogId}/album/photo/${photo.id}?albumId=${albumId}` as never,
           )
         }
-        footer={
-          <Button
-            title="Aggiungi foto"
-            loading={uploading}
-            style={styles.cta}
-            onPress={async () => {
-              const uri = await pickAlbumPhoto();
-              if (!uri) return;
-              setUploading(true);
-              try {
-                await uploadAlbumPhoto(albumId, uri);
-                await Promise.all([
-                  queryClient.invalidateQueries({
-                    queryKey: ['gallery-photos', albumId],
-                  }),
-                  queryClient.invalidateQueries({
-                    queryKey: ['gallery-albums', dogId],
-                  }),
-                  queryClient.invalidateQueries({
-                    queryKey: ['gallery-dog-photos', dogId],
-                  }),
-                ]);
-                Alert.alert(
-                  'Foto aggiunta',
-                  'Salvata in modo privato nel tuo album.',
-                );
-              } catch {
-                Alert.alert(
-                  'Foto non salvata',
-                  'Il caricamento non è riuscito. Riprova tra poco.',
-                );
-              } finally {
-                setUploading(false);
-              }
-            }}
-          />
-        }
+        footer={<View style={styles.footerSpacer} />}
       />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  cta: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.xxxl,
+  headerPad: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  emptyPad: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl },
+  footerSpacer: { height: spacing.xxxl },
 });

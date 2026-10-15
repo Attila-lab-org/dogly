@@ -10,31 +10,39 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CuteIcon } from '@/components/CuteIcon';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { AlbumPhoto, PhotoAlbum } from './types';
+
+/** Gap stile Instagram (profilo): quasi a filo. */
+const GRID_GAP = 2;
 
 export function PhotoThumbnail({
   photo,
   onPress,
+  onLongPress,
   size = 104,
   manageMode = false,
 }: {
   photo: AlbumPhoto;
   onPress?: () => void;
+  onLongPress?: () => void;
   size?: number;
   manageMode?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={photo.caption ?? 'Foto'}
+      accessibilityLabel={photo.caption ?? 'Momento'}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={280}
       style={[styles.thumb, { width: size, height: size }]}
     >
       <Image source={{ uri: photo.thumbnailUri }} style={styles.thumbImage} />
       {manageMode ? (
         <View style={styles.deleteBadge}>
-          <Ionicons name="trash-outline" size={15} color="#FFFFFF" />
+          <Ionicons name="trash-outline" size={14} color="#FFFFFF" />
         </View>
       ) : null}
     </Pressable>
@@ -44,6 +52,7 @@ export function PhotoThumbnail({
 export function PhotoGrid({
   photos,
   onPressPhoto,
+  onLongPressPhoto,
   style,
   header,
   footer,
@@ -53,6 +62,7 @@ export function PhotoGrid({
 }: {
   photos: AlbumPhoto[];
   onPressPhoto: (photo: AlbumPhoto) => void;
+  onLongPressPhoto?: (photo: AlbumPhoto) => void;
   style?: ViewStyle;
   header?: ReactElement;
   footer?: ReactElement;
@@ -61,17 +71,14 @@ export function PhotoGrid({
   onEndReached?: () => void;
 }) {
   const { width } = useWindowDimensions();
-  const size = Math.max(
-    88,
-    Math.floor((width - spacing.lg * 2 - spacing.sm * 2) / 3),
-  );
+  const size = Math.floor((width - GRID_GAP * 2) / 3);
   return (
     <FlatList
       data={photos}
       keyExtractor={(photo) => photo.id}
       numColumns={3}
-      initialNumToRender={12}
-      maxToRenderPerBatch={12}
+      initialNumToRender={18}
+      maxToRenderPerBatch={18}
       windowSize={7}
       showsVerticalScrollIndicator={false}
       style={styles.gridList}
@@ -86,6 +93,9 @@ export function PhotoGrid({
         <PhotoThumbnail
           photo={photo}
           onPress={() => onPressPhoto(photo)}
+          onLongPress={
+            onLongPressPhoto ? () => onLongPressPhoto(photo) : undefined
+          }
           size={size}
           manageMode={manageMode}
         />
@@ -114,7 +124,7 @@ export function AlbumCard({
         {coverUri ? (
           <Image source={{ uri: coverUri }} style={styles.albumCoverImage} />
         ) : (
-          <Ionicons name="images-outline" size={28} color={colors.textMuted} />
+          <CuteIcon name="play" size={28} color={colors.accent} secondary={colors.accentSoft} />
         )}
       </View>
       <View style={styles.albumMeta}>
@@ -144,7 +154,6 @@ export function PrivacyNoticeBanner({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   thumb: {
-    borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceMuted,
   },
@@ -154,22 +163,22 @@ const styles = StyleSheet.create({
   },
   deleteBadge: {
     position: 'absolute',
-    top: 7,
-    right: 7,
-    width: 30,
-    height: 30,
-    borderRadius: radius.full,
+    top: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.danger,
+    backgroundColor: 'rgba(15,23,42,0.72)',
   },
   gridList: {
     flex: 1,
   },
   gridRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    gap: GRID_GAP,
+    marginBottom: GRID_GAP,
   },
   albumCard: {
     flexDirection: 'row',

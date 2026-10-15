@@ -818,8 +818,33 @@ export default function AskScreen() {
                 </Pressable>
               ) : null}
               {!sending && message.id === latestAssistantId && message.turn?.food_review_href ? <Pressable accessibilityRole="button" accessibilityLabel="Apri alimentazione" onPress={() => router.push('/nutrition/foods' as never)} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="nutrition-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Rivedi l’alimento</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
-              {!sending && message.id === latestAssistantId && message.turn?.save_to_moments_suggested && !savedToMoments[message.id] ? (() => { const uri = priorUserAttachmentUri(messageIndex); return uri ? <Pressable accessibilityRole="button" accessibilityLabel="Salva nei Momenti" disabled={momentsBusy === message.id} onPress={() => void saveAttachmentToMoments(message.id, uri)} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="images-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>{momentsBusy === message.id ? 'Salvo…' : 'Salva nei Momenti'}</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null; })() : null}
-              {savedToMoments[message.id] ? <Text style={styles.savedNote}>Salvata nei Momenti</Text> : null}
+              {!sending && message.id === latestAssistantId && message.turn?.save_to_moments_suggested ? (() => {
+                const uri = priorUserAttachmentUri(messageIndex);
+                if (!uri) return null;
+                const saved = Boolean(savedToMoments[message.id]);
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={saved ? 'Salvata nei Momenti' : 'Salva nei Momenti'}
+                    disabled={saved || momentsBusy === message.id}
+                    onPress={() => void saveAttachmentToMoments(message.id, uri)}
+                    style={({ pressed }) => [styles.saveMomentChip, pressed && styles.pressed]}
+                  >
+                    {momentsBusy === message.id ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Ionicons
+                        name={saved ? 'bookmark' : 'bookmark-outline'}
+                        size={16}
+                        color={saved ? colors.primary : colors.textSecondary}
+                      />
+                    )}
+                    <Text style={[styles.saveMomentText, saved && styles.saveMomentTextDone]}>
+                      {saved ? 'Nei Momenti' : 'Salva'}
+                    </Text>
+                  </Pressable>
+                );
+              })() : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
@@ -1041,5 +1066,23 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
-  savedNote: { marginTop: spacing.sm, color: colors.textMuted, fontSize: typography.size.sm },
+  saveMomentChip: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F4F8FC',
+    borderWidth: 1,
+    borderColor: '#D7E6F4',
+  },
+  saveMomentText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
+  saveMomentTextDone: { color: colors.primary },
 });

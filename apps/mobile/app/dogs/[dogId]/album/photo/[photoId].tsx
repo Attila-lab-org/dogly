@@ -182,33 +182,35 @@ export default function PhotoViewerScreen() {
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Condividi"
           onPress={() =>
             void sharePhoto(
               { ...base, caption: caption.trim() || undefined },
               dog.name,
             )
           }
-          style={styles.actionButton}
+          style={styles.actionIcon}
         >
-          <Ionicons name="share-outline" size={20} color={colors.primary} />
-          <Text style={styles.actionText}>Condividi</Text>
+          <Ionicons name="share-outline" size={24} color={colors.text} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Elimina momento"
           disabled={deleting}
           onPress={() =>
             confirmDestructiveAction(
-              'Eliminare questa foto?',
-              `Verrà rimossa definitivamente dai momenti di ${dog.name}.`,
+              'Eliminare questo momento?',
+              `Verrà rimosso dai Momenti di ${dog.name}.`,
               removePhoto,
             )
           }
-          style={styles.actionButton}
+          style={styles.actionIcon}
         >
-          <Ionicons name="trash-outline" size={20} color={colors.danger} />
-          <Text style={styles.deleteText}>
-            {deleting ? 'Elimino…' : 'Elimina'}
-          </Text>
+          {deleting ? (
+            <ActivityIndicator size="small" color={colors.danger} />
+          ) : (
+            <Ionicons name="trash-outline" size={24} color={colors.danger} />
+          )}
         </Pressable>
       </View>
     </ScreenContainer>
@@ -278,29 +280,17 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xl,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
     marginBottom: spacing.xxl,
   },
-  actionButton: {
-    flex: 1,
-    minHeight: 52,
-    flexDirection: 'row',
+  actionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  actionText: {
-    color: colors.primary,
-    fontWeight: typography.weight.semibold,
-  },
-  deleteText: {
-    color: colors.danger,
-    fontWeight: typography.weight.semibold,
+    backgroundColor: colors.surfaceMuted,
   },
   actionError: { color: colors.danger, fontSize: typography.size.sm, marginBottom: spacing.sm },
   retryButton: { alignSelf: 'center', marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },

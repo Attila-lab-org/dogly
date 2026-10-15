@@ -1,8 +1,20 @@
+/**
+ * Momenti — griglia stile Instagram (profilo): foto a filo, + in header, meno click.
+ */
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, EmptyState, ErrorState, ScreenContainer } from '@/components';
+import { Ionicons } from '@expo/vector-icons';
+import { EmptyState, ErrorState, ScreenContainer } from '@/components';
+import { CuteIcon } from '@/components/CuteIcon';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { PhotoGrid } from '@/features/photos/components';
@@ -18,7 +30,6 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
 import { confirmDestructiveAction } from '@/lib/confirmAction';
 
-// Every photo may require a signed URL; keep the initial fetch responsive.
 const PAGE_SIZE = 24;
 
 export default function AlbumIndexScreen() {
@@ -49,22 +60,23 @@ export default function AlbumIndexScreen() {
     setAdding(true);
     try {
       const album = await getOrCreateMomentsAlbum(dogId);
-        const uploaded = await uploadAlbumPhoto(album.id, uri);
-        queryClient.setQueryData(
-          ['gallery-dog-photos', dogId, PAGE_SIZE],
-          (current: { pages: AlbumPhoto[][]; pageParams: number[] } | undefined) => {
-            if (!current) return current;
-            const [firstPage = [], ...restPages] = current.pages;
-            return { ...current, pages: [[uploaded, ...firstPage], ...restPages] };
-          },
-        );
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
-          queryClient.invalidateQueries({
-            queryKey: ['gallery-dog-photos', dogId],
-            refetchType: 'none',
-          }),
-        ]);
+      const uploaded = await uploadAlbumPhoto(album.id, uri);
+      queryClient.setQueryData(
+        ['gallery-dog-photos', dogId, PAGE_SIZE],
+        (current: { pages: AlbumPhoto[][]; pageParams: number[] } | undefined) => {
+          if (!current) return current;
+          const [firstPage = [], ...restPages] = current.pages;
+          return { ...current, pages: [[uploaded, ...firstPage], ...restPages] };
+        },
+      );
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
+        queryClient.invalidateQueries({
+          queryKey: ['gallery-dog-photos', dogId],
+          refetchType: 'none',
+        }),
+        queryClient.invalidateQueries({ queryKey: ['social-moments', dogId] }),
+      ]);
     } catch {
       Alert.alert(
         'Foto non salvata',
@@ -77,8 +89,8 @@ export default function AlbumIndexScreen() {
 
   const deletePhoto = (photo: AlbumPhoto) => {
     confirmDestructiveAction(
-      'Eliminare questa foto?',
-      'Verrà rimossa definitivamente dai momenti di ' + dog.name + '.',
+      'Eliminare questo momento?',
+      `Verrà rimosso dai Momenti di ${dog.name}.`,
       () => {
         setDeletingId(photo.id);
         void deleteAlbumPhoto(photo.id)
@@ -89,6 +101,9 @@ export default function AlbumIndexScreen() {
               }),
               queryClient.invalidateQueries({
                 queryKey: ['gallery-albums', dogId],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ['social-moments', dogId],
               }),
             ]);
             setDeletingId(null);
@@ -106,8 +121,8 @@ export default function AlbumIndexScreen() {
       <ScreenContainer>
         <StackScreenHeader title={`Momenti di ${dog.name}`} />
         <ErrorState
-          title="Foto non caricate"
-          message="Non riesco a mostrare i suoi momenti. Controlla la connessione e riprova."
+          title="Momenti non caricati"
+          message="Non riesco a mostrarli. Controlla la connessione e riprova."
           retryLabel="Riprova"
           onRetry={() => void photosQuery.refetch()}
         />
@@ -116,44 +131,83 @@ export default function AlbumIndexScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer padded={false} style={styles.screen}>
       <PhotoGrid
         photos={photos}
         manageMode={managing}
         header={
-          <>
-            <StackScreenHeader title={`Momenti di ${dog.name}`} />
-            <View style={styles.heading}>
-              <Text style={styles.intro}>
-                Tutte le foto che vuoi conservare di {dog.name}.
-              </Text>
-              {photos.length > 0 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setManaging((value) => !value)}
-                  style={styles.manageButton}
-                >
-                  <Text style={styles.manageText}>
-                    {managing ? 'Fine' : 'Elimina foto'}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+          <View style={styles.headerPad}>
+            <StackScreenHeader
+              title={managing ? 'Seleziona' : 'Momenti'}
+              right={
+                <View style={styles.headerActions}>
+                  {photos.length > 0 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        managing ? 'Esci dalla selezione' : 'Gestisci momenti'
+                      }
+                      onPress={() => setManaging((value) => !value)}
+                      hitSlop={8}
+                      style={styles.iconBtn}
+                    >
+                      <Ionicons
+                        name={managing ? 'checkmark' : 'trash-outline'}
+                        size={22}
+                        color={managing ? colors.primary : colors.text}
+                      />
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Aggiungi momento"
+                    disabled={adding || Boolean(deletingId)}
+                    onPress={() => void addMoment()}
+                    hitSlop={8}
+                    style={styles.iconBtn}
+                  >
+                    {adding ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Ionicons name="add" size={28} color={colors.text} />
+                    )}
+                  </Pressable>
+                </View>
+              }
+            />
             {managing ? (
-              <Text style={styles.manageHint}>
-                Tocca il cestino sulla foto che vuoi eliminare.
-              </Text>
+              <Text style={styles.manageHint}>Tocca un momento per eliminarlo.</Text>
             ) : null}
-          </>
+          </View>
         }
         empty={
           photosQuery.isLoading ? (
-            <ActivityIndicator color={colors.primary} />
+            <View style={styles.emptyWrap}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
           ) : (
-            <EmptyState
-              title={`Il primo momento di ${dog.name}`}
-              message="Scegli una foto che ami: apparirà subito qui."
-            />
+            <View style={styles.emptyWrap}>
+              <View style={styles.emptyIcon}>
+                <CuteIcon
+                  name="play"
+                  size={36}
+                  color={colors.accent}
+                  secondary={colors.accentSoft}
+                />
+              </View>
+              <EmptyState
+                title={`Il primo momento di ${dog.name}`}
+                message="Tocca + in alto per aggiungere una foto."
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void addMoment()}
+                style={styles.emptyAdd}
+              >
+                <Ionicons name="add" size={20} color="#FFFFFF" />
+                <Text style={styles.emptyAddText}>Aggiungi</Text>
+              </Pressable>
+            </View>
           )
         }
         onPressPhoto={(photo) => {
@@ -165,24 +219,24 @@ export default function AlbumIndexScreen() {
             `/dogs/${dogId}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
           );
         }}
+        onLongPressPhoto={(photo) => {
+          if (!managing) setManaging(true);
+          else deletePhoto(photo);
+        }}
         onEndReached={() => {
           if (photosQuery.hasNextPage && !photosQuery.isFetchingNextPage) {
             void photosQuery.fetchNextPage();
           }
         }}
         footer={
-          <View>
-            {photosQuery.isFetchingNextPage ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : null}
-            <Button
-              title={photos.length === 0 ? 'Aggiungi la prima foto' : 'Aggiungi foto'}
-              loading={adding}
-              disabled={Boolean(deletingId)}
-              onPress={() => void addMoment()}
-              style={styles.cta}
+          photosQuery.isFetchingNextPage ? (
+            <ActivityIndicator
+              color={colors.primary}
+              style={styles.pageSpinner}
             />
-          </View>
+          ) : (
+            <View style={styles.footerSpacer} />
+          )
         }
       />
     </ScreenContainer>
@@ -190,34 +244,53 @@ export default function AlbumIndexScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    flexDirection: 'row',
+  screen: { paddingHorizontal: 0 },
+  headerPad: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  iconBtn: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  intro: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-  },
-  manageButton: {
-    minHeight: 44,
     justifyContent: 'center',
-  },
-  manageText: {
-    color: colors.danger,
-    fontWeight: typography.weight.semibold,
   },
   manageHint: {
     color: colors.textSecondary,
     fontSize: typography.size.xs,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
   },
-  cta: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.xxxl,
+  emptyWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl,
+    alignItems: 'center',
+    gap: spacing.md,
   },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyAdd: {
+    marginTop: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyAddText: {
+    color: '#FFFFFF',
+    fontWeight: typography.weight.bold,
+    fontSize: typography.size.sm,
+  },
+  pageSpinner: { marginVertical: spacing.lg },
+  footerSpacer: { height: spacing.xxxl },
 });

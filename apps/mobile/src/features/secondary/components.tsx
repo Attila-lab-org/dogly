@@ -16,13 +16,15 @@ import type { CandidateLevel } from './types';
 
 export { SectionHeader };
 
-/** Top bar stile mockup-result: back chevron a sinistra, titolo centrato. */
+/** Top bar stile mockup-result: back a sinistra, titolo centrato, azione opzionale a destra. */
 export function StackScreenHeader({
   title,
   onBack,
+  right,
 }: {
   title: string;
   onBack?: () => void;
+  right?: React.ReactNode;
 }) {
   const router = useRouter();
   return (
@@ -32,14 +34,16 @@ export function StackScreenHeader({
         accessibilityLabel="Indietro"
         onPress={onBack ?? (() => router.back())}
         hitSlop={12}
-        style={headerStyles.back}
+        style={headerStyles.side}
       >
         <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={headerStyles.title} numberOfLines={1}>
         {title}
       </Text>
-      <View style={headerStyles.back} />
+      <View style={[headerStyles.side, headerStyles.sideRight]}>
+        {right ?? null}
+      </View>
     </View>
   );
 }
@@ -48,11 +52,19 @@ const headerStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
-  back: {
-    width: 32,
+  side: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  sideRight: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'flex-end',
   },
   title: {
     flex: 1,

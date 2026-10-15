@@ -181,7 +181,8 @@ export default function HomeScreen() {
               ))}
             </View>
           ) : <Pressable accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} style={styles.emptyInsight}>
-            <Ionicons name="images-outline" size={24} color={colors.primary} /><Text style={styles.emptyText}>Aggiungi i vostri momenti all’album</Text>
+            <CuteIcon name="play" size={24} color={colors.accent} secondary={colors.accentSoft} />
+            <Text style={styles.emptyText}>Aggiungi i primi Momenti di {dog.name}</Text>
           </Pressable>}
 
           {recentInsights.length > 0 ? <>
