@@ -6,7 +6,7 @@ No endpoint accepts owner_id/user_id from the client as authority (sez. 9.1).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -699,6 +699,43 @@ class DiaryItem(BaseModel):
 
 class DiaryPage(CursorPage):
     items: list[DiaryItem]
+
+
+# ---------------------------------------------------------------------------
+# Giochi (classifica settimanale)
+# ---------------------------------------------------------------------------
+
+
+class GameScoreCreate(BaseModel):
+    dog_id: str
+    game: Literal["squirrel"] = "squirrel"
+    score: int = Field(ge=0, le=500)
+    client_request_id: str = Field(min_length=8, max_length=128)
+
+
+class GameScoreOut(BaseModel):
+    id: str
+    dog_id: str
+    game: str
+    score: int
+    week_start: date
+    created_at: datetime
+
+
+class LeaderboardEntryOut(BaseModel):
+    rank: int
+    dog_id: str
+    dog_name: str
+    score: int
+    avatar_url: str | None = None
+    is_mine: bool = False
+
+
+class GameLeaderboardResponse(BaseModel):
+    game: str
+    week_start: date
+    items: list[LeaderboardEntryOut]
+    me: LeaderboardEntryOut | None = None
 
 
 # ---------------------------------------------------------------------------

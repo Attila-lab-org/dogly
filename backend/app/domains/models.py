@@ -7,7 +7,7 @@ migrations are generated from these models (sez. 3.1).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -52,6 +52,17 @@ class DogRec(BaseModel):
     sex: str | None = None
     weight_kg: float | None = None
     photo_path: str | None = None
+    created_at: datetime
+
+
+class GameScoreRec(BaseModel):
+    id: str
+    user_id: str
+    dog_id: str
+    game: str
+    score: int
+    week_start: date
+    client_request_id: str
     created_at: datetime
 
 

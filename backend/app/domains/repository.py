@@ -27,6 +27,7 @@ from app.domains.models import (
     FecalEventRec,
     FeedingPeriodRec,
     FoodProductRec,
+    GameScoreRec,
     IdempotencyRec,
     PersonalPatternRec,
     ProcessingContextAnswerRec,
@@ -77,6 +78,7 @@ class InMemoryStore:
         self.digestive_feedback: dict[str, dict[str, str]] = {}
         self.processing_context_answers: dict[str, ProcessingContextAnswerRec] = {}
         self.care_events: dict[str, CareEventRec] = {}
+        self.game_scores: dict[str, GameScoreRec] = {}
         self.daily_activities: dict[str, DailyActivityRec] = {}
         self.signal_experiments: dict[str, SignalExperimentRec] = {}
         self.signal_map_entries: dict[tuple[str, str], SignalMapEntryRec] = {}
