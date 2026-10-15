@@ -1,9 +1,9 @@
 /**
  * "Agility Oreo" — runner rifatto: mondo in parallasse a 3 strati che
- * scorre (il cane sta fermo, è il mondo a muoversi), cane MascotBuddy con
+ * scorre (il cane sta fermo, è il mondo a muoversi), AvatarActor con
  * bob di corsa e salto squash&stretch (+ polvere all'atterraggio), ossi
  * bonus in arcata, ostacoli con bandierine e tunnel semi-trasparente,
- * near-miss "Per un pelo!", crash con rallenty. Telecronista MascotBuddy.
+ * near-miss "Per un pelo!", crash con rallenty. Telecronista AvatarActor.
  * Logica pura in features/games/agilityLogic.ts (RNG iniettato, test).
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -26,7 +26,7 @@ import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { DogAvatar } from '@/features/core/components';
-import { MascotBuddy, type BuddyExpression } from '@/features/mascot/MascotBuddy';
+import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import {
   AGILITY_COMBO_LINE,
   AGILITY_JUMP_LINES,
@@ -263,13 +263,9 @@ function RunningDog({
   return (
     <Animated.View pointerEvents="none" style={[styles.dog, style]}>
       {crashed ? (
-        <MascotBuddy size={76} expression="sad" animate={false} />
-      ) : photoUri ? (
-        <View style={styles.dogRing}>
-          <DogAvatar size={56} photoUri={photoUri} dogName={dogName} />
-        </View>
+        <AvatarActor size={76} expression="sad" animate={false} photoUri={photoUri} dogName={dogName} />
       ) : (
-        <MascotBuddy size={76} expression="happy" />
+        <AvatarActor size={76} expression="happy" photoUri={photoUri} dogName={dogName} />
       )}
     </Animated.View>
   );
@@ -277,16 +273,20 @@ function RunningDog({
 
 /** Buddy telecronista (pattern condiviso). */
 function Commentator({
+  photoUri,
+  dogName,
   line,
   expression,
 }: {
+  photoUri: string | null;
+  dogName: string;
   line: { id: number; text: string } | null;
   expression: BuddyExpression;
 }) {
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        <MascotBuddy size={46} expression={expression} />
+        <AvatarActor size={46} expression={expression} photoUri={photoUri} dogName={dogName} />
       </View>
       {line ? (
         <Animated.View
@@ -597,7 +597,7 @@ export default function AgilityGameScreen() {
 
       {phase === 'playing' ? (
         <View style={styles.gameWrap}>
-          <Commentator line={commentary} expression={expression} />
+          <Commentator photoUri={dog.photoUri} dogName={dog.name} line={commentary} expression={expression} />
           <View style={styles.hud}>
             <View style={styles.hudScore} accessibilityLabel={`Punteggio ${score}`}>
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
@@ -735,7 +735,7 @@ export default function AgilityGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
-          <MascotBuddy size={88} expression={score > 8 ? 'celebrate' : 'sad'} />
+          <AvatarActor size={88} expression={score > 8 ? 'celebrate' : 'sad'} photoUri={dog.photoUri} dogName={dog.name} />
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{agilityEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>

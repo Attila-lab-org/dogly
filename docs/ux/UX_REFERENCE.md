@@ -45,6 +45,15 @@ prodotto (`docs/PRODUCT_PARITY.md`).
 - Slogan di brand: "Il tuo cane, finalmente capito." — header Home e welcome.
 - Token unici in `apps/mobile/src/theme/tokens.ts`.
 - Brand board di riferimento: `docs/ux/brand-dogly-board.jpg` (identità, non layout quotidiano).
+- **Il protagonista è il tuo cane** (regola di coerenza, PO 2026-10-16): in app e nei
+  giochi il cane che agisce, reagisce o commenta è sempre la foto del cane
+  dell'utente — `AvatarActor` (`src/features/core/AvatarActor.tsx`) applica le
+  coreografie delle espressioni (happy/celebrate/sad/focused/neutral) alla foto;
+  mai personaggi surrogati (mascotte esterne o altri cani illustrati) al posto suo.
+- **Le illustrazioni sono scenografia**: lo stile duotone teal/navy (CuteIcon,
+  TummyBuddy, creature e tessere dei giochi, empty state) decora il mondo, non
+  interpreta il cane. Vietato introdurre nuovi personaggi/mascotte senza
+  aggiornare prima questa regola.
 
 ## Mappa schermate V1
 

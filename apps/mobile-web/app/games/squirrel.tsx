@@ -26,7 +26,7 @@ import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { MascotBuddy, type BuddyExpression } from '@/features/mascot/MascotBuddy';
+import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import { SquirrelArt, type SquirrelArtVariant } from '@/features/games/squirrelArt';
 import {
   COMMENTARY_FINAL_SECONDS,
@@ -168,18 +168,22 @@ function ScorePopup({ popup, reducedMotion }: { popup: Popup; reducedMotion: boo
   );
 }
 
-/** Buddy telecronista: mascotte + fumetto di reazione (fade, max ~2s). */
+/** Il tuo cane telecronista: avatar + fumetto di reazione (fade, max ~2s). */
 function Commentator({
+  photoUri,
+  dogName,
   line,
   expression,
 }: {
+  photoUri: string | null;
+  dogName: string;
   line: { id: number; text: string } | null;
   expression: BuddyExpression;
 }) {
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        <MascotBuddy size={46} expression={expression} />
+        <AvatarActor size={46} expression={expression} photoUri={photoUri} dogName={dogName} />
       </View>
       {line ? (
         <Animated.View
@@ -473,7 +477,7 @@ export default function SquirrelGameScreen() {
 
       {phase === 'playing' ? (
         <View style={styles.gameWrap}>
-          <Commentator line={commentary} expression={expression} />
+          <Commentator photoUri={dog.photoUri} dogName={dog.name} line={commentary} expression={expression} />
           <View style={styles.hud}>
             <View style={styles.hudScore} accessibilityLabel={`Punteggio ${score}`}>
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
@@ -571,7 +575,7 @@ export default function SquirrelGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
-          <MascotBuddy size={88} expression={score > 5 ? 'celebrate' : 'sad'} />
+          <AvatarActor size={88} expression={score > 5 ? 'celebrate' : 'sad'} photoUri={dog.photoUri} dogName={dog.name} />
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{squirrelEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>
