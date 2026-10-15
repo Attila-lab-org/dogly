@@ -57,9 +57,10 @@ from app.domains.realtime_orchestrator import (
 from app.domains.repository import now_utc
 from app.providers.openai_live import (
     DEFAULT_LIVE_SECONDS,
+    LIVE_MODEL,
     build_live_instructions,
     compact_live_dossier,
-    mint_realtime_client_secret,
+    create_live_webrtc_session,
     openai_voice_for_gender,
 )
 from app.providers.personal_reasoning import recognize_attachment
@@ -229,13 +230,15 @@ async def create_live_session(
         None, Depends(rate_limit("realtime_live_session", limit=6, window_seconds=60))
     ],
 ) -> LiveSessionOut:
-    """Open the dedicated Live voice room (WebRTC via ephemeral OpenAI secret)."""
+    """Open the Live voice room (GPT-Live WebRTC; server exchanges SDP)."""
     if cached := guard.lookup():
         return LiveSessionOut.model_validate(cached)
     if state.settings.realtime_kill_switch or state.settings.ai_kill_switch:
         raise ApiError(ErrorCode.AI_BUDGET_EXCEEDED, "Live non disponibile al momento.")
     if not state.settings.openai_api_key:
         raise ApiError(ErrorCode.PROCESSING_FAILED, "Live non configurato.")
+    if not body.sdp.strip():
+        raise ApiError(ErrorCode.VALIDATION_FAILED, "Offerta WebRTC mancante.")
 
     if state.engine is not None:
         profile = await profiles_db.get_or_create_profile(state.engine, user_id)
@@ -244,7 +247,7 @@ async def create_live_session(
             user_id=user_id,
             dog_id=body.dog_id,
             modality="VOICE",
-            model="gpt-realtime",
+            model=LIVE_MODEL,
         )
     else:
         profile = state.store.ensure_profile(user_id)
@@ -253,7 +256,7 @@ async def create_live_session(
             user_id=user_id,
             dog_id=body.dog_id,
             modality="VOICE",
-            model="gpt-realtime",
+            model=LIVE_MODEL,
         )
     if row is None:
         raise ApiError(ErrorCode.NOT_FOUND, "Cane non trovato.")
@@ -301,14 +304,21 @@ async def create_live_session(
         dossier=dossier,
     )
     try:
-        minted = await mint_realtime_client_secret(
+        minted = await create_live_webrtc_session(
             state.settings,
             instructions=instructions,
             voice=voice,
+            sdp_offer=body.sdp,
             safety_identifier=user_id,
         )
+    except ValueError as exc:
+        if state.engine is not None:
+            await realtime_db.end_session_db(
+                state.engine, session_id=str(row["id"]), user_id=user_id
+            )
+        raise ApiError(ErrorCode.VALIDATION_FAILED, "Offerta WebRTC non valida.") from exc
     except Exception as exc:
-        logger.exception("Live mint failed")
+        logger.exception("Live GPT-Live session failed")
         if state.engine is not None:
             await realtime_db.end_session_db(
                 state.engine, session_id=str(row["id"]), user_id=user_id
@@ -318,16 +328,6 @@ async def create_live_session(
             "Non riesco ad aprire la conversazione vocale. Riprova tra poco.",
         ) from exc
 
-    expires_raw = minted.get("expires_at")
-    expires_at = None
-    if isinstance(expires_raw, (int, float)):
-        expires_at = datetime.fromtimestamp(float(expires_raw), tz=UTC)
-    elif isinstance(expires_raw, str):
-        try:
-            expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
-        except ValueError:
-            expires_at = None
-
     response = LiveSessionOut(
         session_id=str(row["id"]),
         dog_id=str(row["dog_id"]),
@@ -335,8 +335,12 @@ async def create_live_session(
         owner_display_name=owner_name,
         voice=str(minted.get("voice") or voice),
         voice_gender=gender,  # type: ignore[arg-type]
-        client_secret=str(minted["value"]),
-        client_secret_expires_at=expires_at,
+        sdp=str(minted["sdp"]),
+        openai_session_id=(
+            str(minted["openai_session_id"])
+            if minted.get("openai_session_id")
+            else None
+        ),
         seconds_remaining=DEFAULT_LIVE_SECONDS,
         welcome_text=(
             f"Ciao{', ' + owner_name.split()[0] if owner_name else ''}. "

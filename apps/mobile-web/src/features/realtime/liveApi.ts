@@ -9,16 +9,30 @@ export type LiveSession = {
   owner_display_name: string | null;
   voice: string;
   voice_gender: AskVoiceGender;
-  client_secret: string;
-  client_secret_expires_at: string | null;
+  /** GPT-Live WebRTC SDP answer — apply as remote description. */
+  sdp: string;
+  openai_session_id: string | null;
+  /** Soft metering hint; 0 = no hard client cut-off. */
   seconds_remaining: number;
   welcome_text: string;
   status: 'ACTIVE' | 'ENDED' | 'EXPIRED';
 };
 
-export function createLiveSession(dogId: string, idempotencyKey?: string) {
-  return api.post<LiveSession>('/v1/realtime/live/sessions', { dog_id: dogId },
-    idempotencyKey ? { headers: { 'X-Idempotency-Key': idempotencyKey } } : undefined);
+export function createLiveSession(
+  dogId: string,
+  sdpOffer: string,
+  idempotencyKey?: string,
+) {
+  return api.post<LiveSession>(
+    '/v1/realtime/live/sessions',
+    { dog_id: dogId, sdp: sdpOffer },
+    {
+      timeoutMs: 45_000,
+      ...(idempotencyKey
+        ? { headers: { 'X-Idempotency-Key': idempotencyKey } }
+        : undefined),
+    },
+  );
 }
 
 export function endLiveSession(sessionId: string) {

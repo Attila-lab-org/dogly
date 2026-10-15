@@ -1,9 +1,10 @@
 /**
- * Browser WebRTC bridge for OpenAI Realtime (ephemeral client secret).
+ * Browser WebRTC bridge for OpenAI GPT-Live.
  *
- * Always open to room audio (dog barks included): echoCancellation on,
- * browser noiseSuppression off (it strips canine vocalizations), far-field
- * NR on the Realtime side. No special “press to listen” mode.
+ * The browser builds an SDP offer; our backend POSTs it to
+ * /v1/live/sessions (project API key stays server-side) and returns the
+ * SDP answer. Always open to room audio (dog barks included): echoCancellation
+ * on, browser noiseSuppression off.
  */
 
 export type LiveConnectionState =
@@ -19,8 +20,13 @@ export type LiveWebRtcHandle = {
   getAnalyserLevel: () => number;
 };
 
+export type LiveSdpExchangeResult = {
+  answerSdp: string;
+};
+
 type ConnectOptions = {
-  clientSecret: string;
+  /** Exchange local SDP offer for OpenAI GPT-Live answer via our API. */
+  exchangeOffer: (offerSdp: string) => Promise<LiveSdpExchangeResult>;
   onState: (state: LiveConnectionState) => void;
   onRemoteTrack?: (stream: MediaStream) => void;
   onError?: (message: string) => void;
@@ -60,11 +66,17 @@ export async function connectLiveWebRtc(
   let audioCtx: AudioContext | null = null;
   let dataChannel: RTCDataChannel | null = null;
   let closed = false;
+  let finalized = false;
   let remoteStreamId: string | null = null;
+  let closeTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const cleanup = () => {
     if (closed) return;
     closed = true;
+    if (closeTimeout) {
+      clearTimeout(closeTimeout);
+      closeTimeout = null;
+    }
     try {
       dataChannel?.close();
     } catch {
@@ -82,6 +94,19 @@ export async function connectLiveWebRtc(
       audioEl.remove();
     }
     options.onState('ended');
+  };
+
+  const requestGracefulClose = () => {
+    if (closed || finalized) {
+      cleanup();
+      return;
+    }
+    if (dataChannel && dataChannel.readyState === 'open') {
+      sendEvent(dataChannel, { type: 'session.close' });
+      closeTimeout = setTimeout(() => cleanup(), 8_000);
+      return;
+    }
+    cleanup();
   };
 
   pc.ontrack = (event) => {
@@ -132,32 +157,26 @@ export async function connectLiveWebRtc(
     throw new Error('Serve il microfono per parlare con DOGly');
   }
 
+  // Create the event channel before the SDP offer (required by GPT-Live).
   dataChannel = pc.createDataChannel('oai-events');
-  dataChannel.addEventListener('open', () => {
-    sendEvent(dataChannel, {
-      type: 'session.update',
-      session: {
-        turn_detection: {
-          type: 'server_vad',
-          // Slightly open so loud ambient vocalizations can enter;
-          // echoCancellation still protects against speaker loop.
-          threshold: 0.4,
-          prefix_padding_ms: 350,
-          silence_duration_ms: 750,
-          create_response: true,
-          interrupt_response: true,
-        },
-        input_audio_noise_reduction: { type: 'far_field' },
-      },
-    });
-  });
   dataChannel.onmessage = (event) => {
     try {
       const payload = JSON.parse(String(event.data)) as { type?: string };
       const type = payload.type ?? '';
+      if (type === 'session.started') {
+        options.onState('listening');
+        return;
+      }
+      if (type === 'session.closed') {
+        finalized = true;
+        cleanup();
+        return;
+      }
       if (
-        type === 'response.audio_transcript.delta' ||
+        type === 'session.output_transcript.delta' ||
+        type === 'session.output_audio.delta' ||
         type === 'response.output_audio.delta' ||
+        type === 'response.audio_transcript.delta' ||
         type === 'output_audio_buffer.started' ||
         type === 'response.created'
       ) {
@@ -165,6 +184,7 @@ export async function connectLiveWebRtc(
         return;
       }
       if (
+        type === 'session.input_transcript.delta' ||
         type === 'response.done' ||
         type === 'output_audio_buffer.stopped' ||
         type === 'input_audio_buffer.speech_started'
@@ -175,6 +195,11 @@ export async function connectLiveWebRtc(
       /* ignore non-json */
     }
   };
+  dataChannel.addEventListener('close', () => {
+    if (!finalized && !closed) {
+      cleanup();
+    }
+  });
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -184,17 +209,19 @@ export async function connectLiveWebRtc(
       resolve();
       return;
     }
+    const timeout = setTimeout(() => {
+      pc.removeEventListener('icegatheringstatechange', onChange);
+      // Prefer a partial candidate set over hanging forever.
+      resolve();
+    }, 10_000);
     const onChange = () => {
       if (pc.iceGatheringState === 'complete') {
+        clearTimeout(timeout);
         pc.removeEventListener('icegatheringstatechange', onChange);
         resolve();
       }
     };
     pc.addEventListener('icegatheringstatechange', onChange);
-    setTimeout(() => {
-      pc.removeEventListener('icegatheringstatechange', onChange);
-      resolve();
-    }, 1500);
   });
 
   const sdp = pc.localDescription?.sdp;
@@ -203,25 +230,31 @@ export async function connectLiveWebRtc(
     throw new Error('Connessione vocale non riuscita');
   }
 
-  const sdpResponse = await fetch('https://api.openai.com/v1/realtime/calls', {
-    method: 'POST',
-    body: sdp,
-    headers: {
-      Authorization: `Bearer ${options.clientSecret}`,
-      'Content-Type': 'application/sdp',
-    },
-  });
-  if (!sdpResponse.ok) {
+  let answerSdp: string;
+  try {
+    const exchanged = await options.exchangeOffer(sdp);
+    answerSdp = exchanged.answerSdp;
+  } catch (err) {
     cleanup();
-    options.onError?.(`Live ${sdpResponse.status}`);
+    const message =
+      err instanceof Error ? err.message : 'OpenAI Live non ha accettato la connessione';
+    options.onError?.(message);
+    throw err instanceof Error ? err : new Error(message);
+  }
+
+  if (!answerSdp?.trim()) {
+    cleanup();
+    options.onError?.('Live senza risposta SDP');
     throw new Error('OpenAI Live non ha accettato la connessione');
   }
-  const answer = await sdpResponse.text();
-  await pc.setRemoteDescription({ type: 'answer', sdp: answer });
-  options.onState('listening');
+
+  await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+  // HTTP create starts the session — do not send session.start.
+  // Stay on "connecting" until session.started (or audio arrives).
+  options.onState('connecting');
 
   return {
-    stop: cleanup,
+    stop: requestGracefulClose,
     getAnalyserLevel: () => {
       if (!analyser) return 0;
       const data = new Uint8Array(analyser.frequencyBinCount);

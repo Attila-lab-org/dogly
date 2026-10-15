@@ -1,4 +1,4 @@
-"""OpenAI Realtime ephemeral credentials for DOGly Live (WebRTC)."""
+"""OpenAI GPT-Live WebRTC sessions for DOGly Live."""
 
 from __future__ import annotations
 
@@ -20,10 +20,11 @@ VOICE_BY_GENDER: dict[AskVoiceGender, str] = {
     "MALE": "cedar",
 }
 
-LIVE_MODEL = "gpt-realtime"
-LIVE_TOKEN_TTL_SECONDS = 600
-DEFAULT_LIVE_SECONDS = 240
+LIVE_MODEL = "gpt-live-1"
+# Soft UX hint only — Live is billed by duration; no hard client cut-off.
+DEFAULT_LIVE_SECONDS = 0
 _MAX_DOSSIER_CHARS = 2800
+_MAX_SDP_CHARS = 65_536
 
 
 def openai_voice_for_gender(gender: str | None) -> str:
@@ -118,6 +119,8 @@ def build_live_instructions(
         f"Sei DOGly, amica esperta di cani che vuole bene a {dog_name}. "
         f"Parli a voce con {who}. Conversazione libera e naturale: niente script "
         "né questionari. Tono caldo, chiaro, italiano. Frasi adatte alla voce. "
+        "Puoi ascoltare mentre parli (full duplex): se l'umano ti interrompe, "
+        "cedi subito e rispondi a ciò che dice. "
         "Aspetta che l'umano finisca; non parlare sopra di lui; non ripetere la tua ultima frase. "
         "Se senti eco o la tua stessa voce, ignorala. "
         "All'inizio un saluto cortissimo, poi ascolta.\n"
@@ -142,103 +145,69 @@ def build_live_instructions(
     )
 
 
-async def mint_realtime_client_secret(
+async def create_live_webrtc_session(
     settings: Settings,
     *,
     instructions: str,
     voice: str,
+    sdp_offer: str,
     safety_identifier: str,
 ) -> dict[str, Any]:
-    """Mint a short-lived Realtime client secret for browser WebRTC."""
+    """Create a GPT-Live WebRTC session; returns SDP answer + OpenAI session id."""
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY missing")
     if settings.realtime_kill_switch or settings.ai_kill_switch:
-        raise RuntimeError("Realtime disabled by kill switch")
+        raise RuntimeError("Live disabled by kill switch")
 
-    payload = {
-        "expires_after": {"anchor": "created_at", "seconds": LIVE_TOKEN_TTL_SECONDS},
+    offer = (sdp_offer or "").strip()
+    if not offer or len(offer) > _MAX_SDP_CHARS:
+        raise ValueError("Invalid SDP offer")
+
+    # Client delegation (default): dog dossier lives in Live instructions.
+    # WebRTC negotiates audio format via SDP — omit audio.format.
+    payload: dict[str, Any] = {
         "session": {
-            "type": "realtime",
             "model": LIVE_MODEL,
             "instructions": instructions,
             "audio": {
-                "input": {
-                    "transcription": {"model": "gpt-4o-mini-transcribe"},
-                    # far_field: room / dog; near_field filtered barks as noise.
-                    "noise_reduction": {"type": "far_field"},
-                    "turn_detection": {
-                        "type": "server_vad",
-                        "threshold": 0.5,
-                        "prefix_padding_ms": 300,
-                        "silence_duration_ms": 700,
-                    },
-                },
                 "output": {"voice": voice},
             },
+        },
+        "transport": {
+            "type": "webrtc",
+            "sdp": offer,
         },
     }
     headers = {
         "Authorization": f"Bearer {settings.openai_api_key}",
         "Content-Type": "application/json",
-        "OpenAI-Beta": "realtime=v1",
         "OpenAI-Safety-Identifier": safety_identifier[:64],
     }
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
-            "https://api.openai.com/v1/realtime/client_secrets",
+            "https://api.openai.com/v1/live/sessions",
             headers=headers,
             json=payload,
         )
         if response.status_code >= 400:
-            legacy = await client.post(
-                "https://api.openai.com/v1/realtime/sessions",
-                headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}",
-                    "Content-Type": "application/json",
-                    "OpenAI-Beta": "realtime=v1",
-                },
-                json={
-                    "model": LIVE_MODEL,
-                    "voice": voice,
-                    "instructions": instructions,
-                    "modalities": ["audio", "text"],
-                    "input_audio_transcription": {"model": "gpt-4o-mini-transcribe"},
-                    "turn_detection": {
-                        "type": "server_vad",
-                        "threshold": 0.55,
-                        "prefix_padding_ms": 300,
-                        "silence_duration_ms": 700,
-                    },
-                },
+            logger.error(
+                "OpenAI GPT-Live session failed status=%s body=%s",
+                response.status_code,
+                response.text[:500],
             )
-            if legacy.status_code >= 400:
-                logger.error(
-                    "OpenAI live mint failed secrets=%s sessions=%s body=%s",
-                    response.status_code,
-                    legacy.status_code,
-                    legacy.text[:400],
-                )
-                response.raise_for_status()
-            data = legacy.json()
-            secret = data.get("client_secret") or {}
-            return {
-                "value": secret.get("value") or data.get("value"),
-                "expires_at": secret.get("expires_at") or data.get("expires_at"),
-                "voice": voice,
-                "model": data.get("model") or LIVE_MODEL,
-            }
+            response.raise_for_status()
         data = response.json()
-    value = data.get("value")
-    if not value and isinstance(data.get("client_secret"), dict):
-        value = data["client_secret"].get("value")
-    expires_at = data.get("expires_at")
-    if expires_at is None and isinstance(data.get("client_secret"), dict):
-        expires_at = data["client_secret"].get("expires_at")
-    if not value:
-        raise RuntimeError("OpenAI live mint returned no client secret")
+
+    session = data.get("session") if isinstance(data.get("session"), dict) else {}
+    transport = data.get("transport") if isinstance(data.get("transport"), dict) else {}
+    answer = transport.get("sdp")
+    openai_session_id = session.get("id") or data.get("id")
+    if not isinstance(answer, str) or not answer.strip():
+        raise RuntimeError("OpenAI GPT-Live returned no SDP answer")
     return {
-        "value": value,
-        "expires_at": expires_at,
+        "sdp": answer,
+        "openai_session_id": str(openai_session_id) if openai_session_id else None,
         "voice": voice,
         "model": LIVE_MODEL,
     }
+

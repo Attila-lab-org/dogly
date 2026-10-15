@@ -43,10 +43,12 @@ class RealtimeSessionOut(BaseModel):
 
 class LiveSessionCreate(BaseModel):
     dog_id: str
+    # Browser SDP offer — GPT-Live WebRTC requires server-side SDP exchange.
+    sdp: str = Field(min_length=1, max_length=65_536)
 
 
 class LiveSessionOut(BaseModel):
-    """Ephemeral OpenAI Realtime credentials for the Live voice room."""
+    """GPT-Live WebRTC answer for the Live voice room."""
 
     session_id: str
     dog_id: str
@@ -54,9 +56,11 @@ class LiveSessionOut(BaseModel):
     owner_display_name: str | None = None
     voice: str
     voice_gender: Literal["FEMALE", "MALE"]
-    client_secret: str
-    client_secret_expires_at: datetime | None = None
-    seconds_remaining: int
+    # SDP answer from OpenAI POST /v1/live/sessions (apply as remote description).
+    sdp: str
+    openai_session_id: str | None = None
+    # Soft metering hint; 0 means no hard client cut-off.
+    seconds_remaining: int = 0
     welcome_text: str
     status: Literal["ACTIVE", "ENDED", "EXPIRED"] = "ACTIVE"
 

@@ -1,6 +1,6 @@
 /**
  * DOGly Live — dedicated voice room (UX_REFERENCE Ask Live).
- * Atmospheric presence + minute ring; WebRTC via ephemeral OpenAI secret.
+ * Atmospheric presence; GPT-Live WebRTC via server-side SDP exchange.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -49,13 +49,12 @@ export default function AskLiveScreen() {
   const [phase, setPhase] = useState<'gate' | 'live' | 'ending'>('gate');
   const [conn, setConn] = useState<LiveConnectionState>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(240);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [welcome, setWelcome] = useState('');
   const [voiceLabel, setVoiceLabel] = useState('');
   const sessionIdRef = useRef<string | null>(null);
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
   const startingRef = useRef(false);
-  const liveSessionKeyRef = useRef<string | null>(null);
   const level = useSharedValue(0);
   const breath = useSharedValue(1);
   const ringWarn = useSharedValue(0);
@@ -74,17 +73,10 @@ export default function AskLiveScreen() {
     const timer = setInterval(() => {
       const mic = handleRef.current?.getAnalyserLevel() ?? 0;
       level.value = withTiming(mic, { duration: 80 });
-      setSecondsLeft((current) => {
-        if (current <= 1) {
-          void finish('I minuti di oggi sono finiti.');
-          return 0;
-        }
-        if (current === 30) ringWarn.value = withTiming(1, { duration: 600 });
-        return current - 1;
-      });
+      setElapsedSeconds((current) => current + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [phase, level, ringWarn]);
+  }, [phase, level]);
 
   const finish = useCallback(
     async (note?: string) => {
@@ -112,18 +104,13 @@ export default function AskLiveScreen() {
   const startLive = useCallback(async () => {
     if (startingRef.current || handleRef.current) return;
     startingRef.current = true;
-    liveSessionKeyRef.current ??= `live-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    // Fresh idempotency key per attempt — SDP offer differs on every retry.
+    const liveSessionKey = `live-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     setError(null);
+    setElapsedSeconds(0);
     setConn('connecting');
+    setPhase('live');
     try {
-      const session = await createLiveSession(dog.id, liveSessionKeyRef.current);
-      sessionIdRef.current = session.session_id;
-      setSecondsLeft(session.seconds_remaining);
-      setWelcome(session.welcome_text);
-      setVoiceLabel(
-        session.voice_gender === 'MALE' ? 'Voce calda' : 'Voce luminosa',
-      );
-      setPhase('live');
       if (Platform.OS !== 'web') {
         setError(
           'Live vocale completo è ottimizzato sul web. Apri dogly.app dal browser per la conversazione.',
@@ -136,7 +123,19 @@ export default function AskLiveScreen() {
       const leftover = handleRef.current as LiveWebRtcHandle | null;
       leftover?.stop();
       const handle = await connectLiveWebRtc({
-        clientSecret: session.client_secret,
+        exchangeOffer: async (offerSdp) => {
+          const session = await createLiveSession(
+            dog.id,
+            offerSdp,
+            liveSessionKey,
+          );
+          sessionIdRef.current = session.session_id;
+          setWelcome(session.welcome_text);
+          setVoiceLabel(
+            session.voice_gender === 'MALE' ? 'Voce calda' : 'Voce luminosa',
+          );
+          return { answerSdp: session.sdp };
+        },
         onState: setConn,
         onError: (message) => setError(message),
       });
@@ -206,17 +205,16 @@ export default function AskLiveScreen() {
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
           <View style={styles.timerWrap}>
-            <Animated.View
-              style={[
-                styles.timerRing,
-                secondsLeft <= 30 && styles.timerRingWarn,
-              ]}
-            />
+            <Animated.View style={styles.timerRing} />
             <Text
-              style={[styles.timer, secondsLeft <= 30 && styles.timerWarn]}
-              accessibilityLabel={`Minuti rimasti ${formatClock(secondsLeft)}`}
+              style={styles.timer}
+              accessibilityLabel={
+                phase === 'live'
+                  ? `Durata ${formatClock(elapsedSeconds)}`
+                  : 'Live'
+              }
             >
-              {formatClock(secondsLeft)}
+              {phase === 'live' ? formatClock(elapsedSeconds) : 'Live'}
             </Text>
           </View>
           <View style={styles.iconBtn} />
@@ -230,8 +228,8 @@ export default function AskLiveScreen() {
             <Text style={styles.gateEyebrow}>PARLA CON DOGLY</Text>
             <Text style={styles.gateTitle}>Una stanza solo per {dog.name}</Text>
             <Text style={styles.gateBody}>
-              Hai {formatClock(secondsLeft)}. Si consumano solo mentre parli.
-              Scegli la voce in Profilo.
+              Conversazione vocale libera. Termina quando vuoi. Scegli la voce in
+              Profilo.
             </Text>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable
@@ -263,9 +261,6 @@ export default function AskLiveScreen() {
               <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
             ) : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            {secondsLeft <= 30 && secondsLeft > 0 ? (
-              <Text style={styles.warnNote}>Quasi finiti</Text>
-            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Termina conversazione"
@@ -301,14 +296,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(37,99,235,0.28)',
   },
-  timerRingWarn: { borderColor: 'rgba(245,158,11,0.55)' },
   timer: {
     color: colors.text,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
     fontVariant: ['tabular-nums'],
   },
-  timerWarn: { color: colors.warning },
   gate: {
     flex: 1,
     alignItems: 'center',
@@ -410,11 +403,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 300,
     lineHeight: 22,
-  },
-  warnNote: {
-    marginTop: spacing.md,
-    color: colors.warning,
-    fontWeight: typography.weight.bold,
   },
   endBtn: {
     marginTop: spacing.xxl,
