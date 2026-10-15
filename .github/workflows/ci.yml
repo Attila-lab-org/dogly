@@ -123,7 +123,7 @@ jobs:
         run: uv run python ../scripts/export_openapi.py --out /tmp/openapi.generated.json
         working-directory: backend
       - name: Fail on uncommitted contract drift
-        run: diff -u docs/openapi.json /tmp/openapi.generated.json
+        run: diff -u backend/docs/openapi.json /tmp/openapi.generated.json
 
   secrets-scan:
     runs-on: ubuntu-latest
