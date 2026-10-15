@@ -29,13 +29,17 @@ import {
   isFailedDigestiveStatus,
   isTerminalDigestiveStatus,
 } from '@/features/digestive/api';
-import { takeDigestivePhoto } from '@/features/digestive/photo';
+import { pickDigestivePhoto, takeDigestivePhoto } from '@/features/digestive/photo';
 import {
   enqueueAndUploadDigestivePhoto,
   markDigestiveUploadCompletedForEvent,
 } from '@/features/digestive/upload';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
 import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
+import {
+  MediaSourceSheet,
+  type MediaSourceKind,
+} from '@/features/realtime/MediaSourceSheet';
 import { purchasesEnabled } from '@/mocks/entitlements';
 import { ANALYSIS_POLL_TIMEOUT_MS } from '@/features/core/processingTimeout';
 
@@ -111,6 +115,7 @@ export default function AskScreen() {
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
   const [momentsBusy, setMomentsBusy] = useState<string | null>(null);
   const [savedToMoments, setSavedToMoments] = useState<Record<string, boolean>>({});
+  const [mediaSheet, setMediaSheet] = useState<MediaSourceKind | null>(null);
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const digestPhotoHint = /feci|cacca|digest|pup[uù]|diarrea|escrement|foto chiara/i.test(
@@ -463,12 +468,13 @@ export default function AskScreen() {
     if (text) void send(text);
   }, [dog.id, entryId, send, sending, session, starting, userId]);
 
-  const captureDigestiveFromChat = useCallback(async () => {
+  const captureDigestiveFromChat = useCallback(async (source: 'camera' | 'library' = 'camera') => {
     if (sending || analyzing || !session || !userId || !dog.id) return;
     setError(null);
     setMediaPhase('uploading');
     try {
-      const uri = await takeDigestivePhoto();
+      const uri =
+        source === 'library' ? await pickDigestivePhoto() : await takeDigestivePhoto();
       if (!uri) {
         setMediaPhase(null);
         return;
@@ -531,7 +537,7 @@ export default function AskScreen() {
     const turn = latestAssistant?.turn;
     if (sending || !session) return;
     if (needsDigestivePhoto) {
-      await captureDigestiveFromChat();
+      await captureDigestiveFromChat('camera');
       return;
     }
     const uri = await takeConversationPhoto();
@@ -550,7 +556,7 @@ export default function AskScreen() {
   const pickPhoto = useCallback(async () => {
     if (sending || !session) return;
     if (needsDigestivePhoto) {
-      await captureDigestiveFromChat();
+      await captureDigestiveFromChat('library');
       return;
     }
     const uri = await pickAlbumPhoto();
@@ -650,6 +656,28 @@ export default function AskScreen() {
       params: { from: 'ask', sessionId: session.id },
     } as never);
   }, [analyzing, router, sending, session]);
+
+  const openMediaSheet = useCallback(
+    (kind: MediaSourceKind) => {
+      if (sending || analyzing || !session) return;
+      setMediaSheet(kind);
+    },
+    [analyzing, sending, session],
+  );
+
+  const onMediaSheetCapture = useCallback(() => {
+    const kind = mediaSheet;
+    setMediaSheet(null);
+    if (kind === 'photo') void sharePhoto();
+    else if (kind === 'video') void openVideoCapture();
+  }, [mediaSheet, openVideoCapture, sharePhoto]);
+
+  const onMediaSheetLibrary = useCallback(() => {
+    const kind = mediaSheet;
+    setMediaSheet(null);
+    if (kind === 'photo') void pickPhoto();
+    else if (kind === 'video') void pickVideo();
+  }, [mediaSheet, pickPhoto, pickVideo]);
 
   const appendTranscript = useCallback((text: string) => {
     setDraft((current) => `${current}${current ? ' ' : ''}${text}`.slice(0, 4000));
@@ -808,17 +836,17 @@ export default function AskScreen() {
                   accessibilityLabel={
                     message.turn?.media_prompt ||
                     (needsDigestivePhoto
-                      ? `Scatta una foto per la digestione di ${dog.name}`
+                      ? `Mostra una foto per la digestione di ${dog.name}`
                       : `Mostrami ${dog.name} in una foto`)
                   }
-                  onPress={() => void sharePhoto()}
+                  onPress={() => openMediaSheet('photo')}
                   style={({ pressed }) => [styles.mediaCta, styles.mediaCtaPulse, pressed && styles.pressed]}
                 >
                   <View style={styles.mediaIcon}>
                     <Ionicons name="camera" size={17} color={colors.primary} />
                   </View>
                   <Text style={styles.mediaTitle}>
-                    {needsDigestivePhoto ? 'Scatta la foto' : 'Apri la fotocamera'}
+                    {needsDigestivePhoto ? 'Aggiungi la foto' : 'Aggiungi una foto'}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </Pressable>
@@ -829,13 +857,13 @@ export default function AskScreen() {
                   accessibilityLabel={
                     message.turn?.media_prompt || 'Mostrami questo momento in un video'
                   }
-                  onPress={() => void openVideoCapture()}
+                  onPress={() => openMediaSheet('video')}
                   style={({ pressed }) => [styles.mediaCta, styles.mediaCtaPulse, pressed && styles.pressed]}
                 >
                   <View style={styles.mediaIcon}>
                     <Ionicons name="videocam" size={17} color={colors.primary} />
                   </View>
-                  <Text style={styles.mediaTitle}>Apri la videocamera</Text>
+                  <Text style={styles.mediaTitle}>Aggiungi un video</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </Pressable>
               ) : null}
@@ -900,15 +928,9 @@ export default function AskScreen() {
             <View style={styles.composerActions}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  neededMedia === 'PHOTO'
-                    ? 'Apri la fotocamera'
-                    : 'Scegli una foto dalla galleria'
-                }
-                onPress={() =>
-                  void (neededMedia === 'PHOTO' ? sharePhoto() : pickPhoto())
-                }
-                disabled={sending || !session}
+                accessibilityLabel="Aggiungi una foto"
+                onPress={() => openMediaSheet('photo')}
+                disabled={sending || analyzing || !session}
                 style={({ pressed }) => [
                   styles.mediaButton,
                   neededMedia === 'PHOTO' && styles.mediaButtonLit,
@@ -923,15 +945,9 @@ export default function AskScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  neededMedia === 'VIDEO'
-                    ? 'Apri la videocamera'
-                    : 'Scegli un video dalla galleria'
-                }
-                onPress={() =>
-                  void (neededMedia === 'VIDEO' ? openVideoCapture() : pickVideo())
-                }
-                disabled={sending || !session}
+                accessibilityLabel="Aggiungi un video"
+                onPress={() => openMediaSheet('video')}
+                disabled={sending || analyzing || !session}
                 style={({ pressed }) => [
                   styles.mediaButton,
                   neededMedia === 'VIDEO' && styles.mediaButtonLit,
@@ -955,6 +971,14 @@ export default function AskScreen() {
         </View>
         <Text style={styles.disclaimer}>DOGly aiuta a leggere i comportamenti. Per sintomi o urgenze, contatta un veterinario.</Text>
       </KeyboardAvoidingView>
+      <MediaSourceSheet
+        visible={mediaSheet !== null}
+        kind={mediaSheet ?? 'photo'}
+        dogName={dog.name}
+        onClose={() => setMediaSheet(null)}
+        onCapture={onMediaSheetCapture}
+        onLibrary={onMediaSheetLibrary}
+      />
     </SafeAreaView>
   </LinearGradient>;
 }

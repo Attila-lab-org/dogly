@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, ErrorState, ScreenContainer } from '@/components';
-import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { Button, ScreenContainer } from '@/components';
+import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { scanAndUploadFoodLabel } from '@/features/nutrition/api';
 import { takeFoodLabelPhoto } from '@/features/nutrition/photo';
 
-type Phase = 'ready' | 'scanning';
+type Phase = 'ready' | 'reading' | 'error';
 
 const firstParam = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] ?? '' : value ?? '';
@@ -30,21 +36,33 @@ export default function FoodScanScreen() {
   const name = firstParam(params.name);
   const { dog } = useDogProfile();
   const [phase, setPhase] = useState<Phase>('ready');
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const startScan = async () => {
     setError(null);
-    setPhase('scanning');
+    setStatus(null);
     try {
       const uri = await takeFoodLabelPhoto();
-      if (!uri) {
-        setPhase('ready');
-        return;
-      }
+      if (!uri) return;
+
+      // Feedback immediato: foto acquisita, poi lettura.
+      setPreviewUri(uri);
+      setPhase('reading');
+      setStatus('Foto acquisita. Sto leggendo l’etichetta…');
+
       const result = await scanAndUploadFoodLabel({
         dogId: dog.id,
         localUri: uri,
       });
+
+      setStatus(
+        enrich
+          ? 'Fatto. Ti porto a controllare i valori…'
+          : 'Fatto. Ti porto a scegliere l’alimento…',
+      );
+
       if (enrich) {
         router.replace({
           pathname: `/nutrition/foods/${result.foodId}/verify` as never,
@@ -69,62 +87,78 @@ export default function FoodScanScreen() {
         },
       });
     } catch {
+      setPhase('error');
+      setStatus(null);
       setError(
         enrich
           ? 'Non leggo bene ingredienti e valori. Riprova con più luce, senza riflessi.'
-          : 'Non sono riuscito a leggere l’etichetta. Controlla che la foto sia nitida e riprova.',
+          : 'Non sono riuscito a leggere l’etichetta. Controlla che sia nitida e riprova.',
       );
-      setPhase('ready');
     }
   };
 
+  const busy = phase === 'reading';
+
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer contentStyle={styles.screen}>
       <StackScreenHeader
-        title={enrich ? 'Etichetta nutrizionale' : 'Fotografa la confezione'}
+        title={enrich ? 'Etichetta' : 'Fotografa'}
       />
-      <Text style={styles.intro}>
-        {enrich
-          ? `Inquadra COMPOSIZIONE e COSTITUENTI ANALITICI (ingredienti, proteine, grassi). Aiutano a capire meglio il pasto di ${dog.name}.`
-          : 'Inquadra il lato dove si vedono bene marca e nome. Ti mostrerò gli alimenti possibili: sarai tu a scegliere quello giusto.'}
-      </Text>
 
-      {error ? (
-        <ErrorState
-          title={enrich ? 'Valori non letti' : 'Etichetta non letta'}
-          message={error}
-        />
-      ) : null}
+      <View style={styles.body}>
+        <Text style={styles.hero}>
+          {enrich
+            ? 'Inquadra ingredienti e valori'
+            : 'Inquadra marca e nome'}
+        </Text>
+        <Text style={styles.lead}>
+          {enrich
+            ? `Così capisco meglio il pasto di ${dog.name}. Un solo scatto.`
+            : `Poi ti mostro i possibili match: scegli tu quello di ${dog.name}.`}
+        </Text>
 
-      <Card noPadding style={styles.frameCard}>
-        <View style={styles.frameArea}>
-          <Ionicons
-            name={enrich ? 'nutrition-outline' : 'scan-outline'}
-            size={48}
-            color={phase === 'scanning' ? colors.accent : colors.textMuted}
-          />
-          <Text style={styles.frameLabel}>
-            {phase === 'ready'
-              ? enrich
-                ? 'Ingredienti + proteine e grassi leggibili'
-                : 'Marca e nome devono essere leggibili'
-              : enrich
-                ? 'Sto leggendo i valori…'
-                : 'Sto cercando gli alimenti possibili…'}
+        {previewUri ? (
+          <View style={styles.previewWrap}>
+            <Image source={{ uri: previewUri }} style={styles.preview} />
+            {busy ? (
+              <View style={styles.previewOverlay}>
+                <ActivityIndicator color="#FFFFFF" size="large" />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {status ? (
+          <Text style={styles.status} accessibilityLiveRegion="polite">
+            {status}
           </Text>
-        </View>
-      </Card>
+        ) : null}
 
-      <View style={styles.actions}>
-        {phase === 'ready' && (
+        {error ? (
+          <Text style={styles.error} accessibilityLiveRegion="polite">
+            {error}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.footer}>
+        {phase === 'ready' || phase === 'error' ? (
           <Button
-            title="Scatta la foto"
-            icon={<Ionicons name="camera" size={18} color={colors.textOnPrimary} />}
+            title={phase === 'error' ? 'Riprova' : 'Apri fotocamera'}
+            icon={
+              <Ionicons
+                name="camera"
+                size={18}
+                color={colors.textOnPrimary}
+              />
+            }
             onPress={() => void startScan()}
           />
-        )}
-        {phase === 'scanning' && (
-          <Button title="Lettura in corso…" loading onPress={() => undefined} />
+        ) : (
+          <View style={styles.busyRow}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.busyText}>Un attimo…</Text>
+          </View>
         )}
       </View>
     </ScreenContainer>
@@ -132,34 +166,68 @@ export default function FoodScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  intro: {
-    fontSize: typography.size.sm,
+  screen: {
+    flexGrow: 1,
+    paddingBottom: spacing.xxl,
+  },
+  body: {
+    flex: 1,
+    gap: spacing.md,
+  },
+  hero: {
+    color: colors.text,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.bold,
+    letterSpacing: -0.4,
+  },
+  lead: {
     color: colors.textSecondary,
-    lineHeight: typography.size.sm * typography.lineHeight.relaxed,
-    marginBottom: spacing.lg,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * 1.35,
+    marginTop: -4,
   },
-  frameCard: {
-    marginBottom: spacing.lg,
+  previewWrap: {
+    marginTop: spacing.sm,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+    aspectRatio: 3 / 4,
+    maxHeight: 360,
   },
-  frameArea: {
-    height: 180,
+  preview: {
+    width: '100%',
+    height: '100%',
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(14,42,71,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    margin: spacing.md,
   },
-  frameLabel: {
+  status: {
+    color: colors.primary,
     fontSize: typography.size.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
+    fontWeight: typography.weight.semibold,
   },
-  actions: {
+  error: {
+    color: colors.danger,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
+  },
+  footer: {
     gap: spacing.sm,
+    paddingTop: spacing.md,
+  },
+  busyRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  busyText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
   },
 });

@@ -29,3 +29,30 @@ export async function takeDigestivePhoto(): Promise<string | null> {
   if (result.canceled || !result.assets[0]) return null;
   return result.assets[0].uri;
 }
+
+/** Galleria: stessa qualità della fotocamera, per quando non puoi scattare al momento. */
+export async function pickDigestivePhoto(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const picked = await pickWebImage({ capture: false });
+    return picked?.uri ?? null;
+  }
+
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    Alert.alert(
+      'Serve la galleria',
+      'Abilita l’accesso alle foto per scegliere un’immagine.',
+    );
+    return null;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.9,
+    allowsEditing: true,
+    aspect: [4, 3],
+  });
+
+  if (result.canceled || !result.assets[0]) return null;
+  return result.assets[0].uri;
+}
