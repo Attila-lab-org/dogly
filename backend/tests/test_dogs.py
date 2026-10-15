@@ -193,6 +193,26 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     assert listed.json()["items"][0]["photo_url"]
 
 
+async def test_weight_event_retry_is_idempotent(
+    client: httpx.AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    created = await client.post(
+        "/v1/dogs", headers=auth_headers, json={"name": "Oreo"}
+    )
+    dog_id = created.json()["id"]
+    headers = {**auth_headers, "X-Idempotency-Key": "weight-retry-1"}
+    payload = {"weight_kg": 12.4}
+    first = await client.post(
+        f"/v1/dogs/{dog_id}/weight-events", headers=headers, json=payload
+    )
+    replay = await client.post(
+        f"/v1/dogs/{dog_id}/weight-events", headers=headers, json=payload
+    )
+    assert first.status_code == replay.status_code == 201
+    assert replay.json() == first.json()
+
+
 async def test_mock_ids_and_invalid_age_do_not_500(
     client: httpx.AsyncClient,
     auth_headers: dict[str, str],

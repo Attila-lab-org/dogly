@@ -140,7 +140,10 @@ async def create_weight_event(
     payload: WeightEventCreate,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> WeightEventOut:
+    if cached := guard.lookup():
+        return WeightEventOut.model_validate(cached)
     if state.engine is not None:
         event = await weight_db.create_weight_event(
             state.engine, user_id=user_id, dog_id=dog_id, payload=payload
@@ -154,7 +157,9 @@ async def create_weight_event(
             body_condition_score=payload.body_condition_score,
             recorded_at=payload.recorded_at,
         )
-    return _weight_out(event)
+    response = _weight_out(event)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/dogs/{dog_id}/avatar/init", response_model=DogAvatarInitResponse)

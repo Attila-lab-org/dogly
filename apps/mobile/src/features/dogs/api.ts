@@ -107,7 +107,10 @@ export async function createWeightEvent(
   dogId: string,
   body: { weight_kg: number; body_condition_score?: number | null },
 ): Promise<WeightEvent> {
-  return api.post<WeightEvent>(`/v1/dogs/${dogId}/weight-events`, body);
+  const key = `weight-${dogId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return api.post<WeightEvent>(`/v1/dogs/${dogId}/weight-events`, body, {
+    headers: { 'X-Idempotency-Key': key },
+  });
 }
 
 export function dogsQueryKey(userId: string) {
