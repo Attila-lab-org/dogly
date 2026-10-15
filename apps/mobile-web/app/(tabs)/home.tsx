@@ -71,7 +71,7 @@ export default function HomeScreen() {
                 hitSlop={12}
                 style={[styles.headerIcon, styles.careIcon]}
               >
-                <CuteIcon name="doctor" size={22} color="#0F766E" secondary="#0E2A47" />
+                <CuteIcon name="doctor" size={22} color="#D9796C" secondary="#FFFFFF" />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.background,
   },
-  careIcon: { backgroundColor: colors.accentSoft },
+  careIcon: { backgroundColor: '#FFF1EE' },
   headerAvatar: { width: 34, height: 34, borderRadius: 17 },
   momentsRow: { flexDirection: 'row', gap: 10 },
   moment: { flex: 1, minWidth: 0, gap: 6 },

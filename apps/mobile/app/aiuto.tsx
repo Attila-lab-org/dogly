@@ -129,6 +129,14 @@ export default function AiutoScreen() {
     }
   };
 
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)/home' as never);
+  };
+
   const callPhone = (phone: string) => {
     void Linking.openURL(`tel:${phone}`);
   };
@@ -153,8 +161,9 @@ export default function AiutoScreen() {
           <View style={styles.header}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Torna indietro"
-              onPress={() => router.back()}
+              accessibilityLabel="Torna alla Home"
+              onPress={goBack}
+              hitSlop={16}
               style={styles.back}
             >
               <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -169,7 +178,7 @@ export default function AiutoScreen() {
             <View style={styles.heroCall}>
               <View style={styles.heroTop}>
                 <View style={styles.heroBadge}>
-                  <Ionicons name="medkit" size={22} color="#0F766E" />
+                  <Ionicons name="medkit" size={22} color={ROSE} />
                 </View>
                 <View style={styles.heroCopy}>
                   <Text style={styles.heroLabel}>Il tuo veterinario</Text>
@@ -205,7 +214,7 @@ export default function AiutoScreen() {
               style={({ pressed }) => [styles.addVet, pressed && styles.pressed]}
             >
               <View style={styles.heroBadge}>
-                <Ionicons name="add" size={22} color="#0F766E" />
+                <Ionicons name="add" size={22} color={ROSE} />
               </View>
               <View style={styles.heroCopy}>
                 <Text style={styles.heroName}>Aggiungi il tuo veterinario</Text>
@@ -239,7 +248,7 @@ export default function AiutoScreen() {
 
           {locating ? (
             <View style={styles.loading}>
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator color={ROSE} />
               <Text style={styles.muted}>Localizzo…</Text>
             </View>
           ) : locationFailure || !coords ? (
@@ -271,7 +280,7 @@ export default function AiutoScreen() {
             </View>
           ) : placesQuery.isFetching ? (
             <View style={styles.loading}>
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator color={ROSE} />
               <Text style={styles.muted}>
                 {mode === 'emergency' ? 'Cerco pronto soccorso…' : 'Cerco veterinari…'}
               </Text>
@@ -476,17 +485,20 @@ function PlaceRow({
           onPress={() => void Linking.openURL(place.maps_url)}
           style={styles.rowMap}
         >
-          <Ionicons name="map-outline" size={18} color={colors.primary} />
+          <Ionicons name="map-outline" size={18} color={ROSE_DEEP} />
         </Pressable>
       )}
     </View>
   );
 }
 
-const TEAL = '#0F766E';
+/** Rosso tenue: urgenza senza aggressività. */
+const ROSE = '#D9796C';
+const ROSE_SOFT = '#FFF1EE';
+const ROSE_DEEP = '#C45F54';
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: '#FFFCFB' },
   safe: { flex: 1 },
   content: {
     width: '100%',
@@ -501,17 +513,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    zIndex: 2,
   },
   back: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -spacing.sm,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
   },
   headerCopy: { flex: 1, gap: 2 },
   eyebrow: {
-    color: TEAL,
+    color: ROSE,
     fontSize: 11,
     fontWeight: typography.weight.bold,
     letterSpacing: 1,
@@ -523,10 +538,12 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
   heroCall: {
-    backgroundColor: '#ECFDF8',
+    backgroundColor: ROSE_SOFT,
     borderRadius: 22,
     padding: spacing.lg,
     gap: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F3D5CF',
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   heroBadge: {
@@ -539,7 +556,7 @@ const styles = StyleSheet.create({
   },
   heroCopy: { flex: 1, gap: 2 },
   heroLabel: {
-    color: TEAL,
+    color: ROSE_DEEP,
     fontSize: 11,
     fontWeight: typography.weight.bold,
     letterSpacing: 0.6,
@@ -561,24 +578,24 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: '#FFFFFF',
   },
   addVet: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#F3D5CF',
     borderStyle: 'dashed',
   },
   pressed: { opacity: 0.85 },
   callFab: {
     minHeight: 48,
     borderRadius: 999,
-    backgroundColor: TEAL,
+    backgroundColor: ROSE,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -595,8 +612,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     padding: 4,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#FFFFFF',
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#F0E4E1',
   },
   segmentBtn: {
     flex: 1,
@@ -606,20 +625,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
   },
-  segmentActive: { backgroundColor: colors.surface },
-  segmentDanger: { backgroundColor: colors.danger },
+  segmentActive: { backgroundColor: ROSE_SOFT },
+  segmentDanger: { backgroundColor: ROSE },
   segmentLabel: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
   segmentLabelActive: {
-    color: colors.text,
+    color: ROSE_DEEP,
     fontWeight: typography.weight.bold,
   },
   segmentLabelOnDanger: { color: '#FFFFFF' },
   emergencyHint: {
-    color: '#7F1D1D',
+    color: ROSE_DEEP,
     fontSize: typography.size.sm,
     lineHeight: 20,
     marginTop: -spacing.sm,
@@ -637,18 +656,18 @@ const styles = StyleSheet.create({
   },
   fallback: { gap: spacing.md, alignItems: 'stretch' },
   textLink: {
-    color: colors.primary,
+    color: ROSE_DEEP,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
     textAlign: 'center',
   },
   list: {
     gap: 0,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#F0E4E1',
   },
   row: {
     flexDirection: 'row',
@@ -657,7 +676,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#F0E4E1',
   },
   rowMain: { flex: 1, minWidth: 0 },
   rowCopy: { gap: 2 },
@@ -671,7 +690,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: TEAL,
+    backgroundColor: ROSE,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -679,7 +698,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: ROSE_SOFT,
     alignItems: 'center',
     justifyContent: 'center',
   },
