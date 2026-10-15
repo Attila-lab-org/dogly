@@ -201,6 +201,7 @@ export async function connectLiveWebRtc(
     }
   });
 
+  try {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
@@ -249,6 +250,13 @@ export async function connectLiveWebRtc(
   }
 
   await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+  } catch (err) {
+    cleanup();
+    const message = err instanceof Error ? err.message : 'Connessione Live non riuscita';
+    options.onError?.(message);
+    throw err instanceof Error ? err : new Error(message);
+  }
+
   // HTTP create starts the session — do not send session.start.
   // Stay on "connecting" until session.started (or audio arrives).
   options.onState('connecting');

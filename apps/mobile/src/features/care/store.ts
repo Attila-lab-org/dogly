@@ -183,10 +183,19 @@ export async function syncCareReminders(
   await hydrateNotificationPreferences();
   await cancelAllCareReminders();
   if (!getNotificationPreferences().careReminders) return;
-  await rescheduleCareReminders(
+  const notificationIds = await rescheduleCareReminders(
     events.filter((event) => event.dogId === dogId),
     dogName,
   );
+  if (Object.keys(notificationIds).length === 0) return;
+  let changed = false;
+  events = events.map((event) => {
+    const notificationId = notificationIds[event.id];
+    if (!notificationId || event.notificationId === notificationId) return event;
+    changed = true;
+    return { ...event, notificationId };
+  });
+  if (changed) emit();
 }
 
 export function careEventById(eventId: string): CareEvent | undefined {
@@ -258,7 +267,6 @@ export async function completeCareEvent(
   void hapticSuccess();
 
   const previousStatus = event.status;
-  const previousNotificationId = event.notificationId;
   const completedAt = new Date().toISOString();
 
   // 1. Ottimistico: cancello promemoria + marco completato localmente.
@@ -290,7 +298,7 @@ export async function completeCareEvent(
             ...item,
             status: previousStatus,
             completedAt: null,
-            notificationId: previousNotificationId,
+            notificationId: null,
             updatedAt: new Date().toISOString(),
           }
         : item,
@@ -298,8 +306,7 @@ export async function completeCareEvent(
     emit();
     if (
       previousStatus === 'SCHEDULED' &&
-      event.reminderEnabled &&
-      !previousNotificationId
+      event.reminderEnabled
     ) {
       // Il notificationId era già null (es. dopo riavvio): ri-schedulo.
       const id = await scheduleCareReminder(event, dogName);

@@ -48,6 +48,7 @@ export interface FetchDiaryOptions {
   cursor?: string | null;
   limit?: number;
   q?: string;
+  status?: string;
 }
 
 /** GET /v1/diary con filtri opzionali (sez. 5.1 timeline unificata). */
@@ -60,6 +61,7 @@ export async function fetchDiaryPage(options: FetchDiaryOptions = {}): Promise<D
   if (options.domain) params.push(`domain=${options.domain}`);
   if (options.dogId) params.push(`dog_id=${encodeURIComponent(options.dogId)}`);
   if (options.q?.trim()) params.push(`q=${encodeURIComponent(options.q.trim())}`);
+  if (options.status) params.push(`status=${encodeURIComponent(options.status)}`);
   const query = params.length > 0 ? `?${params.join('&')}` : '';
   return api.get<DiaryPage>(`/v1/diary${query}`);
 }
@@ -69,21 +71,7 @@ export async function fetchDiaryPage(options: FetchDiaryOptions = {}): Promise<D
  * Eventi digestive/care non possono quindi spingere l'insight fuori pagina.
  */
 export async function fetchHomeBehaviorPage(dogId: string): Promise<DiaryPage> {
-  let page = await fetchDiaryPage({ dogId, domain: 'BEHAVIOR', limit: 50 });
-  const items = [...page.items];
-  while (
-    page.next_cursor &&
-    items.filter((item) => item.status === 'COMPLETED').length < 8
-  ) {
-    page = await fetchDiaryPage({
-      dogId,
-      domain: 'BEHAVIOR',
-      cursor: page.next_cursor,
-      limit: 50,
-    });
-    items.push(...page.items);
-  }
-  return { items, next_cursor: page.next_cursor };
+  return fetchDiaryPage({ dogId, domain: 'BEHAVIOR', status: 'COMPLETED', limit: 8 });
 }
 
 /** GET /v1/usage → UsageSummary del dominio core (sez. 21). */

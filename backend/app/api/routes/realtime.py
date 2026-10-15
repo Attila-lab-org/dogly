@@ -54,6 +54,8 @@ from app.domains.realtime_orchestrator import (
     orchestrate_realtime_turn,
 )
 from app.domains.repository import now_utc
+from app.providers.base import ProviderUsage
+from app.providers.budget import check_daily_budget
 from app.providers.openai_live import (
     DEFAULT_LIVE_SECONDS,
     LIVE_MODEL,
@@ -62,6 +64,7 @@ from app.providers.openai_live import (
     create_live_webrtc_session,
     openai_voice_for_gender,
 )
+from app.providers.openai_reasoner import _estimate_openai_cost
 from app.providers.personal_reasoning import recognize_attachment
 
 router = APIRouter(prefix="/realtime")
@@ -238,6 +241,12 @@ async def create_live_session(
         raise ApiError(ErrorCode.PROCESSING_FAILED, "Live non configurato.")
     if not body.sdp.strip():
         raise ApiError(ErrorCode.VALIDATION_FAILED, "Offerta WebRTC mancante.")
+    await check_daily_budget(
+        state.engine,
+        role="realtime_live",
+        budget_usd=state.settings.reasoner_budget_usd_per_day,
+        operation="realtime.live",
+    )
 
     if state.engine is not None:
         profile = await profiles_db.get_or_create_profile(state.engine, user_id)
@@ -702,6 +711,27 @@ async def create_realtime_turn(
                 provider_audit=provider_audit,
                 memory_request=memory_request,
             )
+            usage = provider_audit.get("usage")
+            if state.engine is not None and provider_audit.get("provider") == "openai" and isinstance(usage, dict):
+                await state.cost_meter.record(
+                    usage=ProviderUsage(
+                        provider="openai",
+                        model=str(provider_audit.get("model") or state.settings.realtime_reasoning_model),
+                        input_tokens=int(usage.get("prompt_tokens") or 0),
+                        output_tokens=int(usage.get("completion_tokens") or 0),
+                        cost_usd=_estimate_openai_cost(
+                            usage,
+                            input_usd_per_million=state.settings.realtime_input_usd_per_million,
+                            output_usd_per_million=state.settings.realtime_output_usd_per_million,
+                            safety_margin=state.settings.ai_cost_safety_margin,
+                        ),
+                        request_id=str(provider_audit.get("request_id") or ""),
+                    ),
+                    operation="realtime.chat",
+                    domain=AnalysisDomain.OWNER_STORY,
+                    event_id=session_id,
+                    user_id=user_id,
+                )
             await _refresh_conversation_memory_best_effort(
                 state.engine,
                 session_id=session_id,

@@ -214,13 +214,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const bootstrapSession = useCallback(
     async (next: Session | null) => {
       await syncTokensFromSession(next);
+      const { hydrateConsents, resetConsentsForUser, ensureServiceTermsRecorded } = await import('../privacy/consents');
       if (!next?.user?.id) {
+        resetConsentsForUser(null);
         setSession(null);
         setHasDog(false);
         setPrimaryDogId(null);
         setDogStatusUnknown(false);
         return;
       }
+      resetConsentsForUser(next.user.id);
+      void hydrateConsents({ syncRemote: true, userId: next.user.id });
       const dogs = await fetchHasDog();
       if (dogs.authFailed) {
         // Token non valido: forza il sign-out.
@@ -238,7 +242,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setHasDog(dogs.hasDog);
       setPrimaryDogId(dogs.primaryDogId);
       void recoverAndDrainUploads(next.user.id).catch(() => undefined);
-      const { ensureServiceTermsRecorded } = await import('../privacy/consents');
+      void ensureServiceTermsRecorded();
       const { registerDevicePushToken } = await import(
         '../notifications/pushToken'
       );

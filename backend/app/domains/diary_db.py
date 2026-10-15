@@ -57,6 +57,7 @@ async def list_diary_page(
     domain: AnalysisDomain | None,
     dog_id: str | None,
     q: str | None = None,
+    status: str | None = None,
     storage: StorageProvider | None = None,
 ) -> DiaryPage:
     params: dict[str, Any] = {
@@ -75,6 +76,10 @@ async def list_diary_page(
     if q and q.strip():
         search_filter = "and (title ilike :q or coalesce(summary, '') ilike :q)"
         params["q"] = f"%{q.strip()}%"
+    status_filter = ""
+    if status:
+        status_filter = "and status = :status"
+        params["status"] = status
 
     cursor_filter = ""
     if cursor:
@@ -156,6 +161,7 @@ async def list_diary_page(
                       {dog_filter}
                       {domain_filter}
                       {search_filter}
+                      {status_filter}
                       {cursor_filter}
                     order by created_at desc, id desc
                     limit :limit

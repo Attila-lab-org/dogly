@@ -55,6 +55,7 @@ export default function AskLiveScreen() {
   const sessionIdRef = useRef<string | null>(null);
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
   const startingRef = useRef(false);
+  const mountedRef = useRef(true);
   const level = useSharedValue(0);
   const breath = useSharedValue(1);
   const ringWarn = useSharedValue(0);
@@ -139,6 +140,10 @@ export default function AskLiveScreen() {
         onState: setConn,
         onError: (message) => setError(message),
       });
+      if (!mountedRef.current) {
+        handle.stop();
+        return;
+      }
       handleRef.current = handle;
     } catch (err) {
       setConn('error');
@@ -157,10 +162,14 @@ export default function AskLiveScreen() {
   }, [dog.id]);
 
   useEffect(
-    () => () => {
-      handleRef.current?.stop();
-      const id = sessionIdRef.current;
-      if (id) void endLiveSession(id).catch(() => undefined);
+    () => {
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        handleRef.current?.stop();
+        const id = sessionIdRef.current;
+        if (id) void endLiveSession(id).catch(() => undefined);
+      };
     },
     [],
   );

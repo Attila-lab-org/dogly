@@ -9,7 +9,11 @@ import type { ConsentState } from '../secondary/types';
 import { consentsMock } from '../../mocks/secondary';
 import { getKeyValueStorage } from '../notifications/persistence';
 
-const STORAGE_KEY = 'dogly.consents.v1';
+const STORAGE_KEY_PREFIX = 'dogly.consents.v1';
+let activeUserId: string | null = null;
+function storageKey(userId = activeUserId) {
+  return `${STORAGE_KEY_PREFIX}.${userId ?? 'anonymous'}`;
+}
 export const POLICY_VERSION = 'privacy/v2';
 
 let consents: ConsentState = { ...consentsMock };
@@ -68,7 +72,7 @@ async function persistLocal(value: ConsentState): Promise<boolean> {
   const storage = getKeyValueStorage();
   if (!storage) return true;
   try {
-    await storage.setItem(STORAGE_KEY, JSON.stringify(value));
+    await storage.setItem(storageKey(), JSON.stringify(value));
     return true;
   } catch {
     return false;
@@ -78,13 +82,21 @@ async function persistLocal(value: ConsentState): Promise<boolean> {
 /** Carica cache locale e, in real mode, riconcilia con il server autorevole. */
 export async function hydrateConsents(options?: {
   syncRemote?: boolean;
+  userId?: string | null;
 }): Promise<boolean> {
+  if (options?.userId !== undefined && options.userId !== activeUserId) {
+    activeUserId = options.userId ?? null;
+    hydrated = false;
+    remoteHydrated = false;
+    consents = { ...consentsMock };
+    emit();
+  }
   if (!hydrated) {
     hydrated = true;
     const storage = getKeyValueStorage();
     if (storage) {
       try {
-        const raw = await storage.getItem(STORAGE_KEY);
+        const raw = await storage.getItem(storageKey());
         if (raw) {
           const parsed = JSON.parse(raw) as Partial<ConsentState>;
           consents = {
@@ -188,6 +200,15 @@ export async function setConsent(
 }
 
 /** Solo test: riporta lo store ai default e dimentica l'hydration. */
+export function resetConsentsForUser(userId: string | null): void {
+  activeUserId = userId;
+  consents = { ...consentsMock };
+  hydrated = false;
+  remoteHydrated = false;
+  syncKeys.clear();
+  emit();
+}
+
 export function resetConsentsForTests(): void {
   consents = { ...consentsMock };
   hydrated = false;

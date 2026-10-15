@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.contracts.errors import ApiError, ErrorCode
 from app.contracts.realtime import RealtimeDecision, RealtimeDomain
+from app.domains.db import get_engine
 from app.domains.owner_stories import extract_owner_reported_facts
 from app.domains.realtime_context import (
     CONVERSATION_MESSAGE_LIMIT,
@@ -33,6 +34,7 @@ from app.knowledge.claim_validation import (
 )
 from app.knowledge.product_instruction import PRODUCT_INSTRUCTION
 from app.knowledge.spoken_style import DOGLY_SPOKEN_STYLE
+from app.providers.budget import check_daily_budget
 
 REALTIME_ORCHESTRATOR_VERSION = "realtime-orchestrator/v7"
 REALTIME_HISTORY_LIMIT = CONVERSATION_MESSAGE_LIMIT
@@ -529,6 +531,16 @@ async def orchestrate_realtime_turn(
             "version": REALTIME_ORCHESTRATOR_VERSION,
             "canine_intelligence": canine_audit,
         }
+
+    # Chat turns use the same daily provider budget as the other reasoner
+    # calls. This gate runs immediately before the paid request, including
+    # turns that do not carry an attachment.
+    await check_daily_budget(
+        get_engine(settings),
+        role="realtime_chat",
+        budget_usd=settings.reasoner_budget_usd_per_day,
+        operation="realtime.chat",
+    )
 
     recent_history = _recent_conversation(history)
     attachment_focus = _attachment_focus(
