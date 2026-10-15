@@ -220,7 +220,7 @@ export default function PrivacyScreen() {
           <Text style={styles.sectionTitle}>Documenti</Text>
         </View>
         <Text style={styles.note}>
-          Privacy Policy e Termini della closed beta sono sempre raggiungibili da qui.
+          Privacy Policy e Termini sono sempre disponibili e aggiornati.
         </Text>
         <Button
           title="Apri Privacy Policy"

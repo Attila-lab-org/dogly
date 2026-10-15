@@ -84,6 +84,7 @@ export default function FoodScanScreen() {
         params: {
           photoFoodId: result.foodId,
           photoQuery: query,
+          photoLocalUri: uri,
         },
       });
     } catch {
@@ -108,25 +109,57 @@ export default function FoodScanScreen() {
       <View style={styles.body}>
         <Text style={styles.hero}>
           {enrich
-            ? 'Inquadra ingredienti e valori'
-            : 'Inquadra marca e nome'}
+            ? 'Foto dell’etichetta nutrizionale'
+            : 'Foto del fronte della confezione'}
         </Text>
         <Text style={styles.lead}>
           {enrich
-            ? `Così capisco meglio il pasto di ${dog.name}. Un solo scatto.`
-            : `Poi ti mostro i possibili match: scegli tu quello di ${dog.name}.`}
+            ? `Serve il lato con COMPOSIZIONE e valori (proteine, grassi…). Un solo scatto, nitido e senza riflessi.`
+            : `Serve il fronte dove si leggono bene marca e nome del prodotto di ${dog.name}. Non l’etichetta dietro.`}
         </Text>
 
-        {previewUri ? (
+        {!previewUri ? (
+          <View style={styles.guide} accessibilityRole="summary">
+            <View style={styles.guideIcon}>
+              <Ionicons
+                name={enrich ? 'list-outline' : 'cube-outline'}
+                size={28}
+                color={colors.accent}
+              />
+            </View>
+            <View style={styles.guideCopy}>
+              <Text style={styles.guideTitle}>
+                {enrich ? 'Cosa inquadrare' : 'Cosa inquadrare'}
+              </Text>
+              <Text style={styles.guideItem}>
+                {enrich
+                  ? '1. Gira la confezione sul lato ingredienti'
+                  : '1. Tieni la confezione dritta, fronte verso di te'}
+              </Text>
+              <Text style={styles.guideItem}>
+                {enrich
+                  ? '2. Inquadra testo ingredienti + % analitiche'
+                  : '2. Marca e nome devono stare dentro l’inquadratura'}
+              </Text>
+              <Text style={styles.guideItem}>
+                3. Luce buona, niente flash riflesso
+              </Text>
+            </View>
+          </View>
+        ) : (
           <View style={styles.previewWrap}>
-            <Image source={{ uri: previewUri }} style={styles.preview} />
+            <Image
+              source={{ uri: previewUri }}
+              style={styles.preview}
+              accessibilityLabel="Anteprima della foto appena scattata"
+            />
             {busy ? (
               <View style={styles.previewOverlay}>
                 <ActivityIndicator color="#FFFFFF" size="large" />
               </View>
             ) : null}
           </View>
-        ) : null}
+        )}
 
         {status ? (
           <Text style={styles.status} accessibilityLiveRegion="polite">
@@ -144,7 +177,13 @@ export default function FoodScanScreen() {
       <View style={styles.footer}>
         {phase === 'ready' || phase === 'error' ? (
           <Button
-            title={phase === 'error' ? 'Riprova' : 'Apri fotocamera'}
+            title={
+              phase === 'error'
+                ? 'Riprova foto'
+                : enrich
+                  ? 'Scatta etichetta'
+                  : 'Scatta fronte confezione'
+            }
             icon={
               <Ionicons
                 name="camera"
@@ -157,7 +196,7 @@ export default function FoodScanScreen() {
         ) : (
           <View style={styles.busyRow}>
             <ActivityIndicator color={colors.primary} />
-            <Text style={styles.busyText}>Un attimo…</Text>
+            <Text style={styles.busyText}>Leggo la foto…</Text>
           </View>
         )}
       </View>
@@ -186,6 +225,35 @@ const styles = StyleSheet.create({
     lineHeight: typography.size.md * 1.35,
     marginTop: -4,
   },
+  guide: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  guideIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentSoft,
+  },
+  guideCopy: { flex: 1, gap: 6 },
+  guideTitle: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    marginBottom: 2,
+  },
+  guideItem: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.35,
+  },
   previewWrap: {
     marginTop: spacing.sm,
     borderRadius: 20,
@@ -199,7 +267,11 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   previewOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: 'rgba(14,42,71,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
