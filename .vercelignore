@@ -2,8 +2,10 @@
 .github/
 .git/
 .venv/
-apps/admin/
-apps/landing/
+# Keep apps/admin and apps/landing available: their Vercel projects use
+# rootDirectory under those folders. Ignoring them here produced empty
+# Next builds that only shipped /404.
+# apps/mobile-web must stay included for dogly-l2g6.
 apps/mobile/
 backend/tests/
 docs/
