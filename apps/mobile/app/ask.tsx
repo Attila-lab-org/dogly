@@ -73,6 +73,15 @@ export default function AskScreen() {
     eventId: string;
     source: 'behavior' | 'digestive';
   } | null>(null);
+  /** Episodio agganciato (diario / post-analisi): ogni turno resta su QUESTA lettura. */
+  const [pinnedAnalysis, setPinnedAnalysis] = useState<{
+    eventId: string;
+    source: 'behavior' | 'digestive';
+  } | null>(
+    eventId && intent !== 'analyzing' && (source === 'behavior' || source === 'digestive')
+      ? { eventId, source }
+      : null,
+  );
   const [focusedEventId, setFocusedEventId] = useState<string | undefined>(
     intent === 'analyzing' ? undefined : eventId,
   );
@@ -142,45 +151,47 @@ export default function AskScreen() {
         });
       } else if (eventId) {
         const isRevisit = intent === 'revisit';
-        const text = isRevisit
-          ? digestiveHandoff
-            ? 'Riprendiamo questa analisi dal diario.'
-            : 'Riprendiamo questo momento dal diario.'
-          : digestiveHandoff
+        const analysisSource = digestiveHandoff ? 'digestive' : 'behavior';
+        setPinnedAnalysis({ eventId, source: analysisSource });
+        if (isRevisit) {
+          // GPT vede l’analisi pinnata e apre invitandoti ad approfondire QUELLA.
+          const text = digestiveHandoff
+            ? `Dal diario riprendiamo questa analisi di ${dog.name}. Hai i dettagli dell’episodio: invita ad approfondirla restando su questa lettura.`
+            : `Dal diario riprendiamo questo momento di ${dog.name}. Hai i dettagli dell’episodio: invita ad approfondirlo restando su questa lettura.`;
+          const turn = await createRealtimeTurn(next.id, text, undefined, {
+            eventId,
+            source: analysisSource,
+          });
+          if (!mounted.current) return;
+          setMessages([
+            ...(resumed?.messages ?? []),
+            {
+              id: turn.id,
+              role: 'assistant',
+              text: turn.assistant_text,
+              turn,
+            },
+          ]);
+        } else {
+          const text = digestiveHandoff
             ? 'Ho caricato la foto richiesta.'
             : 'Ho caricato il video richiesto.';
-        const revisitInvite = isRevisit
-          ? digestiveHandoff
-            ? `Vuoi approfondire questa analisi di ${dog.name}?`
-            : `Vuoi approfondire questo momento di ${dog.name}?`
-          : undefined;
-        const turn = await createRealtimeTurn(next.id, text, revisitInvite, {
-          eventId,
-          source: digestiveHandoff ? 'digestive' : 'behavior',
-        });
-        if (!mounted.current) return;
-        setMessages(
-          isRevisit
-            ? [
-                ...(resumed?.messages ?? []),
-                {
-                  id: turn.id,
-                  role: 'assistant',
-                  text: turn.assistant_text,
-                  turn,
-                },
-              ]
-            : [
-                ...(resumed?.messages ?? []),
-                { id: 'video-' + eventId, role: 'user', text },
-                {
-                  id: turn.id,
-                  role: 'assistant',
-                  text: turn.assistant_text,
-                  turn,
-                },
-              ],
-        );
+          const turn = await createRealtimeTurn(next.id, text, undefined, {
+            eventId,
+            source: analysisSource,
+          });
+          if (!mounted.current) return;
+          setMessages([
+            ...(resumed?.messages ?? []),
+            { id: 'video-' + eventId, role: 'user', text },
+            {
+              id: turn.id,
+              role: 'assistant',
+              text: turn.assistant_text,
+              turn,
+            },
+          ]);
+        }
         setFocusedEventId(undefined);
       } else if (resumed) {
         setMessages(resumed.messages);
@@ -300,6 +311,10 @@ export default function AskScreen() {
               },
             ];
           });
+          setPinnedAnalysis({
+            eventId: pendingAnalysis.eventId,
+            source: pendingAnalysis.source,
+          });
           setMediaPhase(null);
           setPendingAnalysis(null);
           setSending(false);
@@ -341,14 +356,23 @@ export default function AskScreen() {
         setMediaPhase('analyzing');
       }
       const location = await readDeviceLocation();
+      const activeEventId = focusedEventId ?? pinnedAnalysis?.eventId;
+      const activeSource =
+        focusedEventId
+          ? behaviorSource
+            ? 'behavior'
+            : digestiveSource
+              ? 'digestive'
+              : pinnedAnalysis?.source
+          : pinnedAnalysis?.source;
       const turn = await createRealtimeTurn(
         session.id,
         text,
         undefined,
         {
           idempotencyKey: requestId,
-          eventId: focusedEventId,
-          source: behaviorSource ? 'behavior' : digestiveSource ? 'digestive' : undefined,
+          eventId: activeEventId,
+          source: activeSource,
           photoId,
           photoContext: attachment?.purpose,
           latitude: location?.lat,
@@ -363,7 +387,16 @@ export default function AskScreen() {
       setMessages((current) => [...current, { id: localId + '-error', role: 'assistant', text: attachment || photoId ? 'Non sono riuscito a leggere questo momento. Puoi riprovare?' : 'Non sono riuscito a ricevere una risposta. Puoi riprovare?', failed: true, retryForId: localId, retryText: text, retryAttachmentUri: attachment?.uri, retryPhotoId: photoId, retryRequestId: requestId }]);
       setError('La risposta non è arrivata.');
     } finally { if (mounted.current) { setSending(false); setMediaPhase(null); } }
-  }, [behaviorSource, digestiveSource, dog.id, focusedEventId, sending, session, queryClient]);
+  }, [
+    behaviorSource,
+    digestiveSource,
+    dog.id,
+    focusedEventId,
+    pinnedAnalysis,
+    sending,
+    session,
+    queryClient,
+  ]);
 
   // Claim only once after a session is ready; failures use the normal retry UI.
   useEffect(() => {

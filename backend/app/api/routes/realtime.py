@@ -443,6 +443,69 @@ async def create_realtime_turn(
     source_refs: list[dict[str, str]] = []
     try:
         if body.assistant_text:
+            # Still pin the selected analysis so diary reopen / bridges stay on
+            # THAT event even when the opening line is a fixed invite.
+            if body.event_id and state.engine is not None:
+                context = await load_realtime_context_db(
+                    state.engine,
+                    user_id=user_id,
+                    dog_id=str(session["dog_id"]),
+                    domains=context_domains,
+                    user_text=context_query,
+                )
+                if body.context_source == "behavior":
+                    focus_behavior_event(
+                        context,
+                        await behavior_db.get_event(
+                            state.engine,
+                            user_id=user_id,
+                            event_id=body.event_id,
+                        ),
+                    )
+                elif body.context_source == "digestive":
+                    focus_digestive_event(
+                        context,
+                        await digestive_db.get_fecal_event(
+                            state.engine,
+                            user_id=user_id,
+                            event_id=body.event_id,
+                        ),
+                    )
+                source_refs = [
+                    ref
+                    for ref in context.source_refs()
+                    if ref["source_id"] == body.event_id
+                ][:1]
+            elif body.event_id and state.engine is None:
+                context = load_realtime_context_memory(
+                    state.store,
+                    dog_id=str(session["dog_id"]),
+                    domains=context_domains,
+                    user_text=context_query,
+                )
+                if body.context_source == "behavior":
+                    focus_behavior_event(
+                        context,
+                        behavior.get_event(
+                            state.store,
+                            user_id=user_id,
+                            event_id=body.event_id,
+                        ),
+                    )
+                elif body.context_source == "digestive":
+                    focus_digestive_event(
+                        context,
+                        digestive.get_fecal_event(
+                            state.store,
+                            user_id=user_id,
+                            event_id=body.event_id,
+                        ),
+                    )
+                source_refs = [
+                    ref
+                    for ref in context.source_refs()
+                    if ref["source_id"] == body.event_id
+                ][:1]
             decision = deterministic_safety_interrupt(body.text) or RealtimeDecision(
                 assistant_text=body.assistant_text.strip(), domains=domains
             )
