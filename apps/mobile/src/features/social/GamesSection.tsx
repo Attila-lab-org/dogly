@@ -231,7 +231,20 @@ export function GamesSection() {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Giochi del quartiere</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Giochi del quartiere</Text>
+        {enabled ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Apri la classifica della settimana"
+            onPress={() => router.push('/social/leaderboard' as never)}
+            style={({ pressed }) => [styles.boardLinkWrap, pressed && styles.pressed]}
+          >
+            <Text style={styles.boardLink}>Classifica</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+          </Pressable>
+        ) : null}
+      </View>
 
       <Animated.View style={[styles.heroCard, styles.heroCardRaised, heroPress.style]}>
         <LinearGradient
@@ -319,6 +332,17 @@ export function GamesSection() {
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  boardLinkWrap: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  boardLink: {
+    color: colors.accent,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
   title: {
     color: colors.text,
     fontSize: typography.size.lg,
