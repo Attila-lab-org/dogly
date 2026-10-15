@@ -16,8 +16,9 @@ export type LiveSession = {
   status: 'ACTIVE' | 'ENDED' | 'EXPIRED';
 };
 
-export function createLiveSession(dogId: string) {
-  return api.post<LiveSession>('/v1/realtime/live/sessions', { dog_id: dogId });
+export function createLiveSession(dogId: string, idempotencyKey?: string) {
+  return api.post<LiveSession>('/v1/realtime/live/sessions', { dog_id: dogId },
+    idempotencyKey ? { headers: { 'X-Idempotency-Key': idempotencyKey } } : undefined);
 }
 
 export function endLiveSession(sessionId: string) {

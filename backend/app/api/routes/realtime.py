@@ -224,11 +224,14 @@ async def create_live_session(
     body: LiveSessionCreate,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
     _: Annotated[
         None, Depends(rate_limit("realtime_live_session", limit=6, window_seconds=60))
     ],
 ) -> LiveSessionOut:
     """Open the dedicated Live voice room (WebRTC via ephemeral OpenAI secret)."""
+    if cached := guard.lookup():
+        return LiveSessionOut.model_validate(cached)
     if state.settings.realtime_kill_switch or state.settings.ai_kill_switch:
         raise ApiError(ErrorCode.AI_BUDGET_EXCEEDED, "Live non disponibile al momento.")
     if not state.settings.openai_api_key:
@@ -325,7 +328,7 @@ async def create_live_session(
         except ValueError:
             expires_at = None
 
-    return LiveSessionOut(
+    response = LiveSessionOut(
         session_id=str(row["id"]),
         dog_id=str(row["dog_id"]),
         dog_name=dog_name,
@@ -341,6 +344,16 @@ async def create_live_session(
         ),
         status="ACTIVE",
     )
+    saved_response = response.model_dump(mode="json")
+    guard.record(saved_response)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=saved_response,
+            payload_hash=guard._payload_hash,
+        )
+    return response
 
 
 @router.delete("/live/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

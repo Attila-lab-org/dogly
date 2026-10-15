@@ -55,6 +55,7 @@ export default function AskLiveScreen() {
   const sessionIdRef = useRef<string | null>(null);
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
   const startingRef = useRef(false);
+  const liveSessionKeyRef = useRef<string | null>(null);
   const level = useSharedValue(0);
   const breath = useSharedValue(1);
   const ringWarn = useSharedValue(0);
@@ -111,10 +112,11 @@ export default function AskLiveScreen() {
   const startLive = useCallback(async () => {
     if (startingRef.current || handleRef.current) return;
     startingRef.current = true;
+    liveSessionKeyRef.current ??= `live-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     setError(null);
     setConn('connecting');
     try {
-      const session = await createLiveSession(dog.id);
+      const session = await createLiveSession(dog.id, liveSessionKeyRef.current);
       sessionIdRef.current = session.session_id;
       setSecondsLeft(session.seconds_remaining);
       setWelcome(session.welcome_text);
