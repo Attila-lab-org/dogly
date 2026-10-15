@@ -740,23 +740,34 @@ export default function AskScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Torna alla Home" onPress={() => router.replace('/(tabs)/home' as never)} style={styles.headerButton}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
-        <View style={styles.headerIdentity}><DogAvatar photoUri={dog.photoUri} dogName={dog.name} size={40} /><View><Text style={styles.eyebrow}>PARLA CON DOGLY</Text><Text style={styles.headerTitle}>Su {dog.name}</Text></View></View>
-        <View style={styles.headerButton} />
-      </View>
-      <View style={styles.modeRow} accessibilityRole="tablist">
-        <View style={[styles.modePill, styles.modePillActive]} accessibilityState={{ selected: true }}>
-          <Text style={styles.modePillTextActive}>Testo</Text>
+        <View style={styles.headerIdentity}>
+          <DogAvatar photoUri={dog.photoUri} dogName={dog.name} size={40} />
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>PARLA CON DOGLY</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>Su {dog.name}</Text>
+          </View>
         </View>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityLabel="Passa a conversazione Voce"
-          accessibilityState={{ selected: false }}
-          onPress={() => router.push('/ask/live' as never)}
-          style={({ pressed }) => [styles.modePill, pressed && styles.pressed]}
-        >
-          <Ionicons name="mic-outline" size={14} color={colors.textSecondary} />
-          <Text style={styles.modePillText}>Voce</Text>
-        </Pressable>
+        <View style={styles.modeSwitch} accessibilityRole="tablist">
+          <View
+            style={[styles.modeChip, styles.modeChipActive]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: true }}
+            accessibilityLabel="Modalità Testo"
+          >
+            <Ionicons name="chatbubble" size={13} color="#FFFFFF" />
+            <Text style={styles.modeChipTextActive}>Testo</Text>
+          </View>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityLabel="Passa a conversazione Voce"
+            accessibilityState={{ selected: false }}
+            onPress={() => router.push('/ask/live' as never)}
+            style={({ pressed }) => [styles.modeChip, pressed && styles.pressed]}
+          >
+            <Ionicons name="mic" size={13} color={colors.primary} />
+            <Text style={styles.modeChipText}>Voce</Text>
+          </Pressable>
+        </View>
       </View>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
@@ -901,7 +912,54 @@ export default function AskScreen() {
   </LinearGradient>;
 }
 const styles = StyleSheet.create({
-  root: { flex: 1 }, safe: { flex: 1 }, header: { minHeight: 72, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(148,163,184,0.16)' }, headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, eyebrow: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold, letterSpacing: 0.8 }, headerTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold }, modeRow: { flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 4, marginTop: spacing.sm, marginBottom: spacing.xs, padding: 4, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(148,163,184,0.18)' }, modePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 }, modePillActive: { backgroundColor: colors.primary }, modePillText: { color: colors.textSecondary, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, modePillTextActive: { color: '#FFFFFF', fontWeight: typography.weight.bold, fontSize: typography.size.sm }, body: { flex: 1 }, scroll: { flex: 1 }, conversation: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }, intro: { backgroundColor: 'rgba(255,255,255,0.84)', borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(0,80,216,0.1)' }, sparkle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E6F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }, introTitle: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold, marginBottom: spacing.xs }, introText: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22 }, loading: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm }, muted: { color: colors.textMuted, fontSize: typography.size.sm }, error: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: '#FFF2F0' }, errorText: { color: colors.danger, flex: 1, fontSize: typography.size.sm }, retry: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, messageRow: { width: '100%', alignItems: 'flex-start' }, userRow: { alignItems: 'flex-end' }, bubble: { maxWidth: '88%', borderRadius: radius.lg, padding: spacing.md }, assistantBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4EDF6', borderBottomLeftRadius: 6 }, userBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 }, messageText: { color: colors.text, fontSize: typography.size.md, lineHeight: 23 }, userText: { color: '#FFFFFF' }, retryInside: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }, helpLink: { marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, helpLinkText: { color: colors.primary, fontWeight: typography.weight.bold }, memory: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: '#E4EDF6', paddingTop: spacing.md }, memoryLabel: { color: colors.text, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryText: { color: colors.textSecondary, marginTop: spacing.xs, fontSize: typography.size.sm, lineHeight: 19 }, memoryActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.md }, memoryButton: { backgroundColor: '#E6F1FF', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, memoryConfirm: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryReject: { color: colors.textMuted, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, thinking: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
+  root: { flex: 1 },
+  safe: { flex: 1 },
+  header: {
+    minHeight: 56,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(148,163,184,0.22)',
+  },
+  headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 1 },
+  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.7 },
+  headerTitle: { color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
+  modeSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    padding: 3,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(37,99,235,0.18)',
+  },
+  modeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  modeChipActive: { backgroundColor: colors.primary },
+  modeChipText: {
+    color: colors.primary,
+    fontWeight: typography.weight.bold,
+    fontSize: 12,
+  },
+  modeChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: typography.weight.bold,
+    fontSize: 12,
+  },
+  body: { flex: 1 },
+  scroll: { flex: 1 }, conversation: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }, intro: { backgroundColor: 'rgba(255,255,255,0.84)', borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(0,80,216,0.1)' }, sparkle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E6F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }, introTitle: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold, marginBottom: spacing.xs }, introText: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22 }, loading: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm }, muted: { color: colors.textMuted, fontSize: typography.size.sm }, error: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: '#FFF2F0' }, errorText: { color: colors.danger, flex: 1, fontSize: typography.size.sm }, retry: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, messageRow: { width: '100%', alignItems: 'flex-start' }, userRow: { alignItems: 'flex-end' }, bubble: { maxWidth: '88%', borderRadius: radius.lg, padding: spacing.md }, assistantBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4EDF6', borderBottomLeftRadius: 6 }, userBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 }, messageText: { color: colors.text, fontSize: typography.size.md, lineHeight: 23 }, userText: { color: '#FFFFFF' }, retryInside: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }, helpLink: { marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, helpLinkText: { color: colors.primary, fontWeight: typography.weight.bold }, memory: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: '#E4EDF6', paddingTop: spacing.md }, memoryLabel: { color: colors.text, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryText: { color: colors.textSecondary, marginTop: spacing.xs, fontSize: typography.size.sm, lineHeight: 19 }, memoryActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.md }, memoryButton: { backgroundColor: '#E6F1FF', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, memoryConfirm: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryReject: { color: colors.textMuted, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, thinking: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
   composerWrap: {
     width: '100%',
     maxWidth: 560,
