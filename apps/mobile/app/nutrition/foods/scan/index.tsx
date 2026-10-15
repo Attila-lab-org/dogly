@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
@@ -11,8 +11,23 @@ import { takeFoodLabelPhoto } from '@/features/nutrition/photo';
 
 type Phase = 'ready' | 'scanning';
 
+const firstParam = (value: string | string[] | undefined): string =>
+  Array.isArray(value) ? value[0] ?? '' : value ?? '';
+
 export default function FoodScanScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    enrich?: string | string[];
+    catalogBarcode?: string | string[];
+    lookupId?: string | string[];
+    brand?: string | string[];
+    name?: string | string[];
+  }>();
+  const enrich = firstParam(params.enrich) === '1';
+  const catalogBarcode = firstParam(params.catalogBarcode);
+  const lookupId = firstParam(params.lookupId);
+  const brand = firstParam(params.brand);
+  const name = firstParam(params.name);
   const { dog } = useDogProfile();
   const [phase, setPhase] = useState<Phase>('ready');
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +45,19 @@ export default function FoodScanScreen() {
         dogId: dog.id,
         localUri: uri,
       });
+      if (enrich) {
+        router.replace({
+          pathname: `/nutrition/foods/${result.foodId}/verify` as never,
+          params: {
+            enrich: '1',
+            lookupId,
+            catalogBarcode,
+            brand: brand || result.food?.brand || '',
+            name: name || result.food?.name || '',
+          },
+        });
+        return;
+      }
       const query = [result.food?.brand, result.food?.name]
         .filter(Boolean)
         .join(' ');
@@ -42,7 +70,9 @@ export default function FoodScanScreen() {
       });
     } catch {
       setError(
-        'Non sono riuscito a leggere l’etichetta. Controlla che la foto sia nitida e riprova.',
+        enrich
+          ? 'Non leggo bene ingredienti e valori. Riprova con più luce, senza riflessi.'
+          : 'Non sono riuscito a leggere l’etichetta. Controlla che la foto sia nitida e riprova.',
       );
       setPhase('ready');
     }
@@ -50,27 +80,37 @@ export default function FoodScanScreen() {
 
   return (
     <ScreenContainer scroll>
-      <StackScreenHeader title="Fotografa la confezione" />
+      <StackScreenHeader
+        title={enrich ? 'Etichetta nutrizionale' : 'Fotografa la confezione'}
+      />
       <Text style={styles.intro}>
-        Inquadra il lato dove si vedono bene marca e nome. Ti mostrerò gli
-        alimenti possibili: sarai tu a scegliere quello giusto.
+        {enrich
+          ? `Inquadra COMPOSIZIONE e COSTITUENTI ANALITICI (ingredienti, proteine, grassi). Aiutano a capire meglio il pasto di ${dog.name}.`
+          : 'Inquadra il lato dove si vedono bene marca e nome. Ti mostrerò gli alimenti possibili: sarai tu a scegliere quello giusto.'}
       </Text>
 
       {error ? (
-        <ErrorState title="Etichetta non letta" message={error} />
+        <ErrorState
+          title={enrich ? 'Valori non letti' : 'Etichetta non letta'}
+          message={error}
+        />
       ) : null}
 
       <Card noPadding style={styles.frameCard}>
         <View style={styles.frameArea}>
           <Ionicons
-            name="scan-outline"
+            name={enrich ? 'nutrition-outline' : 'scan-outline'}
             size={48}
             color={phase === 'scanning' ? colors.accent : colors.textMuted}
           />
           <Text style={styles.frameLabel}>
             {phase === 'ready'
-              ? 'Marca e nome devono essere leggibili'
-              : 'Sto cercando gli alimenti possibili…'}
+              ? enrich
+                ? 'Ingredienti + proteine e grassi leggibili'
+                : 'Marca e nome devono essere leggibili'
+              : enrich
+                ? 'Sto leggendo i valori…'
+                : 'Sto cercando gli alimenti possibili…'}
           </Text>
         </View>
       </Card>
@@ -79,7 +119,7 @@ export default function FoodScanScreen() {
         {phase === 'ready' && (
           <Button
             title="Scatta la foto"
-            icon={<Ionicons name="scan" size={18} color={colors.textOnPrimary} />}
+            icon={<Ionicons name="camera" size={18} color={colors.textOnPrimary} />}
             onPress={() => void startScan()}
           />
         )}
@@ -116,6 +156,8 @@ const styles = StyleSheet.create({
   frameLabel: {
     fontSize: typography.size.sm,
     color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   actions: {
     gap: spacing.sm,

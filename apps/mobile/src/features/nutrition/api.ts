@@ -174,9 +174,18 @@ export async function createManualFood(options: {
   brand?: string;
   name: string;
   ingredientsRaw?: string;
+  protein?: string;
+  fat?: string;
+  fiber?: string;
+  moisture?: string;
   calories?: string;
 }): Promise<ApiFoodProduct> {
   const clientRequestId = newId('manual-food');
+  const toPct = (value?: string): number | null => {
+    if (!value?.trim()) return null;
+    const parsed = Number(value.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   return api.post<ApiFoodProduct>(
     '/v1/nutrition/foods/manual',
     {
@@ -186,6 +195,10 @@ export async function createManualFood(options: {
       name: options.name.trim(),
       ingredients_raw: options.ingredientsRaw?.trim() || null,
       guaranteed_analysis: {
+        crude_protein_min: toPct(options.protein),
+        crude_fat_min: toPct(options.fat),
+        crude_fiber_max: toPct(options.fiber),
+        moisture_max: toPct(options.moisture),
         calories: options.calories?.trim() || null,
       },
     },

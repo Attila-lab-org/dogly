@@ -218,6 +218,12 @@ def test_recognizes_dutch_cat_food_as_cat_product():
                         "brands": "Acme",
                         "categories_tags": ["en:dog-food"],
                     },
+                    {
+                        "code": "8000000000016",
+                        "product_name": "Whiskas adult pollo",
+                        "brands": "Whiskas",
+                        "categories_tags": ["en:dog-food"],
+                    },
                 ]
             },
         )
@@ -227,11 +233,68 @@ def test_recognizes_dutch_cat_food_as_cat_product():
         cache={},
         search_cache={},
     )
-    # A dog result remains available; the Dutch cat result is not promoted over it.
+    # Cat rows are dropped entirely, even if mis-tagged under dog-food.
     import asyncio
 
     hits = asyncio.run(client.search_products("Nat"))
-    assert all("kattenvoer" not in (item.name or "").lower() for item in hits)
+    assert [item.name for item in hits] == ["Adult dog pollo"]
+
+
+@pytest.mark.asyncio
+async def test_barcode_lookup_rejects_cat_food():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": 1,
+                "product": {
+                    "code": "8000000000090",
+                    "product_name": "Lechat excellence pollo",
+                    "brands": "Monge",
+                    "categories_tags": ["en:cat-food"],
+                },
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+    )
+    assert await client.lookup_barcode("8000000000090") is None
+
+
+@pytest.mark.asyncio
+async def test_italy_products_rank_before_foreign():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "products": [
+                    {
+                        "code": "8000000000201",
+                        "product_name": "Adult pollo Francia",
+                        "brands": "Acme",
+                        "categories_tags": ["en:dog-food"],
+                        "countries_tags": ["en:france"],
+                    },
+                    {
+                        "code": "8000000000202",
+                        "product_name": "Adult pollo Italia",
+                        "brands": "Acme",
+                        "categories_tags": ["en:dog-food"],
+                        "countries_tags": ["en:italy"],
+                    },
+                ]
+            },
+        )
+
+    client = OpenPetFoodFactsClient(
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        cache={},
+        search_cache={},
+    )
+    hits = await client.search_products("Acme pollo")
+    assert [item.name for item in hits] == ["Adult pollo Italia", "Adult pollo Francia"]
 
 
 @pytest.mark.asyncio
@@ -279,7 +342,9 @@ async def test_browse_products_pages_source_and_applies_food_filters():
     def handler(request: httpx.Request) -> httpx.Response:
         query = dict(request.url.params)
         assert query["tag_0"] == "en:dry-dog-food"
-        assert query["tag_1"] == "Acme"
+        assert query["tag_contains_1"] == "does_not_contain"
+        assert query["tag_1"] == "en:cat-food"
+        assert query["tag_2"] == "Acme"
         assert query["page"] == "2"
         # Browse requests a wider OPFF page so dog-filters still leave enough rows.
         assert int(query["page_size"]) >= 2

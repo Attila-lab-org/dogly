@@ -25,9 +25,11 @@ import { isPersistedId } from '@/lib/persistedId';
 import { StackScreenHeader } from '@/features/secondary/components';
 import {
   activateFeedingPeriod,
+  confirmExternalFood,
   createNutritionOperationId,
   getFood,
   listFeedingPeriods,
+  lookupFoodByBarcode,
   updateFeedingPeriod,
   verifyFood,
 } from '@/features/nutrition/api';
@@ -69,16 +71,23 @@ function EditableField({
 }
 
 export default function FoodVerifyScreen() {
-  const { foodId, reading, focus } = useLocalSearchParams<{
-    foodId: string;
-    reading?: string;
-    focus?: string;
-  }>();
+  const { foodId, reading, focus, enrich, lookupId, catalogBarcode, brand: brandParam, name: nameParam } =
+    useLocalSearchParams<{
+      foodId: string;
+      reading?: string;
+      focus?: string;
+      enrich?: string;
+      lookupId?: string;
+      catalogBarcode?: string;
+      brand?: string;
+      name?: string;
+    }>();
   const router = useRouter();
   const { dog } = useDogProfile();
   const quantityFocus = focus === 'quantity';
-  // Technical label fields stay closed until the owner explicitly asks to edit them.
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const enrichMode = enrich === '1';
+  // Enrich path (FoodSwitch-style): open nutrition fields immediately.
+  const [detailsOpen, setDetailsOpen] = useState(enrichMode);
 
   const foodQuery = useQuery({
     queryKey: ['nutrition-food', foodId],
@@ -110,8 +119,8 @@ export default function FoodVerifyScreen() {
 
   useEffect(() => {
     if (!food) return;
-    setName(food.name ?? '');
-    setBrand(food.brand ?? '');
+    setName(food.name?.trim() || nameParam || '');
+    setBrand(food.brand?.trim() || brandParam || '');
     setIngredients(food.ingredients_raw ?? '');
     setProtein(food.guaranteed_analysis?.crude_protein_min?.toString() ?? '');
     setFat(food.guaranteed_analysis?.crude_fat_min?.toString() ?? '');
@@ -119,8 +128,9 @@ export default function FoodVerifyScreen() {
     setMoisture(food.guaranteed_analysis?.moisture_max?.toString() ?? '');
     setCalories(food.guaranteed_analysis?.calories ?? '');
     setFeedingDirections(food.feeding_directions ?? '');
-    setEditing(!food.verified_at);
-  }, [food]);
+    setEditing(!food.verified_at || enrichMode);
+    if (enrichMode) setDetailsOpen(true);
+  }, [brandParam, enrichMode, food, nameParam]);
 
   useEffect(() => {
     const open = periodsQuery.data?.find(
@@ -222,18 +232,52 @@ export default function FoodVerifyScreen() {
         return;
       }
       if (!quantityOnly) {
-        await verifyFood({
-          foodId,
-          brand: brand.trim(),
-          name: name.trim(),
-          ingredientsRaw: ingredients.trim(),
-          protein,
-          fat,
-          fiber,
-          moisture,
-          calories,
-          feedingDirections,
-        });
+        const toPct = (value: string): number | undefined => {
+          if (!value.trim()) return undefined;
+          const parsed = Number(value.replace(',', '.'));
+          return Number.isFinite(parsed) ? parsed : undefined;
+        };
+        const analysis = {
+          crude_protein_min: toPct(protein),
+          crude_fat_min: toPct(fat),
+          crude_fiber_max: toPct(fiber),
+          moisture_max: toPct(moisture),
+          calories: calories.trim() || undefined,
+        };
+        let resolvedLookupId = lookupId?.trim() || '';
+        if (!resolvedLookupId && catalogBarcode?.trim()) {
+          const exact = await lookupFoodByBarcode({
+            dogId: dog.id,
+            barcode: catalogBarcode.trim(),
+          });
+          resolvedLookupId = exact.lookup_id;
+        }
+        if (resolvedLookupId) {
+          await confirmExternalFood({
+            dogId: dog.id,
+            lookupId: resolvedLookupId,
+            draftFoodId: foodId,
+            brand: brand.trim(),
+            name: name.trim(),
+            ingredientsRaw: ingredients.trim(),
+            calories: calories.trim() || undefined,
+            guaranteedAnalysis: analysis,
+            activate: false,
+          });
+        } else {
+          await verifyFood({
+            foodId,
+            brand: brand.trim(),
+            name: name.trim(),
+            ingredientsRaw: ingredients.trim(),
+            protein,
+            fat,
+            fiber,
+            moisture,
+            calories,
+            feedingDirections,
+          });
+        }
       }
       if (shouldActivate) {
         await activateFeedingPeriod({
@@ -268,11 +312,14 @@ export default function FoodVerifyScreen() {
       <Text style={styles.intro}>
         {quantityFocus
           ? `Quanto ne mangia ${dog.name} al giorno? Aggiungi la quantità sul periodo di alimentazione attivo: così le prossime osservazioni digestive avranno questo dato.`
-          : reading === 'manual'
-            ? 'La foto è salva, ma non sono riuscito a leggere bene i dati. Puoi completarli guardando l’etichetta qui sopra.'
-            : 'Ho compilato ciò che era leggibile. Controlla soprattutto i campi segnati.'}{' '}
-        Solo ciò che confermi verrà usato per seguire la digestione di {dog.name}{' '}
-        nel tempo.
+          : enrichMode
+            ? `Ho letto ciò che era visibile. Controlla e conferma: puoi completare i valori anche più tardi.`
+            : reading === 'manual'
+              ? 'La foto è salva, ma non sono riuscito a leggere bene i dati. Puoi completarli guardando l’etichetta qui sopra.'
+              : 'Ho compilato ciò che era leggibile. Controlla soprattutto i campi segnati.'}{' '}
+        {!quantityFocus && !enrichMode
+          ? `Solo ciò che confermi verrà usato per seguire la digestione di ${dog.name} nel tempo.`
+          : null}
       </Text>
 
       <Card style={styles.card}>
@@ -304,8 +351,14 @@ export default function FoodVerifyScreen() {
         style={styles.detailsToggle}
       >
         <View style={styles.detailsToggleCopy}>
-          <Text style={styles.detailsToggleTitle}>Altri dati dell’etichetta</Text>
-          <Text style={styles.detailsToggleText}>Aprili solo se vuoi correggere la lettura</Text>
+          <Text style={styles.detailsToggleTitle}>
+            {enrichMode ? 'Ingredienti e valori' : 'Altri dati dell’etichetta'}
+          </Text>
+          <Text style={styles.detailsToggleText}>
+            {enrichMode
+              ? 'Utili per seguire il pasto — facoltativi'
+              : 'Aprili solo se vuoi correggere la lettura'}
+          </Text>
         </View>
         <Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
       </Pressable>

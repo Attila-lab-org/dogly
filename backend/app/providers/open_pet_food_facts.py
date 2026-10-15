@@ -57,38 +57,65 @@ class ExternalFoodCandidate(BaseModel):
 
 _BARCODE_CACHE: dict[str, ExternalFoodCandidate | None] = {}
 _SEARCH_CACHE: dict[str, list[ExternalFoodCandidate]] = {}
+_CAT_CATEGORY_TAGS = (
+    "en:cat-food",
+    "en:dry-cat-food",
+    "en:wet-cat-food",
+    "en:cat-treats",
+    "en:kitten-food",
+)
 _CAT_MARKERS = (
     "en:cat-food",
     "en:dry-cat-food",
     "en:wet-cat-food",
+    "en:cat-treats",
+    "en:kitten-food",
     "lechat",
+    "le chat",
     "per gatt",
     "per gatto",
+    "per gatti",
     "cat food",
+    "cats food",
+    "for cats",
+    "for cat",
     "chat ",
+    " chats",
     "kitten",
     "babycat",
     "feline",
     "persian",
     "british shorthair",
-    "per gatti",
-    "for cats",
     "kattenvoer",
     "kattenvoeding",
+    "katzenfutter",
     "hondenvoer voor katten",
+    "whiskas",
+    "sheba",
+    "gourmet gold",
+    "felix ",
+    " felix",
+    "friskies",
+    "purina one chat",
+    "purina one cat",
 )
 _DOG_MARKERS = (
     "en:dog-food",
     "en:dry-dog-food",
     "en:wet-dog-food",
+    "en:dog-treats",
     "per cani",
     "per cane",
     "dog food",
+    "dogs food",
+    "for dogs",
+    "for dog",
     "puppy",
     "hund",
     "special dog",
     "hondenvoer",
     "hondenvoeding",
+    "hundefutter",
 )
 
 
@@ -115,17 +142,44 @@ def _fold(value: Any) -> str:
     return "".join(ch for ch in text if not unicodedata.combining(ch)).casefold()
 
 
-def _dog_preference(product: dict[str, Any]) -> int:
+def _category_tags(product: dict[str, Any]) -> list[str]:
+    tags = product.get("categories_tags") or []
+    return [_fold(tag) for tag in tags if tag]
+
+
+def _is_cat_food(product: dict[str, Any]) -> bool:
+    """Hard exclude: cat categories, cat-only labels, or mixed dog+cat rows."""
+    tags = _category_tags(product)
+    if any(tag in _CAT_CATEGORY_TAGS or tag.startswith("en:cat") for tag in tags):
+        return True
     blob = _fold(_product_blob(product))
-    is_cat = any(marker in blob for marker in _CAT_MARKERS)
-    is_dog = any(marker in blob for marker in _DOG_MARKERS)
-    if is_dog and not is_cat:
-        return 0
-    if is_dog:
-        return 1
-    if is_cat:
+    return any(marker in blob for marker in _CAT_MARKERS)
+
+
+def _dog_preference(product: dict[str, Any]) -> int:
+    """0 = clear dog, 2 = unknown, 3 = cat (never show)."""
+    if _is_cat_food(product):
         return 3
+    blob = _fold(_product_blob(product))
+    if any(marker in blob for marker in _DOG_MARKERS):
+        return 0
     return 2
+
+
+def _italy_rank(product: dict[str, Any]) -> int:
+    """0 = sold/tagged in Italy (show first), 1 = elsewhere."""
+    country_tags = product.get("countries_tags") or []
+    blob = _fold(
+        " ".join(
+            [
+                " ".join(str(tag) for tag in country_tags if tag),
+                str(product.get("countries") or ""),
+            ]
+        )
+    )
+    if "en:italy" in blob or "italy" in blob or "italia" in blob:
+        return 0
+    return 1
 
 
 _NOISE_IN_NAME = re.compile(r"#\S+|\bkm\b", re.IGNORECASE)
@@ -292,13 +346,16 @@ def _token_matches(product: dict[str, Any], tokens: list[str]) -> int:
     return sum(1 for token in tokens if token in blob)
 
 
-def _rank_product(product: dict[str, Any], tokens: list[str]) -> tuple[int, int, int, int]:
+def _rank_product(
+    product: dict[str, Any], tokens: list[str]
+) -> tuple[int, int, int, int, int]:
     name = str(product.get("product_name_it") or product.get("product_name") or "")
     brand = str(product.get("brands") or "").split(",")[0].strip()
     specific = 0 if name and brand and name.casefold() == brand.casefold() else 1
     has_quantity = 1 if product.get("quantity") else 0
     return (
         _dog_preference(product),
+        _italy_rank(product),
         -_token_matches(product, tokens),
         -specific,
         -has_quantity,
@@ -470,6 +527,8 @@ def _parse_product(cleaned: str, payload: dict[str, Any]) -> ExternalFoodCandida
     product = payload.get("product") if isinstance(payload, dict) else None
     if not isinstance(product, dict) or payload.get("status") != 1:
         return None
+    if _is_cat_food(product):
+        return None
     return _candidate_from_product(product, barcode=cleaned)
 
 
@@ -518,6 +577,10 @@ class OpenPetFoodFactsClient:
                 "json": "1",
                 "page": str(page),
                 "page_size": str(page_size),
+                # Server-side: never pull cat-food category into dog shelf.
+                "tagtype_0": "categories",
+                "tag_contains_0": "does_not_contain",
+                "tag_0": "en:cat-food",
             },
         )
         products = payload.get("products") if isinstance(payload, dict) else None
@@ -534,15 +597,17 @@ class OpenPetFoodFactsClient:
     ) -> list[ExternalFoodCandidate]:
         tokens = _query_tokens(query)
         ranked = sorted(
-            _enrich_missing_brands(products),
+            (
+                item
+                for item in _enrich_missing_brands(products)
+                if not _is_cat_food(item)
+            ),
             key=lambda item: _rank_product(item, tokens),
         )
-        preferred = [item for item in ranked if _dog_preference(item) < 3]
-        pool = preferred or ranked
         found: list[ExternalFoodCandidate] = []
         seen_codes: set[str] = set()
         seen_variants: set[tuple[str, ...]] = set()
-        for item in pool:
+        for item in ranked:
             candidate = _candidate_from_product(item)
             if candidate is None or candidate.barcode in seen_codes:
                 continue
@@ -573,7 +638,7 @@ class OpenPetFoodFactsClient:
         usable = [
             item
             for item in products
-            if _candidate_from_product(item) is not None and _dog_preference(item) < 3
+            if _candidate_from_product(item) is not None and not _is_cat_food(item)
         ]
         # Only walk further OPFF pages when the first page was full but sparse
         # after dog filtering — avoids hammering thin queries.
@@ -607,8 +672,7 @@ class OpenPetFoodFactsClient:
             usable = [
                 item
                 for item in products
-                if _candidate_from_product(item) is not None
-                and _dog_preference(item) < 3
+                if _candidate_from_product(item) is not None and not _is_cat_food(item)
             ]
             if added == 0 or len(extra) < page_size // 2:
                 break
@@ -664,15 +728,19 @@ class OpenPetFoodFactsClient:
                 "tagtype_0": "categories",
                 "tag_contains_0": "contains",
                 "tag_0": category,
+                # Drop anything also filed under cat food.
+                "tagtype_1": "categories",
+                "tag_contains_1": "does_not_contain",
+                "tag_1": "en:cat-food",
                 "page": str(source_page),
                 "page_size": str(fetch_size),
                 "sort_by": "unique_scans_n",
             }
             if brand:
                 params.update({
-                    "tagtype_1": "brands",
-                    "tag_contains_1": "contains",
-                    "tag_1": brand,
+                    "tagtype_2": "brands",
+                    "tag_contains_2": "contains",
+                    "tag_2": brand,
                 })
             payload = await self._request_json(_SEARCH_URL, params=params)
             products = payload.get("products")
@@ -685,8 +753,7 @@ class OpenPetFoodFactsClient:
             for item in products:
                 if isinstance(item, dict):
                     collected.append(item)
-            # Keep clear dog foods and ambiguous dog+cat; drop cat-only.
-            usable = [item for item in collected if _dog_preference(item) < 3]
+            usable = [item for item in collected if not _is_cat_food(item)]
             candidates = self._candidates_from_products(
                 usable, query=query, limit=page_size
             )
@@ -707,7 +774,7 @@ class OpenPetFoodFactsClient:
                     page + 1 if client_has_more else None,
                 )
             source_page += 1
-        usable = [item for item in collected if _dog_preference(item) < 3]
+        usable = [item for item in collected if not _is_cat_food(item)]
         client_has_more = (
             page * page_size < total_count
             if total_count is not None

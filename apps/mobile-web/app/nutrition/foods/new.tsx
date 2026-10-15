@@ -33,6 +33,7 @@ import {
   FoodShelfCard,
   useShelfCardWidth,
 } from '@/features/nutrition/FoodShelfCard';
+import { hasMealNutrition, needsLabelEnrichment } from '@/features/nutrition/label';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { scheduleCatalogSearch } from '@/features/nutrition/catalogSearch';
 import { queryKeys } from '@/lib/queryClient';
@@ -87,6 +88,13 @@ export default function NewFoodScreen() {
   const [catalogNextPage, setCatalogNextPage] = useState<number | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [ingredients, setIngredients] = useState('');
+  const [protein, setProtein] = useState('');
+  const [fat, setFat] = useState('');
+  const [fiber, setFiber] = useState('');
+  const [moisture, setMoisture] = useState('');
+  const [caloriesLabel, setCaloriesLabel] = useState('');
+  const [manualNutritionOpen, setManualNutritionOpen] = useState(false);
 
   const photoFoodQuery = useQuery({
     queryKey: ['nutrition-photo-food', photoFoodId],
@@ -171,8 +179,28 @@ export default function NewFoodScreen() {
     setManual(false);
     setBrand(item.brand ?? '');
     setName(item.name ?? '');
+    setIngredients(item.ingredients_raw ?? '');
+    setProtein(item.guaranteed_analysis?.crude_protein_min?.toString() ?? '');
+    setFat(item.guaranteed_analysis?.crude_fat_min?.toString() ?? '');
+    setFiber(item.guaranteed_analysis?.crude_fiber_max?.toString() ?? '');
+    setMoisture(item.guaranteed_analysis?.moisture_max?.toString() ?? '');
+    setCaloriesLabel(item.calories ?? item.guaranteed_analysis?.calories ?? '');
+    setManualNutritionOpen(needsLabelEnrichment(item));
     setStep('details');
     setMessage(null);
+  };
+
+  const goEnrichPhoto = () => {
+    router.push({
+      pathname: '/nutrition/foods/scan' as never,
+      params: {
+        enrich: '1',
+        catalogBarcode: selected?.barcode || '',
+        lookupId: selected?.lookup_id || '',
+        brand,
+        name,
+      },
+    });
   };
 
   useEffect(() => {
@@ -188,6 +216,15 @@ export default function NewFoodScreen() {
         setManual(false);
         setBrand(exact.brand ?? '');
         setName(exact.name ?? '');
+        setIngredients(exact.ingredients_raw ?? '');
+        setProtein(exact.guaranteed_analysis?.crude_protein_min?.toString() ?? '');
+        setFat(exact.guaranteed_analysis?.crude_fat_min?.toString() ?? '');
+        setFiber(exact.guaranteed_analysis?.crude_fiber_max?.toString() ?? '');
+        setMoisture(exact.guaranteed_analysis?.moisture_max?.toString() ?? '');
+        setCaloriesLabel(
+          exact.calories ?? exact.guaranteed_analysis?.calories ?? '',
+        );
+        setManualNutritionOpen(needsLabelEnrichment(exact));
         setStep('details');
         setMessage(null);
       })
@@ -209,10 +246,42 @@ export default function NewFoodScreen() {
   const startManual = () => {
     setSelected(null);
     setManual(true);
-    setBrand(photoFoodQuery.data?.brand ?? '');
-    setName(photoFoodQuery.data?.name ?? query.trim());
+    const draft = photoFoodQuery.data;
+    setBrand(draft?.brand ?? '');
+    setName(draft?.name ?? query.trim());
+    setIngredients(draft?.ingredients_raw ?? '');
+    setProtein(draft?.guaranteed_analysis?.crude_protein_min?.toString() ?? '');
+    setFat(draft?.guaranteed_analysis?.crude_fat_min?.toString() ?? '');
+    setFiber(draft?.guaranteed_analysis?.crude_fiber_max?.toString() ?? '');
+    setMoisture(draft?.guaranteed_analysis?.moisture_max?.toString() ?? '');
+    setCaloriesLabel(draft?.guaranteed_analysis?.calories ?? '');
+    setManualNutritionOpen(true);
     setStep('details');
     setMessage(null);
+  };
+
+  const parsePct = (value: string): number | undefined => {
+    if (!value.trim()) return undefined;
+    const parsed = Number(value.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const nutritionFromForm = () => ({
+    ingredients_raw: ingredients.trim() || null,
+    guaranteed_analysis: {
+      crude_protein_min: parsePct(protein) ?? null,
+      crude_fat_min: parsePct(fat) ?? null,
+      crude_fiber_max: parsePct(fiber) ?? null,
+      moisture_max: parsePct(moisture) ?? null,
+      calories: caloriesLabel.trim() || null,
+    },
+  });
+
+  const mealReady = (): boolean => {
+    if (hasMealNutrition(nutritionFromForm())) return true;
+    if (selected && hasMealNutrition(selected)) return true;
+    if (photoFoodQuery.data && hasMealNutrition(photoFoodQuery.data)) return true;
+    return false;
   };
 
   const save = async () => {
@@ -228,6 +297,41 @@ export default function NewFoodScreen() {
       const chosen = selected && !selected.lookup_id
         ? await lookupFoodByBarcode({ dogId: dog.id, barcode: selected.barcode })
         : selected;
+      const formNutrition = nutritionFromForm();
+      const draft = photoFoodQuery.data;
+      const ingredientsRaw =
+        formNutrition.ingredients_raw ||
+        chosen?.ingredients_raw ||
+        draft?.ingredients_raw ||
+        undefined;
+      const guaranteedAnalysis = {
+        crude_protein_min:
+          formNutrition.guaranteed_analysis.crude_protein_min ??
+          chosen?.guaranteed_analysis?.crude_protein_min ??
+          draft?.guaranteed_analysis?.crude_protein_min ??
+          undefined,
+        crude_fat_min:
+          formNutrition.guaranteed_analysis.crude_fat_min ??
+          chosen?.guaranteed_analysis?.crude_fat_min ??
+          draft?.guaranteed_analysis?.crude_fat_min ??
+          undefined,
+        crude_fiber_max:
+          formNutrition.guaranteed_analysis.crude_fiber_max ??
+          chosen?.guaranteed_analysis?.crude_fiber_max ??
+          draft?.guaranteed_analysis?.crude_fiber_max ??
+          undefined,
+        moisture_max:
+          formNutrition.guaranteed_analysis.moisture_max ??
+          chosen?.guaranteed_analysis?.moisture_max ??
+          draft?.guaranteed_analysis?.moisture_max ??
+          undefined,
+        calories:
+          formNutrition.guaranteed_analysis.calories ||
+          chosen?.calories ||
+          chosen?.guaranteed_analysis?.calories ||
+          draft?.guaranteed_analysis?.calories ||
+          undefined,
+      };
       if (photoFoodId && chosen) {
         food = await confirmExternalFood({
           dogId: dog.id,
@@ -235,25 +339,22 @@ export default function NewFoodScreen() {
           draftFoodId: photoFoodId,
           brand,
           name,
-          ingredientsRaw: chosen.ingredients_raw ?? undefined,
-          calories: chosen.calories ?? undefined,
-          guaranteedAnalysis: chosen.guaranteed_analysis,
+          ingredientsRaw: ingredientsRaw ?? undefined,
+          calories: guaranteedAnalysis.calories ?? undefined,
+          guaranteedAnalysis,
           activate: false,
         });
       } else if (photoFoodId) {
-        const draft = photoFoodQuery.data;
-        const analysis = draft?.guaranteed_analysis;
         food = await verifyFood({
           foodId: photoFoodId,
           brand: brand.trim(),
           name: name.trim(),
-          ingredientsRaw:
-            chosen?.ingredients_raw ?? draft?.ingredients_raw ?? '',
-          protein: analysis?.crude_protein_min?.toString() ?? '',
-          fat: analysis?.crude_fat_min?.toString() ?? '',
-          fiber: analysis?.crude_fiber_max?.toString() ?? '',
-          moisture: analysis?.moisture_max?.toString() ?? '',
-          calories: chosen?.calories ?? analysis?.calories ?? '',
+          ingredientsRaw: ingredientsRaw ?? '',
+          protein: guaranteedAnalysis.crude_protein_min?.toString() ?? '',
+          fat: guaranteedAnalysis.crude_fat_min?.toString() ?? '',
+          fiber: guaranteedAnalysis.crude_fiber_max?.toString() ?? '',
+          moisture: guaranteedAnalysis.moisture_max?.toString() ?? '',
+          calories: guaranteedAnalysis.calories ?? '',
           feedingDirections: draft?.feeding_directions ?? '',
         });
       } else if (chosen) {
@@ -262,13 +363,23 @@ export default function NewFoodScreen() {
           lookupId: chosen.lookup_id,
           brand,
           name,
-          ingredientsRaw: chosen.ingredients_raw ?? undefined,
-          calories: chosen.calories ?? undefined,
-          guaranteedAnalysis: chosen.guaranteed_analysis,
+          ingredientsRaw: ingredientsRaw ?? undefined,
+          calories: guaranteedAnalysis.calories ?? undefined,
+          guaranteedAnalysis,
           activate: false,
         });
       } else {
-        food = await createManualFood({ dogId: dog.id, brand, name });
+        food = await createManualFood({
+          dogId: dog.id,
+          brand,
+          name,
+          ingredientsRaw: ingredientsRaw ?? undefined,
+          protein: protein,
+          fat,
+          fiber,
+          moisture,
+          calories: caloriesLabel,
+        });
       }
       if (activeNow) {
         const operationId =
@@ -503,6 +614,116 @@ export default function NewFoodScreen() {
             </Pressable>
           ) : null}
 
+          {!mealReady() ? (
+            <View style={styles.enrichCard}>
+              <Text style={styles.enrichTitle}>
+                Meglio aggiungere l’etichetta
+              </Text>
+              <Text style={styles.enrichBody}>
+                Ingredienti e valori aiutano a capire se il pasto è adatto a{' '}
+                {dog.name}. Puoi farlo ora o più tardi.
+              </Text>
+              <Button
+                title="Fotografa ingredienti e valori"
+                icon={
+                  <Ionicons name="camera" size={18} color={colors.textOnPrimary} />
+                }
+                onPress={goEnrichPhoto}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setManualNutritionOpen(true)}
+                style={styles.textAction}
+              >
+                <Text style={styles.textActionLabel}>Inseriscili a mano</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.readyRow}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+              <Text style={styles.readyText}>
+                Ingredienti e valori pronti
+              </Text>
+            </View>
+          )}
+
+          {manualNutritionOpen || manual ? (
+            <View style={styles.manualFields}>
+              <Text style={styles.fieldLabel}>
+                Composizione / ingredienti{' '}
+                <Text style={styles.optional}>Facoltativo</Text>
+              </Text>
+              <TextInput
+                accessibilityLabel="Ingredienti"
+                value={ingredients}
+                onChangeText={setIngredients}
+                placeholder="Come scritto in etichetta"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                style={[styles.input, styles.inputMultiline]}
+              />
+              <Text style={styles.fieldLabel}>
+                Proteine grezze % <Text style={styles.optional}>Facoltativo</Text>
+              </Text>
+              <TextInput
+                accessibilityLabel="Proteine grezze"
+                value={protein}
+                onChangeText={setProtein}
+                placeholder="Es. 26"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <Text style={styles.fieldLabel}>
+                Grassi grezzi % <Text style={styles.optional}>Facoltativo</Text>
+              </Text>
+              <TextInput
+                accessibilityLabel="Grassi grezzi"
+                value={fat}
+                onChangeText={setFat}
+                placeholder="Es. 14"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <Text style={styles.fieldLabel}>
+                Fibre % <Text style={styles.optional}>Facoltativo</Text>
+              </Text>
+              <TextInput
+                accessibilityLabel="Fibre"
+                value={fiber}
+                onChangeText={setFiber}
+                placeholder="Es. 2,5"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <Text style={styles.fieldLabel}>
+                Umidità % <Text style={styles.optional}>Facoltativo</Text>
+              </Text>
+              <TextInput
+                accessibilityLabel="Umidità"
+                value={moisture}
+                onChangeText={setMoisture}
+                placeholder="Es. 8"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <Text style={styles.fieldLabel}>
+                Calorie <Text style={styles.optional}>Facoltativo</Text>
+              </Text>
+              <TextInput
+                accessibilityLabel="Calorie"
+                value={caloriesLabel}
+                onChangeText={setCaloriesLabel}
+                placeholder="Come stampato, es. 350 kcal/100g"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+              />
+            </View>
+          ) : null}
+
           <View style={styles.currentRow}>
             <View style={styles.currentCopy}>
               <Text style={styles.currentTitle}>È il cibo di adesso</Text>
@@ -539,7 +760,9 @@ export default function NewFoodScreen() {
                 style={styles.moreButton}
               >
                 <Text style={styles.textActionLabel}>
-                  {moreOpen ? 'Nascondi altri dettagli' : 'Aggiungi snack o cambio recente'}
+                  {moreOpen
+                    ? 'Nascondi altri dettagli'
+                    : 'Aggiungi snack o cambio recente'}
                 </Text>
                 <Ionicons
                   name={moreOpen ? 'chevron-up' : 'chevron-down'}
@@ -821,6 +1044,36 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   manualFields: { gap: spacing.sm },
+  enrichCard: {
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: 20,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  enrichTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  enrichBody: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
+    marginBottom: spacing.xs,
+  },
+  readyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: spacing.xs,
+  },
+  readyText: {
+    color: colors.success,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.semibold,
+  },
   fieldLabel: {
     color: colors.text,
     fontSize: typography.size.sm,
@@ -841,6 +1094,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     color: colors.text,
     fontSize: typography.size.md,
+  },
+  inputMultiline: {
+    minHeight: 96,
+    textAlignVertical: 'top',
   },
   currentRow: {
     flexDirection: 'row',
