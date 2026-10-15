@@ -28,7 +28,9 @@ npm start
 
 ## Autenticazione
 
-V0: login puramente visuale — qualsiasi credenziale porta a `/`.
+V0: login puramente visuale solo se `NEXT_PUBLIC_ADMIN_DEMO=true`; senza questa
+variabile l’accesso resta disabilitato per evitare di presentare una console
+senza autenticazione come ambiente reale.
 In V1 l'auth sarà Supabase: copia `.env.example` in `.env.local` e valorizza
 `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 Nessun segreto reale va committato.

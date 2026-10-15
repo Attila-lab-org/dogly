@@ -6,8 +6,10 @@ import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const demoEnabled = process.env.NEXT_PUBLIC_ADMIN_DEMO === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   return (
     <main
@@ -42,16 +44,22 @@ export default function LoginPage() {
           Il tuo cane, finalmente capito.
         </p>
         <p className="small muted" style={{ margin: "0 0 22px", letterSpacing: "0.12em", fontWeight: 600 }}>
-          CONTROL CENTER · DEMO
+          CONTROL CENTER · {demoEnabled ? "DEMO LOCALE" : "NON CONFIGURATO"}
         </p>
         <p className="small" style={{ margin: "0 0 18px", color: "#92400E" }}>
-          Accesso grafico di prototipo: non verifica credenziali e non è un
-          ambiente di produzione.
+          {demoEnabled
+            ? "Accesso grafico di prototipo: non verifica credenziali e non è un ambiente di produzione."
+            : "L’autenticazione admin non è ancora configurata. Questa console non accetta accessi finché non esiste un provider server-side."}
         </p>
+        {error ? <p role="alert" className="small" style={{ margin: "0 0 12px", color: "#B91C1C" }}>{error}</p> : null}
 
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (!demoEnabled) {
+              setError("Console non disponibile: manca l’autenticazione admin reale.");
+              return;
+            }
             router.push("/");
           }}
           style={{ display: "grid", gap: 12, textAlign: "left" }}
@@ -86,7 +94,7 @@ export default function LoginPage() {
         </form>
 
         <p className="small muted" style={{ marginTop: 20, marginBottom: 0 }}>
-          Accesso riservato al team — V0 demo
+          Accesso riservato al team — demo locale soltanto
         </p>
       </div>
     </main>
