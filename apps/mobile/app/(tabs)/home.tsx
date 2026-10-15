@@ -71,7 +71,7 @@ export default function HomeScreen() {
                 hitSlop={12}
                 style={[styles.headerIcon, styles.careIcon]}
               >
-                <CuteIcon name="doctor" size={22} color="#0D9488" secondary="#0E2A47" />
+                <CuteIcon name="doctor" size={22} color="#0F766E" secondary="#0E2A47" />
               </Pressable>
               <Pressable
                 accessibilityRole="button"

@@ -4,7 +4,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Linking,
   Modal,
   Pressable,
@@ -18,7 +17,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { CuteIcon } from '@/components/CuteIcon';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
@@ -37,9 +35,13 @@ import {
   type NearbyPlace,
 } from '@/features/places/api';
 
-const doctorHero = require('../assets/brand/care-dog-doctor-icon.jpg');
-
 type SearchMode = 'vet' | 'emergency';
+
+function displayName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
 
 export default function AiutoScreen() {
   const router = useRouter();
@@ -52,6 +54,7 @@ export default function AiutoScreen() {
   const [mode, setMode] = useState<SearchMode>('vet');
   const [savedVet, setSavedVet] = useState<SavedVetContact | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftPhone, setDraftPhone] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -109,6 +112,7 @@ export default function AiutoScreen() {
     setDraftName(seed?.name ?? '');
     setDraftPhone(seed?.phone ?? '');
     setSaveError(null);
+    setMenuOpen(false);
     setEditorOpen(true);
   };
 
@@ -159,70 +163,67 @@ export default function AiutoScreen() {
               <Text style={styles.eyebrow}>AIUTO RAPIDO</Text>
               <Text style={styles.title}>Numeri utili per {dog.name}</Text>
             </View>
-            <Image source={doctorHero} style={styles.heroIcon} />
           </View>
 
-          <View style={styles.savedCard}>
-            <View style={styles.savedTop}>
-              <View style={styles.savedIcon}>
-                <CuteIcon name="doctor" size={28} color="#0D9488" secondary="#0E2A47" />
-              </View>
-              <View style={styles.savedCopy}>
-                <Text style={styles.savedLabel}>Il tuo veterinario</Text>
-                {savedVet ? (
-                  <>
-                    <Text style={styles.savedName}>{savedVet.name}</Text>
-                    <Text style={styles.savedPhone}>{savedVet.phone}</Text>
-                  </>
-                ) : (
-                  <Text style={styles.savedEmpty}>
-                    Salva clinica e numero: un tap e chiami.
+          {savedVet ? (
+            <View style={styles.heroCall}>
+              <View style={styles.heroTop}>
+                <View style={styles.heroBadge}>
+                  <Ionicons name="medkit" size={22} color="#0F766E" />
+                </View>
+                <View style={styles.heroCopy}>
+                  <Text style={styles.heroLabel}>Il tuo veterinario</Text>
+                  <Text style={styles.heroName} numberOfLines={1}>
+                    {displayName(savedVet.name)}
                   </Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.savedActions}>
-              {savedVet ? (
+                  <Text style={styles.heroPhone}>{savedVet.phone}</Text>
+                </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Chiama ${savedVet.name}`}
-                  onPress={() => callPhone(savedVet.phone)}
-                  style={styles.callPrimary}
+                  accessibilityLabel="Opzioni veterinario"
+                  onPress={() => setMenuOpen(true)}
+                  hitSlop={10}
+                  style={styles.moreBtn}
                 >
-                  <Ionicons name="call" size={16} color="#FFFFFF" />
-                  <Text style={styles.callPrimaryText}>Chiama ora</Text>
+                  <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
                 </Pressable>
-              ) : null}
+              </View>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => openEditor(savedVet)}
-                style={[styles.secondaryBtn, savedVet ? styles.secondaryBtnFlex : null]}
+                accessibilityLabel={`Chiama ${savedVet.name}`}
+                onPress={() => callPhone(savedVet.phone)}
+                style={styles.callFab}
               >
-                <Text style={styles.secondaryBtnText}>
-                  {savedVet ? 'Modifica' : 'Aggiungi veterinario'}
-                </Text>
+                <Ionicons name="call" size={18} color="#FFFFFF" />
+                <Text style={styles.callFabText}>Chiama</Text>
               </Pressable>
-              {savedVet ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    void clearSavedVet(dog.id).then(() => setSavedVet(null));
-                  }}
-                  hitSlop={8}
-                >
-                  <Text style={styles.clearLink}>Rimuovi</Text>
-                </Pressable>
-              ) : null}
             </View>
-          </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openEditor(null)}
+              style={({ pressed }) => [styles.addVet, pressed && styles.pressed]}
+            >
+              <View style={styles.heroBadge}>
+                <Ionicons name="add" size={22} color="#0F766E" />
+              </View>
+              <View style={styles.heroCopy}>
+                <Text style={styles.heroName}>Aggiungi il tuo veterinario</Text>
+                <Text style={styles.heroPhone}>
+                  Nome e numero: sempre a un tocco di distanza.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+          )}
 
-          <View style={styles.modeRow}>
-            <ModePill
-              label="Veterinari vicino"
+          <View style={styles.segment}>
+            <SegmentBtn
+              label="Vicino a te"
               active={mode === 'vet'}
               onPress={() => setMode('vet')}
             />
-            <ModePill
+            <SegmentBtn
               label="Pronto soccorso"
               active={mode === 'emergency'}
               danger
@@ -231,19 +232,15 @@ export default function AiutoScreen() {
           </View>
 
           {mode === 'emergency' ? (
-            <View style={styles.emergencyBanner}>
-              <Ionicons name="warning-outline" size={18} color={colors.danger} />
-              <Text style={styles.emergencyText}>
-                Difficoltà a respirare, collasso o dolore intenso: cerca una struttura
-                24h e chiama subito.
-              </Text>
-            </View>
+            <Text style={styles.emergencyHint}>
+              Strutture 24h e pronto soccorso veterinario vicino a voi.
+            </Text>
           ) : null}
 
           {locating ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.muted}>Localizzo in fretta…</Text>
+              <Text style={styles.muted}>Localizzo…</Text>
             </View>
           ) : locationFailure || !coords ? (
             <View style={styles.fallback}>
@@ -255,9 +252,9 @@ export default function AiutoScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setLocationTick((v) => v + 1)}
-                style={styles.callPrimary}
+                style={styles.callFab}
               >
-                <Text style={styles.callPrimaryText}>Attiva / riprova GPS</Text>
+                <Text style={styles.callFabText}>Attiva posizione</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -268,38 +265,31 @@ export default function AiutoScreen() {
                       : 'veterinario vicino a me',
                   )
                 }
-                style={styles.secondaryBtn}
               >
-                <Text style={styles.secondaryBtnText}>Apri mappa senza GPS</Text>
+                <Text style={styles.textLink}>Apri mappa senza GPS</Text>
               </Pressable>
             </View>
           ) : placesQuery.isFetching ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
               <Text style={styles.muted}>
-                {mode === 'emergency'
-                  ? 'Cerco pronto soccorso e cliniche 24h…'
-                  : 'Cerco veterinari vicino a voi…'}
+                {mode === 'emergency' ? 'Cerco pronto soccorso…' : 'Cerco veterinari…'}
               </Text>
             </View>
           ) : placesQuery.isError ? (
             <View style={styles.fallback}>
-              <Text style={styles.muted}>
-                Non riesco a caricare le cliniche. Riprova o apri la mappa.
-              </Text>
+              <Text style={styles.muted}>Non riesco a caricare le cliniche.</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => void placesQuery.refetch()}
-                style={styles.callPrimary}
+                style={styles.callFab}
               >
-                <Text style={styles.callPrimaryText}>Riprova</Text>
+                <Text style={styles.callFabText}>Riprova</Text>
               </Pressable>
             </View>
           ) : places.length === 0 ? (
             <View style={styles.fallback}>
-              <Text style={styles.muted}>
-                Nessuna clinica trovata qui intorno, per ora.
-              </Text>
+              <Text style={styles.muted}>Nessuna clinica qui intorno, per ora.</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() =>
@@ -309,34 +299,68 @@ export default function AiutoScreen() {
                       : 'clinica veterinaria',
                   )
                 }
-                style={styles.callPrimary}
+                style={styles.callFab}
               >
-                <Text style={styles.callPrimaryText}>Apri mappa</Text>
+                <Text style={styles.callFabText}>Apri mappa</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.list}>
               {places.map((place) => (
-                <PlaceCallCard key={place.id} place={place} onCall={callPhone} />
+                <PlaceRow key={place.id} place={place} onCall={callPhone} />
               ))}
             </View>
           )}
 
           <Text style={styles.note}>
-            DOGly non sostituisce una visita. In dubbio, chiama e descrivi cosa sta
-            succedendo a {dog.name}.
+            In dubbio, chiama e descrivi cosa sta succedendo a {dog.name}. DOGly non
+            sostituisce una visita.
           </Text>
         </ScrollView>
       </SafeAreaView>
+
+      <Modal visible={menuOpen} animationType="fade" transparent>
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
+          <View style={styles.menuSheet}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openEditor(savedVet)}
+              style={styles.menuItem}
+            >
+              <Ionicons name="create-outline" size={20} color={colors.text} />
+              <Text style={styles.menuItemText}>Modifica</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setMenuOpen(false);
+                void clearSavedVet(dog.id).then(() => setSavedVet(null));
+              }}
+              style={styles.menuItem}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Text style={[styles.menuItemText, styles.menuDanger]}>Rimuovi</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setMenuOpen(false)}
+              style={[styles.menuItem, styles.menuCancel]}
+            >
+              <Text style={styles.menuCancelText}>Annulla</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal visible={editorOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Il tuo veterinario</Text>
+            <Text style={styles.modalHint}>Nome della clinica o del dottore, e il numero.</Text>
             <TextInput
               value={draftName}
               onChangeText={setDraftName}
-              placeholder="Nome clinica"
+              placeholder="Es. Clinica San Barnaba"
               placeholderTextColor={colors.textMuted}
               style={styles.input}
               autoCapitalize="words"
@@ -355,21 +379,22 @@ export default function AiutoScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setEditorOpen(false)}
-                style={styles.secondaryBtn}
+                style={styles.modalGhost}
               >
-                <Text style={styles.secondaryBtnText}>Annulla</Text>
+                <Text style={styles.modalGhostText}>Annulla</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => void onSave()}
                 style={[
-                  styles.callPrimary,
+                  styles.callFab,
+                  styles.modalSave,
                   !draftName.trim() || !isCallablePhone(draftPhone)
                     ? styles.callDisabled
                     : null,
                 ]}
               >
-                <Text style={styles.callPrimaryText}>Salva</Text>
+                <Text style={styles.callFabText}>Salva</Text>
               </Pressable>
             </View>
           </View>
@@ -379,7 +404,7 @@ export default function AiutoScreen() {
   );
 }
 
-function ModePill({
+function SegmentBtn({
   label,
   active,
   onPress,
@@ -396,14 +421,15 @@ function ModePill({
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[
-        styles.modePill,
-        active && (danger ? styles.modePillDanger : styles.modePillActive),
+        styles.segmentBtn,
+        active && (danger ? styles.segmentDanger : styles.segmentActive),
       ]}
     >
       <Text
         style={[
-          styles.modeLabel,
-          active && styles.modeLabelActive,
+          styles.segmentLabel,
+          active && styles.segmentLabelActive,
+          active && danger && styles.segmentLabelOnDanger,
         ]}
       >
         {label}
@@ -412,7 +438,7 @@ function ModePill({
   );
 }
 
-function PlaceCallCard({
+function PlaceRow({
   place,
   onCall,
 }: {
@@ -420,46 +446,44 @@ function PlaceCallCard({
   onCall: (phone: string) => void;
 }) {
   return (
-    <View style={styles.placeCard}>
+    <View style={styles.row}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Apri ${place.name} sulla mappa`}
         onPress={() => void Linking.openURL(place.maps_url)}
-        style={styles.placeMain}
+        style={styles.rowMain}
       >
-        <View style={styles.placeIcon}>
-          <CuteIcon name="heart" size={22} color="#B45309" secondary="#FEF3C7" />
-        </View>
-        <View style={styles.placeCopy}>
-          <Text style={styles.placeTitle} numberOfLines={2}>
+        <View style={styles.rowCopy}>
+          <Text style={styles.rowTitle} numberOfLines={1}>
             {place.name}
           </Text>
-          <Text style={styles.placeMeta}>{formatDistance(place.distance_m)}</Text>
+          <Text style={styles.rowMeta}>{formatDistance(place.distance_m)}</Text>
         </View>
-        <Ionicons name="map-outline" size={18} color={colors.textMuted} />
       </Pressable>
       {place.phone ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Chiama ${place.name}`}
           onPress={() => onCall(place.phone!)}
-          style={styles.callPrimary}
+          style={styles.rowCall}
         >
-          <Ionicons name="call" size={15} color="#FFFFFF" />
-          <Text style={styles.callPrimaryText}>Chiama</Text>
+          <Ionicons name="call" size={18} color="#FFFFFF" />
         </Pressable>
       ) : (
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={`Apri mappa per ${place.name}`}
           onPress={() => void Linking.openURL(place.maps_url)}
-          style={styles.secondaryBtn}
+          style={styles.rowMap}
         >
-          <Text style={styles.secondaryBtnText}>Apri per il numero</Text>
+          <Ionicons name="map-outline" size={18} color={colors.primary} />
         </Pressable>
       )}
     </View>
   );
 }
+
+const TEAL = '#0F766E';
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
@@ -468,28 +492,29 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.lg,
     paddingBottom: spacing.xxxl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   back: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -spacing.sm,
   },
   headerCopy: { flex: 1, gap: 2 },
   eyebrow: {
-    color: colors.accent,
-    fontSize: typography.size.xs,
+    color: TEAL,
+    fontSize: 11,
     fontWeight: typography.weight.bold,
-    letterSpacing: 0.9,
+    letterSpacing: 1,
   },
   title: {
     color: colors.text,
@@ -497,111 +522,107 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     lineHeight: 28,
   },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-  },
-  savedCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+  heroCall: {
+    backgroundColor: '#ECFDF8',
+    borderRadius: 22,
     padding: spacing.lg,
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  savedTop: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  savedIcon: {
-    width: 52,
-    height: 52,
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  heroBadge: {
+    width: 48,
+    height: 48,
     borderRadius: 16,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  savedCopy: { flex: 1, gap: 2 },
-  savedLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
+  heroCopy: { flex: 1, gap: 2 },
+  heroLabel: {
+    color: TEAL,
+    fontSize: 11,
     fontWeight: typography.weight.bold,
-    letterSpacing: 0.4,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  savedName: {
+  heroName: {
     color: colors.text,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
-  savedPhone: { color: colors.textSecondary, fontSize: typography.size.sm },
-  savedEmpty: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
-  savedActions: { gap: spacing.sm },
-  callPrimary: {
-    minHeight: 44,
+  heroPhone: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: 20,
+  },
+  moreBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  addVet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  pressed: { opacity: 0.85 },
+  callFab: {
+    minHeight: 48,
     borderRadius: 999,
-    backgroundColor: '#0D9488',
+    backgroundColor: TEAL,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: spacing.lg,
   },
-  callPrimaryText: {
+  callFabText: {
     color: '#FFFFFF',
     fontWeight: typography.weight.bold,
-    fontSize: typography.size.sm,
+    fontSize: typography.size.md,
   },
-  callDisabled: { opacity: 0.45 },
-  secondaryBtn: {
-    minHeight: 44,
+  callDisabled: { opacity: 0.4 },
+  segment: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    backgroundColor: colors.surfaceMuted,
     borderRadius: 999,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  },
+  segmentBtn: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  secondaryBtnFlex: { alignSelf: 'stretch' },
-  secondaryBtnText: {
-    color: colors.primary,
-    fontWeight: typography.weight.bold,
-    fontSize: typography.size.sm,
-  },
-  clearLink: {
-    color: colors.textMuted,
-    fontSize: typography.size.sm,
-    textAlign: 'center',
-    textDecorationLine: 'underline',
-  },
-  modeRow: { flexDirection: 'row', gap: spacing.sm },
-  modePill: {
-    flex: 1,
-    borderRadius: radius.full,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
   },
-  modePillActive: { backgroundColor: colors.accent },
-  modePillDanger: { backgroundColor: colors.danger },
-  modeLabel: {
+  segmentActive: { backgroundColor: colors.surface },
+  segmentDanger: { backgroundColor: colors.danger },
+  segmentLabel: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
-  modeLabelActive: { color: '#FFFFFF', fontWeight: typography.weight.bold },
-  emergencyBanner: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+  segmentLabelActive: {
+    color: colors.text,
+    fontWeight: typography.weight.bold,
   },
-  emergencyText: {
-    flex: 1,
+  segmentLabelOnDanger: { color: '#FFFFFF' },
+  emergencyHint: {
     color: '#7F1D1D',
     fontSize: typography.size.sm,
     lineHeight: 20,
+    marginTop: -spacing.sm,
   },
   loading: {
     alignItems: 'center',
@@ -614,38 +635,97 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
   },
-  fallback: { gap: spacing.sm },
-  list: { gap: spacing.sm },
-  placeCard: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: 18,
+  fallback: { gap: spacing.md, alignItems: 'stretch' },
+  textLink: {
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+    textAlign: 'center',
+  },
+  list: {
+    gap: 0,
     backgroundColor: colors.surface,
+    borderRadius: 22,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
   },
-  placeMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  placeIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#FEF3C7',
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  placeCopy: { flex: 1, gap: 2 },
-  placeTitle: {
+  rowMain: { flex: 1, minWidth: 0 },
+  rowCopy: { gap: 2 },
+  rowTitle: {
     color: colors.text,
     fontWeight: typography.weight.bold,
     fontSize: typography.size.md,
   },
-  placeMeta: { color: colors.textSecondary, fontSize: 12 },
+  rowMeta: { color: colors.textSecondary, fontSize: 12 },
+  rowCall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: TEAL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowMap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   note: {
     color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
-    paddingHorizontal: spacing.sm,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(14,42,71,0.4)',
+    justifyContent: 'flex-end',
+    padding: spacing.lg,
+  },
+  menuSheet: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  menuItemText: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.medium,
+  },
+  menuDanger: { color: colors.danger },
+  menuCancel: {
+    justifyContent: 'center',
+    borderBottomWidth: 0,
+    backgroundColor: colors.surfaceMuted,
+  },
+  menuCancelText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+    width: '100%',
   },
   modalBackdrop: {
     flex: 1,
@@ -664,6 +744,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
+  },
+  modalHint: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
     marginBottom: spacing.xs,
   },
   input: {
@@ -677,5 +761,22 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
   },
   saveError: { color: colors.danger, fontSize: typography.size.sm },
-  modalActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    alignItems: 'center',
+  },
+  modalGhost: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalGhostText: {
+    color: colors.textSecondary,
+    fontWeight: typography.weight.bold,
+    fontSize: typography.size.md,
+  },
+  modalSave: { flex: 1.2 },
 });

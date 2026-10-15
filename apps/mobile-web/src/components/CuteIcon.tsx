@@ -401,19 +401,18 @@ function renderGlyph(
     case 'doctor':
       return (
         <>
-          <Ellipse cx={12} cy={14.2} rx={6.2} ry={5.4} fill={color} />
-          <Circle cx={7.2} cy={9.2} r={2.4} fill={color} />
-          <Circle cx={16.8} cy={9.2} r={2.4} fill={color} />
-          <Circle cx={10} cy={13.4} r={1.15} fill={secondary} />
-          <Circle cx={14} cy={13.4} r={1.15} fill={secondary} />
-          <Ellipse cx={12} cy={16.2} rx={1.5} ry={1.1} fill={secondary} />
-          <Rect x={9.2} y={3.2} width={5.6} height={5.6} rx={1.4} fill={secondary} />
+          <Rect x={3.5} y={3.5} width={17} height={17} rx={5} fill={color} />
           <Path
-            d="M12 4.4 V7.6 M10.4 6 H13.6"
+            d="M12 7.2 V16.8 M7.2 12 H16.8"
             stroke="#FFFFFF"
-            strokeWidth={1.7}
+            strokeWidth={2.4}
             strokeLinecap="round"
           />
+          <Circle cx={18.2} cy={18.2} r={3.6} fill={secondary} />
+          <Ellipse cx={18.2} cy={19.1} rx={1.35} ry={1.05} fill="#FFFFFF" />
+          <Circle cx={16.55} cy={17.15} r={0.55} fill="#FFFFFF" />
+          <Circle cx={17.85} cy={16.55} r={0.55} fill="#FFFFFF" />
+          <Circle cx={19.2} cy={16.7} r={0.55} fill="#FFFFFF" />
         </>
       );
   }
