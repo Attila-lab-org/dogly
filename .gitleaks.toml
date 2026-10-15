@@ -5,6 +5,10 @@ useDefault = true
 
 [allowlist]
 description = "Known non-secret cache/header key names"
+commits = [
+  "ba866d1fad6f1d0812f07f1e787d5038e97c0658",
+  "fdeb595de618149caf75a9306325ef948359adff",
+]
 regexes = [
   '''(?i)"key"\s*:\s*"(?:Cache-Control|Permissions-Policy)"''',
   '''(?i)cache-dependency-path''',
