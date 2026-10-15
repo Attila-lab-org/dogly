@@ -83,6 +83,13 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     openai_api_key: str = ""
+    google_places_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "GOOGLE_PLACES_API_KEY",
+            "google_places_api_key",
+        ),
+    )
 
     # Kill switches / budget caps (ops, sez. 25 / RUNBOOK)
     ai_kill_switch: bool = False
