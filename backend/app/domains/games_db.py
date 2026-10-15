@@ -72,22 +72,31 @@ async def leaderboard(
             await conn.execute(
                 text(
                     """
-                    select d.id as dog_id,
-                           d.name as dog_name,
-                           d.owner_id as owner_id,
-                           d.photo_path as photo_path,
-                           dpv.visibility as visibility,
-                           max(gs.score) as best_score,
-                           min(gs.created_at) as first_at
-                    from public.game_scores gs
-                    join public.dogs d on d.id = gs.dog_id
-                    left join public.dog_profile_visibility dpv on dpv.dog_id = d.id
-                    where gs.game = :game and gs.week_start = :week_start
-                    group by d.id, d.name, d.owner_id, d.photo_path, dpv.visibility
-                    order by best_score desc, first_at asc, d.id
+                    with ranked as (
+                        select d.id as dog_id,
+                               d.name as dog_name,
+                               d.owner_id as owner_id,
+                               d.photo_path as photo_path,
+                               dpv.visibility as visibility,
+                               max(gs.score) as best_score,
+                               min(gs.created_at) as first_at,
+                               row_number() over (
+                                   order by max(gs.score) desc, min(gs.created_at) asc, d.id
+                               ) as rank
+                        from public.game_scores gs
+                        join public.dogs d on d.id = gs.dog_id
+                        left join public.dog_profile_visibility dpv on dpv.dog_id = d.id
+                        where gs.game = :game and gs.week_start = :week_start
+                        group by d.id, d.name, d.owner_id, d.photo_path, dpv.visibility
+                    )
+                    select dog_id, dog_name, owner_id, photo_path, visibility,
+                           best_score, first_at, rank
+                    from ranked
+                    where rank <= 20 or owner_id = cast(:user_id as uuid)
+                    order by rank
                     """
                 ),
-                {"game": game, "week_start": week_start},
+                {"game": game, "week_start": week_start, "user_id": user_id},
             )
         ).mappings().all()
 
@@ -106,7 +115,7 @@ async def leaderboard(
             ttl_seconds=600,
         )
 
-    def to_entry(rank: int, row) -> LeaderboardEntryOut:
+    def to_entry(row) -> LeaderboardEntryOut:
         photo_path = row.get("photo_path")
         avatar_url = (
             signed.get(str(photo_path))
@@ -114,7 +123,7 @@ async def leaderboard(
             else None
         )
         return LeaderboardEntryOut(
-            rank=rank,
+            rank=int(row["rank"]),
             dog_id=str(row["dog_id"]),
             dog_name=str(row["dog_name"]),
             score=int(row["best_score"]),
@@ -122,7 +131,7 @@ async def leaderboard(
             is_mine=str(row["owner_id"]) == user_id,
         )
 
-    entries = [to_entry(rank + 1, row) for rank, row in enumerate(rows)]
-    items = entries[:20]
+    entries = [to_entry(row) for row in rows]
+    items = [entry for entry in entries if entry.rank <= 20]
     mine = next((entry for entry in entries if entry.is_mine), None)
     return items, mine

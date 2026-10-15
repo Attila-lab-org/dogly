@@ -26,6 +26,36 @@ function dayLabel(date: Date) {
   return new Intl.DateTimeFormat("it-IT", { weekday: "short" }).format(date).replace(".", "");
 }
 
+const ADMIN_PAGE_SIZE = 500;
+
+async function listAllAuthUsers(supabase: ReturnType<typeof createAdminDataClient>) {
+  if (!supabase) throw new AdminDataUnavailableError("Dati admin non configurati.");
+  const users: Array<Record<string, any>> = [];
+  for (let page = 1; page <= 100; page += 1) {
+    const response = await supabase.auth.admin.listUsers({ page, perPage: ADMIN_PAGE_SIZE });
+    if (response.error) return response;
+    users.push(...response.data.users);
+    if (response.data.users.length < ADMIN_PAGE_SIZE || (response.data.total !== undefined && users.length >= response.data.total)) {
+      return { ...response, data: { ...response.data, users } };
+    }
+  }
+  return { data: { users }, error: null };
+}
+
+
+async function fetchAllRows<T>(fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: unknown }>) {
+  const rows: T[] = [];
+  for (let page = 0; page < 100; page += 1) {
+    const from = page * ADMIN_PAGE_SIZE;
+    const response = await fetchPage(from, from + ADMIN_PAGE_SIZE - 1);
+    if (response.error) return { data: null, error: response.error };
+    const batch = response.data ?? [];
+    rows.push(...batch);
+    if (batch.length < ADMIN_PAGE_SIZE) break;
+  }
+  return { data: rows, error: null };
+}
+
 async function requireAdmin() {
   const sessionClient = await createClient();
   const { data: { user }, error } = await sessionClient.auth.getUser();
@@ -81,10 +111,10 @@ export async function getAdminOverview(): Promise<AdminOverview> {
 export async function getAdminUsers(): Promise<AdminUser[]> {
   const supabase = await requireAdmin();
   const [authUsers, dogs, subscriptions, behavior] = await Promise.all([
-    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    supabase.from("dogs").select("owner_id"),
-    supabase.from("subscriptions").select("user_id, plan"),
-    supabase.from("behavior_events").select("user_id, created_at"),
+    listAllAuthUsers(supabase),
+    fetchAllRows<{ owner_id: string }>(async (from, to) => await supabase.from("dogs").select("owner_id").range(from, to)),
+    fetchAllRows<{ user_id: string; plan: string }>(async (from, to) => await supabase.from("subscriptions").select("user_id, plan").range(from, to)),
+    fetchAllRows<{ user_id: string; created_at: string }>(async (from, to) => await supabase.from("behavior_events").select("user_id, created_at").range(from, to)),
   ]);
   if (authUsers.error || dogs.error || subscriptions.error || behavior.error) {
     throw new AdminDataUnavailableError("Supabase non ha restituito gli utenti admin.");

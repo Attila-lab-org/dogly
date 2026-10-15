@@ -31,14 +31,10 @@ import {
   breedLabelFromSelection,
   breedSelectionFromLabel,
 } from '@/features/dogs/breeds';
-import {
-  AgePicker,
-  BirthdayPicker,
-} from '@/features/dogs/AgeBirthdayPicker';
+import { BirthdayPicker } from '@/features/dogs/AgeBirthdayPicker';
 import {
   ageFromBirthDate,
   ageLabelFromYears,
-  ageYearsFromLabel,
 } from '@/features/dogs/profileDates';
 import { dogsQueryKey, type ApiDog } from '@/features/dogs/api';
 import { SEX_OPTIONS, type DogSex } from '@/features/dogs/map';
@@ -78,12 +74,8 @@ export default function DogEditScreen() {
   );
   const [name, setName] = useState(dog.name);
   const [sex, setSex] = useState<DogSex | null>(dog.sex);
-  const [ageYears, setAgeYears] = useState<number | null>(
-    dog.birthDate
-      ? ageFromBirthDate(dog.birthDate)
-      : ageYearsFromLabel(dog.ageLabel),
-  );
   const [birthDate, setBirthDate] = useState(dog.birthDate);
+  const ageYears = birthDate ? ageFromBirthDate(birthDate) : null;
   const [sizeLabel, setSizeLabel] = useState(dog.sizeLabel);
   const [weightKg, setWeightKg] = useState(
     dog.weightKg === null ? '' : String(dog.weightKg).replace('.', ','),
@@ -210,14 +202,17 @@ export default function DogEditScreen() {
       saveInFlightRef.current = false;
       return;
     }
-    if (ageYears === null) {
-      notify('Età richiesta', 'Seleziona l’età.');
+    if (!birthDate) {
+      notify(
+        'Data di nascita',
+        'Scegli la data di nascita sul calendario: l’età si calcola da sola.',
+      );
       setSaveState('error');
       saveInFlightRef.current = false;
       return;
     }
     const breedLabel = breedLabelFromSelection(breedSelection);
-    const ageLabel = ageLabelFromYears(ageYears);
+    const ageLabel = ageLabelFromYears(ageFromBirthDate(birthDate));
     const parsedWeight = weightKg.trim()
       ? Number(weightKg.trim().replace(',', '.'))
       : null;
@@ -312,7 +307,7 @@ export default function DogEditScreen() {
     if (!dirtyRef.current) return;
     const timer = setTimeout(() => void save(), 650);
     return () => clearTimeout(timer);
-  }, [ownerName, voiceGender, name, sex, ageYears, birthDate, sizeLabel, weightKg, breedSelection, profileVisibility, pendingPhotoUri]);
+  }, [ownerName, voiceGender, name, sex, birthDate, sizeLabel, weightKg, breedSelection, profileVisibility, pendingPhotoUri]);
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
@@ -427,32 +422,27 @@ export default function DogEditScreen() {
         ))}
       </View>
 
-      <Text style={styles.label}>Età</Text>
-      <View style={styles.profileField}>
-        <AgePicker
-          value={ageYears}
-          onChange={(years) => {
-            setAgeYears(years);
-            setBirthDate(null);
-            markDirty();
-          }}
-          testID="edit-age"
-        />
-      </View>
-
-      <Text style={styles.label}>Compleanno (facoltativo)</Text>
+      <Text style={styles.label}>Data di nascita</Text>
       <View style={styles.profileField}>
         <BirthdayPicker
           value={birthDate}
           ageYears={ageYears}
           onChange={(date) => {
             setBirthDate(date);
-            if (date) setAgeYears(ageFromBirthDate(date));
             markDirty();
           }}
           testID="edit-birthday"
         />
       </View>
+      {birthDate && ageYears !== null ? (
+        <Text style={styles.ageHint} accessibilityLiveRegion="polite">
+          Età calcolata: {ageLabelFromYears(ageYears)}
+        </Text>
+      ) : (
+        <Text style={styles.ageHint}>
+          Scegli la data sul calendario: l’età si aggiorna da sola.
+        </Text>
+      )}
 
       <Text style={styles.label}>Taglia</Text>
       <View style={styles.chips}>
@@ -601,6 +591,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.semibold,
     color: '#1A2B48',
     marginBottom: spacing.xs,
+  },
+  ageHint: {
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.35,
   },
   input: {
     borderWidth: 1,

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import {
+  ageFromBirthDate,
   ageLabelFromYears,
   DOG_AGE_OPTIONS,
   formatBirthday,
@@ -126,8 +127,16 @@ export function BirthdayPicker({
   return (
     <>
       <PickerField
-        icon="gift-outline"
-        label={value ? formatBirthday(value) : 'Aggiungi il compleanno'}
+        icon="calendar-outline"
+        label={
+          value
+            ? `${formatBirthday(value)}${
+                ageYears !== null
+                  ? ` · ${ageLabelFromYears(ageFromBirthDate(value))}`
+                  : ''
+              }`
+            : 'Scegli la data di nascita'
+        }
         placeholder={!value}
         onPress={openCalendar}
         testID={testID}
@@ -139,7 +148,7 @@ export function BirthdayPicker({
         onRequestClose={() => setOpen(false)}
       >
         <SafeAreaView style={styles.modal}>
-          <ModalHeader title="Compleanno" onClose={() => setOpen(false)} />
+          <ModalHeader title="Data di nascita" onClose={() => setOpen(false)} />
 
           <ScrollView
             horizontal
