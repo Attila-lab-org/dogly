@@ -3,6 +3,7 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, Sc
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
@@ -51,6 +52,15 @@ import {
 } from '@/features/realtime/voiceDictation';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string; turn?: RealtimeTurn; failed?: boolean; retryForId?: string; retryText?: string; retryAttachmentUri?: string; retryPhotoId?: string; retryRequestId?: string; attachmentUri?: string };
+
+/** Vector geometry keeps the send icon independent of icon-font loading. */
+function SendArrow({ size = 20, color = '#FFFFFF' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
+      <Path d="M12 20V4M5 11l7-7 7 7" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
 
 /** Unpin solo su cambio discorso esplicito — non su messaggi lunghi generici. */
 function looksLikeTopicChange(text: string): boolean {
@@ -965,7 +975,7 @@ export default function AskScreen() {
               </Pressable>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              <SendArrow />
             </Pressable>
           </View>
         </View>
