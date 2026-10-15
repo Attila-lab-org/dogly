@@ -50,7 +50,7 @@ export default function PhotoDetailScreen() {
   const dogPhotosQuery = useQuery({
     queryKey: ['gallery-dog-photos', dogId, 80],
     queryFn: () => fetchDogPhotos(dogId, 80),
-    enabled: Boolean(dogId) && (albumQuery.isError || !albumId),
+    enabled: Boolean(dogId) && (albumQuery.isError || !albumId || Boolean(albumQuery.data && !albumQuery.data.some((item) => item.id === photoId))),
   });
 
   const photo: AlbumPhoto | undefined =
