@@ -38,6 +38,10 @@ server-side (`@supabase/ssr`). Solo le email in `ADMIN_ALLOWED_EMAILS` entrano.
 4. Crea l’utente in Supabase Dashboard → Authentication → Users
 5. Su Vercel (`dogly-admin`): stesse env in Production/Preview
 
+Per la panoramica live aggiungi anche `SUPABASE_SERVICE_ROLE_KEY` come variabile
+server-only. La chiave viene letta esclusivamente dai Server Components per il
+read model cross-user e non viene mai inviata al browser.
+
 Mai mettere la service-role key nel frontend o in variabili `NEXT_PUBLIC_*`.
 
 ## Aree

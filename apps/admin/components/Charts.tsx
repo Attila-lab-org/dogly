@@ -10,12 +10,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { analyses7d } from "@/lib/data";
-
-export function AnalysesChart() {
+export function AnalysesChart({ data }: { data: Array<{ day: string; comportamento: number; digestione: number }> }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <AreaChart data={analyses7d} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
         <defs>
           <linearGradient id="gComportamento" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} />
