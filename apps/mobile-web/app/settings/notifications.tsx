@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Chip, ScreenContainer } from '@/components';
 import {
@@ -154,8 +154,12 @@ export default function NotificationSettingsScreen() {
             ) : (
             <Switch
               value={option.key === 'checkIn' ? prefs.smartReminders : preferences[option.key]}
-              onValueChange={(value) => {
-                setNotificationPreference(option.key, value);
+              onValueChange={async (value) => {
+                const saved = await setNotificationPreference(option.key, value);
+                if (!saved) {
+                  Alert.alert('Preferenza non salvata', 'Controlla la connessione e riprova.');
+                  return;
+                }
                 if (option.key === 'checkIn') setSmartReminders(value);
                 if (option.key === 'careReminders' && dog.id) {
                   void syncCareReminders(dog.id, dog.name);
