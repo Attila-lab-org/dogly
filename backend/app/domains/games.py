@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 from app.contracts.api import GameScoreCreate, LeaderboardEntryOut
+from app.domains import dogs as dogs_domain
 from app.domains.models import GameScoreRec
 from app.domains.repository import InMemoryStore
 
@@ -22,6 +23,7 @@ def submit_score_memory(
     user_id: str,
     payload: GameScoreCreate,
 ) -> GameScoreRec:
+    dogs_domain.get_owned_dog(store, user_id=user_id, dog_id=payload.dog_id)
     for existing in store.game_scores.values():
         if (
             existing.user_id == user_id

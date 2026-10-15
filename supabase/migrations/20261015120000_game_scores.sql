@@ -26,12 +26,14 @@ comment on table public.game_scores is
 alter table public.game_scores enable row level security;
 alter table public.game_scores force row level security;
 
--- La classifica è leggibile da tutti gli utenti autenticati: espone solo
--- nome del cane + punteggio (mai dati dell'umano; avatar solo se il profilo
--- cane è PUBLIC per dog_profile_visibility).
-create policy game_scores_select_authenticated on public.game_scores
+-- Client roles get no table privileges: reads/writes go through the API
+-- (service_role). Policies stay tight for defense-in-depth if grants return.
+revoke all on public.game_scores from public, anon, authenticated;
+grant all on public.game_scores to service_role;
+
+create policy game_scores_select_own on public.game_scores
   for select to authenticated
-  using (true);
+  using (user_id = (select auth.uid()));
 
 create policy game_scores_insert_own on public.game_scores
   for insert to authenticated

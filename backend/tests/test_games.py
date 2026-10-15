@@ -47,6 +47,61 @@ async def test_submit_score_validates_range(
     assert resp.status_code == 422
 
 
+async def test_submit_score_rejects_foreign_dog(
+    client: httpx.AsyncClient, auth_headers, state
+):
+    from datetime import UTC, datetime
+
+    from app.domains.models import DogRec
+
+    state.store.dogs["dog-foreign"] = DogRec(
+        id="dog-foreign",
+        owner_id="other-user",
+        name="Fido",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    resp = await client.post(
+        "/v1/games/scores",
+        json=_score_body("dog-foreign", 9, "crid-games-idor"),
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404, resp.text
+    assert "dog-foreign" not in {
+        rec.dog_id for rec in state.store.game_scores.values()
+    }
+
+
+async def test_all_game_ids_accepted_and_leaderboard_filtered(
+    client: httpx.AsyncClient, auth_headers
+):
+    dog_id = await create_dog(client, auth_headers)
+    for game in ("agility", "sniff"):
+        resp = await client.post(
+            "/v1/games/scores",
+            json={**_score_body(dog_id, 8, f"crid-games-{game}"), "game": game},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        board = await client.get(
+            "/v1/games/leaderboard", params={"game": game}, headers=auth_headers
+        )
+        assert board.status_code == 200, board.text
+        assert [item["score"] for item in board.json()["items"]] == [8]
+    # classifiche separate per gioco
+    squirrel_board = await client.get(
+        "/v1/games/leaderboard", params={"game": "squirrel"}, headers=auth_headers
+    )
+    assert squirrel_board.json()["items"] == []
+
+    resp = await client.post(
+        "/v1/games/scores",
+        json={**_score_body(dog_id, 8, "crid-games-bad"), "game": "tresette"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
 async def test_leaderboard_best_per_dog_and_ordering(
     client: httpx.AsyncClient, auth_headers, user_id, state
 ):

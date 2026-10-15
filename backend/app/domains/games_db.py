@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.contracts.api import GameScoreCreate, LeaderboardEntryOut
+from app.domains import dogs_db
 from app.domains.models import GameScoreRec
 from app.providers.base import StorageProvider
 
@@ -19,6 +20,8 @@ async def submit_score(
     payload: GameScoreCreate,
     week_start: date,
 ) -> GameScoreRec:
+    # Ownership: API DB role bypasses RLS; never trust client dog_id alone.
+    await dogs_db.get_owned_dog(engine, user_id=user_id, dog_id=payload.dog_id)
     async with engine.begin() as conn:
         row = (
             await conn.execute(
