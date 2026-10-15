@@ -103,7 +103,7 @@ export function DogCareOverview({
         <CareRow
           tone="routine"
           icon="walk-outline"
-          title="Routine"
+          title="Giornata"
           detail={routineDetail}
           onPress={() => router.push(`/dogs/${dogId}/routine` as never)}
         />
