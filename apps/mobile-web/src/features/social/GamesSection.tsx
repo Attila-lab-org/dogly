@@ -8,11 +8,13 @@ import React, { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, LinearGradient as SvgLinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   Easing,
+  type SharedValue,
+  useAnimatedProps,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -33,7 +35,7 @@ import {
 } from '../games/api';
 import { loadMatchBest } from '../games/matchLogic';
 import { SquirrelArt } from '../games/squirrelArt';
-import { MatchPiece } from '../games/matchPieces';
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 import { useDogProfile } from '../core/useDogProfile';
 
 function MiniCrown() {
@@ -77,39 +79,83 @@ function MiniAvatar({ entry, size }: { entry: LeaderboardEntry; size: number }) 
   );
 }
 
-/** Tessere che fluttuano in micro-loop (pattern dell'hub giochi). */
-function MatchMarkAnimated({ reducedMotion }: { reducedMotion: boolean }) {
+/** Pallina da tennis con radial gradient (3D morbido) + ombra. */
+function TennisBall({ cx, cy, r, float, phase }: { cx: number; cy: number; r: number; float: SharedValue<number>; phase: number }) {
+  const props = useAnimatedProps(() => ({
+    cy: cy - float.value * 4 * (phase ? 1 : -1) * 0.5 - float.value * 2,
+  }));
+  return (
+    <>
+      <Ellipse cx={cx} cy={cy + r + 6} rx={r * 0.9} ry={r * 0.28} fill={colors.text} opacity={0.12} />
+      <Defs>
+        <SvgLinearGradient id={`ball-${phase}`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#E8F7C8" />
+          <Stop offset="1" stopColor="#B8DD5C" />
+        </SvgLinearGradient>
+      </Defs>
+      <AnimatedCircle cx={cx} cy={cy} r={r} fill={`url(#ball-${phase})`} animatedProps={props} />
+      <Path
+        d={`M${cx - r} ${cy} C${cx - r * 0.4} ${cy - r * 0.5} ${cx + r * 0.4} ${cy - r * 0.5} ${cx + r} ${cy}`}
+        stroke="#FFFFFF"
+        strokeWidth={r * 0.16}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </>
+  );
+}
+
+/** Bolla rotonda con faccia di cane kawaii (scenografia). */
+function DogBubble({ cx, cy, r, flip }: { cx: number; cy: number; r: number; flip?: boolean }) {
+  return (
+    <>
+      <Circle cx={cx} cy={cy} r={r} fill="#FFF6EC" stroke={colors.text} strokeWidth={2.4} />
+      <Ellipse cx={cx - r * 0.55} cy={cy - r * 0.35} rx={r * 0.22} ry={r * 0.34} fill={EAR} transform={flip ? `rotate(24 ${cx - r * 0.55} ${cy - r * 0.35})` : undefined} />
+      <Ellipse cx={cx + r * 0.55} cy={cy - r * 0.35} rx={r * 0.22} ry={r * 0.34} fill={EAR} transform={flip ? undefined : `rotate(-24 ${cx + r * 0.55} ${cy - r * 0.35})`} />
+      <Circle cx={cx - r * 0.3} cy={cy - r * 0.05} r={r * 0.09} fill={colors.text} />
+      <Circle cx={cx + r * 0.3} cy={cy - r * 0.05} r={r * 0.09} fill={colors.text} />
+      <Ellipse cx={cx} cy={cy + r * 0.18} rx={r * 0.14} ry={r * 0.1} fill={colors.accent} />
+      <Path d={`M${cx - r * 0.16} ${cy + r * 0.34} q${r * 0.16} ${r * 0.14} ${r * 0.32} 0`} stroke={colors.text} strokeWidth={2} strokeLinecap="round" fill="none" />
+    </>
+  );
+}
+
+const EAR = '#14385E';
+
+/** Composizione scenografica Bau Match (scenografia, non il protagonista). */
+function MatchScene({ reducedMotion }: { reducedMotion: boolean }) {
   const float = useSharedValue(0);
   useEffect(() => {
     if (reducedMotion) return;
     float.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
       ),
       -1,
       true,
     );
   }, [reducedMotion, float]);
-  const styleA = useAnimatedStyle(() => ({
-    transform: [{ translateY: -float.value * 5 }, { rotate: `${float.value * 6 - 3}deg` }],
-  }));
-  const styleB = useAnimatedStyle(() => ({
-    transform: [{ translateY: -float.value * 3 + 2 }, { scale: 1 + float.value * 0.05 }],
-  }));
   return (
-    <View style={styles.markGrid}>
-      <Animated.View style={styleA}><MatchPiece type={0} size={32} /></Animated.View>
-      <Animated.View style={styleB}><MatchPiece type={4} size={32} /></Animated.View>
-      <Animated.View style={styleB}><MatchPiece type={3} size={32} /></Animated.View>
-      <Animated.View style={styleA}><MatchPiece type={1} size={32} /></Animated.View>
-    </View>
+    <Svg width={128} height={112} viewBox="0 0 128 112" style={styles.scene}>
+      {/* erbetta */}
+      <Path d="M0 96 C24 88 44 96 64 92 C88 88 104 94 128 90 L128 112 L0 112 Z" fill="#9BD8CB" />
+      <Path d="M0 102 C28 96 52 104 80 100 C100 97 116 102 128 100 L128 112 L0 112 Z" fill="#74C4A9" />
+      {/* bolle cane */}
+      <DogBubble cx={34} cy={72} r={22} />
+      <DogBubble cx={92} cy={76} r={17} flip />
+      {/* cuoricino */}
+      <Path d="M64 24 C61 18 52 20 52 27 C52 33 60 38 64 42 C68 38 76 33 76 27 C76 20 67 18 64 24 Z" fill="#FF8B74" />
+      {/* palline che fluttuano */}
+      <TennisBall cx={28} cy={30} r={13} float={float} phase={0} />
+      <TennisBall cx={102} cy={22} r={10} float={float} phase={1} />
+    </Svg>
   );
 }
 
 function AgilityMark() {
   return (
-    <Svg width={64} height={46} viewBox="0 0 86 62">
+    <Svg width={84} height={60} viewBox="0 0 86 62">
       <Rect x={2} y={8} width={5} height={54} fill={colors.text} />
       <Rect x={79} y={8} width={5} height={54} fill={colors.text} />
       <Rect x={0} y={18} width={86} height={8} rx={4} fill={colors.accent} />
@@ -284,7 +330,7 @@ export function GamesSection() {
               <Text style={styles.playText}>Gioca</Text>
             </Pressable>
           </View>
-          <MatchMarkAnimated reducedMotion={reducedMotion} />
+          <MatchScene reducedMotion={reducedMotion} />
         </View>
         </Pressable>
 
@@ -316,7 +362,7 @@ export function GamesSection() {
           gradient={['#D9F0E4', '#BFE8DA']}
           onPress={() => router.push('/games/squirrel' as never)}
         >
-          <SquirrelArt size={78} />
+          <SquirrelArt size={92} />
         </GameTile>
         <GameTile
           label={GAME_LABELS.agility}
@@ -410,13 +456,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
-  markGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: 70,
-    justifyContent: 'center',
-    gap: 2,
-  },
+  scene: { marginRight: -spacing.xs },
   miniPodium: {
     flexDirection: 'row',
     alignItems: 'flex-end',

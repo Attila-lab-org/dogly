@@ -13,7 +13,9 @@ import {
   fetchDogPhotos,
   getOrCreateMomentsAlbum,
 } from '@/features/photos/api';
-import { StoryRail } from '@/features/social/StoryRail';
+import { StoryHeader } from '@/features/social/StoryHeader';
+import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
+import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { GamesSection } from '@/features/social/GamesSection';
 import { NearbyPlacesSection } from '@/features/social/NearbyPlacesSection';
 import { getLastSeenPhotoId } from '@/features/social/storySeen';
@@ -21,6 +23,7 @@ import { getLastSeenPhotoId } from '@/features/social/storySeen';
 export default function SocialScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const reducedMotion = useReducedMotion();
   const [lastSeenId, setLastSeenId] = useState<string | null>(null);
 
   const momentsQuery = useQuery({
@@ -81,6 +84,16 @@ export default function SocialScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <Svg
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 400 300"
+        preserveAspectRatio="xMidYMin slice"
+        accessible={false}
+      >
+        <Circle cx={350} cy={-20} r={110} fill={colors.accentSoft} opacity={0.35} />
+        <Ellipse cx={40} cy={30} rx={90} ry={60} fill={colors.primarySoft} opacity={0.3} />
+      </Svg>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -90,21 +103,29 @@ export default function SocialScreen() {
           <Text style={styles.title}>Il mondo di {dog.name}</Text>
         </View>
 
-        <StoryRail
-          dogId={dog.id}
-          dogName={dog.name}
-          dogPhotoUri={dog.photoUri}
-          photos={photos}
-          hasUnseen={hasUnseen}
-          onOpenStory={openStory}
-          onUploaded={onUploaded}
-        />
+        <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(320)}>
+          <StoryHeader
+            stories={[
+              {
+                id: 'mine',
+                dogId: dog.id,
+                dogName: dog.name,
+                dogPhotoUri: dog.photoUri,
+                unseen: hasUnseen && photos.length > 0,
+              },
+            ]}
+            onOpenStory={openStory}
+            onUploaded={onUploaded}
+          />
+        </Animated.View>
 
-        <GamesSection />
+        <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(320).delay(90)}>
+          <GamesSection />
+        </Animated.View>
 
-        <View style={styles.divider} />
-
-        <NearbyPlacesSection />
+        <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(320).delay(180)}>
+          <NearbyPlacesSection />
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
