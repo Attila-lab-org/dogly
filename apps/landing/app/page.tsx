@@ -1,3 +1,4 @@
+import Link from "next/link";
 import FeatureSection from "@/src/components/FeatureSection";
 import PhoneShot from "@/src/components/PhoneShot";
 import StoreButtons from "@/src/components/StoreButtons";
@@ -117,8 +118,12 @@ export default function Home() {
         <p className="footer-note">
           Dogly nasce dal sapere di veterinari ed esperti e ti aiuta a osservare il
           tuo cane: per la sua salute, il tuo veterinario resta il riferimento.
-          {/* TODO: collegare privacy e termini pubblici prima del lancio (sorgenti: docs/PRIVACY_BETA.md, docs/TERMS_BETA.md) */}
         </p>
+        <nav className="footer-links" aria-label="Informazioni legali">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Termini</Link>
+          <Link href="/cookies">Cookie</Link>
+        </nav>
       </footer>
     </>
   );
