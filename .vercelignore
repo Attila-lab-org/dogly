@@ -11,7 +11,9 @@ backend/tests/
 docs/
 infra/
 scripts/
-supabase/
+# Solo la cartella root (migration SQL). Non usare "supabase/" senza slash
+# iniziale: ignorerebbe anche apps/admin/lib/supabase/ e rompe dogly-admin.
+/supabase/
 node_modules/
 **/__pycache__/
 **/.pytest_cache/
