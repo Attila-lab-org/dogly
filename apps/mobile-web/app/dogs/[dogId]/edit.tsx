@@ -1,7 +1,7 @@
 /**
  * Modifica profilo cane — PATCH /v1/dogs/{id} via react-query.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -11,10 +11,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, ScreenContainer } from '@/components';
+import { ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import {
@@ -61,7 +61,6 @@ const VOICE_OPTIONS: { value: AskVoiceGender; label: string; hint: string }[] = 
 ];
 
 export default function DogEditScreen() {
-  const router = useRouter();
   const params = useLocalSearchParams<{ dogId?: string | string[] }>();
   const { dog } = useDogProfile();
   const { userId } = useSession();
@@ -96,6 +95,10 @@ export default function DogEditScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const dirtyRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const markDirty = () => { dirtyRef.current = true; setSaveState('idle'); };
 
   const notify = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -153,9 +156,13 @@ export default function DogEditScreen() {
     if (!uri) return;
     setPhotoUri(uri);
     setPendingPhotoUri(uri);
+    markDirty();
   };
 
   const save = async () => {
+    if (!dirtyRef.current || saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    setSaveState('saving');
     let photoUploadedOnSave = false;
     if (
       dogId &&
@@ -179,6 +186,8 @@ export default function DogEditScreen() {
         const detail =
           error instanceof Error ? error.message : 'Errore sconosciuto';
         notify('Foto non salvata', detail);
+        setSaveState('error');
+        saveInFlightRef.current = false;
         return;
       } finally {
         setUploadingPhoto(false);
@@ -189,14 +198,20 @@ export default function DogEditScreen() {
         'Foto non ancora salvata',
         'Tocca nuovamente la foto e completa il caricamento prima di uscire.',
       );
+      setSaveState('error');
+      saveInFlightRef.current = false;
       return;
     }
     if (!name.trim()) {
       notify('Nome richiesto', 'Il nome del cane è obbligatorio.');
+      setSaveState('error');
+      saveInFlightRef.current = false;
       return;
     }
     if (ageYears === null) {
       notify('Età richiesta', 'Seleziona l’età.');
+      setSaveState('error');
+      saveInFlightRef.current = false;
       return;
     }
     const breedLabel = breedLabelFromSelection(breedSelection);
@@ -209,6 +224,8 @@ export default function DogEditScreen() {
       (!Number.isFinite(parsedWeight) || parsedWeight <= 0 || parsedWeight > 999.99)
     ) {
       notify('Peso non valido', 'Inserisci un peso valido in kg.');
+      setSaveState('error');
+      saveInFlightRef.current = false;
       return;
     }
 
@@ -265,18 +282,30 @@ export default function DogEditScreen() {
               'Visibilità non aggiornata',
               'Il profilo è salvato, ma la visibilità non è stata aggiornata. Controlla la connessione e riprova.',
             );
+            setSaveState('error');
+            saveInFlightRef.current = false;
             return;
           }
         }
       }
-      router.back();
+      dirtyRef.current = false;
+      setSaveState('saved');
     } catch {
       notify(
         'Salvataggio non riuscito',
         'Controlla la connessione e riprova.',
       );
+      setSaveState('error');
+    } finally {
+      saveInFlightRef.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!dirtyRef.current) return;
+    const timer = setTimeout(() => void save(), 650);
+    return () => clearTimeout(timer);
+  }, [ownerName, voiceGender, name, sex, ageYears, birthDate, sizeLabel, weightKg, breedSelection, profileVisibility, pendingPhotoUri]);
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
@@ -287,7 +316,7 @@ export default function DogEditScreen() {
       <Text style={styles.label}>Nome con cui DOGly ti chiama</Text>
       <TextInput
         value={ownerName}
-        onChangeText={setOwnerName}
+        onChangeText={(value) => { setOwnerName(value); markDirty(); }}
         placeholder="Es. Attila"
         placeholderTextColor={colors.textMuted}
         autoCapitalize="words"
@@ -305,7 +334,7 @@ export default function DogEditScreen() {
             key={option.value}
             accessibilityRole="button"
             accessibilityState={{ selected: voiceGender === option.value }}
-            onPress={() => setVoiceGender(option.value)}
+            onPress={() => { setVoiceGender(option.value); markDirty(); }}
             style={[
               styles.chip,
               styles.voiceChip,
@@ -358,13 +387,13 @@ export default function DogEditScreen() {
       <Text style={styles.photoStatus}>
         {uploadingPhoto
           ? 'Salvataggio del profilo in corso…'
-          : 'Tocca per cambiare la foto · le modifiche si applicano con Salva profilo'}
+          : 'Tocca per cambiare la foto · si salva automaticamente'}
       </Text>
 
       <Text style={styles.label}>Nome</Text>
       <TextInput
         value={name}
-        onChangeText={setName}
+        onChangeText={(value) => { setName(value); markDirty(); }}
         style={styles.input}
         placeholderTextColor={colors.textMuted}
       />
@@ -376,7 +405,7 @@ export default function DogEditScreen() {
             key={option.value}
             accessibilityRole="button"
             accessibilityState={{ selected: sex === option.value }}
-            onPress={() => setSex(option.value)}
+            onPress={() => { setSex(option.value); markDirty(); }}
             style={[styles.chip, sex === option.value && styles.chipActive]}
           >
             <Text
@@ -398,6 +427,7 @@ export default function DogEditScreen() {
           onChange={(years) => {
             setAgeYears(years);
             setBirthDate(null);
+            markDirty();
           }}
           testID="edit-age"
         />
@@ -411,6 +441,7 @@ export default function DogEditScreen() {
           onChange={(date) => {
             setBirthDate(date);
             if (date) setAgeYears(ageFromBirthDate(date));
+            markDirty();
           }}
           testID="edit-birthday"
         />
@@ -421,7 +452,7 @@ export default function DogEditScreen() {
         {SIZES.map((size) => (
           <Pressable
             key={size}
-            onPress={() => setSizeLabel(size)}
+            onPress={() => { setSizeLabel(size); markDirty(); }}
             style={[styles.chip, sizeLabel === size && styles.chipActive]}
           >
             <Text
@@ -439,7 +470,7 @@ export default function DogEditScreen() {
       <Text style={styles.label}>Peso (kg, facoltativo)</Text>
       <TextInput
         value={weightKg}
-        onChangeText={setWeightKg}
+        onChangeText={(value) => { setWeightKg(value); markDirty(); }}
         keyboardType="decimal-pad"
         placeholder="Es. 12,5"
         placeholderTextColor={colors.textMuted}
@@ -450,7 +481,7 @@ export default function DogEditScreen() {
       <View style={styles.breedField}>
         <BreedPicker
           value={breedSelection}
-          onChange={setBreedSelection}
+          onChange={(value) => { setBreedSelection(value); markDirty(); }}
           testID="edit-breed"
         />
       </View>
@@ -473,9 +504,10 @@ export default function DogEditScreen() {
             accessibilityState={{ selected: profileVisibility === value }}
             onPress={() => {
               if (value === 'public') {
-                confirmPublicProfile(() => setProfileVisibility('public'));
+                confirmPublicProfile(() => { setProfileVisibility('public'); markDirty(); });
               } else {
                 setProfileVisibility('private');
+                markDirty();
               }
             }}
             style={[
@@ -495,15 +527,16 @@ export default function DogEditScreen() {
         ))}
       </View>
 
-      <Button
-        title="Salva profilo"
-        variant="secondary"
-        loading={
-          updateMutation.isPending || updateMe.isPending || uploadingPhoto
-        }
-        disabled={uploadingPhoto}
-        onPress={() => void save()}
-      />
+      <View style={styles.saveStatus} accessibilityLiveRegion="polite">
+        <Ionicons
+          name={saveState === 'error' ? 'alert-circle-outline' : saveState === 'saved' ? 'checkmark-circle-outline' : 'cloud-upload-outline'}
+          size={16}
+          color={saveState === 'error' ? colors.danger : colors.teal}
+        />
+        <Text style={styles.saveStatusText}>
+          {saveState === 'saving' || updateMutation.isPending || updateMe.isPending || uploadingPhoto ? 'Salvataggio…' : saveState === 'saved' ? 'Salvato' : saveState === 'error' ? 'Controlla i dati evidenziati' : 'Le modifiche si salvano da sole'}
+        </Text>
+      </View>
     </ScreenContainer>
   );
 }
@@ -554,6 +587,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
+  saveStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.md },
+  saveStatusText: { color: colors.textSecondary, fontSize: typography.size.xs },
   label: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
