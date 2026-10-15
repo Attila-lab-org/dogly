@@ -1,8 +1,7 @@
 /**
- * Preferenze notifiche: persistite localmente via AsyncStorage, così
- * "le modifiche vengono salvate subito" è vero anche dopo il riavvio.
- * La persistenza è best-effort: se lo storage non è disponibile il valore
- * resta valido per la sessione corrente.
+ * Preferenze notifiche: cache locale per la UI e consenso globale sincronizzato
+ * col server quando l'API è configurata. Le categorie restano locali finché il
+ * backend non espone preferenze distinte per tipo di messaggio.
  */
 import { useSyncExternalStore } from 'react';
 import { getKeyValueStorage } from './persistence';
