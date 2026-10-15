@@ -15,6 +15,15 @@ export const POLICY_VERSION = 'privacy-beta/v1';
 let consents: ConsentState = { ...consentsMock };
 let hydrated = false;
 let remoteHydrated = false;
+const syncKeys = new Map<keyof ConsentState, string>();
+
+function newSyncKey(key: keyof ConsentState): string {
+  const existing = syncKeys.get(key);
+  if (existing) return existing;
+  const value = `consent-${key}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  syncKeys.set(key, value);
+  return value;
+}
 
 const listeners = new Set<() => void>();
 
@@ -152,7 +161,8 @@ export async function setConsent(
       const remote = await api.patch<ApiConsents>('/v1/me/consents', {
         policy_version: POLICY_VERSION,
         [field]: value,
-      });
+      }, { headers: { 'X-Idempotency-Key': newSyncKey(key) } });
+      syncKeys.delete(key);
       consents = fromApi(remote);
       remoteHydrated = true;
       emit();
@@ -182,5 +192,6 @@ export function resetConsentsForTests(): void {
   consents = { ...consentsMock };
   hydrated = false;
   remoteHydrated = false;
+  syncKeys.clear();
   emit();
 }

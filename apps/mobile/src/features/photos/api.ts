@@ -199,6 +199,8 @@ export async function uploadAlbumPhoto(
   options: {
     caption?: string;
     visibility?: 'PRIVATE' | 'PUBLISHED';
+    /** Stable key reused when the same upload is retried. */
+    idempotencyKey?: string;
   } = {},
 ): Promise<AlbumPhoto> {
   let bytes: number | null = null;
@@ -224,7 +226,11 @@ export async function uploadAlbumPhoto(
     upload: { url: string };
   }>(`/v1/albums/${albumId}/photos/init`, {
     method: 'POST',
-    headers: { 'X-Idempotency-Key': `album-photo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}` },
+    headers: {
+      'X-Idempotency-Key':
+        options.idempotencyKey ??
+        `album-photo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`,
+    },
     body: {
       content_type: contentType,
       bytes,

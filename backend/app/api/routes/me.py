@@ -4,20 +4,31 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.deps import StateDep, UserIdDep
+from app.api.deps import IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
     MeResponse,
     ProfilePatch,
     UserConsentsPatch,
     UserConsentsResponse,
 )
-from app.domains import billing_db, consents_db, profiles_db
+from app.domains import billing_db, consents_db, idempotency_db, profiles_db
 from app.domains import consents as consents_domain
 from app.domains import profiles as profiles_domain
 from app.domains.billing import plan_limits
 from app.domains.models import ProfileRec, SubscriptionRec, UsageLedgerRec
 
 router = APIRouter()
+
+
+async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=guard._payload_hash,
+        )
 
 
 @router.get("/me/consents", response_model=UserConsentsResponse)
@@ -29,11 +40,21 @@ async def get_consents(state: StateDep, user_id: UserIdDep) -> UserConsentsRespo
 
 @router.patch("/me/consents", response_model=UserConsentsResponse)
 async def patch_consents(
-    payload: UserConsentsPatch, state: StateDep, user_id: UserIdDep
+    payload: UserConsentsPatch,
+    state: StateDep,
+    user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> UserConsentsResponse:
+    # Consent history is append-only, so a retried PATCH must not create a
+    # second identical history row. Clients keep the same key while retrying.
+    if cached := guard.lookup():
+        return UserConsentsResponse.model_validate(cached)
     if state.engine is not None:
-        return await consents_db.patch_consents(state.engine, user_id, payload)
-    return consents_domain.patch_consents(state.store, user_id, payload)
+        response = await consents_db.patch_consents(state.engine, user_id, payload)
+    else:
+        response = consents_domain.patch_consents(state.store, user_id, payload)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.get("/me", response_model=MeResponse)

@@ -397,6 +397,7 @@ export default function AskScreen() {
         const photo = await uploadAlbumPhoto(album.id, attachment.uri, {
           caption: attachment.purpose,
           visibility: 'PRIVATE',
+          idempotencyKey: `chat-attachment-${requestId}`,
         });
         photoId = photo.id;
         await Promise.all([
@@ -731,7 +732,11 @@ export default function AskScreen() {
     setMomentsBusy(messageId);
     try {
       const album = await getOrCreateMomentsAlbum(dog.id);
-      await uploadAlbumPhoto(album.id, uri, { caption: `Ricordo di ${dog.name}`, visibility: 'PRIVATE' });
+      await uploadAlbumPhoto(album.id, uri, {
+        caption: `Ricordo di ${dog.name}`,
+        visibility: 'PRIVATE',
+        idempotencyKey: `moments-${messageId}`,
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
         queryClient.invalidateQueries({ queryKey: ['dog-photos', dog.id] }),
