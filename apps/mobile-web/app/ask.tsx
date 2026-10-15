@@ -731,7 +731,7 @@ export default function AskScreen() {
             onChangeText={(value) => setDraft(value.slice(0, 4000))}
             multiline
             maxLength={4000}
-            editable={!starting && !sending && Boolean(session)}
+            editable={!starting && !sending && !analyzing && Boolean(session)}
             style={styles.input}
             onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }}
           />
