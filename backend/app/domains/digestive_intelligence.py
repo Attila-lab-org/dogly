@@ -38,6 +38,54 @@ DIGESTIVE_REASONING_VERSION = "digestive-reasoning/v23"
 DIGESTIVE_BASELINE_VERSION = "digestive-baseline/v2"
 NUTRITION_HREF = "/nutrition/foods"
 
+BASELINE_COMPARISON_CODES = frozenset(
+    {"INSUFFICIENT", "BELOW_USUAL", "NEAR_USUAL", "ABOVE_USUAL"}
+)
+
+
+def normalize_baseline_comparison(value: object | None) -> str | None:
+    """Accept only contract codes; GPT sometimes stores Italian prose here."""
+    if isinstance(value, str) and value in BASELINE_COMPARISON_CODES:
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    lowered = value.casefold()
+    if any(
+        token in lowered
+        for token in (
+            "insufficient",
+            "ancora una baseline",
+            "non ho ancora",
+            "troppo poche",
+            "pochi eventi",
+        )
+    ):
+        return "INSUFFICIENT"
+    if any(
+        token in lowered
+        for token in ("in linea", "simile", "near", "stabile", "abituale", "usuale")
+    ):
+        return "NEAR_USUAL"
+    if any(
+        token in lowered
+        for token in (
+            "sopra",
+            "above",
+            "più moll",
+            "più liquid",
+            "più morbid",
+            "più soft",
+            "più scarr",
+        )
+    ):
+        return "ABOVE_USUAL"
+    if any(
+        token in lowered
+        for token in ("sotto", "below", "più dur", "più firm", "più secc")
+    ):
+        return "BELOW_USUAL"
+    return None
+
 UsefulActionKey = Literal[
     "contact_vet",
     "add_nutrition",

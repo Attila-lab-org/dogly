@@ -7,6 +7,7 @@ from app.domains.digestive_intelligence import (
     DigestiveState,
     _human_food_name,
     build_digestive_intelligence,
+    normalize_baseline_comparison,
 )
 from app.worker.handlers import process_digestive_event
 
@@ -31,6 +32,21 @@ def context(**updates):
     value = {"dog_name": "Rocky"}
     value.update(updates)
     return DigestiveContext(**value)
+
+
+def test_normalize_baseline_comparison_accepts_codes_and_maps_prose():
+    assert normalize_baseline_comparison("NEAR_USUAL") == "NEAR_USUAL"
+    assert normalize_baseline_comparison(
+        "L’aspetto è simile al solito e non mostra quel cambiamento."
+    ) == "NEAR_USUAL"
+    assert normalize_baseline_comparison(
+        "In linea con le osservazioni precedenti, oggi appare più stabile."
+    ) == "NEAR_USUAL"
+    assert normalize_baseline_comparison("Non ho ancora una baseline personale.") == (
+        "INSUFFICIENT"
+    )
+    assert normalize_baseline_comparison("qualcosa di non mappabile") is None
+    assert normalize_baseline_comparison(None) is None
 
 
 def test_new_dog_monitors_without_inventing_a_baseline():

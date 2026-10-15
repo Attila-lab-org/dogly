@@ -8,6 +8,7 @@ from app.domains.digestive_intelligence import (
     DigestiveState,
     DigestiveIntelligenceResult,
     clamp_digestive_owner_copy,
+    normalize_baseline_comparison,
 )
 from app.domains.realtime_context import (
     load_realtime_context_db,
@@ -53,6 +54,8 @@ async def model_digestive_result(state, *, event, digestive_context):
             "Scrivi come a un amico, non come un referto. "
             "Al massimo una domanda utile. "
             "Restituisci JSON conforme allo schema. "
+            "baseline_comparison deve essere solo uno di: "
+            "INSUFFICIENT, BELOW_USUAL, NEAR_USUAL, ABOVE_USUAL. "
             "useful_action.key deve essere none. "
             "followup_key può essere solo vomiting_today, reduced_activity_today, "
             "unusual_food_48h, appetite_reduced, straining_or_urgency, "
@@ -71,6 +74,10 @@ async def model_digestive_result(state, *, event, digestive_context):
     result.consumer_headline, result.consumer_summary = clamp_digestive_owner_copy(
         result.consumer_headline,
         result.consumer_summary,
+    )
+    # Contract field is an enum code; the model sometimes returns owner prose.
+    result.baseline_comparison = (
+        normalize_baseline_comparison(result.baseline_comparison) or "INSUFFICIENT"
     )
     # Safety evidence is a technical floor, while GPT still owns the wording,
     # explanation and follow-up question.

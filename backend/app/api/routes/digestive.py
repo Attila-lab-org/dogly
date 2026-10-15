@@ -20,6 +20,7 @@ from app.contracts.api import (
 from app.contracts.errors import ApiError, ErrorCode
 from app.domains import digestive as digestive_domain
 from app.domains import digestive_db, idempotency_db
+from app.domains.digestive_intelligence import normalize_baseline_comparison
 from app.domains.digestive_observation import (
     api_image_quality,
 )
@@ -164,9 +165,9 @@ async def get_digestive_event(event_id: str, state: StateDep, user_id: UserIdDep
     e = await _ensure_digestive_intelligence(e, state)
     observation = e.observation_json or {}
     intelligence = e.intelligence_json or {}
-    baseline_comparison = (
-        intelligence.get("baseline_comparison") or baseline_comparison
-    )
+    baseline_comparison = normalize_baseline_comparison(
+        intelligence.get("baseline_comparison")
+    ) or normalize_baseline_comparison(baseline_comparison)
     return DigestiveEventOut(
         id=e.id,
         dog_id=e.dog_id,

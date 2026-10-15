@@ -114,7 +114,7 @@ async def list_dog_photos(
     dog_id: str,
     state: StateDep,
     user_id: UserIdDep,
-    limit: Annotated[int, Query(ge=1, le=60)] = 12,
+    limit: Annotated[int, Query(ge=1, le=100)] = 12,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DogPhotoListResponse:
     if state.engine is not None:
