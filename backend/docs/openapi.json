@@ -1795,7 +1795,8 @@
               "enum": [
                 "squirrel",
                 "agility",
-                "sniff"
+                "sniff",
+                "match"
               ],
               "type": "string",
               "default": "squirrel",
@@ -10515,7 +10516,8 @@
             "enum": [
               "squirrel",
               "agility",
-              "sniff"
+              "sniff",
+              "match"
             ],
             "title": "Game",
             "default": "squirrel"

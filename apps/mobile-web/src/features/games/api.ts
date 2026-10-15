@@ -24,12 +24,13 @@ export function newGameRequestId(): string {
   return `crid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export type GameId = 'squirrel' | 'agility' | 'sniff';
+export type GameId = 'squirrel' | 'agility' | 'sniff' | 'match';
 
 export const GAME_LABELS: Record<GameId, string> = {
   squirrel: 'Scoiattolo!',
   agility: 'Agility Oreo',
   sniff: 'Fiuto da campione',
+  match: 'Bau Match',
 };
 
 export async function submitGameScore(

@@ -11,6 +11,7 @@ import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { SquirrelArt } from '@/features/games/squirrelArt';
+import { MatchPiece } from '@/features/games/matchPieces';
 import { GAME_LABELS, type GameId } from '@/features/games/api';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 
@@ -32,32 +33,13 @@ function AgilityMark() {
   );
 }
 
-function SniffMark() {
+function MatchMark() {
   return (
-    <Svg width={86} height={62} viewBox="0 0 86 62">
-      <Path
-        d="M16 44 h22 c2 10 -4 14 -11 14 c-7 0 -13 -4 -11 -14 Z"
-        fill={colors.accentSoft}
-        stroke={colors.text}
-        strokeWidth={2.6}
-      />
-      <Path
-        d="M50 44 h22 c2 10 -4 14 -11 14 c-7 0 -13 -4 -11 -14 Z"
-        fill={colors.primarySoft}
-        stroke={colors.text}
-        strokeWidth={2.6}
-      />
-      <Path
-        d="M40 20 C38 16 33 18 35 23 C33 26 38 29 41 26 C44 29 49 26 47 23 C49 18 44 16 42 20 Z"
-        fill="#FFF9F0"
-        stroke={colors.text}
-        strokeWidth={2.2}
-      />
-      <Path
-        d="M62 10 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z"
-        fill={colors.accent}
-      />
-    </Svg>
+    <View style={styles.markGrid}>
+      {[0, 1, 2, 3].map((piece) => (
+        <MatchPiece key={piece} type={piece} size={34} />
+      ))}
+    </View>
   );
 }
 
@@ -65,9 +47,16 @@ const GAMES: {
   id: GameId;
   route: string;
   text: string;
-  art: 'squirrel' | 'agility' | 'sniff';
+  art: 'match' | 'squirrel' | 'agility';
   gradient: [string, string, string];
 }[] = [
+  {
+    id: 'match',
+    route: '/games/match',
+    text: 'Il preferito del quartiere: scambia le tessere, scoppia le file, catene a moltiplicatore!',
+    art: 'match',
+    gradient: ['#E0F7F4', '#F0FAF6', '#FFF3D6'],
+  },
   {
     id: 'squirrel',
     route: '/games/squirrel',
@@ -81,13 +70,6 @@ const GAMES: {
     text: 'Corri, salta muretti e birilli… ma il tunnel si attraversa da sotto!',
     art: 'agility',
     gradient: ['#E3EFFE', '#EAF3FD', '#E0F7F4'],
-  },
-  {
-    id: 'sniff',
-    route: '/games/sniff',
-    text: 'Tre ciotole, un bocconcino, mille scambi: il tuo naso batte il mio?',
-    art: 'sniff',
-    gradient: ['#FFF1E8', '#FFF7ED', '#FFF3D6'],
   },
 ];
 
@@ -123,12 +105,12 @@ export default function GamesHubScreen() {
               <Text style={styles.heroCtaText}>Gioca</Text>
             </View>
           </View>
-          {game.art === 'squirrel' ? (
+          {game.art === 'match' ? (
+            <MatchMark />
+          ) : game.art === 'squirrel' ? (
             <SquirrelArt size={92} />
-          ) : game.art === 'agility' ? (
-            <AgilityMark />
           ) : (
-            <SniffMark />
+            <AgilityMark />
           )}
         </Pressable>
       ))}
@@ -137,6 +119,12 @@ export default function GamesHubScreen() {
 }
 
 const styles = StyleSheet.create({
+  markGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: 72,
+    justifyContent: 'center',
+  },
   intro: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,

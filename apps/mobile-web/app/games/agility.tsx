@@ -23,10 +23,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
-import { DogIllustration } from '@/components/DogIllustration';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { DogAvatar } from '@/features/core/components';
+import { BuddyMascot, type BuddyExpression } from '@/features/mascot/BuddyMascot';
 import {
   AGILITY_COMBO_LINE,
   AGILITY_JUMP_LINES,
@@ -146,36 +146,30 @@ function RunningDog({
   return (
     <Animated.View pointerEvents="none" style={[styles.dog, style]}>
       {crashed ? (
-        <DogIllustration size={72} mood="thinking" />
+        <BuddyMascot size={72} expression="sad" animate={false} />
       ) : photoUri ? (
         <View style={styles.dogRing}>
           <DogAvatar size={56} photoUri={photoUri} dogName={dogName} />
         </View>
       ) : (
-        <DogIllustration size={72} mood="welcome" />
+        <BuddyMascot size={72} expression="happy" />
       )}
     </Animated.View>
   );
 }
 
-/** Oreo telecronista (stesso pattern di Scoiattolo!). */
+/** Buddy telecronista (stesso pattern di Scoiattolo!). */
 function Commentator({
-  photoUri,
-  dogName,
   line,
+  expression,
 }: {
-  photoUri: string | null;
-  dogName: string;
   line: { id: number; text: string } | null;
+  expression: BuddyExpression;
 }) {
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        {photoUri ? (
-          <DogAvatar size={40} photoUri={photoUri} dogName={dogName} />
-        ) : (
-          <DogIllustration size={46} mood="welcome" />
-        )}
+        <BuddyMascot size={46} expression={expression} />
       </View>
       {line ? (
         <Animated.View
@@ -208,6 +202,7 @@ export default function AgilityGameScreen() {
   const [activeObstacles, setActiveObstacles] = useState<AgilityObstacle[]>([]);
   const [crashed, setCrashed] = useState(false);
   const [commentary, setCommentary] = useState<{ id: number; text: string } | null>(null);
+  const [expression, setExpression] = useState<BuddyExpression>('focused');
   const [weekRank, setWeekRank] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -229,9 +224,10 @@ export default function AgilityGameScreen() {
     void loadAgilityBest(dog.id).then(setBest);
   }, [dog.id]);
 
-  const say = (text: string) => {
+  const say = (text: string, next: BuddyExpression = 'focused') => {
     commentarySeq.current += 1;
     setCommentary({ id: commentarySeq.current, text });
+    setExpression(next);
     if (commentaryTimer.current) clearTimeout(commentaryTimer.current);
     commentaryTimer.current = setTimeout(() => setCommentary(null), 1800);
   };
@@ -272,7 +268,7 @@ export default function AgilityGameScreen() {
     setWeekRank(null);
     setShareDone(false);
     setPhase('playing');
-    say(AGILITY_START_LINE);
+    say(AGILITY_START_LINE, 'focused');
   };
 
   const jump = () => {
@@ -287,7 +283,7 @@ export default function AgilityGameScreen() {
         withTiming(0, { duration: JUMP_MS / 2, easing: Easing.in(Easing.quad) }),
       );
     }
-    say(AGILITY_JUMP_LINES[Math.floor(Math.random() * AGILITY_JUMP_LINES.length)]);
+    say(AGILITY_JUMP_LINES[Math.floor(Math.random() * AGILITY_JUMP_LINES.length)], 'happy');
   };
 
   // Spazio = salto, su web.
@@ -324,7 +320,7 @@ export default function AgilityGameScreen() {
           ) {
             clearedIds.current.add(obstacle.id);
             setCrashed(true);
-            say('Ahi! Mi siedo un attimo…');
+            say('Ahi! Mi siedo un attimo…', 'sad');
             clearInterval(timer);
             setTimeout(finish, 900);
             return;
@@ -342,8 +338,8 @@ export default function AgilityGameScreen() {
           const points = pointsForClear(streak.current);
           streak.current += 1;
           setScore((value) => value + points);
-          if (isCombo(streak.current - 1)) say(AGILITY_COMBO_LINE);
-          else if (obstacle.kind === 'tunnel') say(AGILITY_TUNNEL_LINE);
+          if (isCombo(streak.current - 1)) say(AGILITY_COMBO_LINE, 'celebrate');
+          else if (obstacle.kind === 'tunnel') say(AGILITY_TUNNEL_LINE, 'happy');
         }
       }
       setActiveObstacles(
@@ -413,7 +409,7 @@ export default function AgilityGameScreen() {
 
       {phase === 'playing' ? (
         <View style={styles.gameWrap}>
-          <Commentator photoUri={dog.photoUri} dogName={dog.name} line={commentary} />
+          <Commentator line={commentary} expression={expression} />
           <View style={styles.hud}>
             <View style={styles.hudScore} accessibilityLabel={`Punteggio ${score}`}>
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
@@ -496,6 +492,7 @@ export default function AgilityGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
+          <BuddyMascot size={88} expression={score > 8 ? 'celebrate' : 'sad'} />
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{agilityEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>

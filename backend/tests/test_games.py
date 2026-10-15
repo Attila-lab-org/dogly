@@ -76,7 +76,7 @@ async def test_all_game_ids_accepted_and_leaderboard_filtered(
     client: httpx.AsyncClient, auth_headers
 ):
     dog_id = await create_dog(client, auth_headers)
-    for game in ("agility", "sniff"):
+    for game in ("agility", "sniff", "match"):
         resp = await client.post(
             "/v1/games/scores",
             json={**_score_body(dog_id, 8, f"crid-games-{game}"), "game": game},

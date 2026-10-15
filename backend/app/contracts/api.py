@@ -706,7 +706,7 @@ class DiaryPage(CursorPage):
 # ---------------------------------------------------------------------------
 
 
-GameId = Literal["squirrel", "agility", "sniff"]
+GameId = Literal["squirrel", "agility", "sniff", "match"]
 
 
 class GameScoreCreate(BaseModel):

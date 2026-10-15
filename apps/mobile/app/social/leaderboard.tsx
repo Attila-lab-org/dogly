@@ -52,7 +52,7 @@ function Row({ entry }: { entry: LeaderboardEntry }) {
   );
 }
 
-const GAME_TABS: GameId[] = ['squirrel', 'agility', 'sniff'];
+const GAME_TABS: GameId[] = ['squirrel', 'agility', 'match'];
 
 export default function LeaderboardScreen() {
   const router = useRouter();

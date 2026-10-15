@@ -1,45 +1,53 @@
 /**
- * "Fiuto da campione" — memory delle ciotole: un bocconcino viene coperto,
- * shuffle animato a coppie, il giocatore sceglie. 10 round, streak 3+ con
- * bonus, aiutino "Naso di Oreo" (1 per partita). Oreo telecronista.
- * Logica pura in features/games/sniffLogic.ts (shuffle tracciabile,
- * posizione finale sempre corretta — testata).
+ * "Bau Match" — Match-3 Dogly (griglia 6×7, Blitz 60s). Tap-tap per
+ * scambiare tessere adiacenti; 3+ in linea scoppiano con cascata e
+ * moltiplicatore crescente; linee da 4+ = razzo (riga/colonna intera).
+ * Buddy telecronista. Logica pura in features/games/matchLogic.ts
+ * (deterministica con RNG iniettato, test dedicati).
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
 import Animated, {
   Easing,
-  type SharedValue,
   FadeIn,
+  ZoomIn,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
-import { DogIllustration } from '@/components/DogIllustration';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { DogAvatar } from '@/features/core/components';
+import { BuddyMascot, type BuddyExpression } from '@/features/mascot/BuddyMascot';
+import { MatchPiece } from '@/features/games/matchPieces';
 import {
-  SNIFF_CORRECT_LINES,
-  SNIFF_HINT_LINE,
-  SNIFF_ROUNDS,
-  SNIFF_START_LINE,
-  SNIFF_WRONG_LINES,
-  buildSniffRound,
-  loadSniffBest,
-  saveSniffBest,
-  sniffEndgameLine,
-  sniffRoundPoints,
-  type SniffRound,
-} from '@/features/games/sniffLogic';
+  MATCH_BLITZ_MS,
+  MATCH_CHAIN_LINES,
+  MATCH_COLS,
+  MATCH_FINAL_SECONDS,
+  MATCH_RESHUFFLE_LINE,
+  MATCH_ROCKET_LINE,
+  MATCH_ROWS,
+  MATCH_START_LINE,
+  chainScore,
+  findClears,
+  hasAnyMove,
+  indexOf,
+  isValidSwap,
+  loadMatchBest,
+  matchEndgameLine,
+  randomBoard,
+  removeDropRefill,
+  reshuffle,
+  saveMatchBest,
+  swapCells,
+  type Board,
+} from '@/features/games/matchLogic';
 import { fetchGameLeaderboard, submitGameScore } from '@/features/games/api';
 import { shareSquirrelResult } from '@/features/games/shareScoreCard';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -48,74 +56,23 @@ import { isPersistedId } from '@/lib/persistedId';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 
 type Phase = 'intro' | 'playing' | 'done';
-type RoundStage = 'show' | 'cover' | 'shuffle' | 'pick' | 'reveal';
 
-const BOWL_TONES = [
-  { bg: colors.accentSoft, fg: colors.accentPressed },
-  { bg: colors.warningSoft, fg: '#B45309' },
-  { bg: colors.primarySoft, fg: colors.primary },
-] as const;
-
-function TreatBone() {
-  return (
-    <Svg width={34} height={22} viewBox="0 0 34 22">
-      <Path
-        d="M7 3 C4 0 0 3 2 7 C0 10 4 13 7 10 L25 10 C28 13 32 10 30 7 C32 3 28 0 25 3 Z"
-        fill="#FFF9F0"
-        stroke={colors.text}
-        strokeWidth={2.2}
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
+function rowOf(index: number): number {
+  return Math.floor(index / MATCH_COLS);
 }
 
-/** Ciotola animata: si sposta tra gli slot durante lo shuffle. */
-function Bowl({
-  slot,
-  lift,
-  wiggle,
-  tone,
-}: {
-  slot: SharedValue<number>;
-  lift: SharedValue<number>;
-  wiggle: SharedValue<number>;
-  tone: (typeof BOWL_TONES)[number];
-}) {
-  const style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: slot.value },
-      { translateY: -lift.value },
-      { rotate: `${wiggle.value}deg` },
-    ],
-  }));
-  return (
-    <Animated.View style={[styles.bowl, style]}>
-      <View style={[styles.bowlBody, { backgroundColor: tone.bg, borderColor: tone.fg }]}>
-        <CuteIcon name="bowl" size={44} color={tone.fg} secondary={colors.text} />
-      </View>
-    </Animated.View>
-  );
-}
-
-/** Oreo telecronista (stesso pattern di Scoiattolo!). */
+/** Buddy telecronista (pattern condiviso con gli altri giochi). */
 function Commentator({
-  photoUri,
-  dogName,
   line,
+  expression,
 }: {
-  photoUri: string | null;
-  dogName: string;
   line: { id: number; text: string } | null;
+  expression: BuddyExpression;
 }) {
   return (
     <View style={styles.commentator} pointerEvents="none">
       <View style={styles.commentatorAvatar}>
-        {photoUri ? (
-          <DogAvatar size={40} photoUri={photoUri} dogName={dogName} />
-        ) : (
-          <DogIllustration size={46} mood="welcome" />
-        )}
+        <BuddyMascot size={46} expression={expression} />
       </View>
       {line ? (
         <Animated.View
@@ -133,9 +90,63 @@ function Commentator({
   );
 }
 
-const SLOT_COUNT = 3;
+/** Cella della griglia: pop-in scaglionato per riga al cambio tessera. */
+function Cell({
+  index,
+  piece,
+  cellSize,
+  selected,
+  clearing,
+  boardTick,
+  reducedMotion,
+  onPress,
+}: {
+  index: number;
+  piece: number;
+  cellSize: number;
+  selected: boolean;
+  clearing: boolean;
+  boardTick: number;
+  reducedMotion: boolean;
+  onPress: () => void;
+}) {
+  const wiggle = useSharedValue(0);
+  useEffect(() => {
+    if (!clearing || reducedMotion) return;
+    wiggle.value = withSequence(
+      withTiming(1.15, { duration: 100 }),
+      withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) }),
+    );
+  }, [clearing, reducedMotion, wiggle]);
+  const style = useAnimatedStyle(() => ({
+    opacity: clearing ? Math.max(0, 1.15 - wiggle.value * 2) : 1,
+    transform: [{ scale: clearing ? 1.15 - wiggle.value : selected ? 1.1 : 1 }],
+  }));
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Tessera riga ${rowOf(index) + 1} colonna ${(index % MATCH_COLS) + 1}${selected ? ', selezionata' : ''}`}
+      onPress={onPress}
+      style={[
+        styles.cell,
+        { width: cellSize, height: cellSize },
+        selected && styles.cellSelected,
+      ]}
+    >
+      <Animated.View
+        key={`${boardTick}:${piece}`}
+        entering={
+          reducedMotion ? undefined : ZoomIn.duration(220).delay(rowOf(index) * 28)
+        }
+        style={style}
+      >
+        <MatchPiece type={piece} size={cellSize * 0.78} />
+      </Animated.View>
+    </Pressable>
+  );
+}
 
-export default function SniffGameScreen() {
+export default function MatchGameScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const reducedMotion = useReducedMotion();
@@ -144,55 +155,59 @@ export default function SniffGameScreen() {
     Boolean(userId) && isApiConfigured() && !usingMockGate && isPersistedId(dog.id);
 
   const [phase, setPhase] = useState<Phase>('intro');
+  const [board, setBoard] = useState<Board>(() => randomBoard(Math.random));
+  const [boardTick, setBoardTick] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [clearing, setClearing] = useState<ReadonlySet<number>>(new Set());
+  const [resolving, setResolving] = useState(false);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
-  const [roundNumber, setRoundNumber] = useState(0);
-  const [stage, setStage] = useState<RoundStage>('show');
-  const [pickedSlot, setPickedSlot] = useState<number | null>(null);
-  const [hintUsed, setHintUsed] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [commentary, setCommentary] = useState<{ id: number; text: string } | null>(null);
+  const [expression, setExpression] = useState<BuddyExpression>('focused');
+  const [scorePopup, setScorePopup] = useState<{ id: number; text: string } | null>(null);
   const [weekRank, setWeekRank] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareDone, setShareDone] = useState(false);
   const [shownScore, setShownScore] = useState(0);
+  const [cellSize, setCellSize] = useState(48);
 
-  const current = useRef<SniffRound | null>(null);
-  const streak = useRef(0);
+  const startedAt = useRef(0);
   const commentarySeq = useRef(0);
   const commentaryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const popupSeq = useRef(0);
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const fieldWidth = useRef(360);
-
-  const slot0 = useSharedValue(0);
-  const slot1 = useSharedValue(0);
-  const slot2 = useSharedValue(0);
-  const slotValues = [slot0, slot1, slot2];
-  const lift0 = useSharedValue(0);
-  const lift1 = useSharedValue(0);
-  const lift2 = useSharedValue(0);
-  const liftValues = [lift0, lift1, lift2];
-  const wiggle0 = useSharedValue(0);
-  const wiggle1 = useSharedValue(0);
-  const wiggle2 = useSharedValue(0);
-  const wiggleValues = [wiggle0, wiggle1, wiggle2];
+  const boardRef = useRef(board);
+  boardRef.current = board;
 
   useEffect(() => {
-    void loadSniffBest(dog.id).then(setBest);
+    void loadMatchBest(dog.id).then(setBest);
     return () => {
       timeouts.current.forEach(clearTimeout);
       if (commentaryTimer.current) clearTimeout(commentaryTimer.current);
     };
   }, [dog.id]);
 
-  const say = (text: string) => {
+  const say = (text: string, next: BuddyExpression = 'focused') => {
     commentarySeq.current += 1;
     setCommentary({ id: commentarySeq.current, text });
+    setExpression(next);
     if (commentaryTimer.current) clearTimeout(commentaryTimer.current);
     commentaryTimer.current = setTimeout(() => setCommentary(null), 1800);
   };
 
-  const slotWidth = () => fieldWidth.current / SLOT_COUNT;
+  const popup = (text: string) => {
+    popupSeq.current += 1;
+    setScorePopup({ id: popupSeq.current, text });
+    const id = popupSeq.current;
+    timeouts.current.push(
+      setTimeout(
+        () => setScorePopup((current) => (current?.id === id ? null : current)),
+        900,
+      ),
+    );
+  };
 
   const later = (ms: number, fn: () => void) => {
     timeouts.current.push(setTimeout(fn, ms));
@@ -201,124 +216,32 @@ export default function SniffGameScreen() {
   const startGame = () => {
     timeouts.current.forEach(clearTimeout);
     timeouts.current = [];
-    streak.current = 0;
+    const fresh = randomBoard(Math.random);
+    setBoard(fresh);
+    setBoardTick((tick) => tick + 1);
+    startedAt.current = Date.now();
+    setSelected(null);
+    setClearing(new Set());
+    setResolving(false);
     setScore(0);
+    setElapsed(0);
     setWeekRank(null);
     setShareDone(false);
-    setHintUsed(false);
-    hintActiveRef.current = false;
-    setPickedSlot(null);
     setPhase('playing');
-    say(SNIFF_START_LINE);
-    startRound(1);
-  };
-
-  const startRound = (round: number) => {
-    const plan = buildSniffRound(round, Math.random);
-    current.current = plan;
-    setRoundNumber(round);
-    setStage('show');
-    setPickedSlot(null);
-    // Posizioni iniziali ordinate.
-    slotValues.forEach((value, index) => {
-      value.value = index * slotWidth();
-    });
-    liftValues.forEach((value) => {
-      value.value = 0;
-    });
-    // Il bocconcino appare, la ciotola giusta lo copre, poi shuffle.
-    later(900, () => setStage('cover'));
-    let t = 900 + 450;
-    later(t, () => setStage('shuffle'));
-    t += 250;
-    for (const move of plan.moves) {
-      later(t, () => {
-        const width = slotWidth();
-        const aX = slotValues[move.a].value;
-        const bX = slotValues[move.b].value;
-        const duration = reducedMotion ? 0 : move.durationMs;
-        slotValues[move.a].value = withTiming(bX, { duration, easing: Easing.inOut(Easing.cubic) });
-        slotValues[move.b].value = withTiming(aX, { duration, easing: Easing.inOut(Easing.cubic) });
-      });
-      t += reducedMotion ? 60 : move.durationMs + 60;
-    }
-    later(t, () => {
-      setStage('pick');
-      if (hintActiveRef.current) {
-        wiggleSlot(current.current?.treatFinalSlot ?? -1);
-      }
-    });
-  };
-
-  const hintActiveRef = useRef(false);
-
-  const wiggleSlot = (slotIndex: number) => {
-    if (reducedMotion || slotIndex < 0) return;
-    wiggleValues[slotIndex].value = withSequence(
-      withTiming(-6, { duration: 90 }),
-      withTiming(6, { duration: 110 }),
-      withTiming(-6, { duration: 110 }),
-      withTiming(0, { duration: 90 }),
-    );
-  };
-
-  const useHint = () => {
-    if (hintUsed || stage === 'reveal') return;
-    hintActiveRef.current = true;
-    setHintUsed(true);
-    say(SNIFF_HINT_LINE);
-    if (stage === 'pick') {
-      wiggleSlot(current.current?.treatFinalSlot ?? -1);
-    }
-  };
-
-  const pickBowl = (slotIndex: number) => {
-    if (stage !== 'pick' || pickedSlot !== null) return;
-    const plan = current.current;
-    if (!plan) return;
-    setPickedSlot(slotIndex);
-    setStage('reveal');
-    const correct = slotIndex === plan.treatFinalSlot;
-    if (!reducedMotion) {
-      liftValues[slotIndex].value = withSpring(46, { damping: 9, stiffness: 220 });
-    } else {
-      liftValues[slotIndex].value = 46;
-    }
-    if (correct) {
-      streak.current += 1;
-      const points = sniffRoundPoints(true, streak.current);
-      setScore((value) => value + points);
-      say(SNIFF_CORRECT_LINES[Math.floor(Math.random() * SNIFF_CORRECT_LINES.length)]);
-    } else {
-      streak.current = 0;
-      // Solleva anche la ciotola giusta: impara dove era.
-      if (!reducedMotion) {
-        liftValues[plan.treatFinalSlot].value = withTiming(30, { duration: 260 });
-      } else {
-        liftValues[plan.treatFinalSlot].value = 30;
-      }
-      say(SNIFF_WRONG_LINES[Math.floor(Math.random() * SNIFF_WRONG_LINES.length)]);
-    }
-    later(1100, () => {
-      if (roundNumber >= SNIFF_ROUNDS) {
-        finish();
-      } else {
-        startRound(roundNumber + 1);
-      }
-    });
+    say(MATCH_START_LINE, 'focused');
   };
 
   const finish = () => {
     setPhase('done');
     setScore((finalScore) => {
-      void saveSniffBest(finalScore, dog.id).then(setBest);
+      void saveMatchBest(finalScore, dog.id).then(setBest);
       if (realEnabled) {
         setSubmitting(true);
         void (async () => {
           try {
-            await submitGameScore(dog.id, finalScore, 'sniff');
-            const board = await fetchGameLeaderboard('sniff');
-            setWeekRank(board.me?.rank ?? null);
+            await submitGameScore(dog.id, finalScore, 'match');
+            const leaderboard = await fetchGameLeaderboard('match');
+            setWeekRank(leaderboard.me?.rank ?? null);
           } catch {
             setWeekRank(null);
           } finally {
@@ -328,6 +251,80 @@ export default function SniffGameScreen() {
       }
       return finalScore;
     });
+  };
+
+  // Timer Blitz 60s.
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    let saidCountdown = false;
+    const timer = setInterval(() => {
+      const now = Date.now() - startedAt.current;
+      setElapsed(now);
+      if (!saidCountdown && now >= MATCH_BLITZ_MS - 10_000 && now < MATCH_BLITZ_MS) {
+        saidCountdown = true;
+        say(MATCH_FINAL_SECONDS, 'focused');
+      }
+      if (now >= MATCH_BLITZ_MS) {
+        clearInterval(timer);
+        finish();
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, [phase, dog.id, realEnabled]);
+
+  /** Risolve una catena alla volta con animazioni scaglionate. */
+  const resolveChain = (chainIndex: number) => {
+    const { cells, rockets } = findClears(boardRef.current);
+    if (cells.size === 0) {
+      setResolving(false);
+      setClearing(new Set());
+      if (!hasAnyMove(boardRef.current)) {
+        setBoard(reshuffle(boardRef.current, Math.random));
+        setBoardTick((tick) => tick + 1);
+        say(MATCH_RESHUFFLE_LINE, 'focused');
+      }
+      return;
+    }
+    setResolving(true);
+    setClearing(cells);
+    const points = chainScore(cells.size, chainIndex);
+    setScore((value) => value + points);
+    popup(`+${points}`);
+    if (rockets > 0) say(MATCH_ROCKET_LINE, 'celebrate');
+    else if (chainIndex >= 1) {
+      say(
+        MATCH_CHAIN_LINES[Math.min(chainIndex - 1, MATCH_CHAIN_LINES.length - 1)],
+        'celebrate',
+      );
+    }
+    later(reducedMotion ? 60 : 260, () => {
+      setBoard((current) => removeDropRefill(current, cells, Math.random).board);
+      setBoardTick((tick) => tick + 1);
+      setClearing(new Set());
+      later(reducedMotion ? 60 : 300, () => resolveChain(chainIndex + 1));
+    });
+  };
+
+  const onCellPress = (index: number) => {
+    if (phase !== 'playing' || resolving) return;
+    if (selected === null) {
+      setSelected(index);
+      return;
+    }
+    if (selected === index) {
+      setSelected(null);
+      return;
+    }
+    if (!isValidSwap(boardRef.current, selected, index)) {
+      // swap non valido: solo deseleziona (il feedback è il mancato match)
+      setSelected(null);
+      return;
+    }
+    const next = swapCells(boardRef.current, selected, index);
+    setSelected(null);
+    setBoard(next);
+    setBoardTick((tick) => tick + 1);
+    later(reducedMotion ? 40 : 160, () => resolveChain(0));
   };
 
   // Count-up finale.
@@ -348,34 +345,27 @@ export default function SniffGameScreen() {
     return () => clearInterval(timer);
   }, [phase, score, reducedMotion]);
 
-  const treatSlot =
-    stage === 'show' || stage === 'cover'
-      ? (current.current?.treatStartSlot ?? 1)
-      : stage === 'reveal' && pickedSlot !== null
-        ? (current.current?.treatFinalSlot ?? -1)
-        : -1;
-  const treatVisible =
-    (stage === 'show' || (stage === 'reveal' && pickedSlot === current.current?.treatFinalSlot)) &&
-    treatSlot >= 0;
+  const remainingSeconds = Math.max(0, Math.ceil((MATCH_BLITZ_MS - elapsed) / 1000));
+  const timeFraction = 1 - Math.min(1, elapsed / MATCH_BLITZ_MS);
+
+  const grid = useMemo(() => board.map((piece, index) => ({ piece, index })), [board]);
 
   return (
     <ScreenContainer scroll={phase !== 'playing'}>
-      <StackScreenHeader title="Fiuto da campione" />
+      <StackScreenHeader title="Bau Match" />
 
       {phase === 'intro' ? (
         <View style={styles.introWrap}>
           <View style={styles.introArtRow}>
-            {BOWL_TONES.map((tone, index) => (
-              <View key={index} style={[styles.bowlBody, styles.introBowl, { backgroundColor: tone.bg, borderColor: tone.fg }]}>
-                <CuteIcon name="bowl" size={44} color={tone.fg} secondary={colors.text} />
-              </View>
+            {[0, 1, 2, 3, 4].map((piece) => (
+              <MatchPiece key={piece} type={piece} size={46} />
             ))}
           </View>
-          <Text style={styles.introTitle}>Dov'è il bocconcino?</Text>
+          <Text style={styles.introTitle}>Scambia e scoppia!</Text>
           <Text style={styles.introText}>
-            Guarda dove lo nascondo, segui le ciotole{'\n'}
-            mentre si scambiano e scegli quella giusta.{'\n'}
-            Dieci round; tre di fila e c'è il bonus.
+            Tocca una tessera e una vicina per scambiarle.{'\n'}
+            Tre in fila scoppiano; quattro fanno il razzo.{'\n'}
+            Sessanta secondi, catene a moltiplicatore!
           </Text>
           {best > 0 ? (
             <Text style={styles.introBest}>Il vostro record: {best} punti</Text>
@@ -394,95 +384,56 @@ export default function SniffGameScreen() {
 
       {phase === 'playing' ? (
         <View style={styles.gameWrap}>
-          <Commentator photoUri={dog.photoUri} dogName={dog.name} line={commentary} />
+          <Commentator line={commentary} expression={expression} />
           <View style={styles.hud}>
             <View style={styles.hudScore} accessibilityLabel={`Punteggio ${score}`}>
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
               <Text style={styles.hudScoreText}>{score}</Text>
             </View>
-            <Text style={styles.hudTime}>
-              Round {roundNumber}/{SNIFF_ROUNDS}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                hintUsed ? 'Aiutino del naso già usato' : 'Usa il naso di Oreo: la ciotola giusta si muove'
-              }
-              disabled={hintUsed}
-              onPress={useHint}
-              style={({ pressed }) => [
-                styles.hintButton,
-                (pressed || hintUsed) && styles.pressed,
-                hintUsed && styles.hintButtonUsed,
-              ]}
-            >
-              <CuteIcon name="search" size={14} color={hintUsed ? colors.textMuted : colors.primary} secondary={hintUsed ? colors.textMuted : colors.primary} />
-              <Text style={[styles.hintText, hintUsed && styles.hintTextUsed]}>
-                Naso di Oreo
-              </Text>
-            </Pressable>
+            <View style={styles.timeBarTrack} accessibilityLabel={`${remainingSeconds} secondi rimasti`}>
+              <View style={[styles.timeBarFill, { width: `${timeFraction * 100}%` }]} />
+            </View>
+            <Text style={styles.hudTime}>{remainingSeconds}s</Text>
           </View>
 
-          <View
-            style={styles.field}
-            onLayout={(event) => {
-              fieldWidth.current = event.nativeEvent.layout.width;
-              if (stage === 'show' && roundNumber > 0) {
-                slotValues.forEach((value, index) => {
-                  value.value = index * slotWidth();
-                });
-              }
-            }}
-          >
+          <View style={styles.boardWrap}>
             <LinearGradient
-              colors={['#D9ECFB', '#E7F5EE', '#DFF3EC']}
+              colors={['#DFF3EC', '#EAF7F1', '#FFF6E8']}
               start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
+              end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <View style={styles.tableLine} pointerEvents="none" />
-
-            {treatVisible ? (
-              <View
+            <View
+              style={styles.grid}
+              onLayout={(event) =>
+                setCellSize(Math.floor(event.nativeEvent.layout.width / MATCH_COLS))
+              }
+            >
+              {grid.map(({ piece, index }) => (
+                <Cell
+                  key={index}
+                  index={index}
+                  piece={piece}
+                  cellSize={cellSize}
+                  selected={selected === index}
+                  clearing={clearing.has(index)}
+                  boardTick={boardTick}
+                  reducedMotion={reducedMotion}
+                  onPress={() => onCellPress(index)}
+                />
+              ))}
+            </View>
+            {scorePopup ? (
+              <Animated.View
+                key={scorePopup.id}
+                entering={FadeIn.duration(160)}
+                style={styles.scorePopup}
                 pointerEvents="none"
-                style={[styles.treat, { left: treatSlot * slotWidth() + slotWidth() / 2 - 17 }]}
               >
-                <TreatBone />
-              </View>
+                <Text style={styles.scorePopupText}>{scorePopup.text}</Text>
+              </Animated.View>
             ) : null}
-
-            {BOWL_TONES.map((tone, index) => (
-              <Bowl
-                key={`bowl-${index}`}
-                slot={slotValues[index]}
-                lift={liftValues[index]}
-                wiggle={wiggleValues[index]}
-                tone={tone}
-              />
-            ))}
-            {BOWL_TONES.map((_, index) => (
-              <Pressable
-                key={`slot-${index}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Ciotola ${index + 1}${
-                  stage === 'pick' ? ': scegli questa' : ''
-                }`}
-                disabled={stage !== 'pick'}
-                onPress={() => pickBowl(index)}
-                style={[styles.bowlHit, { left: `${(index * 100) / SLOT_COUNT}%` }]}
-              />
-            ))}
           </View>
-
-          <Text style={styles.stageHint}>
-            {stage === 'pick'
-              ? 'Tocca la ciotola col bocconcino!'
-              : stage === 'shuffle'
-                ? 'Segui le ciotole…'
-                : stage === 'reveal'
-                  ? ''
-                  : 'Guarda dove finisce il bocconcino…'}
-          </Text>
         </View>
       ) : null}
 
@@ -513,8 +464,9 @@ export default function SniffGameScreen() {
               Accedi per entrare nella classifica del quartiere.
             </Text>
           )}
+          <BuddyMascot size={88} expression={score > 40 ? 'celebrate' : 'sad'} />
           <View style={styles.doneBubble}>
-            <Text style={styles.doneLine}>{sniffEndgameLine(score)}</Text>
+            <Text style={styles.doneLine}>{matchEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>
           </View>
           {realEnabled ? (
@@ -529,7 +481,7 @@ export default function SniffGameScreen() {
                   dogName: dog.name,
                   score,
                   best,
-                  gameLabel: 'Fiuto da campione',
+                  gameLabel: 'Bau Match',
                 })
                   .then((ok) => setShareDone(ok))
                   .finally(() => setSharing(false));
@@ -570,8 +522,7 @@ export default function SniffGameScreen() {
 
 const styles = StyleSheet.create({
   introWrap: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl },
-  introArtRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md },
-  introBowl: { width: 74, height: 62 },
+  introArtRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   introTitle: {
     color: colors.text,
     fontSize: typography.size.xl,
@@ -606,61 +557,55 @@ const styles = StyleSheet.create({
   hud: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   hudScore: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hudScoreText: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
-  hudTime: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
-  hintButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  timeBarTrack: {
+    flex: 1,
+    height: 10,
     borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  hintButtonUsed: { borderColor: colors.border },
-  hintText: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
-  hintTextUsed: { color: colors.textMuted },
-  field: {
-    height: 260,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceMuted,
     overflow: 'hidden',
-    ...shadows.card,
   },
-  tableLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 30,
-    height: 4,
-    backgroundColor: '#74C4A9',
-  },
-  bowlHit: {
-    position: 'absolute',
-    bottom: 20,
-    width: '33.33%',
-    height: 130,
-  },
-  bowl: {
-    position: 'absolute',
-    bottom: 0,
-    width: '33.33%',
-    alignItems: 'center',
-  },
-  bowlBody: {
-    width: 84,
-    height: 66,
-    borderRadius: radius.md,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-  treat: { position: 'absolute', bottom: 40 },
-  stageHint: {
+  timeBarFill: { height: '100%', borderRadius: radius.full, backgroundColor: colors.accent },
+  hudTime: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
-    textAlign: 'center',
-    minHeight: 20,
+    fontWeight: typography.weight.bold,
+    minWidth: 30,
+    textAlign: 'right',
+  },
+  boardWrap: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    padding: spacing.sm,
+    ...shadows.card,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  cell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+  },
+  cellSelected: {
+    backgroundColor: 'rgba(20, 184, 166, 0.16)',
+    borderWidth: 2,
+    borderColor: colors.accent,
+  },
+  scorePopup: {
+    position: 'absolute',
+    top: '38%',
+    alignSelf: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    ...shadows.raised,
+  },
+  scorePopupText: {
+    color: colors.accent,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
   },
   commentator: {
     flexDirection: 'row',
