@@ -6,7 +6,8 @@ import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const demoEnabled = process.env.NEXT_PUBLIC_ADMIN_DEMO === "true";
+  const demoEnabled =
+    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ADMIN_DEMO === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
