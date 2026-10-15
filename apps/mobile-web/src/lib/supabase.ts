@@ -17,13 +17,13 @@ const CHUNK = 1800;
 
 const webAuthStorage = {
   async getItem(key: string): Promise<string | null> {
-    return globalThis.localStorage?.getItem(key) ?? null;
+    return globalThis.sessionStorage?.getItem(key) ?? null;
   },
   async setItem(key: string, value: string): Promise<void> {
-    globalThis.localStorage?.setItem(key, value);
+    globalThis.sessionStorage?.setItem(key, value);
   },
   async removeItem(key: string): Promise<void> {
-    globalThis.localStorage?.removeItem(key);
+    globalThis.sessionStorage?.removeItem(key);
   },
 };
 
@@ -42,6 +42,7 @@ const secureAuthStorage = {
     return parts.join('');
   },
   async setItem(key: string, value: string): Promise<void> {
+    await clearStaleChunks(key);
     if (value.length <= CHUNK) {
       await SecureStore.setItemAsync(key, value);
       return;
@@ -68,6 +69,15 @@ const secureAuthStorage = {
     await SecureStore.deleteItemAsync(key);
   },
 };
+
+async function clearStaleChunks(key: string): Promise<void> {
+  const meta = await SecureStore.getItemAsync(key);
+  const chunks = Number(meta);
+  if (!Number.isFinite(chunks) || chunks <= 0) return;
+  for (let i = 0; i < chunks; i += 1) {
+    await SecureStore.deleteItemAsync(`${key}.${i}`);
+  }
+}
 
 type DoglyGlobal = typeof globalThis & {
   __doglySupabaseClient?: SupabaseClient;
