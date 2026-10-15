@@ -107,12 +107,19 @@ export default function BehaviorUploadingScreen() {
         await new Promise((resolve) => setTimeout(resolve, 900));
         if (!mountedRef.current) return;
         clearPendingBehaviorUpload();
-        router.replace({
-          pathname: '/behavior/processing/evt-processing',
-          params: pending.returnTo === 'ask' && pending.sessionId
-            ? { returnTo: 'ask', sessionId: pending.sessionId }
-            : undefined,
-        } as never);
+        if (pending.returnTo === 'ask' && pending.sessionId) {
+          router.replace({
+            pathname: '/ask',
+            params: {
+              sessionId: pending.sessionId,
+              eventId: 'evt-processing',
+              source: 'behavior',
+              intent: 'analyzing',
+            },
+          } as never);
+        } else {
+          router.replace('/behavior/processing/evt-processing' as never);
+        }
         return;
       }
       if (!userId || !pending.dogId) {
@@ -133,12 +140,19 @@ export default function BehaviorUploadingScreen() {
       });
       if (!mountedRef.current) return;
       clearPendingBehaviorUpload();
-      router.replace({
-        pathname: `/behavior/processing/${eventId}`,
-        params: pending.returnTo === 'ask' && pending.sessionId
-          ? { returnTo: 'ask', sessionId: pending.sessionId }
-          : undefined,
-      } as never);
+      if (pending.returnTo === 'ask' && pending.sessionId) {
+        router.replace({
+          pathname: '/ask',
+          params: {
+            sessionId: pending.sessionId,
+            eventId,
+            source: 'behavior',
+            intent: 'analyzing',
+          },
+        } as never);
+      } else {
+        router.replace(`/behavior/processing/${eventId}` as never);
+      }
     } catch (err) {
       console.error('Behavior upload failed', err);
       if (isQuotaExhaustedError(err) && purchasesEnabled) {

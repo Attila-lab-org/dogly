@@ -15,13 +15,29 @@ import { getOrCreateChatAttachmentsAlbum, getOrCreateMomentsAlbum, uploadAlbumPh
 import { pickAlbumPhoto, takeConversationPhoto } from '@/features/photos/share';
 import { readDeviceLocation } from '@/features/places/api';
 import { pickConversationVideo } from '@/features/behavior/videoPicker';
-import { setPendingBehaviorUpload } from '@/features/behavior/pendingUpload';
-import { isQuotaExhaustedError } from '@/features/behavior/api';
+import {
+  enqueueAndUploadBehaviorClip,
+  markUploadCompletedForEvent,
+} from '@/features/behavior/upload';
+import {
+  getBehaviorEvent,
+  isQuotaExhaustedError,
+  isTerminalBehaviorStatus,
+} from '@/features/behavior/api';
+import {
+  getDigestiveEvent,
+  isFailedDigestiveStatus,
+  isTerminalDigestiveStatus,
+} from '@/features/digestive/api';
 import { takeDigestivePhoto } from '@/features/digestive/photo';
-import { enqueueAndUploadDigestivePhoto } from '@/features/digestive/upload';
+import {
+  enqueueAndUploadDigestivePhoto,
+  markDigestiveUploadCompletedForEvent,
+} from '@/features/digestive/upload';
 import { removeFailedRetryPair } from '@/features/realtime/messageState';
 import { rememberRealtimeSession, resumeRealtimeSession } from '@/features/realtime/sessionBridge';
 import { purchasesEnabled } from '@/mocks/entitlements';
+import { ANALYSIS_POLL_TIMEOUT_MS } from '@/features/core/processingTimeout';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
 import {
@@ -53,8 +69,15 @@ export default function AskScreen() {
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
   const [mediaPhase, setMediaPhase] = useState<'uploading' | 'analyzing' | null>(null);
-  const [focusedEventId, setFocusedEventId] = useState<string | undefined>(eventId);
+  const [pendingAnalysis, setPendingAnalysis] = useState<{
+    eventId: string;
+    source: 'behavior' | 'digestive';
+  } | null>(null);
+  const [focusedEventId, setFocusedEventId] = useState<string | undefined>(
+    intent === 'analyzing' ? undefined : eventId,
+  );
   const dictationRef = useRef<DictationHandle | null>(null);
+  const analysisDoneRef = useRef<string | null>(null);
   const [memoryBusy, setMemoryBusy] = useState<string | null>(null);
   const [momentsBusy, setMomentsBusy] = useState<string | null>(null);
   const [savedToMoments, setSavedToMoments] = useState<Record<string, boolean>>({});
@@ -70,17 +93,20 @@ export default function AskScreen() {
   const videoHint = /breve video|mandami un video|fammi vedere|videocamera|carica un video/i.test(
     latestAssistant?.text ?? '',
   );
+  const analyzing = mediaPhase === 'analyzing' || Boolean(pendingAnalysis);
   const neededMedia: 'PHOTO' | 'VIDEO' | null =
-    latestAssistant?.turn?.media_invite === 'PHOTO' ||
-    latestAssistant?.turn?.media_invite === 'VIDEO'
-      ? latestAssistant.turn.media_invite
-      : intent === 'digest' && !sending && messages.length > 0 && !starting
-        ? 'PHOTO'
-        : digestPhotoHint && !sending
+    analyzing || sending
+      ? null
+      : latestAssistant?.turn?.media_invite === 'PHOTO' ||
+          latestAssistant?.turn?.media_invite === 'VIDEO'
+        ? latestAssistant.turn.media_invite
+        : intent === 'digest' && messages.length > 0 && !starting
           ? 'PHOTO'
-          : videoHint && !sending
-            ? 'VIDEO'
-            : null;
+          : digestPhotoHint
+            ? 'PHOTO'
+            : videoHint
+              ? 'VIDEO'
+              : null;
   const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
   const startedKey = useRef<string | null>(null);
@@ -100,8 +126,21 @@ export default function AskScreen() {
       const next = resumed?.session ?? await createRealtimeSession(dog.id);
       if (!mounted.current) return;
       setSession(next);
-      if (eventId) {
-        const digestiveHandoff = source === 'digestive';
+      const digestiveHandoff = source === 'digestive';
+      if (eventId && intent === 'analyzing') {
+        const text = digestiveHandoff
+          ? 'Ho caricato la foto richiesta.'
+          : 'Ho caricato il video richiesto.';
+        setMessages([
+          ...(resumed?.messages ?? []),
+          { id: 'video-' + eventId, role: 'user', text },
+        ]);
+        setMediaPhase('analyzing');
+        setPendingAnalysis({
+          eventId,
+          source: digestiveHandoff ? 'digestive' : 'behavior',
+        });
+      } else if (eventId) {
         const isRevisit = intent === 'revisit';
         const text = isRevisit
           ? digestiveHandoff
@@ -138,7 +177,121 @@ export default function AskScreen() {
     finally { if (mounted.current) setStarting(false); }
   }, [dog.id, dog.name, eventId, intent, sessionId, source]);
   useEffect(() => { void start(); }, [start]);
-  useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending]);
+  useEffect(() => { const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 40); return () => clearTimeout(timer); }, [messages, sending, mediaPhase]);
+
+  useEffect(() => {
+    if (!pendingAnalysis || !session || starting) return;
+    if (analysisDoneRef.current === pendingAnalysis.eventId) return;
+    let cancelled = false;
+    const startedAt = Date.now();
+    const poll = async () => {
+      while (!cancelled && mounted.current) {
+        if (Date.now() - startedAt > ANALYSIS_POLL_TIMEOUT_MS) {
+          setMediaPhase(null);
+          setPendingAnalysis(null);
+          setError('L’analisi sta impiegando troppo. Riprova tra poco dalla chat.');
+          return;
+        }
+        try {
+          if (pendingAnalysis.source === 'digestive') {
+            const event = await getDigestiveEvent(pendingAnalysis.eventId);
+            if (!isTerminalDigestiveStatus(event.status)) {
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            markDigestiveUploadCompletedForEvent(pendingAnalysis.eventId);
+            if (isFailedDigestiveStatus(event.status)) {
+              if (cancelled || !mounted.current) return;
+              setMediaPhase(null);
+              setPendingAnalysis(null);
+              setMessages((current) => [
+                ...current,
+                {
+                  id: 'analyze-fail-' + pendingAnalysis.eventId,
+                  role: 'assistant',
+                  text: 'Non sono riuscito a leggere questa foto. Puoi scattarne un’altra più chiara?',
+                },
+              ]);
+              return;
+            }
+          } else {
+            const event = await getBehaviorEvent(pendingAnalysis.eventId);
+            if (!isTerminalBehaviorStatus(event.status)) {
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            markUploadCompletedForEvent(pendingAnalysis.eventId);
+            if (
+              event.status === 'FAILED_TERMINAL' ||
+              event.status === 'CANCELLED'
+            ) {
+              if (cancelled || !mounted.current) return;
+              setMediaPhase(null);
+              setPendingAnalysis(null);
+              setMessages((current) => [
+                ...current,
+                {
+                  id: 'analyze-fail-' + pendingAnalysis.eventId,
+                  role: 'assistant',
+                  text: 'Non sono riuscito a leggere questo video. Puoi riprovare dalla chat?',
+                },
+              ]);
+              return;
+            }
+          }
+          if (cancelled || !mounted.current) return;
+          analysisDoneRef.current = pendingAnalysis.eventId;
+          const digestive = pendingAnalysis.source === 'digestive';
+          const text = digestive
+            ? 'Ho caricato la foto richiesta.'
+            : 'Ho caricato il video richiesto.';
+          setSending(true);
+          const turn = await createRealtimeTurn(session.id, text, undefined, {
+            eventId: pendingAnalysis.eventId,
+            source: pendingAnalysis.source,
+          });
+          if (!mounted.current) return;
+          setMessages((current) => {
+            const hasUserUpload = current.some(
+              (item) =>
+                item.role === 'user' &&
+                (item.id === 'video-' + pendingAnalysis.eventId ||
+                  item.id.startsWith('digest-up-') ||
+                  item.id.startsWith('video-up-')),
+            );
+            return [
+              ...current,
+              ...(hasUserUpload
+                ? []
+                : [
+                    {
+                      id: 'video-' + pendingAnalysis.eventId,
+                      role: 'user' as const,
+                      text,
+                    },
+                  ]),
+              {
+                id: turn.id,
+                role: 'assistant',
+                text: turn.assistant_text,
+                turn,
+              },
+            ];
+          });
+          setMediaPhase(null);
+          setPendingAnalysis(null);
+          setSending(false);
+          return;
+        } catch {
+          await new Promise((r) => setTimeout(r, 2500));
+        }
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingAnalysis, session, starting]);
 
   const send = useCallback(async (value: string, attachment?: { uri: string; purpose: string }, existingPhotoId?: string, existingRequestId?: string) => {
     const text = value.trim();
@@ -198,8 +351,7 @@ export default function AskScreen() {
   }, [dog.id, entryId, send, sending, session, starting, userId]);
 
   const captureDigestiveFromChat = useCallback(async () => {
-    if (sending || !session || !userId || !dog.id) return;
-    await rememberRealtimeSession(session, messages);
+    if (sending || analyzing || !session || !userId || !dog.id) return;
     setError(null);
     setMediaPhase('uploading');
     try {
@@ -208,11 +360,27 @@ export default function AskScreen() {
         setMediaPhase(null);
         return;
       }
+      setMessages((current) => [
+        ...current,
+        {
+          id: 'digest-up-' + Date.now(),
+          role: 'user',
+          text: 'Ho caricato la foto richiesta.',
+          attachmentUri: uri,
+        },
+      ]);
       if (usingMockGate) {
-        router.replace({
-          pathname: '/digestive/processing/fecal-ok-1',
-          params: { returnTo: 'ask', sessionId: session.id },
-        } as never);
+        setMediaPhase('analyzing');
+        await new Promise((r) => setTimeout(r, 1200));
+        setMediaPhase(null);
+        setMessages((current) => [
+          ...current,
+          {
+            id: 'digest-mock-' + Date.now(),
+            role: 'assistant',
+            text: `Ho guardato la foto. Dimmi pure cosa vuoi approfondire sulla digestione di ${dog.name}.`,
+          },
+        ]);
         return;
       }
       const { eventId: digestiveEventId } = await enqueueAndUploadDigestivePhoto({
@@ -220,10 +388,10 @@ export default function AskScreen() {
         dogId: dog.id,
         localUri: uri,
       });
-      router.replace({
-        pathname: `/digestive/processing/${digestiveEventId}`,
-        params: { returnTo: 'ask', sessionId: session.id },
-      } as never);
+      if (!mounted.current) return;
+      setMediaPhase('analyzing');
+      setPendingAnalysis({ eventId: digestiveEventId, source: 'digestive' });
+      await rememberRealtimeSession(session, messages);
     } catch (err) {
       setMediaPhase(null);
       if (isQuotaExhaustedError(err) && purchasesEnabled) {
@@ -232,7 +400,17 @@ export default function AskScreen() {
       }
       setError('Non sono riuscito a scattare o caricare la foto. Riprova.');
     }
-  }, [dog.id, messages, router, sending, session, userId, usingMockGate]);
+  }, [
+    analyzing,
+    dog.id,
+    dog.name,
+    messages,
+    router,
+    sending,
+    session,
+    userId,
+    usingMockGate,
+  ]);
 
   const sharePhoto = useCallback(async () => {
     const turn = latestAssistant?.turn;
@@ -273,28 +451,84 @@ export default function AskScreen() {
     session,
   ]);
 
+  const beginBehaviorAnalysis = useCallback(
+    async (input: {
+      localUri: string;
+      durationMs: number;
+      hasAudio: boolean;
+      contentType?: string;
+    }) => {
+      if (!session || !userId || !dog.id) return;
+      setError(null);
+      setMediaPhase('uploading');
+      setMessages((current) => [
+        ...current,
+        {
+          id: 'video-up-' + Date.now(),
+          role: 'user',
+          text: 'Ho caricato il video richiesto.',
+        },
+      ]);
+      try {
+        if (usingMockGate) {
+          setMediaPhase('analyzing');
+          await new Promise((r) => setTimeout(r, 1200));
+          setMediaPhase(null);
+          setMessages((current) => [
+            ...current,
+            {
+              id: 'video-mock-' + Date.now(),
+              role: 'assistant',
+              text: `Ho guardato il video di ${dog.name}. Dimmi pure cosa vuoi approfondire.`,
+            },
+          ]);
+          return;
+        }
+        const { eventId: behaviorEventId } = await enqueueAndUploadBehaviorClip({
+          userId,
+          dogId: dog.id,
+          localUri: input.localUri,
+          durationMs: input.durationMs,
+          hasAudio: input.hasAudio,
+          contentType: input.contentType,
+        });
+        if (!mounted.current) return;
+        setMediaPhase('analyzing');
+        setPendingAnalysis({ eventId: behaviorEventId, source: 'behavior' });
+        await rememberRealtimeSession(session, messages);
+      } catch (err) {
+        setMediaPhase(null);
+        if (isQuotaExhaustedError(err) && purchasesEnabled) {
+          router.replace('/paywall');
+          return;
+        }
+        setError('Non sono riuscito a caricare il video. Riprova.');
+      }
+    },
+    [dog.id, dog.name, messages, router, session, userId, usingMockGate],
+  );
+
   const pickVideo = useCallback(async () => {
-    if (sending || !session) return;
+    if (sending || analyzing || !session) return;
     const picked = await pickConversationVideo();
     if (!picked) return;
-    await rememberRealtimeSession(session, messages);
-    setPendingBehaviorUpload({
+    await beginBehaviorAnalysis({
       localUri: picked.uri,
       durationMs: picked.durationMs,
       hasAudio: picked.hasAudio,
       contentType: picked.contentType,
-      dogId: dog.id,
-      returnTo: 'ask',
-      sessionId: session.id,
     });
-    router.replace('/behavior/uploading');
-  }, [dog.id, messages, router, sending, session]);
+  }, [analyzing, beginBehaviorAnalysis, sending, session]);
 
   const openVideoCapture = useCallback(async () => {
-    if (sending || !session) return;
+    if (sending || analyzing || !session) return;
     await rememberRealtimeSession(session, messages);
-    router.push({ pathname: '/behavior/capture', params: { from: 'ask', sessionId: session.id } } as never);
-  }, [messages, router, sending, session]);
+    // Dopo lo scatto, uploading torna in Ask con intent=analyzing (niente processing).
+    router.push({
+      pathname: '/behavior/capture',
+      params: { from: 'ask', sessionId: session.id },
+    } as never);
+  }, [analyzing, messages, router, sending, session]);
 
   const appendTranscript = useCallback((text: string) => {
     setDraft((current) => `${current}${current ? ' ' : ''}${text}`.slice(0, 4000));
@@ -475,7 +709,18 @@ export default function AskScreen() {
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
           </View>)}
-          {sending ? <View style={styles.thinking}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.muted}>{mediaPhase === 'uploading' ? 'Preparo la foto…' : mediaPhase === 'analyzing' ? 'Guardo questo momento…' : 'DOGly sta pensando…'}</Text></View> : null}
+          {sending || mediaPhase ? (
+            <View style={styles.thinking}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.muted}>
+                {mediaPhase === 'uploading'
+                  ? 'Carico il momento…'
+                  : mediaPhase === 'analyzing'
+                    ? 'Sto analizzando…'
+                    : 'DOGly sta pensando…'}
+              </Text>
+            </View>
+          ) : null}
         </ScrollView>
         <View style={styles.composerWrap}>
           <TextInput
