@@ -1464,6 +1464,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -2270,10 +2286,24 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 25000,
+              "maximum": 30000,
               "minimum": 500,
-              "default": 5000,
+              "default": 8000,
               "title": "Radius M"
+            }
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "default",
+                "emergency"
+              ],
+              "type": "string",
+              "default": "default",
+              "title": "Purpose"
             }
           },
           {
