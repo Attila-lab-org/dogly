@@ -6,7 +6,7 @@ import { apiRequest, getApiBaseUrl } from '../../lib/apiClient';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import { putSignedUpload } from '../../lib/signedUpload';
 import { detectImageContentType } from '../dogs/photoUri';
-import type { AlbumPhoto, PhotoAlbum } from './types';
+import { dedupeAlbumPhotos, type AlbumPhoto, type PhotoAlbum } from './types';
 
 export type GalleryAlbumDto = {
   id: string;
@@ -159,7 +159,7 @@ export async function fetchAlbumPhotos(albumId: string): Promise<AlbumPhoto[]> {
   const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
     `/v1/albums/${albumId}/photos`,
   );
-  return body.items.map((photo) => mapPhoto(photo));
+  return dedupeAlbumPhotos(body.items.map((photo) => mapPhoto(photo)));
 }
 
 export async function fetchDogPhotos(
@@ -171,7 +171,7 @@ export async function fetchDogPhotos(
   const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
     `/v1/dogs/${dogId}/photos?limit=${limit}&offset=${offset}`,
   );
-  return body.items.map((photo) => mapPhoto(photo));
+  return dedupeAlbumPhotos(body.items.map((photo) => mapPhoto(photo)));
 }
 
 export async function uploadAlbumPhoto(

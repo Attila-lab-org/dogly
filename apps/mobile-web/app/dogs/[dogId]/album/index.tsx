@@ -25,7 +25,7 @@ import {
   uploadAlbumPhoto,
 } from '@/features/photos/api';
 import { pickAlbumPhoto } from '@/features/photos/share';
-import type { AlbumPhoto } from '@/features/photos/types';
+import { dedupeAlbumPhotos, type AlbumPhoto } from '@/features/photos/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { isPersistedId } from '@/lib/persistedId';
 import { confirmDestructiveAction } from '@/lib/confirmAction';
@@ -49,7 +49,7 @@ export default function AlbumIndexScreen() {
     enabled: isPersistedId(dogId),
   });
   const photos = useMemo(
-    () => (photosQuery.data?.pages ?? []).flat(),
+    () => dedupeAlbumPhotos((photosQuery.data?.pages ?? []).flat()),
     [photosQuery.data],
   );
 
@@ -66,7 +66,10 @@ export default function AlbumIndexScreen() {
         (current: { pages: AlbumPhoto[][]; pageParams: number[] } | undefined) => {
           if (!current) return current;
           const [firstPage = [], ...restPages] = current.pages;
-          return { ...current, pages: [[uploaded, ...firstPage], ...restPages] };
+          return {
+            ...current,
+            pages: [[uploaded, ...firstPage.filter((photo) => photo.id !== uploaded.id)], ...restPages],
+          };
         },
       );
       void Promise.all([

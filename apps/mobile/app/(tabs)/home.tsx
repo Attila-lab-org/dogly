@@ -42,7 +42,7 @@ export default function HomeScreen() {
     useHomeData(dog.id);
   const network = useNetworkStatus();
   const { usingMockGate } = useSession();
-  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id) });
+  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id), staleTime: 30_000 });
 
   const behaviorRemaining = usage
     ? usage.behaviorLimit - usage.behaviorUsed

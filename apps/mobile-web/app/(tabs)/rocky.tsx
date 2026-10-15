@@ -22,7 +22,7 @@ export default function DogProfileTabScreen() {
   const { usingMockGate } = useSession();
   const { width } = useWindowDimensions();
   const photoSize = Math.floor((Math.min(width, 560) - 48) / 3);
-  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id) });
+  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id), staleTime: 30_000 });
   const patterns = usePersonalPatterns(dog.id);
   const learned = patterns.patterns.filter((item) => item.state !== 'ARCHIVED').slice(0, 2);
   const meta = [currentAgeLabel(dog.birthDate, dog.ageLabel), sexLabel(dog.sex)].filter(Boolean).join(' · ');

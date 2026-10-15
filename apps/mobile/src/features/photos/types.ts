@@ -15,6 +15,16 @@ export interface AlbumPhoto {
   uploadedAt: string | null;
 }
 
+/** Keeps pagination and optimistic inserts idempotent when a page is retried. */
+export function dedupeAlbumPhotos(photos: AlbumPhoto[]): AlbumPhoto[] {
+  const seen = new Set<string>();
+  return photos.filter((photo) => {
+    if (seen.has(photo.id)) return false;
+    seen.add(photo.id);
+    return true;
+  });
+}
+
 export interface PhotoAlbum {
   id: string;
   dogId: string;

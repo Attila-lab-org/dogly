@@ -10,7 +10,6 @@ import {
   StyleSheet,
   Text,
   View,
-  type ImageSourcePropType,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +46,6 @@ import {
 } from './dogHeroCopy';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_DOG_PHOTO: ImageSourcePropType = require('../../../assets/images/rocky-avatar.png');
 
 /** Anelli stile Instagram: ruotano a ogni cambio consiglio per invitare il tap. */
 const STORY_RINGS: ReadonlyArray<readonly [string, string, string, string]> = [
@@ -363,9 +361,6 @@ export function DogHero({
 
   const headline = joyful ? JOYFUL_LINE : (tapLine ?? tip.dogLine);
   const support = !joyful && !tapLine ? tip.adviceLine : undefined;
-  const photoSource = photoUri
-    ? ({ uri: photoUri } as const)
-    : DEFAULT_DOG_PHOTO;
   const ringColors = STORY_RINGS[tipIndex % STORY_RINGS.length];
 
   const tempText =
@@ -391,11 +386,13 @@ export function DogHero({
             style={styles.photoRing}
           >
             <View style={styles.photoInner}>
-              <Image
-                source={photoSource}
-                style={styles.photo}
-                resizeMode="cover"
-              />
+              {photoUri ? (
+                <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+              ) : (
+                <View style={styles.photoPlaceholder} accessibilityLabel="Nessuna foto del cane">
+                  <Ionicons name="paw" size={28} color={colors.primary} />
+                </View>
+              )}
             </View>
           </LinearGradient>
         </Pressable>
@@ -518,6 +515,13 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: '100%',
+  },
+  photoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
   },
   copy: {
     flex: 1,
