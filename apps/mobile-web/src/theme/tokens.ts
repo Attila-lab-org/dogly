@@ -1,30 +1,32 @@
 /**
  * Design tokens — UX_REFERENCE V1 (app chiara, cliente-first).
+ * Allineati a apps/mobile (parity brand).
  * Logo Dogly = splash / app icon, non stampato sulle schermate quotidiane.
  */
 
 export const colors = {
-  background: '#F8FAFC',
+  background: '#F4F7FB',
   surface: '#FFFFFF',
   surfaceMuted: '#F1F5F9',
 
-  primary: '#0050D8',
-  primaryPressed: '#003FA8',
-  primaryBright: '#01AEC5',
+  primary: '#2563EB',
+  primaryPressed: '#1D4ED8',
+  primaryBright: '#38BDF8',
   primarySoft: '#DBEAFE',
 
-  accent: '#2DAAAB',
-  accentPressed: '#269394',
-  accentSoft: '#E0F7F6',
-
-  teal: '#2DAAAB',
-  tealSoft: '#E0F7F6',
+  accent: '#14B8A6',
+  accentPressed: '#0D9488',
+  accentSoft: '#CCFBF1',
+  // Alias teal usati da alcune schermate (come nei token web).
+  teal: '#14B8A6',
+  tealSoft: '#CCFBF1',
+  // Accento corallo caldo (pareggio coi token web).
   coral: '#FF8B74',
   coralSoft: '#FFF1EE',
   lavenderSoft: '#EEF2FF',
   curveHeader: '#DDF2F8',
 
-  text: '#1A2B48',
+  text: '#0E2A47',
   textSecondary: '#64748B',
   // Minimum readable muted text on white/light surfaces (WCAG AA).
   textMuted: '#64748B',
@@ -40,16 +42,16 @@ export const colors = {
   warning: '#F59E0B',
   warningSoft: '#FEF3C7',
 
-  border: '#EDF2F7',
-  overlay: 'rgba(26, 43, 72, 0.4)',
-  overlayDark: 'rgba(26, 43, 72, 0.7)',
+  border: '#E2E8F0',
+  overlay: 'rgba(14, 42, 71, 0.4)',
+  overlayDark: 'rgba(14, 42, 71, 0.7)',
   overlayLight: 'rgba(255, 255, 255, 0.4)',
   iconHighlight: '#F5C518',
 } as const;
 
 export const gradients = {
-  cta: ['#0050D8', '#01AEC5'] as const,
-  header: ['#0050D8', '#01AEC5'] as const,
+  cta: [colors.primary, colors.primaryBright] as const,
+  header: [colors.primary, colors.primaryBright] as const,
   authWash: ['#E0F2FE', '#F8FAFC', '#FFFFFF'] as const,
 } as const;
 

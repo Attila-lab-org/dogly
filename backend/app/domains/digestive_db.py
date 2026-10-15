@@ -199,7 +199,7 @@ async def init_fecal_event(
         content_type=payload.content_type,
         ttl_seconds=settings.storage_signed_url_ttl_seconds,
     )
-    return event, url, expires, True
+    return event, url, expires, bool(event.quota_reserved)
 
 
 async def complete_fecal_event(

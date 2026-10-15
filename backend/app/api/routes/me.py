@@ -60,7 +60,12 @@ async def patch_consents(
 @router.get("/me", response_model=MeResponse)
 async def get_me(state: StateDep, user_id: UserIdDep) -> MeResponse:
     profile, sub, ledger = await _load_me(state, user_id)
-    return _me_response(profile, sub, ledger)
+    return _me_response(
+        profile,
+        sub,
+        ledger,
+        ask_live=bool(state.settings.realtime_enabled),
+    )
 
 
 @router.patch("/me", response_model=MeResponse)
@@ -72,7 +77,12 @@ async def patch_me(
     else:
         profiles_domain.update_profile(state.store, user_id, payload)
     profile, sub, ledger = await _load_me(state, user_id)
-    return _me_response(profile, sub, ledger)
+    return _me_response(
+        profile,
+        sub,
+        ledger,
+        ask_live=bool(state.settings.realtime_enabled),
+    )
 
 
 async def _load_me(
@@ -91,7 +101,11 @@ async def _load_me(
 
 
 def _me_response(
-    profile: ProfileRec, sub: SubscriptionRec, ledger: UsageLedgerRec
+    profile: ProfileRec,
+    sub: SubscriptionRec,
+    ledger: UsageLedgerRec,
+    *,
+    ask_live: bool,
 ) -> MeResponse:
     limits = plan_limits(sub.plan)
     premium = sub.plan != "FREE" and sub.status == "active"
@@ -128,10 +142,11 @@ def _me_response(
             "reset_at": ledger.reset_at,
         },
         # Feature availability is backend-owned (sez. 4.1: no hardcoded UI rules).
+        # ask_live must mirror REALTIME_ENABLED — never advertise a dead Ask path.
         feature_availability={
             "full_diary": premium,
             "pattern_insights": premium,
             "nutrition_insights": premium,
-            "ask_live": True,
+            "ask_live": ask_live,
         },
     )

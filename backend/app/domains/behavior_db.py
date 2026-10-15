@@ -210,7 +210,7 @@ async def init_capture(
         content_type=payload.content_type,
         ttl_seconds=settings.storage_signed_url_ttl_seconds,
     )
-    return capture, event, url, expires, True
+    return capture, event, url, expires, bool(event.quota_reserved)
 
 
 

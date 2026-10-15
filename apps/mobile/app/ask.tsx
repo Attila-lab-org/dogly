@@ -526,8 +526,14 @@ export default function AskScreen() {
       await rememberRealtimeSession(session, withUpload);
     } catch (err) {
       setMediaPhase(null);
-      if (isQuotaExhaustedError(err) && purchasesEnabled) {
-        router.replace('/paywall');
+      if (isQuotaExhaustedError(err)) {
+        if (purchasesEnabled) {
+          router.replace('/paywall');
+          return;
+        }
+        setError(
+          'Hai esaurito le analisi del mese. Gli acquisti arriveranno a breve — non è un problema di connessione.',
+        );
         return;
       }
       setError('Non sono riuscito a scattare o caricare la foto. Riprova.');
@@ -633,8 +639,14 @@ export default function AskScreen() {
         await rememberRealtimeSession(session, withUpload);
       } catch (err) {
         setMediaPhase(null);
-        if (isQuotaExhaustedError(err) && purchasesEnabled) {
-          router.replace('/paywall');
+        if (isQuotaExhaustedError(err)) {
+          if (purchasesEnabled) {
+            router.replace('/paywall');
+            return;
+          }
+          setError(
+            'Hai esaurito le analisi del mese. Gli acquisti arriveranno a breve — non è un problema di connessione.',
+          );
           return;
         }
         setError('Non sono riuscito a caricare il video. Riprova.');

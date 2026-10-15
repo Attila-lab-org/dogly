@@ -155,8 +155,17 @@ export default function BehaviorUploadingScreen() {
       }
     } catch (err) {
       console.error('Behavior upload failed', err);
-      if (isQuotaExhaustedError(err) && purchasesEnabled) {
-        if (mountedRef.current) router.replace('/paywall');
+      if (isQuotaExhaustedError(err)) {
+        if (purchasesEnabled) {
+          if (mountedRef.current) router.replace('/paywall');
+          return;
+        }
+        startedRef.current = false;
+        if (mountedRef.current) {
+          setError(
+            'Hai esaurito le analisi del mese. Gli acquisti arriveranno a breve.',
+          );
+        }
         return;
       }
       startedRef.current = false;

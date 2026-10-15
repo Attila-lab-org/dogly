@@ -103,8 +103,12 @@ export default function DigestiveCaptureScreen() {
         },
       } as never);
     } catch (err) {
-      if (isQuotaExhaustedError(err) && purchasesEnabled) {
-        router.replace('/paywall');
+      if (isQuotaExhaustedError(err)) {
+        if (purchasesEnabled) {
+          router.replace('/paywall');
+          return;
+        }
+        setPhase('upload_failed');
         return;
       }
       setPhase('upload_failed');

@@ -280,10 +280,10 @@ export const subscriptionMock: SubscriptionState = {
   },
 };
 
-/** Consensi separati (sez. 23.1): ricerca/training OFF di default. */
+/** Consensi separati (sez. 23.1): ricerca/training e notifiche OFF di default. */
 export const consentsMock: ConsentState = {
   service: true,
   researchTraining: false,
-  notifications: true,
+  notifications: false,
   keepClip: false,
 };
