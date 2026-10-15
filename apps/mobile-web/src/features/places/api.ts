@@ -44,6 +44,8 @@ export function fetchNearbyPlaces(options: {
   kind?: 'PARK' | 'VET';
   /** Default backend 8km; alza per zone sparse. */
   radius_m?: number;
+  /** Pronto soccorso / cliniche 24h (forza ricerca vet urgente). */
+  purpose?: 'default' | 'emergency';
 }) {
   const params = new URLSearchParams({
     lat: String(options.lat),
@@ -51,6 +53,9 @@ export function fetchNearbyPlaces(options: {
     radius_m: String(options.radius_m ?? 12_000),
   });
   if (options.kind) params.set('kind', options.kind);
+  if (options.purpose && options.purpose !== 'default') {
+    params.set('purpose', options.purpose);
+  }
   return api.get<{ items: NearbyPlace[]; location_label: string | null }>(
     `/v1/places/nearby?${params.toString()}`,
     { timeoutMs: PLACES_TIMEOUT_MS },
@@ -70,6 +75,18 @@ async function readExpoLocation(): Promise<DeviceLocationResult> {
     const Location = await import('expo-location');
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== 'granted') return { ok: false, reason: 'denied' };
+    try {
+      const last = await Location.getLastKnownPositionAsync();
+      if (last && Date.now() - last.timestamp < 10 * 60_000) {
+        return {
+          ok: true,
+          lat: last.coords.latitude,
+          lng: last.coords.longitude,
+        };
+      }
+    } catch {
+      // fall through
+    }
     const current = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
@@ -81,6 +98,12 @@ async function readExpoLocation(): Promise<DeviceLocationResult> {
   } catch {
     return { ok: false, reason: 'unavailable' };
   }
+}
+
+/** GPS aggressivo per schermate di emergenza (timeout corto). */
+export async function readDeviceLocationFast(): Promise<DeviceLocationResult> {
+  const timedOut: DeviceLocationResult = { ok: false, reason: 'timeout' };
+  return withTimeout(readDeviceLocationResult(), 3_500, () => timedOut);
 }
 
 async function readBrowserLocation(): Promise<DeviceLocationResult> {

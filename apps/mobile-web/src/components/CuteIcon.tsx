@@ -32,9 +32,10 @@ export const CUTE_ICON_NAMES = [
   'bowl',
   'question',
   'search',
-  // luoghi utili
+  // luoghi utili / cura
   'leaf',
   'heart',
+  'doctor',
 ] as const;
 
 export type CuteIconName = (typeof CUTE_ICON_NAMES)[number];
@@ -395,6 +396,24 @@ function renderGlyph(
             fill={color}
           />
           <Circle cx={8.4} cy={8.6} r={1.5} fill={secondary} opacity={0.45} />
+        </>
+      );
+    case 'doctor':
+      return (
+        <>
+          <Ellipse cx={12} cy={14.2} rx={6.2} ry={5.4} fill={color} />
+          <Circle cx={7.2} cy={9.2} r={2.4} fill={color} />
+          <Circle cx={16.8} cy={9.2} r={2.4} fill={color} />
+          <Circle cx={10} cy={13.4} r={1.15} fill={secondary} />
+          <Circle cx={14} cy={13.4} r={1.15} fill={secondary} />
+          <Ellipse cx={12} cy={16.2} rx={1.5} ry={1.1} fill={secondary} />
+          <Rect x={9.2} y={3.2} width={5.6} height={5.6} rx={1.4} fill={secondary} />
+          <Path
+            d="M12 4.4 V7.6 M10.4 6 H13.6"
+            stroke="#FFFFFF"
+            strokeWidth={1.7}
+            strokeLinecap="round"
+          />
         </>
       );
   }

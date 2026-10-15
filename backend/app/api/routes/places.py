@@ -20,7 +20,8 @@ async def nearby_places(
     lng: float = Query(..., ge=-180, le=180),
     kind: Literal["PARK", "VET"] | None = None,
     radius_m: int = Query(default=8000, ge=500, le=30000),
+    purpose: Literal["default", "emergency"] = Query(default="default"),
 ) -> NearbyPlacesResponse:
     return await places_domain.search_nearby(
-        lat=lat, lng=lng, kind=kind, radius_m=radius_m
+        lat=lat, lng=lng, kind=kind, radius_m=radius_m, purpose=purpose
     )

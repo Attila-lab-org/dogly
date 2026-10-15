@@ -35,7 +35,14 @@ DEFAULT_RADIUS_M = 8_000
 
 # Text queries tuned for IT; dog_park first, then generic parks as fill.
 _VET_QUERIES = ("clinica veterinaria", "veterinario")
+_EMERGENCY_VET_QUERIES = (
+    "pronto soccorso veterinario",
+    "clinica veterinaria 24 ore",
+    "ospedale veterinario",
+)
 _PARK_QUERIES = ("area cani", "dog park", "sgambamento cani", "parco")
+
+Purpose = Literal["default", "emergency"]
 
 _VET_TYPES = frozenset({"veterinary_care"})
 _PARK_TYPES = frozenset({"dog_park", "park"})
@@ -230,8 +237,14 @@ async def _fetch_kind(
     kind: Kind,
     radius_m: int,
     api_key: str,
+    purpose: Purpose = "default",
 ) -> list[_PlaceHit]:
-    queries = _VET_QUERIES if kind == "VET" else _PARK_QUERIES
+    if kind == "VET":
+        queries = (
+            _EMERGENCY_VET_QUERIES if purpose == "emergency" else _VET_QUERIES
+        )
+    else:
+        queries = _PARK_QUERIES
     async with httpx.AsyncClient(timeout=12.0) as client:
         batches = await asyncio.gather(
             *[
@@ -301,15 +314,26 @@ async def _search_kind_with_widen(
     kind: Kind,
     radius_m: int,
     api_key: str,
+    purpose: Purpose = "default",
 ) -> list[_PlaceHit]:
     items = await _fetch_kind(
-        lat=lat, lng=lng, kind=kind, radius_m=radius_m, api_key=api_key
+        lat=lat,
+        lng=lng,
+        kind=kind,
+        radius_m=radius_m,
+        api_key=api_key,
+        purpose=purpose,
     )
     if items:
         return items
     wide = max(radius_m * 2, 20_000)
     return await _fetch_kind(
-        lat=lat, lng=lng, kind=kind, radius_m=wide, api_key=api_key
+        lat=lat,
+        lng=lng,
+        kind=kind,
+        radius_m=wide,
+        api_key=api_key,
+        purpose=purpose,
     )
 
 
@@ -319,6 +343,7 @@ async def search_nearby(
     lng: float,
     kind: Kind | None = None,
     radius_m: int = DEFAULT_RADIUS_M,
+    purpose: Purpose = "default",
 ) -> NearbyPlacesResponse:
     api_key = _api_key()
     if not api_key:
@@ -328,8 +353,11 @@ async def search_nearby(
             retryable=True,
         )
 
+    # Emergency mode always searches vets (24h / pronto soccorso).
+    effective_kind: Kind | None = "VET" if purpose == "emergency" else kind
+
     try:
-        if kind is None:
+        if effective_kind is None:
             parks, vets = await asyncio.gather(
                 _search_kind_with_widen(
                     lat=lat, lng=lng, kind="PARK", radius_m=radius_m, api_key=api_key
@@ -341,7 +369,12 @@ async def search_nearby(
             unique = _merge_balanced(parks, vets)
         else:
             items = await _search_kind_with_widen(
-                lat=lat, lng=lng, kind=kind, radius_m=radius_m, api_key=api_key
+                lat=lat,
+                lng=lng,
+                kind=effective_kind,
+                radius_m=radius_m,
+                api_key=api_key,
+                purpose=purpose,
             )
             unique = _dedupe(items, limit=RESULT_LIMIT)
     except ApiError:

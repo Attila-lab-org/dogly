@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { CuteIcon } from '@/components/CuteIcon';
 import { DogHero } from '@/features/home/DogHero';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useHomeData } from '@/features/home/useHomeData';
@@ -65,12 +66,12 @@ export default function HomeScreen() {
             <View style={styles.headerActions}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Apri Social"
-                onPress={() => router.push('/social' as never)}
+                accessibilityLabel="Aiuto rapido: veterinario e numeri utili"
+                onPress={() => router.push('/care' as never)}
                 hitSlop={12}
-                style={styles.headerIcon}
+                style={[styles.headerIcon, styles.careIcon]}
               >
-                <Ionicons name="people-outline" size={22} color={colors.primary} />
+                <CuteIcon name="doctor" size={22} color="#0D9488" secondary="#0E2A47" />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -296,6 +297,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.background,
   },
+  careIcon: { backgroundColor: colors.accentSoft },
   headerAvatar: { width: 34, height: 34, borderRadius: 17 },
   momentsRow: { flexDirection: 'row', gap: 10 },
   moment: { flex: 1, minWidth: 0, gap: 6 },

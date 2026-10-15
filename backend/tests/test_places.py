@@ -82,8 +82,8 @@ def test_parse_filters_pharmacies_parking_and_distance():
 async def test_search_nearby_uses_google_for_both_kinds(monkeypatch):
     calls: list[str] = []
 
-    async def fake_fetch(*, lat, lng, kind, radius_m, api_key):
-        del lat, lng, radius_m, api_key
+    async def fake_fetch(*, lat, lng, kind, radius_m, api_key, purpose="default"):
+        del lat, lng, radius_m, api_key, purpose
         calls.append(kind)
         payload = GOOGLE_PARK_PAYLOAD if kind == "PARK" else GOOGLE_VET_PAYLOAD
         return places_domain._parse_places(
@@ -99,11 +99,32 @@ async def test_search_nearby_uses_google_for_both_kinds(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_emergency_purpose_searches_vets_only(monkeypatch):
+    purposes: list[str] = []
+
+    async def fake_fetch(*, lat, lng, kind, radius_m, api_key, purpose="default"):
+        del lat, lng, radius_m, api_key
+        purposes.append(purpose)
+        assert kind == "VET"
+        return places_domain._parse_places(
+            GOOGLE_VET_PAYLOAD, lat=45.46, lng=9.19, kind="VET", radius_m=5000
+        )
+
+    monkeypatch.setattr(places_domain, "_api_key", lambda: "test-key")
+    monkeypatch.setattr(places_domain, "_fetch_kind", fake_fetch)
+    result = await places_domain.search_nearby(
+        lat=45.46, lng=9.19, purpose="emergency"
+    )
+    assert purposes == ["emergency"]
+    assert all(item.kind == "VET" for item in result.items)
+
+
+@pytest.mark.asyncio
 async def test_search_nearby_widens_when_empty(monkeypatch):
     radii: list[int] = []
 
-    async def fake_fetch(*, lat, lng, kind, radius_m, api_key):
-        del lat, lng, kind, api_key
+    async def fake_fetch(*, lat, lng, kind, radius_m, api_key, purpose="default"):
+        del lat, lng, kind, api_key, purpose
         radii.append(radius_m)
         if radius_m < 10_000:
             return []
@@ -148,8 +169,8 @@ async def test_search_nearby_errors_when_google_fails(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_park_only_keeps_many_parks(monkeypatch):
-    async def fake_fetch(*, lat, lng, kind, radius_m, api_key):
-        del lat, lng, radius_m, api_key
+    async def fake_fetch(*, lat, lng, kind, radius_m, api_key, purpose="default"):
+        del lat, lng, radius_m, api_key, purpose
         assert kind == "PARK"
         return [
             _PlaceHit(
