@@ -22,6 +22,7 @@ from app.api.routes import (
     digestive,
     dogs,
     gallery,
+    games,
     me,
     nutrition,
     owner_stories,
@@ -170,6 +171,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.include_router(advice.router, prefix="/v1", tags=["advice"])
     app.include_router(dogs.router, prefix="/v1", tags=["dogs"])
     app.include_router(gallery.router, prefix="/v1", tags=["gallery"])
+    app.include_router(games.router, prefix="/v1", tags=["games"])
     app.include_router(care.router, prefix="/v1", tags=["care-agenda"])
     app.include_router(daily_activities.router, prefix="/v1", tags=["daily-routine"])
     app.include_router(places.router, prefix="/v1", tags=["places"])

@@ -4,9 +4,13 @@
  * per fascia, best score persistito per cane (storage iniettabile).
  */
 import {
+  COMMENTARY_GOLDEN,
+  COMMENTARY_HEDGEHOG,
+  COMMENTARY_HIT_LINES,
   SQUIRREL_GAME_DURATION_MS,
   applyScore,
   buildSpawnSchedule,
+  commentaryFor,
   loadSquirrelBest,
   saveSquirrelBest,
   scoreFor,
@@ -114,6 +118,17 @@ describe('endgame lines', () => {
     expect(squirrelEndgameLine(6)).toContain('parco');
     expect(squirrelEndgameLine(12)).toContain('parco');
     expect(squirrelEndgameLine(13)).toContain('trofeo');
+  });
+});
+
+describe('commentary', () => {
+  it('golden and hedgehog have fixed lines, squirrel rotates hit lines', () => {
+    expect(commentaryFor('golden')).toBe(COMMENTARY_GOLDEN);
+    expect(commentaryFor('hedgehog')).toBe(COMMENTARY_HEDGEHOG);
+    expect(commentaryFor('squirrel', () => 0)).toBe(COMMENTARY_HIT_LINES[0]);
+    expect(commentaryFor('squirrel', () => 0.999)).toBe(
+      COMMENTARY_HIT_LINES[COMMENTARY_HIT_LINES.length - 1],
+    );
   });
 });
 

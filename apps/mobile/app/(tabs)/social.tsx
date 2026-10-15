@@ -14,6 +14,7 @@ import {
   getOrCreateMomentsAlbum,
 } from '@/features/photos/api';
 import { StoryRail } from '@/features/social/StoryRail';
+import { GamesSection } from '@/features/social/GamesSection';
 import { NearbyPlacesSection } from '@/features/social/NearbyPlacesSection';
 import { getLastSeenPhotoId } from '@/features/social/storySeen';
 
@@ -88,7 +89,7 @@ export default function SocialScreen() {
           <Text style={styles.eyebrow}>SOCIAL</Text>
           <Text style={styles.title}>Il mondo di {dog.name}</Text>
           <Text style={styles.subtitle}>
-            Storie dai Momenti e luoghi utili vicino a voi.
+            Storie, giochi del quartiere e luoghi utili vicino a voi.
           </Text>
         </View>
 
@@ -101,6 +102,8 @@ export default function SocialScreen() {
           onOpenStory={openStory}
           onUploaded={onUploaded}
         />
+
+        <GamesSection />
 
         <View style={styles.divider} />
 

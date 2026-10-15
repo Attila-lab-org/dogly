@@ -87,6 +87,31 @@ export function squirrelEndgameLine(score: number): string {
   return 'SCOIA-TTO-LO! Domani gli porto il trofeo.';
 }
 
+/** Telecronaca di Oreo durante la partita (chip sopra il campo). */
+export const COMMENTARY_START = 'Pronti? Gli scoiattoli non aspettano!';
+export const COMMENTARY_FINAL_SECONDS = 'Corri corri!';
+export const COMMENTARY_HIT_LINES: readonly string[] = [
+  'Preso!',
+  'Che riflessi!',
+  'Questo non scappava!',
+];
+export const COMMENTARY_GOLDEN = 'DORATO! +3!';
+export const COMMENTARY_HEDGEHOG = 'No! Quello è un amico!';
+export const COMMENTARY_MISS_LINES: readonly string[] = [
+  'Ah, rientrato…',
+  'Veloce quel furbetto!',
+];
+
+export function commentaryFor(kind: CreatureKind, random: () => number = Math.random): string {
+  if (kind === 'golden') return COMMENTARY_GOLDEN;
+  if (kind === 'hedgehog') return COMMENTARY_HEDGEHOG;
+  const index = Math.min(
+    COMMENTARY_HIT_LINES.length - 1,
+    Math.floor(random() * COMMENTARY_HIT_LINES.length),
+  );
+  return COMMENTARY_HIT_LINES[index];
+}
+
 /* ------------------------------------------------------------------ */
 /* Best score per cane (pattern checkin/persistence: backend iniettabile) */
 /* ------------------------------------------------------------------ */

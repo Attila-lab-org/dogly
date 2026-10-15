@@ -13,7 +13,6 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { isPersistedId } from '@/lib/persistedId';
 import { usePersonalPatterns } from '@/features/patterns/api';
 import { DogCareOverview } from '@/features/dogs/DogCareOverview';
-import { CuteIcon } from '@/components/CuteIcon';
 import { colors } from '@/theme/tokens';
 
 export default function DogProfileTabScreen() {
@@ -44,16 +43,6 @@ export default function DogProfileTabScreen() {
           </View>
           {extraMeta ? <Text style={styles.extraMeta}>{extraMeta}</Text> : null}
           <DogCareOverview dogId={dog.id} dogName={dog.name} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Apri i giochi da fare con ${dog.name}`}
-            onPress={() => router.push('/games' as never)}
-            style={styles.gamesCard}
-          >
-            <View style={styles.gamesIcon}><CuteIcon name="play" size={22} color={colors.accent} secondary={colors.accentSoft} /></View>
-            <View style={styles.identityCopy}><Text style={styles.linkTitle}>Giochi insieme</Text><Text style={styles.meta}>Scoiattolo! e altre sfide da tre minuti</Text></View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>I suoi momenti</Text><Pressable accessibilityRole="button" accessibilityLabel="Apri album" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} style={styles.pill}><Text style={styles.pillText}>Apri album</Text></Pressable></View>
           {photos.isLoading ? <Text style={styles.emptyText}>Carico i suoi momenti…</Text> : photos.isError ? <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.pillText}>Non riesco a caricare le foto · Riprova</Text></Pressable> : (photos.data ?? []).length > 0 ? <View style={styles.photoRow}>{(photos.data ?? []).slice(0, 3).map((photo) => <PhotoThumbnail key={photo.id} photo={photo} size={photoSize} onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never)} />)}</View> : <ProfileLink icon="images-outline" title="Aggiungi una foto" detail="I vostri momenti preferiti" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} />}
           {learned.length > 0 || (patterns.live && (patterns.isLoading || patterns.isError)) ? (
@@ -118,8 +107,6 @@ const styles = StyleSheet.create({
   photoRow: { flexDirection: 'row', gap: 8 },
   card: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 14 },
   link: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  gamesCard: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  gamesIcon: { width: 44, height: 44, borderRadius: 999, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   linkTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   patternRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52 },
   patternText: { flex: 1, color: colors.text, fontSize: 14, lineHeight: 20 },

@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import Animated, {
   Easing,
+  FadeIn,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -29,16 +30,25 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { DogAvatar } from '@/features/core/components';
 import { SquirrelArt, type SquirrelArtVariant } from '@/features/games/squirrelArt';
 import {
+  COMMENTARY_FINAL_SECONDS,
+  COMMENTARY_MISS_LINES,
+  COMMENTARY_START,
   SQUIRREL_GAME_DURATION_MS,
   SQUIRREL_HOLES,
   applyScore,
   buildSpawnSchedule,
+  commentaryFor,
   loadSquirrelBest,
   saveSquirrelBest,
   squirrelEndgameLine,
   type CreatureKind,
   type SpawnEvent,
 } from '@/features/games/squirrelLogic';
+import { fetchGameLeaderboard, submitGameScore } from '@/features/games/api';
+import { shareSquirrelResult } from '@/features/games/shareScoreCard';
+import { useSession } from '@/features/auth/SessionProvider';
+import { isApiConfigured } from '@/features/auth/env';
+import { isPersistedId } from '@/lib/persistedId';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 
 type Phase = 'intro' | 'playing' | 'done';
@@ -110,7 +120,7 @@ function HoleCreature({
     return {
       opacity: 1 - out * (caught === 'hit' ? 1 : 0.6),
       transform: [
-        { translateY: (1 - up) * 64 + out * 40 },
+        { translateY: (1 - up) * 72 + out * 44 },
         { rotate: `${wiggle.value}deg` },
         { scaleY: up * (1 - out * 0.35) },
         { scaleX: up * (1 + out * 0.25) },
@@ -120,7 +130,7 @@ function HoleCreature({
 
   return (
     <Animated.View pointerEvents="none" style={[styles.creature, style]}>
-      <SquirrelArt variant={spawn.kind as SquirrelArtVariant} size={58} />
+      <SquirrelArt variant={spawn.kind as SquirrelArtVariant} size={66} />
     </Animated.View>
   );
 }
@@ -139,7 +149,14 @@ function ScorePopup({ popup, reducedMotion }: { popup: Popup; reducedMotion: boo
   }));
   const negative = popup.kind === 'hedgehog';
   return (
-    <Animated.View pointerEvents="none" style={[styles.popup, style]}>
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.popup,
+        negative ? styles.popupBad : popup.kind === 'golden' ? styles.popupGold : styles.popupGood,
+        style,
+      ]}
+    >
       <Text
         style={[
           styles.popupText,
@@ -152,62 +169,66 @@ function ScorePopup({ popup, reducedMotion }: { popup: Popup; reducedMotion: boo
   );
 }
 
-/** Il cane in campo: scatta verso la buca colpita, felice o deluso. */
-function DogPlayer({
+/** Oreo telecronista: chip foto + fumetto di reazione (fade, max ~2s). */
+function Commentator({
   photoUri,
   dogName,
-  cue,
-  reducedMotion,
+  line,
 }: {
   photoUri: string | null;
   dogName: string;
-  cue: { holeIndex: number; kind: CreatureKind; tick: number } | null;
-  reducedMotion: boolean;
+  line: { id: number; text: string } | null;
 }) {
-  const lungeX = useSharedValue(0);
-  const bounce = useSharedValue(0);
-  const shake = useSharedValue(0);
-
-  useEffect(() => {
-    if (!cue || reducedMotion) return;
-    const column = (cue.holeIndex % 3) - 1;
-    lungeX.value = withSequence(
-      withTiming(column * 26, { duration: 130, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 420, easing: Easing.inOut(Easing.quad) }),
-    );
-    if (cue.kind === 'hedgehog') {
-      shake.value = withSequence(
-        withTiming(-6, { duration: 90 }),
-        withTiming(6, { duration: 110 }),
-        withTiming(-4, { duration: 110 }),
-        withTiming(0, { duration: 90 }),
-      );
-    } else {
-      bounce.value = withSequence(
-        withSpring(1.16, { damping: 5, stiffness: 240 }),
-        withSpring(1, { damping: 8, stiffness: 180 }),
-      );
-    }
-  }, [cue, reducedMotion, lungeX, bounce, shake]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: lungeX.value },
-      { scale: 1 + (bounce.value > 0 ? bounce.value - 1 : 0) },
-      { rotate: `${shake.value}deg` },
-    ],
-  }));
-
   return (
-    <Animated.View pointerEvents="none" style={[styles.dogPlayer, style]}>
-      {photoUri ? (
-        <View style={styles.dogRing}>
-          <DogAvatar size={64} photoUri={photoUri} dogName={dogName} />
-        </View>
-      ) : (
-        <DogIllustration size={92} mood="welcome" />
-      )}
-    </Animated.View>
+    <View style={styles.commentator} pointerEvents="none">
+      <View style={styles.commentatorAvatar}>
+        {photoUri ? (
+          <DogAvatar size={40} photoUri={photoUri} dogName={dogName} />
+        ) : (
+          <DogIllustration size={46} mood="welcome" />
+        )}
+      </View>
+      {line ? (
+        <Animated.View
+          key={line.id}
+          entering={FadeIn.duration(180)}
+          style={styles.commentatorBubble}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.commentatorText} numberOfLines={2}>
+            {line.text}
+          </Text>
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Fiorellini statici sul prato (decorazione, nessuna animazione). */
+function FieldFlowers() {
+  return (
+    <Svg
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+      viewBox="0 0 400 400"
+      preserveAspectRatio="xMidYMax slice"
+    >
+      {[
+        { x: 36, y: 236, c: '#F5A8C0' },
+        { x: 178, y: 268, c: '#FFFFFF' },
+        { x: 330, y: 244, c: '#F5C94C' },
+        { x: 96, y: 320, c: '#FFFFFF' },
+        { x: 262, y: 330, c: '#F5A8C0' },
+        { x: 366, y: 312, c: '#FFFFFF' },
+      ].map((flower, index) => (
+        <Path
+          key={index}
+          d={`M${flower.x} ${flower.y} m0 -4 c2 -3 6 -1 4 2 c3 -2 5 2 2 4 c2 3 -2 6 -4 3 c-2 3 -6 1 -4 -2 c-3 2 -5 -2 -2 -4 c-2 -3 2 -6 4 -1 Z`}
+          fill={flower.c}
+          opacity={0.85}
+        />
+      ))}
+    </Svg>
   );
 }
 
@@ -222,13 +243,31 @@ export default function SquirrelGameScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [active, setActive] = useState<ReadonlyMap<number, ActiveCreature>>(new Map());
   const [popups, setPopups] = useState<Popup[]>([]);
-  const [dogCue, setDogCue] = useState<{ holeIndex: number; kind: CreatureKind; tick: number } | null>(null);
+  const [commentary, setCommentary] = useState<{ id: number; text: string } | null>(null);
   const [shownScore, setShownScore] = useState(0);
+  const [weekRank, setWeekRank] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareDone, setShareDone] = useState(false);
+
+  const { userId, usingMockGate } = useSession();
+  const realEnabled =
+    Boolean(userId) && isApiConfigured() && !usingMockGate && isPersistedId(dog.id);
+  const commentarySeq = useRef(0);
+  const commentaryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saidFinalSeconds = useRef(false);
 
   const schedule = useRef<SpawnEvent[]>([]);
   const startedAt = useRef(0);
   const popupSeq = useRef(0);
-  const cueTick = useRef(0);
+  const lastMissCommentAt = useRef(0);
+
+  const say = (text: string) => {
+    commentarySeq.current += 1;
+    setCommentary({ id: commentarySeq.current, text });
+    if (commentaryTimer.current) clearTimeout(commentaryTimer.current);
+    commentaryTimer.current = setTimeout(() => setCommentary(null), 2000);
+  };
 
   useEffect(() => {
     void loadSquirrelBest(dog.id).then(setBest);
@@ -246,7 +285,11 @@ export default function SquirrelGameScreen() {
     setElapsed(0);
     setActive(new Map());
     setPopups([]);
+    setWeekRank(null);
+    setShareDone(false);
     setPhase('playing');
+    saidFinalSeconds.current = false;
+    say(COMMENTARY_START);
     timeBar.value = 0;
     timeBar.value = withTiming(1, {
       duration: SQUIRREL_GAME_DURATION_MS,
@@ -260,12 +303,34 @@ export default function SquirrelGameScreen() {
     const timer = setInterval(() => {
       const now = Date.now() - startedAt.current;
       setElapsed(now);
+      if (
+        !saidFinalSeconds.current &&
+        now >= SQUIRREL_GAME_DURATION_MS - 5000 &&
+        now < SQUIRREL_GAME_DURATION_MS
+      ) {
+        saidFinalSeconds.current = true;
+        say(COMMENTARY_FINAL_SECONDS);
+      }
       if (now >= SQUIRREL_GAME_DURATION_MS) {
         clearInterval(timer);
         setActive(new Map());
         setPhase('done');
         setScore((finalScore) => {
           void saveSquirrelBest(finalScore, dog.id).then(setBest);
+          if (realEnabled) {
+            setSubmitting(true);
+            void (async () => {
+              try {
+                await submitGameScore(dog.id, finalScore);
+                const board = await fetchGameLeaderboard();
+                setWeekRank(board.me?.rank ?? null);
+              } catch {
+                setWeekRank(null);
+              } finally {
+                setSubmitting(false);
+              }
+            })();
+          }
           return finalScore;
         });
         return;
@@ -287,6 +352,17 @@ export default function SquirrelGameScreen() {
             now > existing.spawn.spawnAtMs + existing.spawn.visibleMs
           ) {
             next.set(existing.spawn.holeIndex, { ...existing, caught: 'missed' });
+            if (
+              now - lastMissCommentAt.current > 4200 &&
+              Math.random() < 0.35
+            ) {
+              lastMissCommentAt.current = now;
+              const line =
+                COMMENTARY_MISS_LINES[
+                  Math.floor(Math.random() * COMMENTARY_MISS_LINES.length)
+                ];
+              say(line);
+            }
           }
           // pulizia creature in uscita
           if (
@@ -325,10 +401,9 @@ export default function SquirrelGameScreen() {
     if (phase !== 'playing') return;
     const entry = active.get(holeIndex);
     if (!entry || entry.caught !== 'none') return;
-    cueTick.current += 1;
     popupSeq.current += 1;
     setScore((value) => applyScore(value, entry.spawn.kind));
-    setDogCue({ holeIndex, kind: entry.spawn.kind, tick: cueTick.current });
+    say(commentaryFor(entry.spawn.kind));
     setPopups((list) => [
       ...list,
       {
@@ -396,6 +471,7 @@ export default function SquirrelGameScreen() {
 
       {phase === 'playing' ? (
         <View style={styles.gameWrap}>
+          <Commentator photoUri={dog.photoUri} dogName={dog.name} line={commentary} />
           <View style={styles.hud}>
             <View style={styles.hudScore} accessibilityLabel={`Punteggio ${score}`}>
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
@@ -417,6 +493,7 @@ export default function SquirrelGameScreen() {
               end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
+            <FieldFlowers />
             {HILLS.map((d, index) => (
               <View key={index} pointerEvents="none" style={styles.hill}>
                 <Svg width={760} height={90} viewBox="0 0 760 90">
@@ -461,12 +538,6 @@ export default function SquirrelGameScreen() {
               })}
             </View>
 
-            <DogPlayer
-              photoUri={dog.photoUri}
-              dogName={dog.name}
-              cue={dogCue}
-              reducedMotion={reducedMotion}
-            />
           </View>
         </View>
       ) : null}
@@ -481,14 +552,58 @@ export default function SquirrelGameScreen() {
             </Text>
           </View>
           {score >= best && score > 0 ? (
-            <Text style={styles.doneBest}>Nuovo record!</Text>
+            <Text style={styles.doneBest}>Nuovo record personale!</Text>
           ) : best > 0 ? (
-            <Text style={styles.doneBestPlain}>Record: {best}</Text>
+            <Text style={styles.doneBestPlain}>Record personale: {best}</Text>
           ) : null}
+          {realEnabled ? (
+            <Text style={styles.doneRank}>
+              {submitting
+                ? 'Salvo il punteggio in classifica…'
+                : weekRank !== null
+                  ? `Posizione in settimana: #${weekRank}`
+                  : 'Punteggio in classifica.'}
+            </Text>
+          ) : (
+            <Text style={styles.doneBestPlain}>
+              Accedi per entrare nella classifica del quartiere.
+            </Text>
+          )}
           <View style={styles.doneBubble}>
             <Text style={styles.doneLine}>{squirrelEndgameLine(score)}</Text>
             <Text style={styles.doneLineAuthor}>— {dog.name}</Text>
           </View>
+          {realEnabled ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Condividi il risultato nelle storie"
+              disabled={sharing || shareDone}
+              onPress={() => {
+                setSharing(true);
+                void shareSquirrelResult({
+                  dogId: dog.id,
+                  dogName: dog.name,
+                  score,
+                  best,
+                })
+                  .then((ok) => setShareDone(ok))
+                  .finally(() => setSharing(false));
+              }}
+              style={({ pressed }) => [
+                styles.shareButton,
+                (pressed || sharing || shareDone) && styles.pressed,
+              ]}
+            >
+              <CuteIcon name="play" size={16} color={colors.primary} secondary={colors.primary} />
+              <Text style={styles.shareButtonText}>
+                {shareDone
+                  ? 'Condiviso!'
+                  : sharing
+                    ? 'Condivido…'
+                    : 'Condividi nelle storie'}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Rigioca"
@@ -628,8 +743,8 @@ const styles = StyleSheet.create({
   riserClip: {
     position: 'absolute',
     bottom: 22,
-    width: 72,
-    height: 72,
+    width: 80,
+    height: 82,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -639,25 +754,34 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   holeShadow: {
-    width: 66,
-    height: 20,
-    borderRadius: 33,
-    backgroundColor: '#5C4028',
+    width: 72,
+    height: 24,
+    borderRadius: 36,
+    backgroundColor: '#4A3320',
+    borderWidth: 3,
+    borderColor: '#6B4A2F',
   },
   holeLip: {
     position: 'absolute',
-    bottom: 0,
-    width: 76,
-    height: 12,
-    borderRadius: 38,
+    bottom: -2,
+    width: 82,
+    height: 13,
+    borderRadius: 41,
     backgroundColor: '#7A5A3A',
-    opacity: 0.9,
+    opacity: 0.95,
   },
   popup: {
     position: 'absolute',
-    top: -4,
+    top: -10,
     alignSelf: 'center',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    ...shadows.card,
   },
+  popupGood: { backgroundColor: colors.surface },
+  popupGold: { backgroundColor: '#FFF3D6' },
+  popupBad: { backgroundColor: colors.surface },
   popupText: {
     color: colors.accent,
     fontSize: typography.size.lg,
@@ -732,6 +856,58 @@ const styles = StyleSheet.create({
   doneLineAuthor: {
     color: colors.textMuted,
     fontSize: typography.size.xs,
+  },
+  commentator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.xs,
+  },
+  commentatorAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  commentatorBubble: {
+    flexShrink: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  commentatorText: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+  },
+  doneRank: {
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  shareButtonText: {
+    color: colors.primary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
   },
   pressed: { opacity: 0.88 },
 });
