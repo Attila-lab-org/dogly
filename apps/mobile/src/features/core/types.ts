@@ -63,6 +63,8 @@ export interface LastInsight {
   /** Timestamp già formattato (es. "Oggi, 09:30") */
   timestampLabel: string;
   tone: InsightTone;
+  /** Frame/foto del momento, se disponibile. */
+  mediaUri: string | null;
 }
 
 /** Domini rappresentati nella timeline unificata del Diario (sez. 5.1). */

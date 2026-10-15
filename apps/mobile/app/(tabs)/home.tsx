@@ -42,7 +42,12 @@ export default function HomeScreen() {
     useHomeData(dog.id);
   const network = useNetworkStatus();
   const { usingMockGate } = useSession();
-  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id), staleTime: 30_000 });
+  const photos = useQuery({
+    queryKey: ['gallery-dog-photos', dog.id, 8],
+    queryFn: () => fetchDogPhotos(dog.id, 8),
+    enabled: !usingMockGate && isPersistedId(dog.id),
+    staleTime: 30_000,
+  });
 
   const behaviorRemaining = usage
     ? usage.behaviorLimit - usage.behaviorUsed
@@ -169,32 +174,66 @@ export default function HomeScreen() {
           {photos.isLoading ? <Text style={styles.quota}>Carico i momenti…</Text> : photos.isError ? (
             <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.seeAll}>Non riesco a caricare le foto · Riprova</Text></Pressable>
           ) : (photos.data ?? []).length > 0 ? (
-            <View style={styles.momentsRow}>
-              {(photos.data ?? []).slice(0, 3).map((photo) => (
-                <Pressable key={photo.id} accessibilityRole="button" accessibilityLabel={photo.caption || 'Apri momento'}
-                  onPress={() => router.push(`/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never)} style={styles.moment}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.hStrip}
+              contentContainerStyle={styles.hStripContent}
+              decelerationRate="fast"
+            >
+              {(photos.data ?? []).slice(0, 8).map((photo) => (
+                <Pressable
+                  key={photo.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={photo.caption || 'Apri momento'}
+                  onPress={() =>
+                    router.push(
+                      `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
+                    )
+                  }
+                  style={({ pressed }) => [styles.momentCard, pressed && styles.pressed]}
+                >
                   <Image source={{ uri: photo.thumbnailUri }} style={styles.momentPhoto} />
-                  <Text style={styles.insightTime} numberOfLines={1}>
+                  <Text style={styles.momentCaption} numberOfLines={1}>
                     {photo.caption || formatMomentStamp(photo.takenAt)}
                   </Text>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           ) : <Pressable accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} style={styles.emptyInsight}>
             <CuteIcon name="play" size={24} color={colors.accent} secondary={colors.accentSoft} />
             <Text style={styles.emptyText}>Aggiungi i primi Momenti di {dog.name}</Text>
           </Pressable>}
 
-          {recentInsights.length > 0 ? <>
-            <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Le ultime osservazioni</Text><Pressable onPress={() => router.push('/(tabs)/diary')} accessibilityRole="button"><Text style={styles.seeAll}>Diario</Text></Pressable></View>
-            {recentInsights.map((insight) => (
-              <InsightCard
-                key={insight.eventId}
-                insight={insight}
-                onPress={() => router.push('/(tabs)/diary' as never)}
-              />
-            ))}
-          </> : null}
+          {recentInsights.length > 0 ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Le ultime osservazioni</Text>
+                <Pressable
+                  onPress={() => router.push('/(tabs)/diary')}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.seeAll}>Diario</Text>
+                </Pressable>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.hStrip}
+                contentContainerStyle={styles.hStripContent}
+                decelerationRate="fast"
+              >
+                {recentInsights.map((insight) => (
+                  <InsightMomentCard
+                    key={insight.eventId}
+                    insight={insight}
+                    dogPhotoUri={dog.photoUri}
+                    onPress={() => router.push('/(tabs)/diary' as never)}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
 
           {behaviorRemaining !== null && behaviorRemaining <= 2 ? (
             <Text style={behaviorRemaining <= 0 ? styles.quotaWarning : styles.quota}>
@@ -225,32 +264,75 @@ function formatMomentStamp(iso: string): string {
   return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 }
 
-function InsightCard({
+function InsightMomentCard({
   insight,
+  dogPhotoUri,
   onPress,
 }: {
   insight: LastInsight;
+  dogPhotoUri: string | null;
   onPress: () => void;
 }) {
+  const coverUri = insight.mediaUri || dogPhotoUri;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Apri la lettura: ${insight.label}`}
+      accessibilityLabel={`Apri: ${insight.label}`}
       onPress={onPress}
       style={({ pressed }) => [styles.insightCard, pressed && styles.pressed]}
     >
-      <Text style={styles.insightTitle} numberOfLines={2}>{insight.label}</Text>
+      <View style={styles.insightMedia}>
+        {coverUri ? (
+          <Image source={{ uri: coverUri }} style={styles.insightPhoto} />
+        ) : (
+          <View style={[styles.insightPhoto, styles.insightPhotoFallback]}>
+            <CuteIcon
+              name="paw"
+              size={36}
+              color={colors.primary}
+              secondary={colors.primarySoft}
+            />
+          </View>
+        )}
+        <View style={styles.insightWash} />
+        <TonePill tone={insight.tone} />
+      </View>
+      <Text style={styles.insightTitle} numberOfLines={3}>
+        {insight.label}
+      </Text>
       <Text style={styles.insightTime}>{insight.timestampLabel}</Text>
-      <TonePill tone={insight.tone} />
     </Pressable>
   );
 }
 
 function TonePill({ tone }: { tone: InsightTone }) {
   return (
-    <View style={[styles.tonePill, tone === 'watch' && styles.tonePillWatch]}>
-      <View style={[styles.toneDot, tone === 'watch' && styles.toneDotWatch]} />
-      <Text style={styles.toneText}>{insightToneLabel(tone)}</Text>
+    <View
+      style={[
+        styles.tonePill,
+        tone === 'positive' && styles.tonePillPositive,
+        tone === 'watch' && styles.tonePillWatch,
+        tone === 'neutral' && styles.tonePillNeutral,
+      ]}
+    >
+      <View
+        style={[
+          styles.toneDot,
+          tone === 'positive' && styles.toneDotPositive,
+          tone === 'watch' && styles.toneDotWatch,
+          tone === 'neutral' && styles.toneDotNeutral,
+        ]}
+      />
+      <Text
+        style={[
+          styles.toneText,
+          tone === 'positive' && styles.toneTextPositive,
+          tone === 'watch' && styles.toneTextWatch,
+          tone === 'neutral' && styles.toneTextNeutral,
+        ]}
+      >
+        {insightToneLabel(tone)}
+      </Text>
     </View>
   );
 }
@@ -291,9 +373,23 @@ const styles = StyleSheet.create({
   },
   careIcon: { backgroundColor: '#FFF1EE' },
   headerAvatar: { width: 34, height: 34, borderRadius: 17 },
-  momentsRow: { flexDirection: 'row', gap: 10 },
-  moment: { flex: 1, minWidth: 0, gap: 6 },
-  momentPhoto: { width: '100%', aspectRatio: 1, borderRadius: 14 },
+  hStrip: { marginHorizontal: -spacing.lg },
+  hStripContent: {
+    paddingHorizontal: spacing.lg,
+    gap: 12,
+    paddingBottom: 2,
+  },
+  momentCard: { width: 132, gap: 6 },
+  momentPhoto: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceMuted,
+  },
+  momentCaption: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+  },
   statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -314,14 +410,68 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.lg },
   sectionTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
   seeAll: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
-  insightCard: { width: '100%', padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
-  insightTitle: { color: colors.text, fontSize: typography.size.sm, lineHeight: typography.size.sm * 1.25, fontWeight: typography.weight.bold },
+  insightCard: {
+    width: 208,
+    gap: 8,
+  },
+  insightMedia: {
+    width: '100%',
+    aspectRatio: 0.92,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#D9E8F6',
+    justifyContent: 'flex-end',
+  },
+  insightPhoto: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  insightPhotoFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D9E8F6',
+  },
+  insightWash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(14, 42, 71, 0.12)',
+  },
+  insightTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * 1.28,
+    fontWeight: typography.weight.bold,
+    letterSpacing: -0.2,
+  },
   insightTime: { color: colors.textMuted, fontSize: typography.size.xs },
-  tonePill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: spacing.xs, marginTop: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.accentSoft },
-  tonePillWatch: { backgroundColor: colors.warningSoft },
-  toneDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  tonePill: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  tonePillPositive: { backgroundColor: 'rgba(220, 252, 231, 0.95)' },
+  tonePillNeutral: { backgroundColor: 'rgba(255,255,255,0.92)' },
+  tonePillWatch: { backgroundColor: 'rgba(254, 243, 199, 0.95)' },
+  toneDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted },
+  toneDotPositive: { backgroundColor: colors.success },
+  toneDotNeutral: { backgroundColor: colors.textMuted },
   toneDotWatch: { backgroundColor: colors.warning },
-  toneText: { color: colors.textSecondary, fontSize: 10, fontWeight: typography.weight.bold },
+  toneText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: typography.weight.bold,
+  },
+  toneTextPositive: { color: '#166534' },
+  toneTextNeutral: { color: colors.textSecondary },
+  toneTextWatch: { color: '#92400E' },
   emptyInsight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, width: '100%', padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   emptyText: { color: colors.textSecondary, fontSize: typography.size.xs },
   quota: { color: colors.textMuted, fontSize: typography.size.xs, textAlign: 'center', marginTop: spacing.sm },

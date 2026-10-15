@@ -133,13 +133,18 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     expect(derived.lastInsight).toBeNull();
   });
 
-  it('recentInsights tiene al massimo tre COMPLETED, più recenti prima', () => {
+  it('recentInsights tiene al massimo otto COMPLETED, più recenti prima', () => {
     const derived = deriveHomeState(
       [
         diaryItem({ id: 'a', title: 'PLAY_INTERACTION', created_at: '2026-09-04T12:00:00Z' }),
         diaryItem({ id: 'b', title: 'ALERT_VIGILANCE', created_at: '2026-09-04T11:00:00Z' }),
         diaryItem({ id: 'c', title: 'RELAX_REST', created_at: '2026-09-04T10:00:00Z' }),
         diaryItem({ id: 'd', title: 'FRUSTRATION', created_at: '2026-09-04T09:00:00Z' }),
+        diaryItem({ id: 'e', title: 'PLAY_INTERACTION', created_at: '2026-09-04T08:00:00Z' }),
+        diaryItem({ id: 'f', title: 'RELAX_REST', created_at: '2026-09-04T07:00:00Z' }),
+        diaryItem({ id: 'g', title: 'ALERT_VIGILANCE', created_at: '2026-09-04T06:00:00Z' }),
+        diaryItem({ id: 'h', title: 'PLAY_INTERACTION', created_at: '2026-09-04T05:00:00Z' }),
+        diaryItem({ id: 'i', title: 'RELAX_REST', created_at: '2026-09-04T04:00:00Z' }),
       ],
       now,
     );
@@ -147,6 +152,11 @@ describe('deriveHomeState (sez. 6 Home)', () => {
       'a',
       'b',
       'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
     ]);
     expect(derived.recentInsights[0]?.tone).toBe('positive');
     expect(derived.recentInsights[1]?.tone).toBe('neutral');
@@ -163,13 +173,14 @@ describe('probabilisticInsightLabel', () => {
 });
 
 describe('insightToneFromTitle', () => {
-  it('mappa gioco/relax a Positivo e disagio a Da osservare', () => {
+  it('mappa gioco/relax a positivo e disagio a da tenere d’occhio', () => {
     expect(insightToneFromTitle('PLAY_INTERACTION')).toBe('positive');
     expect(insightToneFromTitle('Sembra rilassato')).toBe('positive');
     expect(insightToneFromTitle('FEAR_INSECURITY')).toBe('watch');
     expect(insightToneFromTitle('ALERT_VIGILANCE')).toBe('neutral');
-    expect(insightToneLabel('positive')).toBe('Positivo');
-    expect(insightToneLabel('watch')).toBe('Da osservare');
+    expect(insightToneLabel('positive')).toBe('Bello');
+    expect(insightToneLabel('neutral')).toBe('Calmo');
+    expect(insightToneLabel('watch')).toBe('Da tenere d’occhio');
   });
 });
 

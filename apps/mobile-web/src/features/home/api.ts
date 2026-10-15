@@ -73,7 +73,7 @@ export async function fetchHomeBehaviorPage(dogId: string): Promise<DiaryPage> {
   const items = [...page.items];
   while (
     page.next_cursor &&
-    items.filter((item) => item.status === 'COMPLETED').length < 3
+    items.filter((item) => item.status === 'COMPLETED').length < 8
   ) {
     page = await fetchDiaryPage({
       dogId,
@@ -218,9 +218,9 @@ export function insightToneFromTitle(title: string): InsightTone {
 }
 
 export function insightToneLabel(tone: InsightTone): string {
-  if (tone === 'positive') return 'Positivo';
-  if (tone === 'watch') return 'Da osservare';
-  return 'Neutro';
+  if (tone === 'positive') return 'Bello';
+  if (tone === 'watch') return 'Da tenere d’occhio';
+  return 'Calmo';
 }
 
 function toLastInsight(item: ApiDiaryItem, now: Date): LastInsight {
@@ -229,6 +229,7 @@ function toLastInsight(item: ApiDiaryItem, now: Date): LastInsight {
     label: probabilisticInsightLabel(item.title),
     timestampLabel: formatInsightTimestamp(item.created_at, now),
     tone: insightToneFromTitle(item.title),
+    mediaUri: item.media_url ?? null,
   };
 }
 
@@ -279,7 +280,7 @@ export function deriveHomeState(
 
   const processing = behavior.find((item) => IN_PROGRESS_STATUSES.has(item.status));
   const completed = behavior.filter((item) => item.status === 'COMPLETED');
-  const recentInsights = completed.slice(0, 3).map((item) => toLastInsight(item, now));
+  const recentInsights = completed.slice(0, 8).map((item) => toLastInsight(item, now));
 
   return {
     processingEventId: processing?.id ?? null,
