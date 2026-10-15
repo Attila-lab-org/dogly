@@ -25,12 +25,11 @@ import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
-import { DogAvatar } from '@/features/core/components';
 import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import {
   AGILITY_COMBO_LINE,
   AGILITY_JUMP_LINES,
-  AGILITY_MAX_MS,
+  AGILITY_LIVES,
   AGILITY_START_LINE,
   AGILITY_TUNNEL_LINE,
   DOG_W,
@@ -43,11 +42,15 @@ import {
   bonusBoneX,
   buildAgilitySchedule,
   buildBonusArcs,
+  buildAgilitySchedule as extendSchedule,
   collides,
   isCleared,
   isCombo,
+  isInvulnerable,
+  isGameOver,
   isNearMiss,
   jumpHeightAt,
+  livesAfterCrash,
   loadAgilityBest,
   obstacleX,
   pointsForClear,
@@ -216,6 +219,45 @@ function LandingDust({ tick }: { tick: number }) {
   );
 }
 
+/** Cuori delle vite: duotone, si svuotano con un pop. */
+function LivesHud({ lives }: { lives: number }) {
+  return (
+    <View style={styles.lives} accessibilityLabel={`${lives} vite rimaste`}>
+      {[0, 1, 2].map((index) => (
+        <Heart key={`${index}-${lives > index}`} filled={lives > index} />
+      ))}
+    </View>
+  );
+}
+
+function Heart({ filled }: { filled: boolean }) {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    if (filled) return;
+    scale.value = withSequence(
+      withTiming(1.35, { duration: 130, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) }),
+    );
+  }, [filled, scale]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: filled ? 1 : 0.35,
+  }));
+  return (
+    <Animated.View style={style}>
+      <Svg width={26} height={24} viewBox="0 0 26 24">
+        <Path
+          d="M13 22 C6 16.5 2.5 12.6 2.5 8.6 C2.5 5 5 2.7 8 2.7 C10 2.7 11.9 3.9 13 5.8 C14.1 3.9 16 2.7 18 2.7 C21 2.7 23.5 5 23.5 8.6 C23.5 12.6 20 16.5 13 22 Z"
+          fill={filled ? '#FF8B74' : colors.surfaceMuted}
+          stroke={colors.text}
+          strokeWidth={1.8}
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
 /** Il cane che corre: bob + tilt; salto con squash&stretch. */
 function RunningDog({
   photoUri,
@@ -223,6 +265,7 @@ function RunningDog({
   jumpY,
   crashed,
   inTunnel,
+  invulnerable,
   reducedMotion,
 }: {
   photoUri: string | null;
@@ -230,6 +273,7 @@ function RunningDog({
   jumpY: SharedValue<number>;
   crashed: boolean;
   inTunnel: boolean;
+  invulnerable: boolean;
   reducedMotion: boolean;
 }) {
   const bob = useSharedValue(0);
@@ -249,8 +293,9 @@ function RunningDog({
     const y = jumpY.value;
     const airborne = y > 0.5;
     const rising = airborne && y < JUMP_HEIGHT_U * 0.75;
+    const flash = invulnerable ? (Math.sin(Date.now() / 90) > 0 ? 0.35 : 0.8) : 1;
     return {
-      opacity: inTunnel ? 0.4 : 1,
+      opacity: (inTunnel ? 0.4 : 1) * flash,
       transform: [
         { translateY: -y * UNIT_H - bob.value * 5 },
         { rotate: crashed ? '0deg' : `${airborne ? -6 : 3}deg` },
@@ -258,7 +303,7 @@ function RunningDog({
         { scaleX: rising ? 0.94 : 1 },
       ],
     };
-  }, [inTunnel, crashed]);
+  }, [inTunnel, crashed, invulnerable]);
 
   return (
     <Animated.View pointerEvents="none" style={[styles.dog, style]}>
@@ -320,6 +365,8 @@ export default function AgilityGameScreen() {
   const [activeArcs, setActiveArcs] = useState<BonusArc[]>([]);
   const [collectedBones, setCollectedBones] = useState<ReadonlySet<string>>(new Set());
   const [crashed, setCrashed] = useState(false);
+  const [lives, setLives] = useState(AGILITY_LIVES);
+  const [invulnerable, setInvulnerable] = useState(false);
   const [inTunnel, setInTunnel] = useState(false);
   const [nearMiss, setNearMiss] = useState<{ id: number } | null>(null);
   const [landingTick, setLandingTick] = useState(0);
@@ -335,6 +382,8 @@ export default function AgilityGameScreen() {
   const arcs = useRef<BonusArc[]>([]);
   const startedAt = useRef(0);
   const crashAt = useRef<number | null>(null);
+  const lastHitAt = useRef<number | null>(null);
+  const livesRef = useRef(AGILITY_LIVES);
   const jumpStart = useRef<number | null>(null);
   const clearedIds = useRef<Set<number>>(new Set());
   const streak = useRef(0);
@@ -407,6 +456,10 @@ export default function AgilityGameScreen() {
     setActiveArcs([]);
     setCollectedBones(new Set());
     setCrashed(false);
+    livesRef.current = AGILITY_LIVES;
+    setLives(AGILITY_LIVES);
+    setInvulnerable(false);
+    lastHitAt.current = null;
     setInTunnel(false);
     setNearMiss(null);
     setWeekRank(null);
@@ -453,10 +506,16 @@ export default function AgilityGameScreen() {
     const timer = setInterval(() => {
       const now = Date.now() - startedAt.current;
       setElapsed(now);
-      if (now >= AGILITY_MAX_MS && !crashed) {
-        clearInterval(timer);
-        finish();
-        return;
+      // Niente timer: la partita va avanti finché ci sono vite. La schedule
+      // si estende a chunk di 60s quando il fondo si avvicina.
+      const lastSpawn = schedule.current[schedule.current.length - 1];
+      if (lastSpawn && now > lastSpawn.spawnAtMs - 6000) {
+        schedule.current = schedule.current.concat(
+          extendSchedule(Math.random, lastSpawn.spawnAtMs + 60_000, {
+            startAtMs: lastSpawn.spawnAtMs + 1,
+            startId: lastSpawn.id + 1,
+          }),
+        );
       }
       // Rallenty sul crash prima della fine.
       const slowmo =
@@ -464,8 +523,10 @@ export default function AgilityGameScreen() {
       worldX.value = -(now / 1000) * speedAt(now) * slowmo;
 
       const dogY = jumpHeightAt(jumpStart.current, now);
+      const flashing = isInvulnerable(lastHitAt.current, now);
+      setInvulnerable(flashing);
 
-      if (!crashed) {
+      if (!crashed && !flashing) {
         for (const obstacle of schedule.current) {
           if (
             obstacle.spawnAtMs <= now &&
@@ -473,11 +534,24 @@ export default function AgilityGameScreen() {
             collides(dogY, obstacle, now)
           ) {
             clearedIds.current.add(obstacle.id);
-            crashAt.current = now;
-            setCrashed(true);
-            say('Ahi! Mi siedo un attimo…', 'sad');
-            clearInterval(timer);
-            later(900, finish);
+            lastHitAt.current = now;
+            const nextLives = livesAfterCrash(livesRef.current);
+            livesRef.current = nextLives;
+            setLives(nextLives);
+            if (isGameOver(nextLives)) {
+              crashAt.current = now;
+              setCrashed(true);
+              say('Ahi! Mi siedo un attimo…', 'sad');
+              clearInterval(timer);
+              later(900, finish);
+            } else {
+              say(
+                nextLives === 1
+                  ? 'Ultima vita, con calma!'
+                  : `Ops! Ancora ${nextLives} vite!`,
+                'sad',
+              );
+            }
             return;
           }
         }
@@ -561,8 +635,6 @@ export default function AgilityGameScreen() {
   }, [phase, score, reducedMotion]);
 
   const unitX = fieldWidth.current / 100;
-  const remainingSeconds = Math.max(0, Math.ceil((AGILITY_MAX_MS - elapsed) / 1000));
-
   return (
     <ScreenContainer scroll={phase !== 'playing'}>
       <StackScreenHeader title="Agility Oreo" />
@@ -603,7 +675,7 @@ export default function AgilityGameScreen() {
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
               <Text style={styles.hudScoreText}>{score}</Text>
             </View>
-            <Text style={styles.hudTime}>{remainingSeconds}s</Text>
+            <LivesHud lives={lives} />
           </View>
 
           <Pressable
@@ -691,6 +763,7 @@ export default function AgilityGameScreen() {
               jumpY={jumpAnim}
               crashed={crashed}
               inTunnel={inTunnel}
+              invulnerable={invulnerable}
               reducedMotion={reducedMotion}
             />
 
@@ -828,7 +901,7 @@ const styles = StyleSheet.create({
   hud: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   hudScore: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hudScoreText: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
-  hudTime: { color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
+  lives: { flexDirection: 'row', gap: 4 },
   field: {
     height: 320,
     borderRadius: radius.lg,
@@ -878,13 +951,6 @@ const styles = StyleSheet.create({
     bottom: GROUND_Y + 2,
     width: DOG_W * 8,
     alignItems: 'center',
-  },
-  dogRing: {
-    padding: 3,
-    borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
   obstacle: { position: 'absolute' },
   bone: { position: 'absolute' },

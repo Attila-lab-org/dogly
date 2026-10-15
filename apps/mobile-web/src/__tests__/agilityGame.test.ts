@@ -21,6 +21,10 @@ import {
   minGapMs,
   obstacleX,
   pointsForClear,
+  AGILITY_LIVES,
+  isGameOver,
+  isInvulnerable,
+  livesAfterCrash,
   saveAgilityBest,
   setAgilityStorageBackend,
   speedAt,
@@ -47,15 +51,18 @@ function steppedRng(start = 0.42, step = 0.37): () => number {
 
 afterEach(() => setAgilityStorageBackend(null));
 
-describe('speed ramp', () => {
-  it('ramps 28 → 52 u/s smoothly and clamps', () => {
-    expect(speedAt(0)).toBe(28);
-    expect(speedAt(AGILITY_MAX_MS)).toBe(52);
-    expect(speedAt(AGILITY_MAX_MS / 2)).toBe(40);
-    expect(speedAt(-5)).toBe(28);
-    expect(speedAt(AGILITY_MAX_MS * 2)).toBe(52);
-    expect(minGapMs(0)).toBe(1050);
-    expect(minGapMs(AGILITY_MAX_MS)).toBe(700);
+describe('speed ramp (rebalanced: easier, lives instead of timer)', () => {
+  it('ramps 24 → 40 u/s over 90s and clamps', () => {
+    expect(speedAt(0)).toBe(24);
+    expect(speedAt(45_000)).toBe(32);
+    expect(speedAt(90_000)).toBe(40);
+    expect(speedAt(-5)).toBe(24);
+    expect(speedAt(500_000)).toBe(40);
+  });
+
+  it('keeps the safety gap +15% wider than before', () => {
+    expect(minGapMs(0)).toBe(1210);
+    expect(minGapMs(AGILITY_MAX_MS)).toBe(805);
   });
 });
 
@@ -66,9 +73,10 @@ describe('schedule', () => {
     );
   });
 
-  it('never spawns closer than the safety gap', () => {
+  it('never spawns closer than the safety gap and nothing in the first 2s', () => {
     const obstacles = buildAgilitySchedule(Math.random);
-    expect(obstacles.length).toBeGreaterThanOrEqual(30);
+    expect(obstacles[0].spawnAtMs).toBeGreaterThanOrEqual(2000);
+    expect(obstacles.length).toBeGreaterThanOrEqual(25);
     for (let i = 1; i < obstacles.length; i += 1) {
       const gap = obstacles[i].spawnAtMs - obstacles[i - 1].spawnAtMs;
       expect(gap).toBeGreaterThanOrEqual(minGapMs(obstacles[i - 1].spawnAtMs));
@@ -137,6 +145,38 @@ describe('combo scoring', () => {
     expect(pointsForClear(9)).toBe(2);
     expect(isCombo(5)).toBe(true);
     expect(isCombo(4)).toBe(false);
+  });
+});
+
+describe('lives system', () => {
+  it('starts at 3 lives, loses one per crash, game over at zero', () => {
+    expect(AGILITY_LIVES).toBe(3);
+    expect(livesAfterCrash(3)).toBe(2);
+    expect(livesAfterCrash(2)).toBe(1);
+    expect(livesAfterCrash(1)).toBe(0);
+    expect(livesAfterCrash(0)).toBe(0);
+    expect(isGameOver(1)).toBe(false);
+    expect(isGameOver(0)).toBe(true);
+  });
+
+  it('invulnerability window covers 1.5s after a crash', () => {
+    expect(isInvulnerable(null, 5000)).toBe(false);
+    expect(isInvulnerable(5000, 5000)).toBe(true);
+    expect(isInvulnerable(5000, 5000 + 1499)).toBe(true);
+    expect(isInvulnerable(5000, 5000 + 1500)).toBe(false);
+  });
+
+  it('schedule can extend beyond 60s chunks with unique ids', () => {
+    const first = buildAgilitySchedule(Math.random);
+    const last = first[first.length - 1];
+    const extra = buildAgilitySchedule(Math.random, last.spawnAtMs + 60_000, {
+      startAtMs: last.spawnAtMs + 1,
+      startId: last.id + 1,
+    });
+    expect(extra.length).toBeGreaterThan(0);
+    expect(extra[0].spawnAtMs).toBeGreaterThan(last.spawnAtMs);
+    const ids = new Set([...first, ...extra].map((o) => o.id));
+    expect(ids.size).toBe(first.length + extra.length);
   });
 });
 

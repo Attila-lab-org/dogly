@@ -1,19 +1,72 @@
 /**
- * Hub "Giochi": i tre mini-giochi da giocare insieme al cane.
- * Scoiattolo!, Agility Oreo e Fiuto da campione — tutti giocabili.
+ * Hub "Giochi": hero card del gioco della settimana (Bau Match, artwork
+ * animato in micro-loop) con record personale, più le card compatte degli
+ * altri giochi con il proprio best. Entrata scaglionata.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect } from 'react-native-svg';
+import Animated, {
+  Easing,
+  FadeInUp,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import { SquirrelArt } from '@/features/games/squirrelArt';
 import { MatchPiece } from '@/features/games/matchPieces';
 import { GAME_LABELS, type GameId } from '@/features/games/api';
+import { loadMatchBest } from '@/features/games/matchLogic';
+import { loadSquirrelBest } from '@/features/games/squirrelLogic';
+import { loadAgilityBest } from '@/features/games/agilityLogic';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+
+/** Tessere che fluttuano in micro-loop (reduce-motion → statiche). */
+function MatchMarkAnimated({ reducedMotion }: { reducedMotion: boolean }) {
+  const float = useSharedValue(0);
+  useEffect(() => {
+    if (reducedMotion) return;
+    float.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    );
+  }, [reducedMotion, float]);
+  const styleA = useAnimatedStyle(() => ({
+    transform: [{ translateY: -float.value * 5 }, { rotate: `${float.value * 6 - 3}deg` }],
+  }));
+  const styleB = useAnimatedStyle(() => ({
+    transform: [{ translateY: -float.value * 3 + 2 }, { scale: 1 + float.value * 0.05 }],
+  }));
+  return (
+    <View style={styles.markGrid}>
+      <Animated.View style={styleA}>
+        <MatchPiece type={0} size={34} />
+      </Animated.View>
+      <Animated.View style={styleB}>
+        <MatchPiece type={4} size={34} />
+      </Animated.View>
+      <Animated.View style={styleB}>
+        <MatchPiece type={3} size={34} />
+      </Animated.View>
+      <Animated.View style={styleA}>
+        <MatchPiece type={1} size={34} />
+      </Animated.View>
+    </View>
+  );
+}
 
 function AgilityMark() {
   return (
@@ -33,48 +86,45 @@ function AgilityMark() {
   );
 }
 
-function MatchMark() {
+function BestChip({ best }: { best: number | null }) {
+  if (best === null) return null;
   return (
-    <View style={styles.markGrid}>
-      {[0, 1, 2, 3].map((piece) => (
-        <MatchPiece key={piece} type={piece} size={34} />
-      ))}
+    <View style={styles.bestChip}>
+      <CuteIcon name="paw" size={12} color={colors.accent} secondary={colors.accent} />
+      <Text style={styles.bestText}>
+        {best > 0 ? `Record: ${best}` : 'Prima partita!'}
+      </Text>
     </View>
   );
 }
 
-const GAMES: {
-  id: GameId;
-  route: string;
-  text: string;
-  art: 'match' | 'squirrel' | 'agility';
-  gradient: [string, string, string];
-}[] = [
-  {
-    id: 'match',
-    route: '/games/match',
-    text: 'Il preferito del quartiere: scambia le tessere, scoppia le file, catene a moltiplicatore!',
-    art: 'match',
-    gradient: ['#E0F7F4', '#F0FAF6', '#FFF3D6'],
-  },
-  {
-    id: 'squirrel',
-    route: '/games/squirrel',
-    text: 'Gli scoiattoli sbucano dalle buche: acchiappali prima che scappino. Attento al riccio!',
-    art: 'squirrel',
-    gradient: ['#DFF3EC', '#EAF7F1', '#FFF6E8'],
-  },
-  {
-    id: 'agility',
-    route: '/games/agility',
-    text: 'Corri, salta muretti e birilli… ma il tunnel si attraversa da sotto!',
-    art: 'agility',
-    gradient: ['#E3EFFE', '#EAF3FD', '#E0F7F4'],
-  },
-];
-
 export default function GamesHubScreen() {
   const router = useRouter();
+  const { dog } = useDogProfile();
+  const reducedMotion = useReducedMotion();
+  const [best, setBest] = useState<Record<'match' | 'squirrel' | 'agility', number | null>>({
+    match: null,
+    squirrel: null,
+    agility: null,
+  });
+
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([
+      loadMatchBest(dog.id),
+      loadSquirrelBest(dog.id),
+      loadAgilityBest(dog.id),
+    ]).then(([match, squirrel, agility]) => {
+      if (alive) setBest({ match, squirrel, agility });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [dog.id]);
+
+  const enter = (delay: number) =>
+    reducedMotion ? undefined : FadeInUp.duration(340).delay(delay);
+
   return (
     <ScreenContainer scroll>
       <StackScreenHeader title="Giochi" />
@@ -83,37 +133,86 @@ export default function GamesHubScreen() {
         la vostra sfida.
       </Text>
 
-      {GAMES.map((game) => (
+      <Animated.View entering={enter(0)}>
         <Pressable
-          key={game.id}
           accessibilityRole="button"
-          accessibilityLabel={`Gioca a ${GAME_LABELS[game.id]}`}
-          onPress={() => router.push(game.route as never)}
+          accessibilityLabel={`Gioca a ${GAME_LABELS.match}, gioco della settimana`}
+          onPress={() => router.push('/games/match' as never)}
           style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
         >
           <LinearGradient
-            colors={game.gradient}
+            colors={['#E0F7F4', '#F0FAF6', '#FFF3D6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.weeklyChip}>
+            <Text style={styles.weeklyText}>Gioco della settimana</Text>
+          </View>
+          <View style={styles.heroBody}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroTitle}>{GAME_LABELS.match}</Text>
+              <Text style={styles.heroText}>
+                Scambia le tessere, scoppia le file, catene a moltiplicatore!
+              </Text>
+              <BestChip best={best.match} />
+              <View style={styles.heroCta}>
+                <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
+                <Text style={styles.heroCtaText}>Gioca</Text>
+              </View>
+            </View>
+            <MatchMarkAnimated reducedMotion={reducedMotion} />
+          </View>
+        </Pressable>
+      </Animated.View>
+
+      <Animated.View entering={enter(120)}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Gioca a ${GAME_LABELS.squirrel}`}
+          onPress={() => router.push('/games/squirrel' as never)}
+          style={({ pressed }) => [styles.heroCard, styles.compactCard, pressed && styles.pressed]}
+        >
+          <LinearGradient
+            colors={['#DFF3EC', '#EAF7F1', '#FFF6E8']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>{GAME_LABELS[game.id]}</Text>
-            <Text style={styles.heroText}>{game.text}</Text>
-            <View style={styles.heroCta}>
-              <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
-              <Text style={styles.heroCtaText}>Gioca</Text>
-            </View>
+            <Text style={styles.heroTitle}>{GAME_LABELS.squirrel}</Text>
+            <Text style={styles.heroText}>
+              Gli scoiattoli sbucano dalle buche: acchiappali prima che scappino!
+            </Text>
+            <BestChip best={best.squirrel} />
           </View>
-          {game.art === 'match' ? (
-            <MatchMark />
-          ) : game.art === 'squirrel' ? (
-            <SquirrelArt size={92} />
-          ) : (
-            <AgilityMark />
-          )}
+          <SquirrelArt size={84} />
         </Pressable>
-      ))}
+      </Animated.View>
+
+      <Animated.View entering={enter(240)}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Gioca a ${GAME_LABELS.agility}`}
+          onPress={() => router.push('/games/agility' as never)}
+          style={({ pressed }) => [styles.heroCard, styles.compactCard, pressed && styles.pressed]}
+        >
+          <LinearGradient
+            colors={['#E3EFFE', '#EAF3FD', '#E0F7F4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroTitle}>{GAME_LABELS.agility}</Text>
+            <Text style={styles.heroText}>
+              Tre vite, muretti da saltare e ossicini da raccogliere al volo!
+            </Text>
+            <BestChip best={best.agility} />
+          </View>
+          <AgilityMark />
+        </Pressable>
+      </Animated.View>
     </ScreenContainer>
   );
 }
@@ -122,8 +221,9 @@ const styles = StyleSheet.create({
   markGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: 72,
+    width: 76,
     justifyContent: 'center',
+    gap: 2,
   },
   intro: {
     color: colors.textSecondary,
@@ -132,14 +232,35 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   heroCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
     overflow: 'hidden',
     ...shadows.card,
+  },
+  compactCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  weeklyChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.accent,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    marginBottom: spacing.sm,
+  },
+  weeklyText: {
+    color: colors.textOnPrimary,
+    fontSize: 10,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.6,
+  },
+  heroBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   heroCopy: { flex: 1, minWidth: 0, gap: spacing.sm },
   heroTitle: {
@@ -165,6 +286,21 @@ const styles = StyleSheet.create({
   heroCtaText: {
     color: colors.textOnPrimary,
     fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  bestChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  bestText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
   },
   pressed: { opacity: 0.9 },

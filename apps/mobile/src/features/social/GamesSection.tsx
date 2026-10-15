@@ -122,26 +122,27 @@ export function GamesSection() {
             <Text style={styles.boardEmpty}>Leggo la classifica…</Text>
           ) : top3.length === 0 ? (
             <Text style={styles.boardEmpty}>
-              Nessun punteggio questa settimana: siate i primi!
+              Il podio aspetta il primo campione: siate voi!
             </Text>
           ) : (
-            top3.map((entry) => (
-              <View key={entry.dog_id} style={styles.boardRow}>
-                <Text style={styles.boardRank}>#{entry.rank}</Text>
-                <LeaderboardAvatar entry={entry} />
-                <Text
-                  style={[styles.boardName, entry.is_mine && styles.boardNameMine]}
-                  numberOfLines={1}
-                >
-                  {entry.dog_name}
-                  {entry.is_mine ? ' (voi)' : ''}
-                </Text>
-                <View style={styles.boardScore}>
-                  <CuteIcon name="paw" size={12} color={colors.accent} secondary={colors.accent} />
-                  <Text style={styles.boardScoreText}>{entry.score}</Text>
+            <View style={styles.miniPodium}>
+              {[top3[1], top3[0], top3[2]].filter(Boolean).map((entry) => (
+                <View key={entry.dog_id} style={styles.miniPodiumItem}>
+                  <Text style={styles.miniPodiumRank}>#{entry.rank}</Text>
+                  <LeaderboardAvatar entry={entry} />
+                  <Text
+                    style={[styles.boardName, entry.is_mine && styles.boardNameMine]}
+                    numberOfLines={1}
+                  >
+                    {entry.dog_name}
+                  </Text>
+                  <View style={styles.boardScore}>
+                    <CuteIcon name="paw" size={12} color={colors.accent} secondary={colors.accent} />
+                    <Text style={styles.boardScoreText}>{entry.score}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
+              ))}
+            </View>
           )}
         </Pressable>
       </View>
@@ -217,10 +218,20 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.sm,
   },
-  boardRow: {
+  miniPodium: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-start',
+  },
+  miniPodiumItem: {
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 4,
+    maxWidth: 90,
+  },
+  miniPodiumRank: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
   },
   boardRank: {
     color: colors.textMuted,

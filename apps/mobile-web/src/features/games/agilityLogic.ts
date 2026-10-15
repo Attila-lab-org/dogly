@@ -36,19 +36,22 @@ export interface AgilityObstacle {
   speed: number;
 }
 
-/** Velocità smooth: 28 → 52 u/s su 60s. */
+/**
+ * Velocità smooth: 24 → 40 u/s su 90s (ribilanciata: il gioco deve durare
+ * mediamente 60-90s anche a chi è alle prime partite).
+ */
 export function speedAt(elapsedMs: number): number {
-  const progress = Math.min(1, Math.max(0, elapsedMs / AGILITY_MAX_MS));
-  return 28 + progress * 24;
+  const progress = Math.min(1, Math.max(0, elapsedMs / 90_000));
+  return 24 + progress * 16;
 }
 
 /**
  * Gap minimo di sicurezza tra due spawn (in ms di percorrenza alla
- * velocità corrente): 1050 → 700 ms, così il salto è sempre giocabile.
+ * velocità corrente): 1210 → 805 ms (+15% dopo il ribilanciamento).
  */
 export function minGapMs(elapsedMs: number): number {
   const progress = Math.min(1, Math.max(0, elapsedMs / AGILITY_MAX_MS));
-  return Math.round(1050 - progress * 350);
+  return Math.round(1210 - progress * 405);
 }
 
 function rollKind(roll: number): ObstacleKind {
@@ -61,10 +64,12 @@ function rollKind(roll: number): ObstacleKind {
 export function buildAgilitySchedule(
   rng: () => number,
   durationMs: number = AGILITY_MAX_MS,
+  options: { startAtMs?: number; startId?: number } = {},
 ): AgilityObstacle[] {
   const obstacles: AgilityObstacle[] = [];
-  let t = 800;
-  let id = 0;
+  // Nessun ostacolo nei primi 2 secondi: il giocatore prende il ritmo.
+  let t = options.startAtMs ?? 2100;
+  let id = options.startId ?? 0;
   while (t < durationMs - 600) {
     const speed = speedAt(t);
     obstacles.push({ id, kind: rollKind(rng()), spawnAtMs: Math.round(t), speed });
@@ -98,6 +103,8 @@ export function isJumping(jumpStartMs: number | null, nowMs: number): boolean {
  * muretto/birilli; per il tunnel vale l'opposto: se sei in aria mentre
  * lo attraversi, sbatti la testa.
  */
+export const HITBOX_MARGIN_U = 1.2;
+
 export function collides(
   dogY: number,
   obstacle: AgilityObstacle,
@@ -105,7 +112,8 @@ export function collides(
 ): boolean {
   const spec = OBSTACLE_DIMS[obstacle.kind];
   const x = obstacleX(obstacle, nowMs);
-  const overlapX = x < DOG_X + DOG_W && x + spec.w > DOG_X;
+  const overlapX =
+    x < DOG_X + DOG_W - HITBOX_MARGIN_U && x + spec.w > DOG_X + HITBOX_MARGIN_U;
   if (!overlapX) return false;
   if (obstacle.kind === 'tunnel') {
     return dogY > 2;
@@ -191,6 +199,25 @@ export function isNearMiss(dogYAtClear: number, kind: ObstacleKind): boolean {
   if (kind === 'tunnel') return false;
   const margin = dogYAtClear - OBSTACLE_DIMS[kind].h;
   return dogYAtClear > 0 && margin <= 2;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sistema a vite (niente timer: si gioca finché ci sono cuori).        */
+/* ------------------------------------------------------------------ */
+
+export const AGILITY_LIVES = 3;
+export const INVULNERABLE_MS = 1500;
+
+export function livesAfterCrash(lives: number): number {
+  return Math.max(0, lives - 1);
+}
+
+export function isGameOver(lives: number): boolean {
+  return lives <= 0;
+}
+
+export function isInvulnerable(lastCrashAtMs: number | null, nowMs: number): boolean {
+  return lastCrashAtMs !== null && nowMs - lastCrashAtMs < INVULNERABLE_MS;
 }
 
 /** Frase di Oreo in prima persona per fascia di punteggio. */
