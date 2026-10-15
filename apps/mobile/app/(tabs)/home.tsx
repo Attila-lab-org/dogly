@@ -67,7 +67,7 @@ export default function HomeScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Aiuto rapido: veterinario e numeri utili"
-                onPress={() => router.push('/care' as never)}
+                onPress={() => router.push('/aiuto' as never)}
                 hitSlop={12}
                 style={[styles.headerIcon, styles.careIcon]}
               >

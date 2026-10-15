@@ -41,7 +41,7 @@ const doctorHero = require('../assets/brand/care-dog-doctor-icon.jpg');
 
 type SearchMode = 'vet' | 'emergency';
 
-export default function CareScreen() {
+export default function AiutoScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
