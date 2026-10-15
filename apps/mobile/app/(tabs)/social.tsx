@@ -86,10 +86,10 @@ export default function SocialScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>SOCIAL</Text>
-          <Text style={styles.title}>Il mondo di {dog.name}</Text>
+          <Text style={styles.eyebrow}>MOMENTI</Text>
+          <Text style={styles.title}>I momenti di {dog.name}</Text>
           <Text style={styles.subtitle}>
-            Storie, giochi del quartiere e luoghi utili vicino a voi.
+            Le vostre storie e i luoghi utili vicino a voi.
           </Text>
         </View>
 

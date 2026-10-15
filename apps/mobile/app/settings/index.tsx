@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
-import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
 
@@ -26,10 +25,8 @@ export default function SettingsScreen() {
   // Stessa fonte della schermata Abbonamento (query condivisa): il
   // sottotitolo riflette lo stato reale, non sempre il mock.
   const { live, query, state: subscription } = useSubscriptionState();
-  const { dog } = useDogProfile();
   // The edit screen also works for the local profile used before the first
   // sync. Settings should never make the profile row look disabled.
-  const dogId = dog.id || '';
 
   const subscriptionSubtitle = (() => {
     if (live && query.isLoading) return 'Verifica del piano in corso…';
@@ -42,12 +39,6 @@ export default function SettingsScreen() {
   })();
 
   const rows: Row[] = [
-    {
-      icon: 'person-outline',
-      title: 'Profilo',
-      subtitle: 'Tu e il cane',
-      href: dogId ? `/dogs/${dogId}/edit` : null,
-    },
     {
       icon: 'notifications-outline',
       title: 'Notifiche',
