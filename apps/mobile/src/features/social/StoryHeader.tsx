@@ -23,7 +23,7 @@ import { CuteIcon } from '../../components/CuteIcon';
 import { DogAvatar } from '../core/components';
 import { hapticLight } from '../../lib/haptics';
 import {
-  getOrCreateMomentsAlbum,
+  getOrCreateStoriesAlbum,
   uploadAlbumPhoto,
 } from '../photos/api';
 import { pickAlbumPhoto, takeStoryPhoto } from '../photos/share';
@@ -127,13 +127,13 @@ export function StoryHeader({
       if (!mine) return;
       setBusy(true);
       try {
-        const album = await getOrCreateMomentsAlbum(mine.dogId);
+        const album = await getOrCreateStoriesAlbum(mine.dogId);
         await uploadAlbumPhoto(album.id, uri, {
           caption: `Storia di ${mine.dogName}`,
           visibility: 'PRIVATE',
         });
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['social-moments', mine.dogId] }),
+          queryClient.invalidateQueries({ queryKey: ['social-stories', mine.dogId] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', mine.dogId] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
           queryClient.invalidateQueries({ queryKey: ['gallery-albums', mine.dogId] }),
@@ -222,7 +222,7 @@ export function StoryHeader({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Aggiungi una storia"
+          accessibilityLabel="Aggiungi una storia privata"
           onPress={openChooser}
           disabled={isBusy}
           hitSlop={10}
@@ -240,7 +240,7 @@ export function StoryHeader({
         <Text style={styles.name} numberOfLines={1}>
           {mine.dogName}
         </Text>
-        <Text style={styles.label}>La tua storia</Text>
+        <Text style={styles.label}>La tua storia · privata · 24 ore</Text>
         <View style={styles.moodChip}>
           <CuteIcon name="paw" size={12} color={colors.accent} secondary={colors.accent} />
           <Text style={styles.moodText}>Pronto per nuove avventure?</Text>

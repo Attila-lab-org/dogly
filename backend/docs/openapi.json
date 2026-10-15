@@ -1167,6 +1167,16 @@
             }
           },
           {
+            "name": "stories",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Stories"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,

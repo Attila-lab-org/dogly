@@ -142,6 +142,21 @@ export async function getOrCreateMomentsAlbum(
   }
 }
 
+/** Stories are separate from permanent moments and never used as AI input. */
+export async function getOrCreateStoriesAlbum(dogId: string): Promise<PhotoAlbum> {
+  const albums = await fetchAlbums(dogId, { includeHidden: true });
+  return albums.find((album) => album.title.trim().toLowerCase() === 'storie')
+    ?? createAlbum(dogId, 'Storie', `system-album-${dogId}-storie`);
+}
+
+export async function fetchStories(dogId: string, limit = 24, offset = 0): Promise<AlbumPhoto[]> {
+  if (!apiConfigured()) return [];
+  const body = await apiRequest<{ items: GalleryPhotoDto[] }>(
+    `/v1/dogs/${dogId}/photos?stories=true&limit=${limit}&offset=${offset}`,
+  );
+  return dedupeAlbumPhotos(body.items.map((photo) => mapPhoto(photo)));
+}
+
 export async function getOrCreateChatAttachmentsAlbum(
   dogId: string,
 ): Promise<PhotoAlbum> {

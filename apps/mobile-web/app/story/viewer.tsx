@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Alert,
   Image,
   Pressable,
   StatusBar,
@@ -16,11 +17,13 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { DogAvatar } from '@/features/core/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
-  fetchDogPhotos,
+  fetchStories,
+  getOrCreateMomentsAlbum,
+  uploadAlbumPhoto,
 } from '@/features/photos/api';
 import { setLastSeenPhotoId } from '@/features/social/storySeen';
 import { typography } from '@/theme/tokens';
@@ -30,6 +33,11 @@ const STORY_MS = 5000;
 export default function StoryViewerScreen() {
   const PAGE_SIZE = 24;
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const pagingRef = useRef(false);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { dog } = useDogProfile();
@@ -47,13 +55,14 @@ export default function StoryViewerScreen() {
   );
 
   const momentsQuery = useInfiniteQuery({
-    queryKey: ['social-moments', dogId, PAGE_SIZE],
-    queryFn: ({ pageParam }) => fetchDogPhotos(dogId, PAGE_SIZE, pageParam),
+    queryKey: ['social-stories', dogId, PAGE_SIZE],
+    queryFn: ({ pageParam }) => fetchStories(dogId, PAGE_SIZE, pageParam),
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
     enabled: Boolean(dogId),
     retry: 1,
+    refetchInterval: 60_000,
   });
 
   const photos = useMemo(
@@ -95,21 +104,28 @@ export default function StoryViewerScreen() {
   }, [router]);
 
   const goNext = useCallback(() => {
+    if (pagingRef.current || savingRef.current) return;
     const current = indexRef.current;
     elapsedRef.current = 0;
     setProgressPct(0);
     if (current >= photos.length - 1) {
       if (momentsQuery.hasNextPage) {
+        pagingRef.current = true;
+        setPaused(true);
         void momentsQuery.fetchNextPage().then((result) => {
-          const lastPage = result.data?.pages[result.data.pages.length - 1];
-          if (lastPage?.length) setIndex(current + 1);
+          if (result.isError) {
+            Alert.alert('Storia non caricata', 'Tocca per riprovare.');
+            return;
+          }
+          const count = result.data?.pages.reduce((sum, page) => sum + page.length, 0) ?? 0;
+          if (count > current + 1) setIndex(current + 1);
           else close();
-        });
+        }).finally(() => { pagingRef.current = false; setPaused(false); });
       } else close();
       return;
     }
     setIndex(current + 1);
-  }, [close, photos.length]);
+  }, [close, photos.length, momentsQuery.hasNextPage, momentsQuery.fetchNextPage]);
 
   const goPrev = useCallback(() => {
     const current = indexRef.current;
@@ -146,6 +162,34 @@ export default function StoryViewerScreen() {
     }, tickMs);
     return () => clearInterval(timer);
   }, [goNext, index, paused, photos.length, reduceMotion]);
+
+  const saveMoment = async () => {
+    const selected = photos[indexRef.current];
+    if (!selected || savingRef.current || savedIds.includes(selected.id)) return;
+    savingRef.current = true;
+    setSaving(true);
+    setPaused(true);
+    try {
+      const album = await getOrCreateMomentsAlbum(dogId);
+      await uploadAlbumPhoto(album.id, selected.localUri || selected.thumbnailUri, {
+        caption: selected.caption,
+        visibility: 'PRIVATE',
+        idempotencyKey: `keep-story-${selected.id}`,
+      });
+      setSavedIds((ids) => [...ids, selected.id]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['gallery-dog-photos', dogId] }),
+        queryClient.invalidateQueries({ queryKey: ['gallery-photos', album.id] }),
+        queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
+      ]);
+    } catch {
+      Alert.alert('Momento non salvato', 'La storia è ancora disponibile. Riprova.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+      setPaused(false);
+    }
+  };
 
   const onHoldIn = () => {
     holdStartedAt.current = Date.now();
@@ -199,6 +243,14 @@ export default function StoryViewerScreen() {
         onPressOut={(e) => onHoldOut(e.nativeEvent.locationX)}
       />
 
+      <Pressable
+        accessibilityRole="button"
+        disabled={saving || savedIds.includes(photo.id)}
+        onPress={() => void saveMoment()}
+        style={{ position: 'absolute', bottom: insets.bottom + 24, alignSelf: 'center', zIndex: 3, backgroundColor: 'rgba(0,0,0,0.7)', padding: 14, borderRadius: 24 }}
+      >
+        <Text style={styles.loadingText}>{saving ? 'Salvataggio…' : savedIds.includes(photo.id) ? 'Conservata nei Momenti' : 'Conserva nei Momenti'}</Text>
+      </Pressable>
       <View style={[styles.chrome, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.progressRow} pointerEvents="none">
           {photos.map((item, i) => {

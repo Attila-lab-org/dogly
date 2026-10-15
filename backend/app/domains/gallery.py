@@ -7,6 +7,7 @@ AI raw media buckets and never receive behavior/digestive analysis assets.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from app.config import Settings
 from app.contracts.api import (
@@ -128,6 +129,7 @@ def list_dog_photos(
     dog_id: str,
     limit: int,
     offset: int = 0,
+    stories: bool = False,
 ) -> list[DogPhotoOut]:
     """Return lasting dog moments; exclude stories and chat-only attachments."""
     get_owned_dog(store, user_id=user_id, dog_id=dog_id)
@@ -138,13 +140,22 @@ def list_dog_photos(
         and album.owner_id == user_id
         and album.title.strip().casefold() in {"storie", "allegati chat"}
     }
+    story_album_ids = {
+        album.id for album in store.dog_albums.values()
+        if album.dog_id == dog_id and album.owner_id == user_id
+        and album.title.strip().casefold() == "storie"
+    }
+    cutoff = now_utc() - timedelta(hours=24)
     photos = [
         photo
         for photo in store.dog_photos.values()
         if photo.dog_id == dog_id
         and photo.owner_id == user_id
         and photo.deleted_at is None
-        and photo.album_id not in hidden_album_ids
+        and (
+            (not stories and photo.album_id not in hidden_album_ids)
+            or (stories and photo.album_id in story_album_ids and photo.created_at > cutoff)
+        )
     ]
     # Match the PostgreSQL ordering exactly.  The id tie-breaker matters for
     # uploads created in the same clock tick, otherwise memory-backed local

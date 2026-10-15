@@ -234,3 +234,30 @@ async def test_recent_dog_photos_exclude_stories(
     assert [item["id"] for item in second_page.json()["items"]] == [
         moment.json()["photo"]["id"]
     ]
+
+
+async def test_recent_stories_are_separate_and_expire_from_feed(
+    client: httpx.AsyncClient, auth_headers: dict[str, str]
+):
+    dog_id = await create_dog(client, auth_headers)
+    stories = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Storie"},
+        headers=auth_headers,
+    )
+    story_id = stories.json()["id"]
+    photo = await client.post(
+        f"/v1/albums/{story_id}/photos/init",
+        json={"content_type": "image/jpeg", "bytes": 1_024},
+        headers=auth_headers,
+    )
+    photo_id = photo.json()["photo"]["id"]
+
+    moments = await client.get(
+        f"/v1/dogs/{dog_id}/photos", headers=auth_headers
+    )
+    recent_stories = await client.get(
+        f"/v1/dogs/{dog_id}/photos?stories=true", headers=auth_headers
+    )
+    assert [item["id"] for item in moments.json()["items"]] == []
+    assert [item["id"] for item in recent_stories.json()["items"]] == [photo_id]

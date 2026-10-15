@@ -9,7 +9,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
-  fetchDogPhotos,
+  fetchStories,
 } from '@/features/photos/api';
 import { StoryHeader } from '@/features/social/StoryHeader';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -26,13 +26,14 @@ export default function SocialScreen() {
   const [lastSeenId, setLastSeenId] = useState<string | null>(null);
 
   const momentsQuery = useInfiniteQuery({
-    queryKey: ['social-moments', dog.id, PAGE_SIZE],
-    queryFn: ({ pageParam }) => fetchDogPhotos(dog.id, PAGE_SIZE, pageParam),
+    queryKey: ['social-stories', dog.id, PAGE_SIZE],
+    queryFn: ({ pageParam }) => fetchStories(dog.id, PAGE_SIZE, pageParam),
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
     enabled: Boolean(dog.id),
     retry: 1,
+    refetchInterval: 60_000,
   });
 
   const photos = useMemo(
