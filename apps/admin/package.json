@@ -11,10 +11,13 @@
   },
   "dependencies": {
     "lucide-react": "^0.545.0",
-    "next": "^15.5.4",
+    "next": "15.5.28",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "recharts": "^2.15.4"
+  },
+  "overrides": {
+    "postcss": "8.5.30"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
