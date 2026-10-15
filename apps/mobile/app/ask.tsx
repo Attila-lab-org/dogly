@@ -144,21 +144,43 @@ export default function AskScreen() {
         const isRevisit = intent === 'revisit';
         const text = isRevisit
           ? digestiveHandoff
-            ? 'Torniamo su questo controllo.'
-            : 'Torniamo su questo momento.'
+            ? 'Riprendiamo questa analisi dal diario.'
+            : 'Riprendiamo questo momento dal diario.'
           : digestiveHandoff
             ? 'Ho caricato la foto richiesta.'
             : 'Ho caricato il video richiesto.';
-        const turn = await createRealtimeTurn(next.id, text, undefined, {
+        const revisitInvite = isRevisit
+          ? digestiveHandoff
+            ? `Vuoi approfondire questa analisi di ${dog.name}?`
+            : `Vuoi approfondire questo momento di ${dog.name}?`
+          : undefined;
+        const turn = await createRealtimeTurn(next.id, text, revisitInvite, {
           eventId,
           source: digestiveHandoff ? 'digestive' : 'behavior',
         });
         if (!mounted.current) return;
-        setMessages([
-          ...(resumed?.messages ?? []),
-          { id: 'video-' + eventId, role: 'user', text },
-          { id: turn.id, role: 'assistant', text: turn.assistant_text, turn },
-        ]);
+        setMessages(
+          isRevisit
+            ? [
+                ...(resumed?.messages ?? []),
+                {
+                  id: turn.id,
+                  role: 'assistant',
+                  text: turn.assistant_text,
+                  turn,
+                },
+              ]
+            : [
+                ...(resumed?.messages ?? []),
+                { id: 'video-' + eventId, role: 'user', text },
+                {
+                  id: turn.id,
+                  role: 'assistant',
+                  text: turn.assistant_text,
+                  turn,
+                },
+              ],
+        );
         setFocusedEventId(undefined);
       } else if (resumed) {
         setMessages(resumed.messages);
