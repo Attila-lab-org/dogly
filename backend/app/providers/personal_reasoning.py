@@ -31,7 +31,7 @@ async def request_personal_json(settings, *, task: str, payload: dict,
                          {"role": "user", "content": content}],
             "response_format": {"type": "json_object"}}
     model_name = settings.realtime_reasoning_model.lower()
-    if model_name.startswith("gpt-5") or model_name.startswith("gpt-6"):
+    if model_name.startswith(("gpt-5", "gpt-6")):
         # gpt-6.* rejects temperature and requires an explicit effort.
         body["reasoning_effort"] = "medium" if image_url else "low"
     try:

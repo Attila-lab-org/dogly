@@ -165,7 +165,14 @@ async def get_album_cover_path(
         ).scalar_one_or_none()
 
 
-async def list_photos(engine: AsyncEngine, *, user_id: str, album_id: str) -> list[DogPhotoOut]:
+async def list_photos(
+    engine: AsyncEngine,
+    *,
+    user_id: str,
+    album_id: str,
+    limit: int = 100,
+) -> list[DogPhotoOut]:
+    limit = max(1, min(limit, 100))
     async with engine.connect() as conn:
         album = (
             await conn.execute(
@@ -186,9 +193,10 @@ async def list_photos(engine: AsyncEngine, *, user_id: str, album_id: str) -> li
                       and owner_id = :user_id
                       and deleted_at is null
                     order by created_at desc, id desc
+                    limit :limit
                     """
                 ),
-                {"album_id": album_id, "user_id": user_id},
+                {"album_id": album_id, "user_id": user_id, "limit": limit},
             )
         ).mappings().all()
     return [_photo_out(row) for row in rows]

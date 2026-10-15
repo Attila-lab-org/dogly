@@ -1283,6 +1283,18 @@
             }
           },
           {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -5490,7 +5502,7 @@
           "realtime"
         ],
         "summary": "Create Live Session",
-        "description": "Open the dedicated Live voice room (WebRTC via ephemeral OpenAI secret).",
+        "description": "Open the Live voice room (GPT-Live WebRTC; server exchanges SDP).",
         "operationId": "create_live_session_v1_realtime_live_sessions_post",
         "parameters": [
           {
@@ -11119,11 +11131,18 @@
           "dog_id": {
             "type": "string",
             "title": "Dog Id"
+          },
+          "sdp": {
+            "type": "string",
+            "maxLength": 65536,
+            "minLength": 1,
+            "title": "Sdp"
           }
         },
         "type": "object",
         "required": [
-          "dog_id"
+          "dog_id",
+          "sdp"
         ],
         "title": "LiveSessionCreate"
       },
@@ -11164,25 +11183,25 @@
             ],
             "title": "Voice Gender"
           },
-          "client_secret": {
+          "sdp": {
             "type": "string",
-            "title": "Client Secret"
+            "title": "Sdp"
           },
-          "client_secret_expires_at": {
+          "openai_session_id": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Client Secret Expires At"
+            "title": "Openai Session Id"
           },
           "seconds_remaining": {
             "type": "integer",
-            "title": "Seconds Remaining"
+            "title": "Seconds Remaining",
+            "default": 0
           },
           "welcome_text": {
             "type": "string",
@@ -11206,12 +11225,11 @@
           "dog_name",
           "voice",
           "voice_gender",
-          "client_secret",
-          "seconds_remaining",
+          "sdp",
           "welcome_text"
         ],
         "title": "LiveSessionOut",
-        "description": "Ephemeral OpenAI Realtime credentials for the Live voice room."
+        "description": "GPT-Live WebRTC answer for the Live voice room."
       },
       "MeResponse": {
         "properties": {

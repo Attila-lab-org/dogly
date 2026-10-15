@@ -9,7 +9,9 @@
 revoke all on public.game_scores from public, anon, authenticated;
 grant all on public.game_scores to service_role;
 
-drop policy if exists game_scores_select_authenticated on public.game_scores;
+-- The preceding migration already created the *_own policy. Drop that exact
+-- name so a fresh database can replay the migration chain safely.
+drop policy if exists game_scores_select_own on public.game_scores;
 create policy game_scores_select_own on public.game_scores
   for select to authenticated
   using (user_id = (select auth.uid()));

@@ -194,21 +194,21 @@ class DigestiveIntelligenceResult(BaseModel):
 
 
 _OWNER_JARGON = (
-    (re.compile(r"\bsalsicciotto\b(?:\s*\([^)]*\))?", re.I), "ben formate"),
+    (re.compile(r"\bsalsicciotto\b(?:\s*\([^)]*\))?", re.IGNORECASE), "ben formate"),
     (re.compile(r"\(~?\s*[1-7]\s*\)"), ""),
-    (re.compile(r"\bbristol\b[^.,;]*", re.I), ""),
-    (re.compile(r"\bdel\s+tratto\s+finale\s*\(retto\s*/\s*ano\)", re.I), "della parte finale"),
-    (re.compile(r"\btratto\s+finale\s*\(retto\s*/\s*ano\)", re.I), "parte finale"),
-    (re.compile(r"\bretto\s*/\s*ano\b", re.I), "parte finale"),
-    (re.compile(r"\bdel\s+retto\b", re.I), "della parte finale"),
-    (re.compile(r"\bretto\b", re.I), "parte finale"),
-    (re.compile(r"\bdell['’]?ano\b", re.I), "dell’uscita"),
-    (re.compile(r"\bano\b", re.I), "uscita"),
-    (re.compile(r"\bmicrofessur[ae]\b", re.I), "piccola irritazione"),
-    (re.compile(r"\bvolume nella norma\b", re.I), "quantità normale"),
-    (re.compile(r"\bquadro regolare\b", re.I), "quadro normale"),
-    (re.compile(r"\btratto finale\b", re.I), "parte finale"),
-    (re.compile(r"\bstriature rosso vivo\b", re.I), "tracce di sangue rosso"),
+    (re.compile(r"\bbristol\b[^.,;]*", re.IGNORECASE), ""),
+    (re.compile(r"\bdel\s+tratto\s+finale\s*\(retto\s*/\s*ano\)", re.IGNORECASE), "della parte finale"),
+    (re.compile(r"\btratto\s+finale\s*\(retto\s*/\s*ano\)", re.IGNORECASE), "parte finale"),
+    (re.compile(r"\bretto\s*/\s*ano\b", re.IGNORECASE), "parte finale"),
+    (re.compile(r"\bdel\s+retto\b", re.IGNORECASE), "della parte finale"),
+    (re.compile(r"\bretto\b", re.IGNORECASE), "parte finale"),
+    (re.compile(r"\bdell['’]?ano\b", re.IGNORECASE), "dell’uscita"),
+    (re.compile(r"\bano\b", re.IGNORECASE), "uscita"),
+    (re.compile(r"\bmicrofessur[ae]\b", re.IGNORECASE), "piccola irritazione"),
+    (re.compile(r"\bvolume nella norma\b", re.IGNORECASE), "quantità normale"),
+    (re.compile(r"\bquadro regolare\b", re.IGNORECASE), "quadro normale"),
+    (re.compile(r"\btratto finale\b", re.IGNORECASE), "parte finale"),
+    (re.compile(r"\bstriature rosso vivo\b", re.IGNORECASE), "tracce di sangue rosso"),
 )
 
 

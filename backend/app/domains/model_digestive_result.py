@@ -5,8 +5,8 @@ from pydantic import Field
 
 from app.contracts.taxonomy import AnalysisDomain
 from app.domains.digestive_intelligence import (
-    DigestiveState,
     DigestiveIntelligenceResult,
+    DigestiveState,
     clamp_digestive_owner_copy,
     normalize_baseline_comparison,
 )

@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.domains.realtime_context import (
@@ -229,7 +230,7 @@ async def create_session_db(
                     },
                 )
                 await conn.execute(text("RELEASE SAVEPOINT archive_conversation_memory"))
-            except Exception:
+            except SQLAlchemyError:
                 await conn.execute(
                     text("ROLLBACK TO SAVEPOINT archive_conversation_memory")
                 )
@@ -609,7 +610,7 @@ def create_session_memory(
         "context_snapshot_version": "personal-dog-context/v1",
         "started_at": now,
         "last_active_at": now,
-        "expires_at": now + timedelta(hours=24),
+        "expires_at": now + timedelta(minutes=15),
         "dog_name": dog.name,
         "display_name": getattr(store.profiles.get(user_id), "display_name", None),
     }

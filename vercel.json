@@ -35,6 +35,10 @@
     {
       "path": "/tasks/cron/sweep-stuck",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/tasks/cron/care-reminders",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

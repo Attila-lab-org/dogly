@@ -95,7 +95,13 @@ def get_album(store: InMemoryStore, *, user_id: str, album_id: str) -> DogAlbumO
     return _album_out(album, store)
 
 
-def list_photos(store: InMemoryStore, *, user_id: str, album_id: str) -> list[DogPhotoOut]:
+def list_photos(
+    store: InMemoryStore,
+    *,
+    user_id: str,
+    album_id: str,
+    limit: int = 100,
+) -> list[DogPhotoOut]:
     album = store.dog_albums.get(album_id)
     if album is None or album.owner_id != user_id:
         raise ApiError(ErrorCode.NOT_FOUND, "Album not found.")
@@ -105,7 +111,7 @@ def list_photos(store: InMemoryStore, *, user_id: str, album_id: str) -> list[Do
         if p.album_id == album_id and p.owner_id == user_id and p.deleted_at is None
     ]
     photos.sort(key=lambda p: p.created_at, reverse=True)
-    return [_photo_out(p) for p in photos]
+    return [_photo_out(p) for p in photos[: max(1, min(limit, 100))]]
 
 
 def get_photo(store: InMemoryStore, *, user_id: str, photo_id: str) -> DogPhotoOut:

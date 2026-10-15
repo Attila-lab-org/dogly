@@ -168,11 +168,20 @@ async def get_album(album_id: str, state: StateDep, user_id: UserIdDep) -> DogAl
 
 
 @router.get("/albums/{album_id}/photos", response_model=DogPhotoListResponse)
-async def list_photos(album_id: str, state: StateDep, user_id: UserIdDep) -> DogPhotoListResponse:
+async def list_photos(
+    album_id: str,
+    state: StateDep,
+    user_id: UserIdDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> DogPhotoListResponse:
     if state.engine is not None:
-        items = await gallery_db.list_photos(state.engine, user_id=user_id, album_id=album_id)
+        items = await gallery_db.list_photos(
+            state.engine, user_id=user_id, album_id=album_id, limit=limit
+        )
     else:
-        items = gallery_domain.list_photos(state.store, user_id=user_id, album_id=album_id)
+        items = gallery_domain.list_photos(
+            state.store, user_id=user_id, album_id=album_id, limit=limit
+        )
     return DogPhotoListResponse(items=await photos_with_urls(items, state))
 
 

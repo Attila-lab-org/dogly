@@ -166,7 +166,7 @@ JSON richiesto; used_source_ids solo per dati personali forniti; nessun link inv
 
 def _uses_reasoning_effort(model: str) -> bool:
     name = model.lower()
-    return name.startswith("gpt-5") or name.startswith("gpt-6")
+    return name.startswith(("gpt-5", "gpt-6"))
 
 
 def openai_realtime_decision_schema() -> dict[str, Any]:

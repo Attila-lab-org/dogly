@@ -158,5 +158,23 @@ jobs:
         run: |
           uv sync
           uv pip compile pyproject.toml -o /tmp/reqs.txt
+          uvx --from pip-audit pip-audit -r /tmp/reqs.txt --strict
           # No paid provider calls in CI — assert mock defaults in tests.
           uv run pytest -q tests/test_config_fail_fast.py
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            apps/mobile/pnpm-lock.yaml
+            apps/mobile-web/pnpm-lock.yaml
+      - name: Consumer runtime dependency audit
+        run: |
+          pnpm --dir apps/mobile install --frozen-lockfile
+          pnpm --dir apps/mobile audit --prod --audit-level=high
+          pnpm --dir apps/mobile-web install --frozen-lockfile
+          pnpm --dir apps/mobile-web audit --prod --audit-level=high

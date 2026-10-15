@@ -21,8 +21,9 @@ VOICE_BY_GENDER: dict[AskVoiceGender, str] = {
 }
 
 LIVE_MODEL = "gpt-live-1"
-# Soft UX hint only — Live is billed by duration; no hard client cut-off.
-DEFAULT_LIVE_SECONDS = 0
+# Server session lifetime. The client timer is only a UX aid; backend session
+# expiry also prevents later turns from being accepted after this window.
+DEFAULT_LIVE_SECONDS = 15 * 60
 _MAX_DOSSIER_CHARS = 2800
 _MAX_SDP_CHARS = 65_536
 

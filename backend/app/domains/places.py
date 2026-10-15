@@ -379,7 +379,7 @@ async def search_nearby(
             unique = _dedupe(items, limit=RESULT_LIMIT)
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Google Places nearby failed: %s", exc)
         raise ApiError(
             ErrorCode.PROCESSING_FAILED,

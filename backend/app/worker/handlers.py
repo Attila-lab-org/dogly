@@ -1648,7 +1648,21 @@ async def process_media_retention_cleanup(state: AppState, *, event_id: str | No
     """
     del event_id  # unused; cleanup scans the store
     if state.engine is not None:
-        result = await cleanup_expired_raw_media_db(state.engine, storage=state.storage)
+        # Drain several bounded batches in one cron invocation. This keeps each
+        # SQL transaction small while preventing a backlog of more than 100
+        # expired objects from surviving until the next day.
+        result: dict = {}
+        for _ in range(10):
+            batch = await cleanup_expired_raw_media_db(
+                state.engine, storage=state.storage, limit=100
+            )
+            for key, value in batch.items():
+                if isinstance(value, (int, float)):
+                    result[key] = result.get(key, 0) + value
+                elif key not in result:
+                    result[key] = value
+            if not batch.get("processed") and not batch.get("refunded_abandoned"):
+                break
         try:
             from app.domains import idempotency_db
 

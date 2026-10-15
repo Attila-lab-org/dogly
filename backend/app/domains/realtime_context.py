@@ -300,9 +300,7 @@ def _is_substantive_owner_line(text: str) -> bool:
         return False
     if cleaned.casefold() in _GENERIC_STARTER_QUESTIONS:
         return False
-    if _TRIVIAL_CONTINUITY.fullmatch(cleaned):
-        return False
-    return True
+    return not _TRIVIAL_CONTINUITY.fullmatch(cleaned)
 
 
 def build_open_threads(
