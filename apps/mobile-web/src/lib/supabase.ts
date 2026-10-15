@@ -9,8 +9,8 @@ import {
 } from '../features/auth/env';
 
 /**
- * Supabase Auth storage → SecureStore (Spec V1 sez. 5.3).
- * Valori lunghi spezzati in chunk (limite SecureStore ~2KB su Android).
+ * Supabase Auth storage → SecureStore nativo / sessionStorage web (Spec V1
+ * sez. 5.3). Valori lunghi spezzati in chunk (limite SecureStore ~2KB).
  */
 
 const CHUNK = 1800;
