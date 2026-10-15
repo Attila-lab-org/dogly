@@ -170,6 +170,25 @@ export default function AroundScreen() {
             <Ionicons name="location-outline" size={22} color={colors.accent} />
           </View>
 
+          <View style={styles.filterRow}>
+            {PLACE_FILTERS.map((filter) => {
+              const active = placeFilter === filter.key;
+              return (
+                <Pressable
+                  key={filter.key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => setPlaceFilter(filter.key)}
+                  style={[styles.filterPill, active && styles.filterPillActive]}
+                >
+                  <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>
+                    {filter.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {locating ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
@@ -178,7 +197,7 @@ export default function AroundScreen() {
           ) : Boolean(coords) && placesQuery.isFetching && !placesTimedOut && !placesQuery.isError ? (
             <View style={styles.loading}>
               <ActivityIndicator color={colors.primary} />
-              <Text style={styles.emptyText}>Cerco posti vicini…</Text>
+              <Text style={styles.emptyText}>Sniff sniff… cerco i posti giusti vicino a voi.</Text>
             </View>
           ) : locationFailure || !coords ? (
             <View style={styles.fallback}>
@@ -236,11 +255,20 @@ export default function AroundScreen() {
                 }
               />
             </View>
-          ) : cards.length === 0 ? (
+          ) : filteredPlaces.length === 0 ? (
             <View style={styles.fallback}>
               <Text style={styles.emptyText}>
-                Non ho trovato posti nominati qui intorno. Prova la ricerca sulla mappa.
+                {placeFilter === 'ALL'
+                  ? 'Nessun luogo utile vicino a te, per ora.'
+                  : placeFilter === 'PARK'
+                    ? 'Nessun parco o area cani qui intorno, per ora.'
+                    : 'Nessun veterinario qui intorno, per ora.'}
               </Text>
+              <PlaceFallback
+                title="Riprova la posizione"
+                button="Riprova"
+                onPress={() => setLocationTick((value) => value + 1)}
+              />
               <PlaceFallback
                 title="Apri la mappa"
                 button="Cerca nelle vicinanze"
@@ -253,7 +281,7 @@ export default function AroundScreen() {
             </View>
           ) : (
             <View style={styles.placeList}>
-              {cards.map((place) => (
+              {filteredPlaces.map((place) => (
                 <PlaceCard key={place.id} place={place} />
               ))}
             </View>
@@ -265,7 +293,7 @@ export default function AroundScreen() {
 }
 
 function PlaceCard({ place }: { place: NearbyPlace }) {
-  const tone = place.kind === 'VET' ? 'warm' : 'cool';
+  const isVet = place.kind === 'VET';
   const phoneHref = place.phone ? `tel:${place.phone}` : null;
   return (
     <View style={styles.placeCard}>
@@ -275,11 +303,12 @@ function PlaceCard({ place }: { place: NearbyPlace }) {
         onPress={() => void Linking.openURL(place.maps_url)}
         style={({ pressed }) => [styles.placeMain, pressed && styles.pressed]}
       >
-        <View style={[styles.placeIcon, tone === 'warm' && styles.placeIconWarm]}>
-          <Ionicons
-            name={place.kind === 'VET' ? 'medkit-outline' : 'paw-outline'}
-            size={22}
-            color={tone === 'warm' ? '#B45309' : colors.primary}
+        <View style={[styles.placeIcon, isVet && styles.placeIconWarm]}>
+          <CuteIcon
+            name={isVet ? 'heart' : 'leaf'}
+            size={24}
+            color={isVet ? '#B45309' : colors.accent}
+            secondary={isVet ? '#FEF3C7' : colors.accentSoft}
           />
         </View>
         <View style={styles.placeCopy}>
@@ -287,7 +316,7 @@ function PlaceCard({ place }: { place: NearbyPlace }) {
             {place.name}
           </Text>
           <Text style={styles.placeMeta}>
-            {place.kind === 'VET' ? 'Veterinario' : 'Parco / area cani'} ·{' '}
+            {isVet ? 'Veterinario' : 'Parco / area cani'} ·{' '}
             {formatDistance(place.distance_m)}
           </Text>
         </View>
@@ -303,7 +332,7 @@ function PlaceCard({ place }: { place: NearbyPlace }) {
           <Ionicons name="call" size={16} color="#FFFFFF" />
           <Text style={styles.callButtonText}>Chiama ora</Text>
         </Pressable>
-      ) : place.kind === 'VET' ? (
+      ) : isVet ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Apri ${place.name} sulla mappa per chiamare`}
@@ -369,20 +398,17 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: '700' },
   link: { color: colors.primary, fontWeight: '700' },
-  gallery: { flexDirection: 'row', gap: 10, height: 210 },
-  galleryLarge: { flex: 1.2, borderRadius: 18, overflow: 'hidden' },
-  gallerySide: { flex: 1, gap: 10 },
-  gallerySmall: { flex: 1, borderRadius: 18, overflow: 'hidden' },
-  galleryImage: { width: '100%', height: '100%' },
-  moreOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15,23,42,0.45)',
+  galleryRow: { flexDirection: 'row', gap: 10 },
+  galleryThumb: { width: 96, height: 96, borderRadius: 18, overflow: 'hidden' },
+  galleryMore: {
+    backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moreText: { color: '#FFFFFF', fontWeight: '700', fontSize: 22 },
+  galleryImage: { width: '100%', height: '100%' },
+  moreText: { color: colors.textSecondary, fontWeight: '700', fontSize: 18 },
   galleryEmpty: {
-    minHeight: 120,
+    minHeight: 84,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
@@ -392,6 +418,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.lg,
   },
+  filterRow: { flexDirection: 'row', gap: spacing.sm },
+  filterPill: {
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surfaceMuted,
+  },
+  filterPillActive: { backgroundColor: colors.accent },
+  filterLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+  },
+  filterLabelActive: { color: colors.textOnPrimary },
   emptyText: { color: colors.textSecondary, fontSize: typography.size.sm, textAlign: 'center' },
   loading: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
   placeList: { gap: spacing.sm },
