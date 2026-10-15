@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -56,10 +57,12 @@ export default function NewFoodScreen() {
   const params = useLocalSearchParams<{
     photoFoodId?: string | string[];
     photoQuery?: string | string[];
+    photoLocalUri?: string | string[];
     catalogBarcode?: string | string[];
   }>();
   const photoFoodId = firstParam(params.photoFoodId);
   const photoQuery = firstParam(params.photoQuery);
+  const photoLocalUri = firstParam(params.photoLocalUri);
   const catalogBarcode = firstParam(params.catalogBarcode);
   const queryClient = useQueryClient();
   const { dog } = useDogProfile();
@@ -69,11 +72,11 @@ export default function NewFoodScreen() {
   const catalogPickStarted = useRef(false);
   const feedingOperationIdRef = useRef<string | null>(null);
 
-  const [step, setStep] = useState<Step>('identify');
+  const [step, setStep] = useState<Step>(photoFoodId ? 'details' : 'identify');
   const [query, setQuery] = useState(photoQuery);
   const [hits, setHits] = useState<ExternalFoodCandidate[]>([]);
   const [selected, setSelected] = useState<ExternalFoodCandidate | null>(null);
-  const [manual, setManual] = useState(false);
+  const [manual, setManual] = useState(Boolean(photoFoodId));
   const [brand, setBrand] = useState('');
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -160,17 +163,29 @@ export default function NewFoodScreen() {
     if (!photoFoodId || photoStarted.current || photoFoodQuery.isLoading) return;
     photoStarted.current = true;
     const food = photoFoodQuery.data;
+    const nextBrand = (food?.brand ?? '').trim();
+    const nextName = (food?.name ?? '').trim();
     const extractedQuery =
-      photoQuery || [food?.brand, food?.name].filter(Boolean).join(' ');
-    setBrand(food?.brand ?? '');
-    setName(food?.name ?? '');
+      photoQuery || [nextBrand, nextName].filter(Boolean).join(' ');
+    setBrand(nextBrand);
+    setName(nextName || extractedQuery);
     setQuery(extractedQuery);
-    if (extractedQuery.trim().length >= 2) {
-      setStep('identify');
+    setSelected(null);
+    setManual(true);
+    setStep('details');
+    setIngredients(food?.ingredients_raw ?? '');
+    setProtein(food?.guaranteed_analysis?.crude_protein_min?.toString() ?? '');
+    setFat(food?.guaranteed_analysis?.crude_fat_min?.toString() ?? '');
+    setFiber(food?.guaranteed_analysis?.crude_fiber_max?.toString() ?? '');
+    setMoisture(food?.guaranteed_analysis?.moisture_max?.toString() ?? '');
+    setCaloriesLabel(food?.guaranteed_analysis?.calories ?? '');
+    setManualNutritionOpen(needsLabelEnrichment(food ?? {}));
+    if (nextBrand && nextName) {
+      setMessage('Ho letto marca e nome dalla foto. Controlla e salva.');
     } else {
-      setManual(true);
-      setStep('details');
-      setMessage('Non ho letto abbastanza bene marca e nome. Completa solo questi due campi.');
+      setMessage(
+        'Ho la tua foto. Completa solo marca e nome se mancano, poi salva.',
+      );
     }
   }, [photoFoodId, photoFoodQuery.data, photoFoodQuery.isLoading, photoQuery]);
 
@@ -409,6 +424,13 @@ export default function NewFoodScreen() {
   };
 
   const selectedMeta = selected ? uniqueProductMeta(selected) : [];
+  const photoPreviewUri =
+    photoLocalUri ||
+    photoFoodQuery.data?.label_image_url ||
+    photoFoodQuery.data?.catalog_image_url ||
+    null;
+  const identifyBusy = searching || catalogLoading;
+  const identifyEmpty = !identifyBusy && hits.length === 0;
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
@@ -418,7 +440,7 @@ export default function NewFoodScreen() {
         <>
           <Text style={styles.hero}>Il cibo di {dog.name}</Text>
           <Text style={styles.lead}>
-            Cerca o scegli tra i più usati. Un tap e confermi.
+            Cerca per marca o nome, oppure scegli dallo scaffale. Un tap e confermi.
           </Text>
 
           <View style={styles.searchRow}>
@@ -464,15 +486,54 @@ export default function NewFoodScreen() {
             })}
           </View>
 
-          <Text style={styles.count}>
+          <Text style={styles.count} accessibilityLiveRegion="polite">
             {searching
-              ? 'Cerco nel catalogo…'
+              ? query.trim()
+                ? `Cerco “${query.trim()}”…`
+                : 'Cerco nel catalogo…'
               : catalogLoading
                 ? 'Carico lo scaffale…'
                 : query.trim()
-                  ? `${hits.length} risultat${hits.length === 1 ? 'o' : 'i'}`
-                  : 'Tra i più usati'}
+                  ? hits.length === 0
+                    ? `Nessun risultato per “${query.trim()}”`
+                    : `${hits.length} risultat${hits.length === 1 ? 'o' : 'i'}`
+                  : hits.length === 0
+                    ? 'Catalogo vuoto al momento'
+                    : 'Tra i più usati'}
           </Text>
+
+          {identifyBusy ? (
+            <View style={styles.stateBlock}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.stateBody}>
+                {searching
+                  ? 'Sto cercando nel catalogo Open Pet Food Facts…'
+                  : 'Sto caricando i prodotti più usati…'}
+              </Text>
+            </View>
+          ) : null}
+
+          {identifyEmpty ? (
+            <View style={styles.stateBlock}>
+              <View style={styles.stateIcon}>
+                <Ionicons
+                  name={query.trim() ? 'search-outline' : 'file-tray-outline'}
+                  size={28}
+                  color={colors.textMuted}
+                />
+              </View>
+              <Text style={styles.stateTitle}>
+                {query.trim()
+                  ? 'Non c’è in catalogo'
+                  : 'Niente da mostrare qui'}
+              </Text>
+              <Text style={styles.stateBody}>
+                {query.trim()
+                  ? 'Prova la marca completa, togli filtri, oppure fotografa il fronte della confezione.'
+                  : 'Puoi cercare per nome, oppure aggiungere il cibo con una foto del fronte.'}
+              </Text>
+            </View>
+          ) : null}
 
           {hits.length > 0 ? (
             <View style={styles.grid}>
@@ -487,7 +548,7 @@ export default function NewFoodScreen() {
             </View>
           ) : null}
 
-          {!query.trim() && catalogNextPage ? (
+          {!query.trim() && catalogNextPage && !identifyBusy ? (
             <Button
               title="Mostra altri"
               loading={catalogLoading}
@@ -524,8 +585,10 @@ export default function NewFoodScreen() {
                 <Ionicons name="camera-outline" size={22} color={colors.accent} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.photoTitle}>Fotografa la confezione</Text>
-                <Text style={styles.photoSub}>Solo se non è in catalogo</Text>
+                <Text style={styles.photoTitle}>Foto del fronte confezione</Text>
+                <Text style={styles.photoSub}>
+                  Solo marca e nome, ben leggibili
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
@@ -543,11 +606,35 @@ export default function NewFoodScreen() {
       {step === 'details' ? (
         <>
           <Text style={styles.confirmEyebrow}>
-            {manual ? 'Inserimento' : 'Conferma'}
+            {photoFoodId ? 'Dalla tua foto' : manual ? 'Inserimento' : 'Conferma'}
           </Text>
           <Text style={styles.hero}>
-            {manual ? 'Inserisci l’alimento' : 'È questo?'}
+            {photoFoodId
+              ? brand.trim() && name.trim()
+                ? 'Conferma questo cibo'
+                : 'Completa dalla foto'
+              : manual
+                ? 'Inserisci l’alimento'
+                : 'È questo?'}
           </Text>
+          {photoFoodId ? (
+            <Text style={styles.lead}>
+              Sotto vedi l’anteprima. Correggi solo se marca o nome non tornano.
+            </Text>
+          ) : null}
+
+          {photoFoodId && photoPreviewUri ? (
+            <View style={styles.heroPack}>
+              <Image
+                source={{ uri: photoPreviewUri }}
+                style={styles.heroImage}
+                accessibilityLabel="Anteprima della foto della confezione"
+              />
+              <View style={styles.heroInfo}>
+                <Text style={styles.heroPeek}>La tua foto · puoi correggere i campi sotto</Text>
+              </View>
+            </View>
+          ) : null}
 
           {selected && !manual ? (
             <Pressable
@@ -583,16 +670,30 @@ export default function NewFoodScreen() {
 
           {manual ? (
             <View style={styles.manualFields}>
-              <Text style={styles.fieldLabel}>Marca</Text>
+              <Text style={styles.fieldLabel}>
+                Marca
+                {photoFoodId && brand.trim() ? (
+                  <Text style={styles.optional}> · letto dalla foto</Text>
+                ) : null}
+              </Text>
               <TextInput
                 accessibilityLabel="Marca"
                 value={brand}
                 onChangeText={setBrand}
-                placeholder="Per esempio: Monge"
+                placeholder={
+                  photoFoodId
+                    ? 'Come sulla foto / confezione'
+                    : 'Per esempio: Monge'
+                }
                 placeholderTextColor={colors.textMuted}
                 style={styles.input}
               />
-              <Text style={styles.fieldLabel}>Nome completo</Text>
+              <Text style={styles.fieldLabel}>
+                Nome completo
+                {photoFoodId && name.trim() ? (
+                  <Text style={styles.optional}> · letto dalla foto</Text>
+                ) : null}
+              </Text>
               <TextInput
                 accessibilityLabel="Nome completo dell’alimento"
                 value={name}
@@ -604,7 +705,24 @@ export default function NewFoodScreen() {
             </View>
           ) : null}
 
-          {!manual ? (
+          {photoFoodId ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setManual(false);
+                setSelected(null);
+                setStep('identify');
+                if (brand.trim() || name.trim()) {
+                  setQuery([brand, name].filter(Boolean).join(' '));
+                }
+              }}
+              style={styles.textAction}
+            >
+              <Text style={styles.textActionLabel}>
+                Meglio scegliere dal catalogo
+              </Text>
+            </Pressable>
+          ) : !manual ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => setStep('identify')}
@@ -794,9 +912,15 @@ export default function NewFoodScreen() {
           ) : null}
 
           <Button
-            title={manual ? `Salva per ${dog.name}` : `Sì, è questo · Salva`}
+            title={
+              photoFoodId
+                ? `Salva foto per ${dog.name}`
+                : manual
+                  ? `Salva per ${dog.name}`
+                  : `Sì, è questo · Salva`
+            }
             loading={working}
-            disabled={!name.trim()}
+            disabled={!name.trim() || (Boolean(photoFoodId) && !brand.trim())}
             onPress={() => void save()}
           />
         </>
@@ -950,6 +1074,34 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: typography.weight.bold,
+  },
+  stateBlock: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  stateIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+    marginBottom: 4,
+  },
+  stateTitle: {
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
+  },
+  stateBody: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
+    textAlign: 'center',
+    maxWidth: 300,
   },
   grid: {
     flexDirection: 'row',

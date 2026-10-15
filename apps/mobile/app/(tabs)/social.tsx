@@ -86,11 +86,8 @@ export default function SocialScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>MOMENTI</Text>
-          <Text style={styles.title}>I momenti di {dog.name}</Text>
-          <Text style={styles.subtitle}>
-            Le vostre storie e i luoghi utili vicino a voi.
-          </Text>
+          <Text style={styles.eyebrow}>SOCIAL</Text>
+          <Text style={styles.title}>Il mondo di {dog.name}</Text>
         </View>
 
         <StoryRail
@@ -134,11 +131,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: 20,
   },
   divider: {
     height: 1,

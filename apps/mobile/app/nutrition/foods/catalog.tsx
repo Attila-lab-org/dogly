@@ -68,7 +68,7 @@ export default function FoodCatalogScreen() {
       <StackScreenHeader title="Catalogo" />
       <Text style={styles.hero}>Il cibo di {dog.name}</Text>
       <Text style={styles.lead}>
-        Cerca o scegli tra i più usati. Un tap e confermi.
+        Cerca per marca o nome, oppure scegli dallo scaffale. Un tap e confermi.
       </Text>
 
       <View style={styles.searchRow}>
@@ -113,23 +113,51 @@ export default function FoodCatalogScreen() {
         })}
       </View>
 
-      <Text style={styles.count}>
+      <Text style={styles.count} accessibilityLiveRegion="polite">
         {loading
-          ? 'Carico lo scaffale…'
+          ? query.trim()
+            ? `Cerco “${query.trim()}”…`
+            : 'Carico lo scaffale…'
           : query.trim()
-            ? `${items.length} risultat${items.length === 1 ? 'o' : 'i'}`
-            : 'Tra i più usati'}
+            ? items.length === 0
+              ? `Nessun risultato per “${query.trim()}”`
+              : `${items.length} risultat${items.length === 1 ? 'o' : 'i'}`
+            : items.length === 0
+              ? 'Catalogo vuoto al momento'
+              : 'Tra i più usati'}
       </Text>
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+        <View style={styles.empty}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.emptyBody}>
+            {query.trim()
+              ? 'Sto cercando nel catalogo…'
+              : 'Sto caricando i prodotti più usati…'}
+          </Text>
+        </View>
       ) : error ? (
-        <Text style={styles.error}>{error}</Text>
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Catalogo non raggiungibile</Text>
+          <Text style={styles.emptyBody}>{error}</Text>
+          <Text style={styles.emptyBody}>
+            Puoi riprovare tra poco oppure aggiungere il cibo con una foto del fronte.
+          </Text>
+        </View>
       ) : items.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Nessun prodotto qui</Text>
+          <Ionicons
+            name={query.trim() ? 'search-outline' : 'file-tray-outline'}
+            size={28}
+            color={colors.textMuted}
+          />
+          <Text style={styles.emptyTitle}>
+            {query.trim() ? 'Non c’è in catalogo' : 'Niente da mostrare qui'}
+          </Text>
           <Text style={styles.emptyBody}>
-            Prova un’altra marca oppure fotografa la confezione.
+            {query.trim()
+              ? 'Prova la marca completa, togli filtri, oppure fotografa il fronte della confezione (marca e nome).'
+              : 'Cerca per nome oppure aggiungi il cibo con una foto del fronte.'}
           </Text>
         </View>
       ) : (
@@ -183,7 +211,7 @@ export default function FoodCatalogScreen() {
       >
         <Ionicons name="camera-outline" size={18} color={colors.primary} />
         <Text style={styles.photoFallbackText}>
-          Non c’è? Fotografa la confezione
+          Non c’è? Foto del fronte (marca e nome)
         </Text>
       </Pressable>
     </ScreenContainer>

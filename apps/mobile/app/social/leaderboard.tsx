@@ -1,13 +1,14 @@
 /**
- * Classifica settimanale "Giochi del quartiere" (azzera il lunedì).
- * Podio fisico a 3 gradini con corona e medaglie, lista dal #4, card
- * "La tua posizione" con distanza dal podio, countdown all'azzardo.
+ * Classifica settimanale "Giochi del quartiere" (nuovo podio il lunedì).
+ * Podio fisico SOLO con partecipanti reali (mai gradini vuoti); con 0-2
+ * iscritti uno stato festoso dedicato celebra chi è in testa e invita a
+ * giocare/sfidare gli amici. Corona duotone vera sul vincitore.
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
@@ -27,17 +28,20 @@ import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 
 const GAME_TABS: GameId[] = ['squirrel', 'agility', 'match'];
 
-function Crown({ size = 22 }: { size?: number }) {
+/** Corona duotone vera: tre punte, banda teal, gemma navy. */
+function Crown({ size = 30 }: { size?: number }) {
   return (
-    <Svg width={size} height={size * 0.75} viewBox="0 0 28 20" style={styles.crown}>
+    <Svg width={size} height={size * 0.82} viewBox="0 0 34 28" style={styles.crown}>
       <Path
-        d="M3 16 L1 5 L8 9 L14 2 L20 9 L27 5 L25 16 Z"
+        d="M4 21 L1 7 L10 12 L17 2 L24 12 L33 7 L30 21 Z"
         fill="#F6C94C"
         stroke={colors.text}
-        strokeWidth={1.8}
+        strokeWidth={2}
         strokeLinejoin="round"
       />
-      <Circle cx={14} cy={12} r={1.8} fill={colors.text} />
+      <Rect x={4} y={21} width={26} height={4.4} rx={2.2} fill={colors.accent} stroke={colors.text} strokeWidth={1.6} />
+      <Circle cx={17} cy={13} r={2.2} fill={colors.text} />
+      <Circle cx={8.6} cy={10.4} r={1.4} fill={colors.textOnPrimary} opacity={0.85} />
     </Svg>
   );
 }
@@ -45,7 +49,7 @@ function Crown({ size = 22 }: { size?: number }) {
 function Medal({ place }: { place: 2 | 3 }) {
   const tone = place === 2 ? '#C7D2E0' : '#E8B98A';
   return (
-    <Svg width={20} height={20} viewBox="0 0 20 20" style={styles.medal}>
+    <Svg width={22} height={22} viewBox="0 0 20 20" style={styles.medal}>
       <Circle cx={10} cy={10} r={7.4} fill={tone} stroke={colors.text} strokeWidth={1.6} />
       <Path
         d="M10 6.4 l1.1 2.2 2.4 0.4 -1.7 1.7 0.4 2.4 -2.2 -1.1 -2.2 1.1 0.4 -2.4 -1.7 -1.7 2.4 -0.4 Z"
@@ -83,21 +87,26 @@ function PodiumAvatar({ entry, size }: { entry: LeaderboardEntry; size: number }
 
 const STEP_HEIGHTS = [104, 76, 60] as const;
 
+/** Gradini SOLO per i partecipanti esistenti (mai blocchi vuoti). */
 function Podium({ entries, reducedMotion }: { entries: LeaderboardEntry[]; reducedMotion: boolean }) {
-  const ordered = [entries[1], entries[0], entries[2]].filter(Boolean);
-  const places = [2, 1, 3] as const;
+  const ordered =
+    entries.length === 1
+      ? [entries[0]]
+      : entries.length === 2
+        ? [entries[1], entries[0]]
+        : [entries[1], entries[0], entries[2]].filter(Boolean);
   return (
     <View style={styles.podium}>
-      {ordered.map((entry, visualIndex) => {
-        const place = places[visualIndex];
-        const stepHeight = STEP_HEIGHTS[place - 1];
+      {ordered.map((entry) => {
+        const place = entry.rank;
+        const stepHeight = STEP_HEIGHTS[place - 1] ?? 60;
         return (
           <Animated.View
             key={entry.dog_id}
-            entering={reducedMotion ? undefined : FadeInUp.duration(360).delay(120 + visualIndex * 140)}
+            entering={reducedMotion ? undefined : FadeInUp.duration(360).delay(120 + place * 120)}
             style={styles.podiumColumn}
           >
-            {place === 1 ? <Crown /> : <Medal place={place as 2 | 3} />}
+            {place === 1 ? <Crown /> : place === 2 || place === 3 ? <Medal place={place} /> : null}
             <PodiumAvatar entry={entry} size={place === 1 ? 64 : 52} />
             <Text style={styles.podiumName} numberOfLines={1}>
               {entry.dog_name}
@@ -150,7 +159,7 @@ function BoardRow({ entry }: { entry: LeaderboardEntry }) {
   );
 }
 
-/** Giorni mancanti al prossimo lunedì (azzardo classifica). */
+/** Giorni mancanti al prossimo lunedì (nuovo podio). */
 export function daysUntilReset(now: Date = new Date()): number {
   return ((8 - now.getDay()) % 7) || 7;
 }
@@ -180,22 +189,17 @@ export default function LeaderboardScreen() {
     return Math.max(0, podium[2].score - me.score + 1);
   }, [meOutsidePodium, podium, me]);
 
+  const challengeFriends = () => {
+    void Share.share({
+      message: `Giochiamo a ${GAME_LABELS[game]} su Dogly: riuscite a battere ${dog.name} in classifica questa settimana?`,
+    }).catch(() => {});
+  };
+
   const resetDays = daysUntilReset();
 
   return (
     <ScreenContainer scroll>
-      <StackScreenHeader title="Classifica della settimana" />
-      <View style={styles.headerRow}>
-        <Text style={styles.intro}>
-          {`I campioni del quartiere a ${GAME_LABELS[game]}.`}
-        </Text>
-        <View style={styles.resetChip}>
-          <CuteIcon name="clock" size={12} color={colors.textSecondary} secondary={colors.textSecondary} />
-          <Text style={styles.resetText}>
-            {resetDays === 1 ? 'Si azzera domani' : `Si azzera tra ${resetDays}g`}
-          </Text>
-        </View>
-      </View>
+      <StackScreenHeader title="Classifica" />
 
       <View style={styles.tabs}>
         {GAME_TABS.map((tab) => {
@@ -220,9 +224,15 @@ export default function LeaderboardScreen() {
         <View style={styles.emptyCard}>
           <AvatarActor size={92} expression="happy" photoUri={dog.photoUri} dogName={dog.name} />
           <Text style={styles.emptyTitle}>Accedi per giocare la classifica</Text>
-          <Text style={styles.emptyText}>
-            I punteggi del quartiere si vedono solo con un account.
-          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}
+            onPress={() => router.push(`/games/${game}` as never)}
+            style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
+          >
+            <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
+            <Text style={styles.playButtonText}>Gioca ora</Text>
+          </Pressable>
         </View>
       ) : leaderboard.isLoading ? (
         <Text style={styles.emptyText}>Leggo la classifica…</Text>
@@ -235,20 +245,61 @@ export default function LeaderboardScreen() {
         </Pressable>
       ) : items.length === 0 ? (
         <View style={styles.emptyCard}>
-          <AvatarActor size={92} expression="happy" photoUri={dog.photoUri} dogName={dog.name} />
-          <Text style={styles.emptyTitle}>Il podio aspetta il primo campione. Sarai tu?</Text>
-          <Text style={styles.emptyText}>
-            {`Nessun punteggio ancora: una partita a ${GAME_LABELS[game]} e siete in vetta.`}
+          <AvatarActor size={92} expression="celebrate" photoUri={dog.photoUri} dogName={dog.name} />
+          <Text style={styles.emptyTitle}>Il podio aspetta i campioni</Text>
+          <View style={styles.emptyActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}
+              onPress={() => router.push(`/games/${game}` as never)}
+              style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
+            >
+              <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
+              <Text style={styles.playButtonText}>Gioca ora</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sfida gli amici"
+              onPress={challengeFriends}
+              style={({ pressed }) => [styles.challengeButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.challengeText}>Sfida gli amici</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : items.length <= 2 ? (
+        <View style={styles.emptyCard}>
+          <AvatarActor size={92} expression="celebrate" photoUri={dog.photoUri} dogName={dog.name} />
+          <Text style={styles.emptyTitle}>
+            {me ? 'Sei in testa!' : `${items[0].dog_name} è in testa!`}
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}
-            onPress={() => router.push(`/games/${game}` as never)}
-            style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
-          >
-            <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
-            <Text style={styles.playButtonText}>Gioca ora</Text>
-          </Pressable>
+          <Text style={styles.emptyText}>
+            Il podio si completa con i campioni del quartiere.
+          </Text>
+          <View style={styles.miniBoard}>
+            {items.map((entry) => (
+              <BoardRow key={entry.dog_id} entry={entry} />
+            ))}
+          </View>
+          <View style={styles.emptyActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}
+              onPress={() => router.push(`/games/${game}` as never)}
+              style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
+            >
+              <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
+              <Text style={styles.playButtonText}>Gioca ora</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sfida gli amici"
+              onPress={challengeFriends}
+              style={({ pressed }) => [styles.challengeButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.challengeText}>Sfida gli amici</Text>
+            </Pressable>
+          </View>
         </View>
       ) : (
         <>
@@ -280,6 +331,12 @@ export default function LeaderboardScreen() {
               ) : null}
             </Animated.View>
           ) : null}
+          <View style={styles.resetRow}>
+            <View style={styles.resetChip}>
+              <CuteIcon name="clock" size={12} color={colors.textSecondary} secondary={colors.textSecondary} />
+              <Text style={styles.resetText}>Nuovo podio lunedì</Text>
+            </View>
+          </View>
         </>
       )}
     </ScreenContainer>
@@ -287,32 +344,6 @@ export default function LeaderboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  intro: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-  },
-  resetChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  resetText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.xs,
-    fontWeight: typography.weight.bold,
-  },
   tabs: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -339,7 +370,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   podiumColumn: { alignItems: 'center', gap: 4, width: 96 },
-  crown: { marginBottom: -4 },
+  crown: { marginBottom: -2 },
   medal: {},
   podiumName: {
     color: colors.text,
@@ -438,6 +469,21 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
   },
   meCardGap: { color: colors.textSecondary, fontSize: typography.size.xs },
+  resetRow: { alignItems: 'center', marginTop: spacing.lg },
+  resetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  resetText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
   emptyCard: {
     alignItems: 'center',
     gap: spacing.sm,
@@ -459,6 +505,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: typography.size.sm * typography.lineHeight.relaxed,
   },
+  emptyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  miniBoard: {
+    alignSelf: 'stretch',
+    gap: 2,
+  },
   retry: {
     color: colors.primary,
     fontSize: typography.size.sm,
@@ -470,7 +526,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.sm,
     backgroundColor: colors.accent,
     borderRadius: radius.full,
     paddingHorizontal: spacing.xl,
@@ -478,6 +533,18 @@ const styles = StyleSheet.create({
   },
   playButtonText: {
     color: colors.textOnPrimary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  challengeButton: {
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  challengeText: {
+    color: colors.primary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },

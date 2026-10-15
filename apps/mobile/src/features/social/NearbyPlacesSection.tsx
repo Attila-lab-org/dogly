@@ -23,14 +23,6 @@ import {
   type NearbyPlace,
 } from '@/features/places/api';
 
-type PlaceFilter = 'ALL' | 'PARK' | 'VET';
-
-const PLACE_FILTERS: { key: PlaceFilter; label: string }[] = [
-  { key: 'ALL', label: 'Tutti' },
-  { key: 'PARK', label: 'Parchi' },
-  { key: 'VET', label: 'Veterinari' },
-];
-
 function mapsSearchUrl(query: string, coords?: { lat: number; lng: number } | null) {
   if (coords) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&center=${coords.lat},${coords.lng}`;
@@ -45,7 +37,6 @@ export function NearbyPlacesSection() {
     useState<LocationFailureReason | null>(null);
   const [locationTick, setLocationTick] = useState(0);
   const [placesTimedOut, setPlacesTimedOut] = useState(false);
-  const [placeFilter, setPlaceFilter] = useState<PlaceFilter>('ALL');
 
   useEffect(() => {
     let alive = true;
@@ -70,13 +61,11 @@ export function NearbyPlacesSection() {
   }, [locationTick]);
 
   const placesQuery = useQuery({
-    queryKey: ['nearby-places', coords?.lat, coords?.lng, placeFilter],
+    queryKey: ['nearby-places', coords?.lat, coords?.lng],
     queryFn: () =>
       fetchNearbyPlaces({
         lat: coords!.lat,
         lng: coords!.lng,
-        // Filtro server-side: così "Parchi" non è un sottoinsieme di 12 misti.
-        kind: placeFilter === 'ALL' ? undefined : placeFilter,
         radius_m: 12_000,
       }),
     enabled: Boolean(coords),
@@ -106,27 +95,6 @@ export function NearbyPlacesSection() {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Luoghi utili</Text>
         <Ionicons name="location-outline" size={20} color={colors.accent} />
-      </View>
-
-      <View style={styles.filterRow}>
-        {PLACE_FILTERS.map((filter) => {
-          const active = placeFilter === filter.key;
-          return (
-            <Pressable
-              key={filter.key}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              onPress={() => setPlaceFilter(filter.key)}
-              style={[styles.filterPill, active && styles.filterPillActive]}
-            >
-              <Text
-                style={[styles.filterLabel, active && styles.filterLabelActive]}
-              >
-                {filter.label}
-              </Text>
-            </Pressable>
-          );
-        })}
       </View>
 
       {locating ? (
@@ -185,17 +153,11 @@ export function NearbyPlacesSection() {
       ) : filteredPlaces.length === 0 ? (
         <View style={styles.fallback}>
           <Text style={styles.muted}>
-            {placeFilter === 'ALL'
-              ? 'Nessun luogo utile vicino, per ora.'
-              : placeFilter === 'PARK'
-                ? 'Nessun parco o area cani qui intorno.'
-                : 'Nessun veterinario qui intorno.'}
+            Nessun luogo utile vicino, per ora.
           </Text>
           <FallbackButton
             label="Apri mappa"
-            onPress={() =>
-              openMaps(placeFilter === 'VET' ? 'veterinario' : 'parco cani')
-            }
+            onPress={() => openMaps('parco cani')}
           />
         </View>
       ) : (
@@ -290,20 +252,6 @@ const styles = StyleSheet.create({
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
-  filterRow: { flexDirection: 'row', gap: spacing.sm },
-  filterPill: {
-    borderRadius: radius.full,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surfaceMuted,
-  },
-  filterPillActive: { backgroundColor: colors.accent },
-  filterLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.medium,
-  },
-  filterLabelActive: { color: colors.textOnPrimary },
   muted: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
