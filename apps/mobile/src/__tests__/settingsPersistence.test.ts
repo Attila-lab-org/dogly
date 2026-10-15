@@ -17,6 +17,7 @@ import {
 import {
   getConsents,
   hydrateConsents,
+  resetConsentsForUser,
   resetConsentsForTests,
   setConsent,
 } from '../features/privacy/consents';
@@ -115,6 +116,20 @@ describe('consensi privacy persistiti', () => {
     const saved = await setConsent('keepClip', !before);
     expect(saved).toBe(false);
     expect(getConsents().keepClip).toBe(before);
+  });
+
+  it('isola la cache locale tra account diversi', async () => {
+    const storage = createFakeStorage();
+    setKeyValueStorageForTests(storage);
+
+    await hydrateConsents({ userId: 'account-a' });
+    await setConsent('researchTraining', true);
+    resetConsentsForUser('account-b');
+    await hydrateConsents({ userId: 'account-b' });
+
+    expect(getConsents().researchTraining).toBe(false);
+    expect(storage.data.has('dogly.consents.v1.account-a')).toBe(true);
+    expect(storage.data.has('dogly.consents.v1.account-b')).toBe(false);
   });
 });
 

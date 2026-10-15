@@ -11,6 +11,7 @@ import { getKeyValueStorage } from '../notifications/persistence';
 
 const STORAGE_KEY_PREFIX = 'dogly.consents.v1';
 let activeUserId: string | null = null;
+let accountGeneration = 0;
 function storageKey(userId = activeUserId) {
   return `${STORAGE_KEY_PREFIX}.${userId ?? 'anonymous'}`;
 }
@@ -86,17 +87,21 @@ export async function hydrateConsents(options?: {
 }): Promise<boolean> {
   if (options?.userId !== undefined && options.userId !== activeUserId) {
     activeUserId = options.userId ?? null;
+    accountGeneration += 1;
     hydrated = false;
     remoteHydrated = false;
     consents = { ...consentsMock };
     emit();
   }
+  const generation = accountGeneration;
+  const userId = activeUserId;
   if (!hydrated) {
     hydrated = true;
     const storage = getKeyValueStorage();
     if (storage) {
       try {
-        const raw = await storage.getItem(storageKey());
+        const raw = await storage.getItem(storageKey(userId));
+        if (generation !== accountGeneration || userId !== activeUserId) return false;
         if (raw) {
           const parsed = JSON.parse(raw) as Partial<ConsentState>;
           consents = {
@@ -127,6 +132,7 @@ export async function hydrateConsents(options?: {
   try {
     const { api } = await import('../../lib/apiClient');
     const remote = await api.get<ApiConsents>('/v1/me/consents');
+    if (generation !== accountGeneration || userId !== activeUserId) return false;
     consents = fromApi(remote);
     remoteHydrated = true;
     emit();
@@ -157,6 +163,8 @@ export async function setConsent(
   value: boolean,
   options?: { syncRemote?: boolean },
 ): Promise<boolean> {
+  const generation = accountGeneration;
+  const userId = activeUserId;
   const previous = consents;
   consents = { ...consents, [key]: value };
   emit();
@@ -174,6 +182,7 @@ export async function setConsent(
         policy_version: POLICY_VERSION,
         [field]: value,
       }, { headers: { 'X-Idempotency-Key': newSyncKey(key) } });
+      if (generation !== accountGeneration || userId !== activeUserId) return false;
       syncKeys.delete(key);
       consents = fromApi(remote);
       remoteHydrated = true;
@@ -185,12 +194,14 @@ export async function setConsent(
       }
       return true;
     } catch {
+      if (generation !== accountGeneration || userId !== activeUserId) return false;
       consents = previous;
       emit();
       return false;
     }
   }
 
+  if (generation !== accountGeneration || userId !== activeUserId) return false;
   if (await persistLocal(consents)) {
     return true;
   }
@@ -201,6 +212,7 @@ export async function setConsent(
 
 /** Solo test: riporta lo store ai default e dimentica l'hydration. */
 export function resetConsentsForUser(userId: string | null): void {
+  accountGeneration += 1;
   activeUserId = userId;
   consents = { ...consentsMock };
   hydrated = false;
@@ -210,6 +222,8 @@ export function resetConsentsForUser(userId: string | null): void {
 }
 
 export function resetConsentsForTests(): void {
+  activeUserId = null;
+  accountGeneration += 1;
   consents = { ...consentsMock };
   hydrated = false;
   remoteHydrated = false;
