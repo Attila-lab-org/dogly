@@ -50,7 +50,7 @@ describe('upload foto profilo cane', () => {
 
     expect(mockInitDogAvatar).toHaveBeenCalledWith('dog-1', {
       content_type: 'image/jpeg',
-    });
+    }, expect.stringMatching(/^dog-avatar-dog-1-/));
     expect(mockCreateUploadTask).toHaveBeenCalledWith(
       'https://storage.test/signed',
       'file:///photo.jpg',

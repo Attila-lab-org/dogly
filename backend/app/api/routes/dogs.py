@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks
 
-from app.api.deps import AppState, StateDep, UserIdDep
+from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
     DogAvatarCompleteRequest,
     DogAvatarInitRequest,
@@ -17,7 +17,7 @@ from app.contracts.api import (
     WeightEventOut,
 )
 from app.domains import dogs as dogs_domain
-from app.domains import dogs_db, weight_db
+from app.domains import dogs_db, idempotency_db, weight_db
 from app.domains import weight_events as weight_domain
 from app.domains.dogs import AVATAR_BUCKET
 from app.domains.models import DogRec
@@ -63,6 +63,17 @@ async def to_out(dog: DogRec, state: AppState) -> DogOut:
         photo_url=photo_url,
         created_at=dog.created_at,
     )
+
+
+async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=guard._payload_hash,
+        )
 
 
 @router.get("/dogs", response_model=DogListResponse)
@@ -152,7 +163,10 @@ async def init_avatar(
     payload: DogAvatarInitRequest,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> DogAvatarInitResponse:
+    if cached := guard.lookup():
+        return DogAvatarInitResponse.model_validate(cached)
     if state.engine is not None:
         path, upload = await dogs_db.init_avatar_upload(
             state.engine,
@@ -171,7 +185,9 @@ async def init_avatar(
             dog_id=dog_id,
             payload=payload,
         )
-    return DogAvatarInitResponse(storage_path=path, upload=upload)
+    response = DogAvatarInitResponse(storage_path=path, upload=upload)
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/dogs/{dog_id}/avatar/complete", response_model=DogOut)

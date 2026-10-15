@@ -37,10 +37,11 @@ export async function persistDogAvatar(
 ): Promise<string | null> {
   const contentType = await detectImageContentType(localUri);
   const bytes = await localBytes(localUri);
+  const idempotencyKey = `dog-avatar-${dogId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const init = await initDogAvatar(dogId, {
     content_type: contentType,
     bytes,
-  });
+  }, idempotencyKey);
   await putSignedUpload(init.upload.url, localUri, contentType);
   const completed = await completeDogAvatar(dogId, {
     storage_path: init.storage_path,

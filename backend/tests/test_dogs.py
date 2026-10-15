@@ -125,9 +125,10 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     assert created.json()["photo_path"] is None
     assert created.json()["photo_url"] is None
 
+    avatar_headers = {**auth_headers, "X-Idempotency-Key": "avatar-init-retry-1"}
     init = await client.post(
         f"/v1/dogs/{dog_id}/avatar/init",
-        headers=auth_headers,
+        headers=avatar_headers,
         json={"content_type": "image/jpeg", "bytes": 2048},
     )
     assert init.status_code == 200, init.text
@@ -135,6 +136,13 @@ async def test_dog_avatar_init_complete_persists_signed_url(
     assert path.startswith("users/")
     assert f"/dogs/{dog_id}/avatar/" in path
     assert init.json()["upload"]["url"].startswith("https://storage.mock.local/")
+    replay_init = await client.post(
+        f"/v1/dogs/{dog_id}/avatar/init",
+        headers=avatar_headers,
+        json={"content_type": "image/jpeg", "bytes": 2048},
+    )
+    assert replay_init.status_code == 200
+    assert replay_init.json() == init.json()
 
     rejected = await client.post(
         f"/v1/dogs/{dog_id}/avatar/complete",

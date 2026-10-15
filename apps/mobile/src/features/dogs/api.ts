@@ -76,8 +76,10 @@ export async function initDogAvatar(
     content_type: 'image/jpeg' | 'image/png' | 'image/webp';
     bytes?: number;
   },
+  idempotencyKey?: string,
 ): Promise<DogAvatarInitResponse> {
-  return api.post<DogAvatarInitResponse>(`/v1/dogs/${dogId}/avatar/init`, body);
+  return api.post<DogAvatarInitResponse>(`/v1/dogs/${dogId}/avatar/init`, body,
+    idempotencyKey ? { headers: { 'X-Idempotency-Key': idempotencyKey } } : undefined);
 }
 
 export async function completeDogAvatar(
