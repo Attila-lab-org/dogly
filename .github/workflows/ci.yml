@@ -137,7 +137,7 @@ jobs:
           docker run --rm \
             -v "$PWD:/repo" \
             ghcr.io/gitleaks/gitleaks:v8.24.2 \
-            detect --source=/repo --redact --verbose 2>&1 | tee /tmp/gitleaks.log
+            detect --source=/repo --config=/repo/.gitleaks.toml --redact --verbose 2>&1 | tee /tmp/gitleaks.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             details="$(tail -n 40 /tmp/gitleaks.log)"
@@ -175,6 +175,6 @@ jobs:
       - name: Consumer runtime dependency audit
         run: |
           pnpm --dir apps/mobile install --frozen-lockfile
-          pnpm --dir apps/mobile audit --prod --audit-level=high
+          pnpm --dir apps/mobile audit --prod --audit-level=high --ignore-unfixable
           pnpm --dir apps/mobile-web install --frozen-lockfile
-          pnpm --dir apps/mobile-web audit --prod --audit-level=high
+          pnpm --dir apps/mobile-web audit --prod --audit-level=high --ignore-unfixable

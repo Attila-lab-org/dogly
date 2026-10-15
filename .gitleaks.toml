@@ -1,0 +1,11 @@
+title = "DOGly secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret cache/header key names"
+regexes = [
+  '''(?i)"key"\s*:\s*"(?:Cache-Control|Permissions-Policy)"''',
+  '''(?i)cache-dependency-path''',
+]
