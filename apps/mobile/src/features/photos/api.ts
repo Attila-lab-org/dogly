@@ -205,6 +205,7 @@ export async function uploadAlbumPhoto(
     upload: { url: string };
   }>(`/v1/albums/${albumId}/photos/init`, {
     method: 'POST',
+    headers: { 'X-Idempotency-Key': `album-photo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}` },
     body: {
       content_type: contentType,
       bytes,

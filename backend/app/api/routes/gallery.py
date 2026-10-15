@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import AppState, StateDep, UserIdDep
+from app.api.deps import AppState, IdempotencyDep, StateDep, UserIdDep
 from app.contracts.api import (
     DogAlbumCreate,
     DogAlbumListResponse,
@@ -21,10 +21,21 @@ from app.contracts.api import (
     DogProfileVisibilityUpdate,
 )
 from app.domains import gallery as gallery_domain
-from app.domains import gallery_db
+from app.domains import gallery_db, idempotency_db
 from app.domains.gallery_db import GALLERY_BUCKET
 
 router = APIRouter()
+
+
+async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
+    guard.record(body)
+    if state.engine is not None and guard._scope:
+        await idempotency_db.record(
+            state.engine,
+            scope=guard._scope,
+            body=body,
+            payload_hash=guard._payload_hash,
+        )
 
 
 async def photo_with_url(photo: DogPhotoOut, state: AppState) -> DogPhotoOut:
@@ -179,7 +190,10 @@ async def init_photo(
     payload: DogPhotoInitRequest,
     state: StateDep,
     user_id: UserIdDep,
+    guard: IdempotencyDep,
 ) -> DogPhotoUploadResponse:
+    if cached := guard.lookup():
+        return DogPhotoUploadResponse.model_validate(cached)
     if state.engine is not None:
         photo, url, expires = await gallery_db.init_photo_upload(
             state.engine,
@@ -198,7 +212,7 @@ async def init_photo(
             album_id=album_id,
             payload=payload,
         )
-    return DogPhotoUploadResponse(
+    response = DogPhotoUploadResponse(
         photo=DogPhotoOut(
             id=photo.id,
             album_id=photo.album_id,
@@ -211,6 +225,8 @@ async def init_photo(
         ),
         upload={"url": url, "storage_path": photo.storage_path, "expires_at": expires},
     )
+    await _record_guard(state, guard, response.model_dump(mode="json"))
+    return response
 
 
 @router.patch("/photos/{photo_id}", response_model=DogPhotoOut)

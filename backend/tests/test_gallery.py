@@ -124,6 +124,37 @@ async def test_gallery_soft_delete_removes_storage_object(
     assert state.store.dog_photos[photo_id].deleted_at is not None
 
 
+async def test_photo_init_is_idempotent_on_retry(
+    client: httpx.AsyncClient, auth_headers
+):
+    dog_id = await create_dog(client, auth_headers)
+    album = await client.post(
+        f"/v1/dogs/{dog_id}/albums",
+        json={"title": "Retry"},
+        headers=auth_headers,
+    )
+    album_id = album.json()["id"]
+    headers = {**auth_headers, "X-Idempotency-Key": "album-photo-retry-001"}
+    payload = {"content_type": "image/jpeg", "bytes": 4_096}
+
+    first = await client.post(
+        f"/v1/albums/{album_id}/photos/init", json=payload, headers=headers
+    )
+    second = await client.post(
+        f"/v1/albums/{album_id}/photos/init", json=payload, headers=headers
+    )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert second.json()["photo"]["id"] == first.json()["photo"]["id"]
+    listed = await client.get(
+        f"/v1/albums/{album_id}/photos", headers=auth_headers
+    )
+    assert [item["id"] for item in listed.json()["items"]] == [
+        first.json()["photo"]["id"]
+    ]
+
+
 async def test_recent_dog_photos_exclude_stories(
     client: httpx.AsyncClient,
     auth_headers,
