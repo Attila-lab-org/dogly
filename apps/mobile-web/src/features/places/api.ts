@@ -75,6 +75,7 @@ async function readExpoLocation(): Promise<DeviceLocationResult> {
     const Location = await import('expo-location');
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== 'granted') return { ok: false, reason: 'denied' };
+    // Last-known first: Aiuto rapido non deve aspettare un fix GPS fresco.
     try {
       const last = await Location.getLastKnownPositionAsync();
       if (last && Date.now() - last.timestamp < 10 * 60_000) {
@@ -85,7 +86,7 @@ async function readExpoLocation(): Promise<DeviceLocationResult> {
         };
       }
     } catch {
-      // fall through
+      // fall through to fresh fix
     }
     const current = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
