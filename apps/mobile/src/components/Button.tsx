@@ -7,7 +7,9 @@ import {
   ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated from 'react-native-reanimated';
 import { colors, gradients, radius, spacing, typography } from '../theme/tokens';
+import { usePressSpring } from './pressSpring';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger';
 
@@ -41,6 +43,7 @@ export function Button({
   testID,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const press = usePressSpring();
 
   const content = (
     <>
@@ -74,53 +77,62 @@ export function Button({
     </>
   );
 
+  const springHandlers = {
+    onPressIn: press.onPressIn,
+    onPressOut: press.onPressOut,
+  };
+
   if (variant === 'primary') {
     return (
+      <Animated.View style={[press.style, style]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          disabled={isDisabled}
+          testID={testID}
+          {...springHandlers}
+          style={({ pressed }) => [
+            styles.base,
+            pressed && !isDisabled && styles.pressedPrimary,
+            isDisabled && styles.disabled,
+          ]}
+        >
+          <LinearGradient
+            colors={[...gradients.cta]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradient}
+          >
+            {content}
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View style={[press.style, style]}>
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
         disabled={isDisabled}
         testID={testID}
+        {...springHandlers}
         style={({ pressed }) => [
           styles.base,
-          pressed && !isDisabled && styles.pressedPrimary,
+          styles.inner,
+          variant === 'secondary' && styles.secondary,
+          variant === 'secondary' && pressed && !isDisabled && styles.secondaryPressed,
+          variant === 'outline' && styles.outline,
+          variant === 'outline' && pressed && !isDisabled && styles.outlinePressed,
+          variant === 'danger' && styles.danger,
+          variant === 'danger' && pressed && !isDisabled && styles.dangerPressed,
           isDisabled && styles.disabled,
-          style,
         ]}
       >
-        <LinearGradient
-          colors={[...gradients.cta]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradient}
-        >
-          {content}
-        </LinearGradient>
+        {content}
       </Pressable>
-    );
-  }
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      disabled={isDisabled}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.base,
-        styles.inner,
-        variant === 'secondary' && styles.secondary,
-        variant === 'secondary' && pressed && !isDisabled && styles.secondaryPressed,
-        variant === 'outline' && styles.outline,
-        variant === 'outline' && pressed && !isDisabled && styles.outlinePressed,
-        variant === 'danger' && styles.danger,
-        variant === 'danger' && pressed && !isDisabled && styles.dangerPressed,
-        isDisabled && styles.disabled,
-        style,
-      ]}
-    >
-      {content}
-    </Pressable>
+    </Animated.View>
   );
 }
 

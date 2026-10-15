@@ -193,7 +193,7 @@ async def test_park_only_keeps_many_parks(monkeypatch):
 
 
 def test_dedupe_by_name_and_rounded_coords():
-    base = dict(kind="PARK", lat=45.46001, lng=9.19001, maps_url="https://x")
+    base = {"kind": "PARK", "lat": 45.46001, "lng": 9.19001, "maps_url": "https://x"}
     items = [
         _PlaceHit(id="a", name="Parco Sempione", distance_m=300, **base),
         _PlaceHit(

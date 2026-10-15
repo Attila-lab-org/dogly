@@ -9,13 +9,14 @@ import uuid
 import httpx
 import jwt as pyjwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+
 from app.api.app import create_app
 from app.api.auth import StaticJwksProvider
 from app.api.deps import AppState, build_default_state
 from app.config import Settings
 from app.worker.main import create_worker_app
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 ISSUER = "https://test-project.supabase.co/auth/v1"
 AUDIENCE = "authenticated"

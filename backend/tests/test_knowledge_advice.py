@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import httpx
+
 from app.contracts.interpretation import (
     EvidenceItem,
     InterpretationContract,

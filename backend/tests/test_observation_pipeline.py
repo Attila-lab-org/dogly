@@ -7,6 +7,8 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
+
 from app.contracts.interpretation import (
     EvidenceItem,
     InterpretationContract,
@@ -47,7 +49,6 @@ from app.knowledge.safety import (
 )
 from app.providers.base import EligiblePatternSummary, ProviderUsage
 from app.providers.mock import load_fixture
-from pydantic import ValidationError
 
 
 def _dog(**overrides) -> DogRec:

@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from app.config import Settings
 from app.contracts.observation import ObservationContract
 from app.contracts.taxonomy import ContextBucket

@@ -32,6 +32,7 @@ import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 import { DiaryMediaCover } from '@/features/home/DiaryMediaCover';
+import { usePressSpring } from '@/components/pressSpring';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogIllustration } from '@/components/DogIllustration';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -154,6 +155,7 @@ function StatusBadgeView({ badge }: { badge: StatusBadge }) {
 function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
   const badge = entryStatusBadge(entry);
   const icon = entryIconTone(entry);
+  const press = usePressSpring();
 
   const meta = (
     <View style={styles.metaRow}>
@@ -175,10 +177,13 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
 
   if (entry.domain === 'DIGESTIVE' || entry.mediaUri) {
     return (
+      <Animated.View style={press.style}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={cardAccessibilityLabel}
         onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
         style={({ pressed }) => [styles.mediaCard, pressed && styles.entryCardPressed]}
       >
         <View style={styles.mediaTop}>
@@ -193,14 +198,18 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
           {deleted}
         </View>
       </Pressable>
+      </Animated.View>
     );
   }
 
   return (
+    <Animated.View style={press.style}>
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={cardAccessibilityLabel}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={({ pressed }) => [styles.plainCard, pressed && styles.entryCardPressed]}
     >
       <View style={[styles.iconBlock, { backgroundColor: icon.bg }]}>
@@ -215,6 +224,7 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
         {deleted}
       </View>
     </Pressable>
+    </Animated.View>
   );
 }
 

@@ -113,8 +113,9 @@ async def test_leaderboard_best_per_dog_and_ordering(
         assert resp.status_code == 201, resp.text
 
     # Un altro cane (altro utente) direttamente nello store.
-    from app.domains.models import DogRec, GameScoreRec
     from datetime import UTC, datetime
+
+    from app.domains.models import DogRec, GameScoreRec
 
     state.store.dogs["dog-rival"] = DogRec(
         id="dog-rival", owner_id="other-user", name="Fido",

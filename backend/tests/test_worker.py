@@ -4,6 +4,7 @@ commit/refund semantics; internal auth on workflow routes."""
 
 import httpx
 import pytest
+
 from app.contracts.taxonomy import BehaviorEventStatus, ContextBucket
 from app.providers.base import ProviderRateLimitError
 from app.worker.handlers import (
@@ -12,7 +13,6 @@ from app.worker.handlers import (
     process_behavior_event,
 )
 from app.worker.main import create_worker_app
-
 from tests.conftest import create_dog
 
 

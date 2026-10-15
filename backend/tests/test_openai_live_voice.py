@@ -48,6 +48,7 @@ def test_live_instructions_stay_free_and_memory_aware() -> None:
 
 def test_create_live_webrtc_session_posts_gpt_live_payload(monkeypatch) -> None:
     import httpx
+
     from app.providers import openai_live as live
 
     captured: dict = {}

@@ -130,13 +130,13 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   return authUsers.data.users.map((user) => ({
     id: user.id,
     name: (user.user_metadata?.display_name as string | undefined) ?? user.email?.split("@")[0] ?? "Utente",
-    emailMasked: user.email ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2") : "—",
+    emailMasked: user.email ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2") : "â€”",
     plan: planByUser.get(user.id)?.startsWith("PREMIUM") || planByUser.get(user.id) === "PREMIUM" ? "premium" : "free",
     dogsCount: dogsByUser.get(user.id) ?? 0,
     monthlyAnalyses: analysesByUser.get(user.id) ?? 0,
     lastAccess: user.last_sign_in_at ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(user.last_sign_in_at)) : "Mai",
     status: user.banned_until && new Date(user.banned_until) > new Date() ? "suspended" : "active",
-    locale: (user.user_metadata?.locale as string | undefined) ?? "—",
+    locale: (user.user_metadata?.locale as string | undefined) ?? "â€”",
     createdAt: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(user.created_at)),
   }));
 }
@@ -186,6 +186,17 @@ export async function getAdminUserDetail(userId: string): Promise<import("./type
   const dogRows = dogs.data ?? [];
   const behaviorRows = behavior.data ?? [];
   const digestiveRows = digestive.data ?? [];
+  const eventIds = [...behaviorRows.map((event) => event.id), ...digestiveRows.map((event) => event.id)];
+  const jobsQuery = eventIds.length > 0
+    ? supabase.schema("internal").from("analysis_jobs").select("event_id, attempt_count").in("event_id", eventIds).limit(500)
+    : Promise.resolve({ data: [], error: null });
+  const [jobs, quotaBlocks] = await Promise.all([
+    jobsQuery,
+    supabase.schema("internal").from("audit_log").select("id").eq("actor_id", userId).eq("action", "QUOTA_EXHAUSTED").limit(500),
+  ]);
+  const jobRows = jobs.error ? [] : (jobs.data ?? []).filter((job) => !job.event_id || eventIds.includes(job.event_id));
+  const retryCount = jobRows.reduce((sum, job) => sum + Math.max(0, Number(job.attempt_count ?? 0) - 1), 0);
+  const quotaBlockCount = quotaBlocks.error ? 0 : (quotaBlocks.data ?? []).length;
   const planValue = String(subscription.data?.plan ?? "FREE");
   const plan = planValue.startsWith("PREMIUM") || planValue === "PREMIUM" ? "premium" : "free";
   const ledger = usage.data;
@@ -196,17 +207,17 @@ export async function getAdminUserDetail(userId: string): Promise<import("./type
   return {
     id: user.id,
     name: (user.user_metadata?.display_name as string | undefined) ?? user.email?.split("@")[0] ?? "Utente",
-    emailMasked: user.email ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2") : "—",
+    emailMasked: user.email ? user.email.replace(/^(.{1,2})[^@]*(@.*)$/, "$1***$2") : "â€”",
     plan,
     dogsCount: dogRows.length,
     monthlyAnalyses: behaviorRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length,
     lastAccess: user.last_sign_in_at ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(user.last_sign_in_at)) : "Mai",
     status: user.banned_until && new Date(user.banned_until) > new Date() ? "suspended" : "active",
-    locale: (user.user_metadata?.locale as string | undefined) ?? "—",
+    locale: (user.user_metadata?.locale as string | undefined) ?? "â€”",
     createdAt: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(user.created_at)),
-    subscription: { plan, renewal: subscription.data?.period_end ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(subscription.data.period_end)) : "—", platform: String(subscription.data?.store ?? "—"), quotaUsed: (ledger?.behavior_used ?? 0) + (ledger?.digestive_used ?? 0), quotaTotal: (ledger?.behavior_limit ?? 0) + (ledger?.digestive_limit ?? 0) },
-    dogs: dogRows.map((dog) => ({ id: dog.id, name: dog.name, breed: dog.breed_label ?? "Non indicata", age: dog.birth_date ? `${new Date().getFullYear() - new Date(dog.birth_date).getFullYear()} anni` : "Età non indicata", knowledgeStatus: `${behaviorRows.filter((event) => event.dog_id === dog.id).length} eventi comportamentali`, lastAnalysis: lastByDog.get(dog.id) ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(lastByDog.get(dog.id)!)) : "Nessuna" })),
-    usage30d: { behaviorEvents: behaviorRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length, digestiveEvents: digestiveRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length, retries: 0, quotaBlocks: 0 },
+    subscription: { plan, renewal: subscription.data?.period_end ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium" }).format(new Date(subscription.data.period_end)) : "â€”", platform: String(subscription.data?.store ?? "â€”"), quotaUsed: (ledger?.behavior_used ?? 0) + (ledger?.digestive_used ?? 0), quotaTotal: (ledger?.behavior_limit ?? 0) + (ledger?.digestive_limit ?? 0) },
+    dogs: dogRows.map((dog) => ({ id: dog.id, name: dog.name, breed: dog.breed_label ?? "Non indicata", age: dog.birth_date ? `${new Date().getFullYear() - new Date(dog.birth_date).getFullYear()} anni` : "EtÃ  non indicata", knowledgeStatus: `${behaviorRows.filter((event) => event.dog_id === dog.id).length} eventi comportamentali`, lastAnalysis: lastByDog.get(dog.id) ? new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(lastByDog.get(dog.id)!)) : "Nessuna" })),
+    usage30d: { behaviorEvents: behaviorRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length, digestiveEvents: digestiveRows.filter((event) => Date.parse(event.created_at) >= Date.now() - 30 * 86400000).length, retries: retryCount, quotaBlocks: quotaBlockCount },
     consents: { service: consentMap.get("SERVICE_TERMS") ?? false, notifications: consentMap.get("NOTIFICATIONS") ?? false, research: consentMap.get("RESEARCH_TRAINING") ?? false, mediaRetention: consentMap.get("MEDIA_RETENTION") ?? false },
     supportRisk: { openTickets: 0, riskFlags: [] },
   };
@@ -220,4 +231,54 @@ export async function getAdminBehaviorEvent(eventId: string) {
   ]);
   if (event.error || feedback.error || !event.data) throw new AdminDataUnavailableError("Analisi non trovata.");
   return { ...event.data, feedback: feedback.data ?? null };
+}
+
+
+export type AdminSearchResult = {
+  key: string;
+  group: "Utenti" | "Cani" | "Eventi";
+  title: string;
+  subtitle: string;
+  href: string;
+};
+
+export async function searchAdmin(query: string): Promise<AdminSearchResult[]> {
+  const term = query.trim();
+  if (term.length < 2) return [];
+  const supabase = await requireAdmin();
+  const pattern = `%${term}%`;
+  const [authUsers, dogs, events] = await Promise.all([
+    listAllAuthUsers(supabase),
+    supabase.from("dogs").select("id, name, breed_label, owner_id").ilike("name", pattern).limit(20),
+    supabase.from("behavior_events").select("id, dog_id, primary_intent, summary, created_at").or(`id.ilike.${pattern},primary_intent.ilike.${pattern},summary.ilike.${pattern}`).order("created_at", { ascending: false }).limit(20),
+  ]);
+  if (authUsers.error || dogs.error || events.error) throw new AdminDataUnavailableError("Ricerca admin non disponibile.");
+  const users = authUsers.data.users.filter((user) => `${user.email ?? ""} ${user.user_metadata?.display_name ?? ""}`.toLowerCase().includes(term.toLowerCase())).slice(0, 20);
+  const dogRows = dogs.data ?? [];
+  const eventRows = events.data ?? [];
+  return [
+    ...users.map((user) => ({ key: `u-${user.id}`, group: "Utenti" as const, title: String(user.user_metadata?.display_name ?? user.email?.split("@")[0] ?? "Utente"), subtitle: user.email ?? "—", href: `/users/${user.id}` })),
+    ...dogRows.map((dog) => ({ key: `d-${dog.id}`, group: "Cani" as const, title: `${dog.name} — ${dog.breed_label ?? "Razza non indicata"}`, subtitle: `ID ${dog.id}`, href: `/users/${dog.owner_id}` })),
+    ...eventRows.map((event) => ({ key: `e-${event.id}`, group: "Eventi" as const, title: `${event.id} — ${event.summary ?? event.primary_intent ?? "Analisi"}`, subtitle: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.created_at)), href: `/behavior/${event.id}` })),
+  ];
+}
+
+
+export async function getAdminAuditEntries(): Promise<import("./types").AuditEntry[]> {
+  const supabase = await requireAdmin();
+  const result = await supabase.schema("internal").from("audit_log").select("id, actor_type, actor_id, action, entity, entity_id, metadata, created_at").order("created_at", { ascending: false }).limit(200);
+  if (result.error) throw new AdminDataUnavailableError("Registro attività non disponibile.");
+  return (result.data ?? []).map((row) => {
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    return {
+      id: String(row.id),
+      timestamp: new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.created_at)),
+      actor: String(row.actor_id ?? row.actor_type),
+      role: String(row.actor_type),
+      action: String(row.action),
+      target: `${row.entity}${row.entity_id ? `/${row.entity_id}` : ""}`,
+      reason: String(metadata.reason ?? metadata.message ?? "—"),
+      result: metadata.result === "denied" ? "denied" : "success",
+    };
+  });
 }

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Bell, Dog, Flag, Search, User } from "lucide-react";
-import { allDogs, behaviorEvents, reports, users } from "@/lib/data";
 
 interface SearchResult {
   key: string;
@@ -23,53 +22,11 @@ const GROUP_ICONS: Record<SearchResult["group"], React.ReactNode> = {
   Segnalazioni: <Flag size={15} color="#b45309" />,
 };
 
-function computeResults(query: string): SearchResult[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  const foundUsers: SearchResult[] = users
-    .filter((u) => u.name.toLowerCase().includes(q) || u.emailMasked.toLowerCase().includes(q))
-    .map((u) => ({
-      key: `u-${u.id}`,
-      group: "Utenti",
-      title: u.name,
-      subtitle: u.emailMasked,
-      href: `/users/${u.id}`,
-    }));
-
-  const foundDogs: SearchResult[] = allDogs
-    .filter((d) => d.name.toLowerCase().includes(q) || d.breed.toLowerCase().includes(q))
-    .map((d) => ({
-      key: `d-${d.id}`,
-      group: "Cani",
-      title: `${d.name} — ${d.breed}`,
-      subtitle: `di ${d.ownerName}`,
-      href: `/users/${d.ownerId}`,
-    }));
-
-  const foundEvents: SearchResult[] = behaviorEvents
-    .filter(
-      (e) => e.id.toLowerCase().includes(q) || e.interpretation.toLowerCase().includes(q),
-    )
-    .map((e) => ({
-      key: `e-${e.id}`,
-      group: "Eventi",
-      title: `${e.id} — ${e.interpretation}`,
-      subtitle: `${e.dogName} · ${e.timestamp}`,
-      href: `/behavior/${e.id}`,
-    }));
-
-  const foundReports: SearchResult[] = reports
-    .filter((r) => r.id.toLowerCase().includes(q) || r.text.toLowerCase().includes(q))
-    .map((r) => ({
-      key: `r-${r.id}`,
-      group: "Segnalazioni",
-      title: `${r.id} — ${r.text}`,
-      subtitle: r.userName,
-      href: `/segnalazioni/${r.id}`,
-    }));
-
-  return [...foundUsers, ...foundDogs, ...foundEvents, ...foundReports];
+async function fetchResults(query: string): Promise<SearchResult[]> {
+  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { cache: "no-store" });
+  if (!response.ok) return [];
+  const payload = (await response.json()) as { results?: SearchResult[] };
+  return payload.results ?? [];
 }
 
 export default function TopBar({ sessionSlot }: { sessionSlot?: React.ReactNode }) {
@@ -99,7 +56,7 @@ export default function TopBar({ sessionSlot }: { sessionSlot?: React.ReactNode 
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Click fuori → chiudi
+  // Click fuori â†’ chiudi
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -110,7 +67,13 @@ export default function TopBar({ sessionSlot }: { sessionSlot?: React.ReactNode 
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  const results = useMemo(() => computeResults(debounced), [debounced]);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  useEffect(() => {
+    let active = true;
+    if (debounced.trim().length < 2) { setResults([]); return () => { active = false; }; }
+    fetchResults(debounced).then((next) => { if (active) setResults(next); }).catch(() => { if (active) setResults([]); });
+    return () => { active = false; };
+  }, [debounced]);
   const hasQuery = debounced.trim().length > 0;
   const grouped = GROUP_ORDER.map((group) => ({
     group,
@@ -147,7 +110,7 @@ export default function TopBar({ sessionSlot }: { sessionSlot?: React.ReactNode 
           ref={inputRef}
           className="input"
           style={{ paddingLeft: 36, paddingRight: 52 }}
-          placeholder="Cerca utente, cane, segnalazione…"
+          placeholder="Cerca utente, cane, segnalazioneâ€¦"
           aria-label="Ricerca globale"
           role="combobox"
           aria-expanded={open && hasQuery}

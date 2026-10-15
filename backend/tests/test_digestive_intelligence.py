@@ -1,6 +1,7 @@
 """Digestive Intelligence V2 decision gates."""
 
 import pytest
+
 from app.domains.digestive import contextual_safety_flags
 from app.domains.digestive_intelligence import (
     DigestiveContext,
@@ -10,7 +11,6 @@ from app.domains.digestive_intelligence import (
     normalize_baseline_comparison,
 )
 from app.worker.handlers import process_digestive_event
-
 from tests.conftest import create_dog
 
 
