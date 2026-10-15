@@ -76,6 +76,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -766,6 +782,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -833,6 +865,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
             }
           }
         ],
@@ -1026,6 +1074,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -1085,7 +1149,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 60,
+              "maximum": 100,
               "minimum": 1,
               "default": 12,
               "title": "Limit"
@@ -1623,6 +1687,146 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DogProfileVisibilityOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/games/scores": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Submit Game Score",
+        "operationId": "submit_game_score_v1_games_scores_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameScoreCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameScoreOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/games/leaderboard": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Get Game Leaderboard",
+        "operationId": "get_game_leaderboard_v1_games_leaderboard_get",
+        "parameters": [
+          {
+            "name": "game",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "squirrel",
+                "agility",
+                "sniff",
+                "match"
+              ],
+              "type": "string",
+              "default": "squirrel",
+              "title": "Game"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameLeaderboardResponse"
                 }
               }
             }
@@ -5228,6 +5432,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -5287,6 +5507,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
             }
           }
         ],
@@ -5776,6 +6012,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
           }
         ],
         "responses": {
@@ -5824,6 +6076,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
             }
           }
         ],
@@ -10200,6 +10468,121 @@
         "title": "FoodVerifyRequest",
         "description": "Only user-verified fields become durable data (sez. 20.1)."
       },
+      "GameLeaderboardResponse": {
+        "properties": {
+          "game": {
+            "type": "string",
+            "title": "Game"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "me": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LeaderboardEntryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "game",
+          "week_start",
+          "items"
+        ],
+        "title": "GameLeaderboardResponse"
+      },
+      "GameScoreCreate": {
+        "properties": {
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "game": {
+            "type": "string",
+            "enum": [
+              "squirrel",
+              "agility",
+              "sniff",
+              "match"
+            ],
+            "title": "Game",
+            "default": "squirrel"
+          },
+          "score": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 0.0,
+            "title": "Score"
+          },
+          "client_request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Client Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dog_id",
+          "score",
+          "client_request_id"
+        ],
+        "title": "GameScoreCreate"
+      },
+      "GameScoreOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "game": {
+            "type": "string",
+            "title": "Game"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dog_id",
+          "game",
+          "score",
+          "week_start",
+          "created_at"
+        ],
+        "title": "GameScoreOut"
+      },
       "GuaranteedAnalysis": {
         "properties": {
           "crude_protein_min": {
@@ -10362,6 +10745,50 @@
           "dog_id"
         ],
         "title": "KnowledgeScoreOut"
+      },
+      "LeaderboardEntryOut": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "dog_id": {
+            "type": "string",
+            "title": "Dog Id"
+          },
+          "dog_name": {
+            "type": "string",
+            "title": "Dog Name"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "dog_id",
+          "dog_name",
+          "score"
+        ],
+        "title": "LeaderboardEntryOut"
       },
       "LifestylePreferences": {
         "properties": {
