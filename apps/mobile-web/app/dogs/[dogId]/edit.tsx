@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
@@ -24,9 +25,11 @@ import {
 import { profileChangesToUpdateBody } from '@/features/dogs/profilePatch';
 import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
 import { useSession } from '@/features/auth/SessionProvider';
+import { useAvatarPalette } from '@/features/dogs/avatarTint';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { pickAvatarPhoto } from '@/features/photos/share';
 import { BreedPicker } from '@/features/dogs/BreedPicker';
+import { SpringPress } from '@/components/pressSpring';
 import {
   breedLabelFromSelection,
   breedSelectionFromLabel,
@@ -60,12 +63,23 @@ const VOICE_OPTIONS: { value: AskVoiceGender; label: string; hint: string }[] = 
   { value: 'MALE', label: 'Maschile', hint: 'Calda e posata' },
 ];
 
+const SEX_META: Record<DogSex, {
+  hint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  iconColor: string;
+}> = {
+  MALE: { hint: 'Profilo maschile', icon: 'male', tint: '#E4F1FF', iconColor: '#3276C8' },
+  FEMALE: { hint: 'Profilo femminile', icon: 'female', tint: '#FFE7F0', iconColor: '#D45D8A' },
+  UNKNOWN: { hint: 'Da scegliere', icon: 'help-circle-outline', tint: '#EEF2F7', iconColor: '#708096' },
+};
+
 export default function DogEditScreen() {
   const params = useLocalSearchParams<{ dogId?: string | string[] }>();
-  const { dog } = useDogProfile();
+  const routeDogId = Array.isArray(params.dogId) ? params.dogId[0] : params.dogId;
+  const { dog } = useDogProfile(routeDogId);
   const { userId } = useSession();
   const queryClient = useQueryClient();
-  const routeDogId = Array.isArray(params.dogId) ? params.dogId[0] : params.dogId;
   const dogId = routeDogId ?? dog.id;
   const updateMutation = useUpdateDogMutation(dogId);
   const meQuery = useMeProfile();
@@ -95,6 +109,7 @@ export default function DogEditScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+  const palette = useAvatarPalette(dogId, photoUri);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const dirtyRef = useRef(false);
   const saveInFlightRef = useRef(false);
@@ -316,12 +331,52 @@ export default function DogEditScreen() {
     return () => clearTimeout(timer);
   }, [ownerName, voiceGender, name, sex, ageYears, birthDate, sizeLabel, weightKg, breedSelection, profileVisibility, pendingPhotoUri]);
 
+  const saveBusy = saveState === 'saving' || updateMutation.isPending || updateMe.isPending || uploadingPhoto;
+  const saveLabel = saveBusy
+    ? 'Salvataggio…'
+    : saveState === 'error'
+      ? 'Non salvato'
+      : 'Salvato';
+  const saveIcon = saveBusy
+    ? 'cloud-upload-outline'
+    : saveState === 'error'
+      ? 'alert-circle-outline'
+      : 'checkmark-circle-outline';
+
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title="Modifica profilo" />
+      <View style={[styles.saveBar, saveState === 'error' && styles.saveBarError]} accessibilityLiveRegion="polite">
+        <Ionicons name={saveIcon} size={17} color={saveState === 'error' ? colors.danger : colors.teal} />
+        <Text style={styles.saveBarText}>{saveLabel}</Text>
+        <Text style={styles.saveBarHint}>Le modifiche si salvano automaticamente</Text>
+      </View>
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
-      <Text style={styles.sectionTitle}>Tu</Text>
+      <View style={styles.profileHero}>
+        <LinearGradient
+          colors={[palette.heroFrom, palette.heroTo]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.profileHeroGradient}
+        >
+          <View style={styles.profileHeroCopy}>
+            <Text style={styles.profileHeroEyebrow}>IL MONDO DI</Text>
+            <Text style={styles.profileHeroTitle}>{name || dog.name || 'Il tuo cane'}</Text>
+            <Text style={styles.profileHeroBody}>
+              Ogni dettaglio rende DOGly più preciso e personale.
+            </Text>
+          </View>
+          <View style={styles.profileHeroAvatar}>
+            <DogAvatar photoUri={photoUri} dogName={name || dog.name} size={94} />
+            <View style={styles.profileHeroSpark}>
+              <Ionicons name="sparkles" size={14} color={colors.textOnPrimary} />
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+
+      <Text style={styles.sectionTitle}>Come ti chiama DOGly</Text>
       <Text style={styles.label}>Nome con cui DOGly ti chiama</Text>
       <TextInput
         value={ownerName}
@@ -339,12 +394,12 @@ export default function DogEditScreen() {
       </Text>
       <View style={styles.chips}>
         {VOICE_OPTIONS.map((option) => (
-          <Pressable
+          <SpringPress
             key={option.value}
             accessibilityRole="button"
             accessibilityState={{ selected: voiceGender === option.value }}
             onPress={() => { setVoiceGender(option.value); markDirty(); }}
-            style={[
+            pressableStyle={[
               styles.chip,
               styles.voiceChip,
               voiceGender === option.value && styles.chipActive,
@@ -373,31 +428,33 @@ export default function DogEditScreen() {
                 {option.hint}
               </Text>
             </View>
-          </Pressable>
+          </SpringPress>
         ))}
       </View>
 
-      <Text style={styles.sectionTitle}>{name.trim() || dog.name}</Text>
+      <Text style={styles.sectionTitle}>Il profilo di {name.trim() || dog.name}</Text>
 
-      <Pressable
+      <SpringPress
         accessibilityRole="button"
         accessibilityLabel="Cambia foto profilo"
         disabled={uploadingPhoto}
         onPress={() => void selectAndUploadPhoto()}
-        style={styles.avatarSection}
+        pressableStyle={styles.profilePhotoCard}
       >
         <View style={styles.avatarHalo}>
           <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
         </View>
+        <View style={styles.photoCopy}>
+          <Text style={styles.photoTitle}>Foto di {name || dog.name}</Text>
+          <Text style={styles.photoStatus}>
+            {uploadingPhoto ? 'Salvataggio in corso…' : 'Tocca per cambiarla'}
+          </Text>
+        </View>
         <View style={styles.photoBadge}>
           <Ionicons name="camera" size={16} color="#FFFFFF" />
         </View>
-      </Pressable>
-      <Text style={styles.photoStatus}>
-        {uploadingPhoto
-          ? 'Salvataggio del profilo in corso…'
-          : 'Tocca per cambiare la foto · si salva automaticamente'}
-      </Text>
+        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+      </SpringPress>
 
       <Text style={styles.label}>Nome</Text>
       <TextInput
@@ -410,22 +467,21 @@ export default function DogEditScreen() {
       <Text style={styles.label}>Sesso</Text>
       <View style={styles.chips}>
         {SEX_OPTIONS.map((option) => (
-          <Pressable
+          <SpringPress
             key={option.value}
             accessibilityRole="button"
             accessibilityState={{ selected: sex === option.value }}
             onPress={() => { setSex(option.value); markDirty(); }}
-            style={[styles.chip, sex === option.value && styles.chipActive]}
+            style={styles.sexCardWrap}
+            pressableStyle={[styles.sexCard, sex === option.value && styles.sexCardSelected]}
           >
-            <Text
-              style={[
-                styles.chipText,
-                sex === option.value && styles.chipTextActive,
-              ]}
-            >
-              {option.label}
-            </Text>
-          </Pressable>
+            <View style={[styles.sexAvatar, { backgroundColor: SEX_META[option.value].tint }]}>
+              <Ionicons name={SEX_META[option.value].icon} size={22} color={SEX_META[option.value].iconColor} />
+            </View>
+            <Text style={[styles.sexLabel, sex === option.value && styles.sexLabelSelected]}>{option.label}</Text>
+            <Text style={styles.sexHint}>{SEX_META[option.value].hint}</Text>
+            {sex === option.value ? <View style={styles.sexCheck}><Ionicons name="checkmark" size={11} color="#FFFFFF" /></View> : null}
+          </SpringPress>
         ))}
       </View>
 
@@ -459,10 +515,10 @@ export default function DogEditScreen() {
       <Text style={styles.label}>Taglia</Text>
       <View style={styles.chips}>
         {SIZES.map((size) => (
-          <Pressable
+          <SpringPress
             key={size}
             onPress={() => { setSizeLabel(size); markDirty(); }}
-            style={[styles.chip, sizeLabel === size && styles.chipActive]}
+            pressableStyle={[styles.chip, sizeLabel === size && styles.chipActive]}
           >
             <Text
               style={[
@@ -472,7 +528,7 @@ export default function DogEditScreen() {
             >
               {size}
             </Text>
-          </Pressable>
+          </SpringPress>
         ))}
       </View>
 
@@ -507,7 +563,7 @@ export default function DogEditScreen() {
             ['public', 'Pubblico'],
           ] as const
         ).map(([value, label]) => (
-          <Pressable
+          <SpringPress
             key={value}
             accessibilityRole="button"
             accessibilityState={{ selected: profileVisibility === value }}
@@ -519,7 +575,7 @@ export default function DogEditScreen() {
                 markDirty();
               }
             }}
-            style={[
+            pressableStyle={[
               styles.chip,
               profileVisibility === value && styles.chipActive,
             ]}
@@ -532,29 +588,83 @@ export default function DogEditScreen() {
             >
               {label}
             </Text>
-          </Pressable>
+          </SpringPress>
         ))}
-      </View>
-
-      <View style={styles.saveStatus} accessibilityLiveRegion="polite">
-        <Ionicons
-          name={saveState === 'error' ? 'alert-circle-outline' : saveState === 'saved' ? 'checkmark-circle-outline' : 'cloud-upload-outline'}
-          size={16}
-          color={saveState === 'error' ? colors.danger : colors.teal}
-        />
-        <Text style={styles.saveStatusText}>
-          {saveState === 'saving' || updateMutation.isPending || updateMe.isPending || uploadingPhoto ? 'Salvataggio…' : saveState === 'saved' ? 'Salvato' : saveState === 'error' ? 'Controlla i dati evidenziati' : 'Le modifiche si salvano da sole'}
-        </Text>
       </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  profileHero: {
+    borderRadius: 26,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadows.card,
+  },
+  profileHeroGradient: {
+    minHeight: 168,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  profileHeroCopy: { flex: 1, gap: spacing.xs },
+  profileHeroEyebrow: {
+    color: colors.primary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 1.2,
+  },
+  profileHeroTitle: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: typography.weight.bold,
+  },
+  profileHeroBody: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: 19,
+    maxWidth: 220,
+  },
+  profileHeroAvatar: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    padding: 5,
+    backgroundColor: 'rgba(255,255,255,0.74)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileHeroSpark: {
+    position: 'absolute',
+    right: 0,
+    bottom: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     paddingBottom: spacing.xxxl,
   },
   feedback: { color: colors.danger, fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed },
+  saveBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: '#E8F8F4',
+    marginBottom: spacing.md,
+  },
+  saveBarError: { backgroundColor: '#FFF0F0' },
+  saveBarText: { color: colors.teal, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
+  saveBarHint: { color: colors.textMuted, fontSize: 11 },
   sectionTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
@@ -566,6 +676,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: spacing.md,
   },
+  profilePhotoCard: {
+    minHeight: 132,
+    padding: spacing.md,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    ...shadows.card,
+  },
+  photoCopy: { flex: 1, gap: 4 },
+  photoTitle: { color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.semibold },
   avatarHalo: {
     borderWidth: 4,
     borderColor: '#FFFFFF',
@@ -593,11 +716,8 @@ const styles = StyleSheet.create({
   photoStatus: {
     color: colors.textSecondary,
     fontSize: typography.size.sm,
-    marginBottom: spacing.lg,
     textAlign: 'center',
   },
-  saveStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.md },
-  saveStatusText: { color: colors.textSecondary, fontSize: typography.size.xs },
   label: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
@@ -646,6 +766,46 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: '#FFFFFF',
     fontWeight: typography.weight.semibold,
+  },
+  sexCardWrap: { flex: 1, minWidth: 88 },
+  sexCard: {
+    minHeight: 112,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F9FC',
+    borderWidth: 1,
+    borderColor: '#E8EEF5',
+    position: 'relative',
+  },
+  sexCardSelected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: colors.teal,
+    borderWidth: 2,
+  },
+  sexAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  sexLabel: { color: colors.text, fontSize: 13, fontWeight: typography.weight.semibold },
+  sexLabelSelected: { color: colors.teal },
+  sexHint: { color: colors.textMuted, fontSize: 10, marginTop: 3, textAlign: 'center' },
+  sexCheck: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   visibilityHint: {
     fontSize: typography.size.xs,

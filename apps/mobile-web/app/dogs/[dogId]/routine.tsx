@@ -13,6 +13,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
+import { hapticLight } from '@/lib/haptics';
+import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -108,6 +111,20 @@ export default function DailyRoutineScreen() {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
+      <Svg
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 400 200"
+        preserveAspectRatio="xMaxYMin slice"
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
+        <Circle cx={336} cy={44} r={26} fill="#F6C94C" opacity={0.3} />
+        <Path d="M336 6 v10 M336 72 v10 M298 44 h10 M364 44 h10 M310 18 l7 7 M362 18 l-7 7 M310 70 l7 -7 M362 70 l-7 -7" stroke="#F6C94C" strokeWidth={3} strokeLinecap="round" opacity={0.3} />
+        <Ellipse cx={40} cy={150} rx={30} ry={20} fill={colors.primarySoft} opacity={0.5} />
+        <Path d="M52 138 a16 16 0 1 0 8 28 a13 13 0 1 1 -8 -28 Z" fill={colors.primarySoft} />
+      </Svg>
       <StackScreenHeader title={`La giornata di ${dog.name || '…'}`} />
       <Text style={styles.subtitle}>Organizza passeggiate, pasti e riposo. Puoi cambiare giorno dalla striscia.</Text>
 
@@ -116,16 +133,20 @@ export default function DailyRoutineScreen() {
           const date = dateForWeekday(index);
           const selected = index === selectedDay;
           return (
-            <Pressable
+            <SpringPress
               key={label}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              onPress={() => setSelectedDay(index)}
-              style={[styles.dayChip, selected && styles.dayChipActive]}
+              onPress={() => {
+                void hapticLight();
+                setSelectedDay(index);
+              }}
+              scaleTo={0.93}
+              pressableStyle={[styles.dayChip, selected && styles.dayChipActive]}
             >
               <Text style={[styles.dayLabel, selected && styles.dayLabelActive]}>{label}</Text>
               <Text style={[styles.dayNumber, selected && styles.dayLabelActive]}>{date.getDate()}</Text>
-            </Pressable>
+            </SpringPress>
           );
         })}
       </ScrollView>
@@ -155,9 +176,25 @@ export default function DailyRoutineScreen() {
         </View>
       ) : (
         <View style={styles.timeline}>
-          {items.map((item, index) => {
-            const meta = ACTIVITY_META[item.activity_kind];
-            return (
+          {(() => {
+            const nowMinutes =
+              new Date().getHours() * 60 + new Date().getMinutes();
+            const showNow = selectedDay === mondayBasedToday();
+            const rows: React.ReactNode[] = [];
+            let nowInserted = false;
+            items.forEach((item, index) => {
+              if (showNow && !nowInserted && item.local_time_minutes > nowMinutes) {
+                nowInserted = true;
+                rows.push(
+                  <View key="now" style={styles.nowRow} accessibilityLabel="Adesso">
+                    <View style={styles.nowDot} />
+                    <View style={styles.nowLine} />
+                    <Text style={styles.nowText}>Adesso</Text>
+                  </View>,
+                );
+              }
+              const meta = ACTIVITY_META[item.activity_kind];
+              rows.push(
               <View key={item.id} style={styles.row}>
                 <View style={styles.timeCol}>
                   <Text style={styles.time}>{formatLocalTime(item.local_time_minutes)}</Text>
@@ -184,9 +221,20 @@ export default function DailyRoutineScreen() {
                     <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
                   </Pressable>
                 </View>
-              </View>
-            );
-          })}
+              </View>,
+              );
+            });
+            if (showNow && !nowInserted) {
+              rows.push(
+                <View key="now" style={styles.nowRow} accessibilityLabel="Adesso">
+                  <View style={styles.nowDot} />
+                  <View style={styles.nowLine} />
+                  <Text style={styles.nowText}>Adesso</Text>
+                </View>,
+              );
+            }
+            return rows;
+          })()}
         </View>
       )}
 
@@ -196,6 +244,7 @@ export default function DailyRoutineScreen() {
         title="Aggiungi attività"
         icon={<Ionicons name="add" size={20} color={colors.textOnPrimary} />}
         onPress={() => {
+          void hapticLight();
           setError(null);
           setComposerOpen(true);
         }}
@@ -275,6 +324,31 @@ export default function DailyRoutineScreen() {
 }
 
 const styles = StyleSheet.create({
+  nowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 64,
+    marginVertical: 2,
+  },
+  nowDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.accent,
+  },
+  nowLine: {
+    flex: 1,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.accent,
+    opacity: 0.5,
+  },
+  nowText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   content: { gap: spacing.md, paddingBottom: spacing.xxxl },
   subtitle: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
   week: { gap: 8, paddingVertical: 4 },

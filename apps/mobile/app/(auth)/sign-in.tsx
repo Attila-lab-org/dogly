@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Button, ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { SpringPress } from '@/components/pressSpring';
 import { useSession } from '@/features/auth/SessionProvider';
 import {
   mapAuthError,
@@ -180,15 +181,16 @@ export default function SignInScreen() {
 
   return (
     <ScreenContainer>
-      <Pressable
+        <SpringPress
         accessibilityRole="button"
         accessibilityLabel="Indietro"
         onPress={() => router.back()}
         hitSlop={12}
-        style={styles.back}
+          style={styles.back}
+          pressableStyle={styles.backPressable}
       >
         <Ionicons name="chevron-back" size={26} color={colors.text} />
-      </Pressable>
+        </SpringPress>
 
       <View style={styles.header}>
         <View style={styles.logoBadge}>
@@ -336,6 +338,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     alignSelf: 'flex-start',
   },
+  backPressable: { padding: spacing.xs, borderRadius: 22 },
   header: {
     marginBottom: spacing.xl,
   },

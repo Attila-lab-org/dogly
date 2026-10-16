@@ -1,21 +1,22 @@
 /**
  * Settings (Spec V1 sez. 5.1 — drill-down dal tab Rocky).
- * Lista: profilo (tu e il cane), notifiche, privacy, abbonamento.
+ * Lista: profilo del cane, notifiche, privacy, abbonamento.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
-import { colors, shadows, spacing, typography } from '@/theme/tokens';
+import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { SpringPress } from '@/components/pressSpring';
+import { hapticLight } from '@/lib/haptics';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
-  iconBg: string;
-  iconColor: string;
   title: string;
   subtitle: string;
   href: string | null;
@@ -24,6 +25,7 @@ interface Row {
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, usingMockGate } = useSession();
+  const { dog } = useDogProfile();
   // Stessa fonte della schermata Abbonamento (query condivisa): il
   // sottotitolo riflette lo stato reale, non sempre il mock.
   const { live, query, state: subscription } = useSubscriptionState();
@@ -42,25 +44,25 @@ export default function SettingsScreen() {
 
   const rows: Row[] = [
     {
+      icon: 'paw-outline',
+      title: dog.name ? `Profilo di ${dog.name}` : 'Profilo del cane',
+      subtitle: 'Nome, foto, razza e dettagli',
+      href: dog.id ? `/dogs/${dog.id}/edit` : null,
+    },
+    {
       icon: 'notifications-outline',
-      iconBg: colors.tealSoft,
-      iconColor: colors.teal,
       title: 'Notifiche',
       subtitle: 'Cosa vuoi ricevere e quando',
       href: '/settings/notifications',
     },
     {
       icon: 'shield-checkmark-outline',
-      iconBg: '#E0F2FE',
-      iconColor: '#0284C7',
       title: 'Privacy e dati',
       subtitle: 'Consensi, esportazione, eliminazione account',
       href: '/settings/privacy',
     },
     {
       icon: 'star-outline',
-      iconBg: colors.tealSoft,
-      iconColor: colors.teal,
       title: 'Abbonamento',
       subtitle: subscriptionSubtitle,
       href: '/settings/subscription',
@@ -68,23 +70,27 @@ export default function SettingsScreen() {
   ];
 
   return (
-    <ScreenContainer scroll style={styles.screen}>
+    <ScreenContainer scroll>
       <StackScreenHeader title="Impostazioni" />
-      <Card noPadding style={styles.group}>
+      <Card noPadding>
         {rows.map((row, index) => (
-          <Pressable
+          <SpringPress
             key={row.title}
             accessibilityRole="button"
             disabled={row.href === null}
-            onPress={() => row.href && router.push(row.href as never)}
-            style={[
+            onPress={() => {
+              void hapticLight();
+              if (row.href) router.push(row.href as never);
+            }}
+            scaleTo={0.98}
+            pressableStyle={[
               styles.row,
               index < rows.length - 1 && styles.rowDivider,
               row.href === null && styles.rowDisabled,
             ]}
           >
-            <View style={[styles.iconWrap, { backgroundColor: row.iconBg }]}>
-              <Ionicons name={row.icon} size={18} color={row.iconColor} />
+            <View style={styles.iconWrap}>
+              <Ionicons name={row.icon} size={20} color={colors.accent} />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>{row.title}</Text>
@@ -93,9 +99,9 @@ export default function SettingsScreen() {
             <Ionicons
               name="chevron-forward"
               size={18}
-              color={colors.iconMuted}
+              color={colors.textMuted}
             />
-          </Pressable>
+          </SpringPress>
         ))}
       </Card>
       {!usingMockGate ? (
@@ -114,34 +120,24 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: '#F8FAFC',
-  },
-  group: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EDF2F7',
-    backgroundColor: '#FFFFFF',
-    ...shadows.card,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
+    padding: spacing.lg,
   },
   rowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceMuted,
+    borderBottomColor: colors.border,
   },
   rowDisabled: {
     opacity: 0.6,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -149,9 +145,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowTitle: {
-    fontSize: 15,
-    fontWeight: typography.weight.medium,
-    color: '#1A2B48',
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.semibold,
+    color: colors.text,
   },
   rowSubtitle: {
     fontSize: typography.size.xs,

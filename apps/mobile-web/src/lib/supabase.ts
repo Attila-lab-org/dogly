@@ -106,7 +106,10 @@ export function getSupabaseClient(): SupabaseClient {
       autoRefreshToken: true,
       persistSession: true,
       flowType: 'pkce',
-      detectSessionInUrl: Platform.OS === 'web',
+      // The callback route exchanges the PKCE code explicitly. Keeping
+      // Supabase's automatic URL detector enabled here would race that
+      // exchange and consume the one-time code before the route can finish.
+      detectSessionInUrl: false,
     },
   });
   // Fast Refresh può rivalutare il modulo sul web. Conservare il client sul

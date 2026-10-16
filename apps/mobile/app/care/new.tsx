@@ -26,6 +26,7 @@ import {
   type CareEventType,
 } from '@/features/care/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { SpringPress } from '@/components/pressSpring';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useNotificationPreferences } from '@/features/notifications/store';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
@@ -121,12 +122,12 @@ export default function NewCareEventScreen() {
           const meta = CARE_TYPE_META[type];
           const selected = eventType === type;
           return (
-            <Pressable
+            <SpringPress
               key={type}
               accessibilityRole="button"
               accessibilityState={{ selected }}
               onPress={() => chooseType(type)}
-              style={[
+              pressableStyle={[
                 styles.typeCard,
                 selected && styles.typeCardSelected,
               ]}
@@ -151,7 +152,7 @@ export default function NewCareEventScreen() {
               >
                 {meta.label}
               </Text>
-            </Pressable>
+            </SpringPress>
           );
         })}
       </View>
@@ -187,12 +188,13 @@ export default function NewCareEventScreen() {
       {!allDay ? (
         <View style={styles.timeRow}>
           {TIME_OPTIONS.map((option) => (
-            <Pressable
+            <SpringPress
               key={option}
               accessibilityRole="button"
               accessibilityState={{ selected: hour === option }}
               onPress={() => setHour(option)}
-              style={[
+              scaleTo={0.92}
+              pressableStyle={[
                 styles.timeChip,
                 hour === option && styles.timeChipSelected,
               ]}
@@ -205,7 +207,7 @@ export default function NewCareEventScreen() {
               >
                 {String(option).padStart(2, '0')}:00
               </Text>
-            </Pressable>
+            </SpringPress>
           ))}
         </View>
       ) : null}

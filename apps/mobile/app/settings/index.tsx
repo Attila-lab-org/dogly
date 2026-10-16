@@ -1,6 +1,6 @@
 /**
  * Settings (Spec V1 sez. 5.1 — drill-down dal tab Rocky).
- * Lista: profilo (tu e il cane), notifiche, privacy, abbonamento.
+ * Lista: profilo del cane, notifiche, privacy, abbonamento.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -9,6 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, ScreenContainer } from '@/components';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { StackScreenHeader } from '@/features/secondary/components';
+import { SpringPress } from '@/components/pressSpring';
+import { hapticLight } from '@/lib/haptics';
+import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSubscriptionState } from '@/features/billing/useSubscription';
 import { useSession } from '@/features/auth/SessionProvider';
 
@@ -22,6 +25,7 @@ interface Row {
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, usingMockGate } = useSession();
+  const { dog } = useDogProfile();
   // Stessa fonte della schermata Abbonamento (query condivisa): il
   // sottotitolo riflette lo stato reale, non sempre il mock.
   const { live, query, state: subscription } = useSubscriptionState();
@@ -39,6 +43,12 @@ export default function SettingsScreen() {
   })();
 
   const rows: Row[] = [
+    {
+      icon: 'paw-outline',
+      title: dog.name ? `Profilo di ${dog.name}` : 'Profilo del cane',
+      subtitle: 'Nome, foto, razza e dettagli',
+      href: dog.id ? `/dogs/${dog.id}/edit` : null,
+    },
     {
       icon: 'notifications-outline',
       title: 'Notifiche',
@@ -64,12 +74,16 @@ export default function SettingsScreen() {
       <StackScreenHeader title="Impostazioni" />
       <Card noPadding>
         {rows.map((row, index) => (
-          <Pressable
+          <SpringPress
             key={row.title}
             accessibilityRole="button"
             disabled={row.href === null}
-            onPress={() => row.href && router.push(row.href as never)}
-            style={[
+            onPress={() => {
+              void hapticLight();
+              if (row.href) router.push(row.href as never);
+            }}
+            scaleTo={0.98}
+            pressableStyle={[
               styles.row,
               index < rows.length - 1 && styles.rowDivider,
               row.href === null && styles.rowDisabled,
@@ -87,7 +101,7 @@ export default function SettingsScreen() {
               size={18}
               color={colors.textMuted}
             />
-          </Pressable>
+          </SpringPress>
         ))}
       </Card>
       {!usingMockGate ? (

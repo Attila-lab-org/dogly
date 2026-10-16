@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ErrorState, ScreenContainer } from '@/components';
+import { DogIllustration } from '@/components/DogIllustration';
 import { useSession } from '@/features/auth/SessionProvider';
+
+const styles = StyleSheet.create({
+  illustration: { alignItems: 'center', paddingBottom: 8 },
+});
 
 export default function ConnectionErrorScreen() {
   const router = useRouter();
@@ -30,6 +36,9 @@ export default function ConnectionErrorScreen() {
 
   return (
     <ScreenContainer>
+      <View style={styles.illustration} pointerEvents="none">
+        <DogIllustration size={150} mood="thinking" />
+      </View>
       <ErrorState
         title="Dogly non riesce a collegarsi"
         message={

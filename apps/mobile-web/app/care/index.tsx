@@ -3,6 +3,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ScreenContainer } from '@/components';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Animated from 'react-native-reanimated';
+import { usePressSpring } from '@/components/pressSpring';
+import { SpringPress } from '@/components/pressSpring';
+import { hapticLight } from '@/lib/haptics';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { CareEventCard } from '@/features/care/CareEventCard';
@@ -49,14 +54,38 @@ export default function CareAgendaScreen() {
   const nextUrgent = next ? dayDistance(next.scheduledAt) <= 1 : false;
   const nextDate = next ? new Date(next.scheduledAt) : null;
 
+  const nextPress = usePressSpring();
   return (
     <ScreenContainer scroll style={styles.screen}>
+      <Svg
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 400 220"
+        preserveAspectRatio="xMaxYMin slice"
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
+        <Rect x={296} y={20} width={72} height={64} rx={10} fill={colors.surface} stroke={colors.border} />
+        <Rect x={296} y={20} width={72} height={18} rx={10} fill={colors.accentSoft} />
+        <Circle cx={314} cy={16} r={4} fill={colors.accent} />
+        <Circle cx={350} cy={16} r={4} fill={colors.accent} />
+        <Circle cx={60} cy={170} r={30} fill={colors.surface} stroke={colors.border} />
+        <Path d="M60 152 v18 l12 8" stroke={colors.accent} strokeWidth={4} strokeLinecap="round" fill="none" />
+      </Svg>
       <StackScreenHeader title={`Agenda di ${dog.name}`} />
 
       {view === 'upcoming' && next && nextDate ? (
+        <Animated.View style={nextPress.style}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push(`/care/${next.id}` as never)}
+          accessibilityLabel={`Prossimo appuntamento: ${next.title}, ${relativeCareDate(next.scheduledAt)}`}
+          onPress={() => {
+            void hapticLight();
+            router.push(`/care/${next.id}` as never);
+          }}
+          onPressIn={nextPress.onPressIn}
+          onPressOut={nextPress.onPressOut}
           style={({ pressed }) => [
             styles.nextCard,
             nextUrgent && styles.nextCardUrgent,
@@ -113,6 +142,14 @@ export default function CareAgendaScreen() {
           >
             PROSSIMO APPUNTAMENTO
           </Text>
+          <Text
+            style={[
+              styles.nextCountdown,
+              nextUrgent && styles.nextCountdownUrgent,
+            ]}
+          >
+            {relativeCareDate(next.scheduledAt)}
+          </Text>
           <Text style={styles.nextTitle}>{next.title}</Text>
           <Text style={styles.nextDate}>
             {formatCareDate(next.scheduledAt, next.allDay)}
@@ -138,6 +175,7 @@ export default function CareAgendaScreen() {
             </View>
           ) : null}
         </Pressable>
+        </Animated.View>
       ) : (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
@@ -159,12 +197,12 @@ export default function CareAgendaScreen() {
       />
 
       <View style={styles.segmented} accessibilityRole="tablist">
-        <Pressable accessibilityRole="tab" accessibilityState={{ selected: view === 'upcoming' }} onPress={() => setView('upcoming')} style={[styles.segment, view === 'upcoming' && styles.segmentActive]}>
+        <SpringPress style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: view === 'upcoming' }} onPress={() => { void hapticLight(); setView('upcoming'); }} pressableStyle={[styles.segment, view === 'upcoming' && styles.segmentActive]}>
           <Text style={[styles.segmentText, view === 'upcoming' && styles.segmentTextActive]}>Prossimi ({upcoming.length + (next ? 1 : 0)})</Text>
-        </Pressable>
-        <Pressable accessibilityRole="tab" accessibilityState={{ selected: view === 'completed' }} onPress={() => setView('completed')} style={[styles.segment, view === 'completed' && styles.segmentActive]}>
+        </SpringPress>
+        <SpringPress style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: view === 'completed' }} onPress={() => { void hapticLight(); setView('completed'); }} pressableStyle={[styles.segment, view === 'completed' && styles.segmentActive]}>
           <Text style={[styles.segmentText, view === 'completed' && styles.segmentTextActive]}>Completati ({history.length})</Text>
-        </Pressable>
+        </SpringPress>
       </View>
 
       {view === 'upcoming' && overdue.length > 0 ? (
@@ -304,6 +342,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
   },
   nextLabelUrgent: {
+    color: CARE.coral,
+  },
+  nextCountdown: {
+    color: CARE.teal,
+    fontSize: 26,
+    fontWeight: typography.weight.bold,
+    marginTop: 2,
+  },
+  nextCountdownUrgent: {
     color: CARE.coral,
   },
   nextTitle: {

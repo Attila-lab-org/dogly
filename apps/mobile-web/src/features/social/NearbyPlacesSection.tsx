@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Linking,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -14,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import { useQuery } from '@tanstack/react-query';
 import { CuteIcon } from '@/components/CuteIcon';
+import { SpringPress } from '@/components/pressSpring';
 import { SkeletonCard } from '@/components/Skeleton';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import {
@@ -121,6 +123,8 @@ export function NearbyPlacesSection() {
     () => placesQuery.data?.items ?? [],
     [placesQuery.data],
   );
+  const previewPlaces = filteredPlaces.slice(0, 3);
+  const extraPlaces = Math.max(filteredPlaces.length - previewPlaces.length, 0);
 
   const openMaps = (query: string) => {
     void Linking.openURL(mapsSearchUrl(query, coords));
@@ -130,8 +134,23 @@ export function NearbyPlacesSection() {
     <View style={styles.root}>
       <StylizedMapBg />
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Luoghi utili</Text>
-        <Ionicons name="location-outline" size={20} color={colors.accent} />
+        <View style={styles.sectionTitleGroup}>
+          <Text style={styles.sectionTitle}>Luoghi utili</Text>
+          {filteredPlaces.length > 0 ? (
+            <Text style={styles.sectionCount}>{filteredPlaces.length} vicini</Text>
+          ) : null}
+        </View>
+        <SpringPress
+          accessibilityRole="button"
+          accessibilityLabel="Apri tutti i luoghi sulla mappa"
+          onPress={() => openMaps('parco cani e veterinari vicino a me')}
+          pressableStyle={styles.mapAction}
+          scaleTo={0.96}
+        >
+          <Ionicons name="map-outline" size={16} color={colors.primary} />
+          <Text style={styles.mapActionText}>Mappa</Text>
+          <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+        </SpringPress>
       </View>
 
       {locating ? (
@@ -198,10 +217,31 @@ export function NearbyPlacesSection() {
           />
         </View>
       ) : (
-        <View style={styles.list}>
-          {filteredPlaces.map((place) => (
-            <PlaceCard key={place.id} place={place} />
-          ))}
+        <View style={styles.placesBlock}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.placesRail}
+            style={styles.placesScroller}
+          >
+            {previewPlaces.map((place) => (
+              <PlaceCard key={place.id} place={place} />
+            ))}
+          </ScrollView>
+          <SpringPress
+            accessibilityRole="button"
+            accessibilityLabel="Apri tutti i luoghi sulla mappa"
+            onPress={() => openMaps('parco cani e veterinari vicino a me')}
+            pressableStyle={styles.morePlaces}
+            scaleTo={0.97}
+          >
+            <Text style={styles.morePlacesText}>
+              {extraPlaces > 0
+                ? `Vedi altri ${extraPlaces} luoghi sulla mappa`
+                : 'Apri la mappa dei luoghi vicini'}
+            </Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+          </SpringPress>
         </View>
       )}
     </View>
@@ -213,11 +253,12 @@ function PlaceCard({ place }: { place: NearbyPlace }) {
   const phoneHref = place.phone ? `tel:${place.phone}` : null;
   return (
     <View style={styles.placeCard}>
-      <Pressable
+      <SpringPress
         accessibilityRole="button"
         accessibilityLabel={`Apri ${place.name} sulla mappa`}
         onPress={() => void Linking.openURL(place.maps_url)}
-        style={({ pressed }) => [styles.placeMain, pressed && styles.pressed]}
+        pressableStyle={styles.placeMain}
+        scaleTo={0.98}
       >
         <View style={[styles.placeIcon, isVet && styles.placeIconWarm]}>
           <CuteIcon
@@ -237,17 +278,18 @@ function PlaceCard({ place }: { place: NearbyPlace }) {
           </Text>
         </View>
         <Ionicons name="map-outline" size={18} color={colors.textMuted} />
-      </Pressable>
+      </SpringPress>
       {phoneHref ? (
-        <Pressable
+        <SpringPress
           accessibilityRole="button"
           accessibilityLabel={`Chiama ${place.name}`}
           onPress={() => void Linking.openURL(phoneHref)}
-          style={({ pressed }) => [styles.callBtn, pressed && styles.pressed]}
+          pressableStyle={styles.callBtn}
+          scaleTo={0.98}
         >
           <Ionicons name="call" size={15} color="#FFFFFF" />
           <Text style={styles.callBtnText}>Chiama ora</Text>
-        </Pressable>
+        </SpringPress>
       ) : null}
     </View>
   );
@@ -284,9 +326,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  sectionTitleGroup: { gap: 2 },
   sectionTitle: {
     color: colors.text,
     fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+  },
+  sectionCount: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: typography.weight.medium,
+  },
+  mapAction: {
+    minHeight: 36,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    backgroundColor: colors.primarySoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mapActionText: {
+    color: colors.primary,
+    fontSize: 12,
     fontWeight: typography.weight.bold,
   },
   muted: {
@@ -321,21 +383,24 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
   },
   fallbackBtnTextOutline: { color: colors.primary },
-  list: { gap: spacing.sm },
+  placesBlock: { gap: spacing.sm },
+  placesScroller: { marginHorizontal: -spacing.lg },
+  placesRail: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   placeCard: {
+    width: 254,
     backgroundColor: colors.surface,
     shadowColor: colors.text,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
-    gap: spacing.sm,
-    padding: spacing.md,
+    gap: 10,
+    padding: 12,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  placeMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  placeMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   placeIcon: {
     width: 44,
     height: 44,
@@ -353,7 +418,7 @@ const styles = StyleSheet.create({
   },
   placeMeta: { color: colors.textSecondary, fontSize: 12 },
   callBtn: {
-    minHeight: 40,
+    minHeight: 36,
     borderRadius: 999,
     backgroundColor: '#B45309',
     flexDirection: 'row',
@@ -366,5 +431,20 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     fontSize: typography.size.sm,
   },
-  pressed: { opacity: 0.84 },
+  morePlaces: {
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  morePlacesText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: typography.weight.bold,
+  },
 });

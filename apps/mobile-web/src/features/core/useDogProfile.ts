@@ -68,7 +68,7 @@ function emptyDog(): DogProfile {
   };
 }
 
-export function useDogProfile(): DogProfileState {
+export function useDogProfile(preferredDogId?: string): DogProfileState {
   const { userId, primaryDogId } = useSession();
   const enabled = Boolean(userId) && isApiConfigured();
 
@@ -83,12 +83,15 @@ export function useDogProfile(): DogProfileState {
   const dog = useMemo(() => {
     const items = query.data ?? [];
     const preferred =
+      (preferredDogId
+        ? items.find((d) => d.id === preferredDogId)
+        : undefined) ??
       (primaryDogId
         ? items.find((d) => d.id === primaryDogId)
         : undefined) ?? items[0];
     if (preferred) return mapApiDogToProfile(preferred);
     return emptyDog();
-  }, [query.data, primaryDogId]);
+  }, [query.data, primaryDogId, preferredDogId]);
 
   const knowledgeQuery = useQuery({
     queryKey: queryKeys.knowledgeScore(userId ?? 'anon', dog.id),

@@ -9,7 +9,6 @@ import {
   type AppStateStatus,
   Linking,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -23,6 +22,7 @@ import {
 } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import {
   CAPTURE_MAX_SECONDS,
@@ -423,25 +423,25 @@ export default function BehaviorCaptureScreen() {
     >
       <View style={styles.container}>
         <View style={styles.topBar}>
-          <Pressable
+          <SpringPress
             accessibilityRole="button"
             accessibilityLabel="Indietro"
             onPress={() => router.back()}
             hitSlop={12}
-            style={styles.iconButton}
+            pressableStyle={styles.iconButton}
           >
             <Ionicons name="chevron-back" size={24} color={TITLE_COLOR} />
-          </Pressable>
+          </SpringPress>
           <Text style={styles.topTitle} numberOfLines={1}>
             Osserva {dog.name}
           </Text>
           <View style={styles.topActions}>
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel={torchOn ? 'Spegni flash' : 'Accendi flash'}
               onPress={() => setTorchOn((v) => !v)}
               hitSlop={10}
-              style={styles.iconButton}
+              pressableStyle={styles.iconButton}
               disabled={facing === 'front' || !showCamera}
             >
               <Ionicons
@@ -453,8 +453,8 @@ export default function BehaviorCaptureScreen() {
                     : TITLE_COLOR
                 }
               />
-            </Pressable>
-            <Pressable
+            </SpringPress>
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel="Inverti fotocamera"
               onPress={() => {
@@ -463,7 +463,7 @@ export default function BehaviorCaptureScreen() {
                 setFacing((f) => (f === 'back' ? 'front' : 'back'));
               }}
               hitSlop={10}
-              style={styles.iconButton}
+              pressableStyle={styles.iconButton}
               disabled={!showCamera || isRecording}
             >
               <Ionicons
@@ -471,7 +471,7 @@ export default function BehaviorCaptureScreen() {
                 size={22}
                 color={!showCamera || isRecording ? colors.iconMuted : TITLE_COLOR}
               />
-            </Pressable>
+            </SpringPress>
           </View>
         </View>
 
@@ -495,12 +495,12 @@ export default function BehaviorCaptureScreen() {
                 onPress={() => void requestCameraPermission()}
                 style={styles.permissionButton}
               />
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 onPress={() => Linking.openSettings()}
               >
                 <Text style={styles.permissionLink}>Apri impostazioni</Text>
-              </Pressable>
+              </SpringPress>
             </View>
           ) : (
             <>
@@ -592,13 +592,13 @@ export default function BehaviorCaptureScreen() {
               ) : null}
 
               {state.phase === 'ready' ? (
-                <Pressable
+                <SpringPress
                   accessibilityRole="button"
                   accessibilityLabel="Inizia registrazione"
                   disabled={!cameraReady}
                   onPress={() => void startRecording()}
                   hitSlop={16}
-                  style={({ pressed }) => [
+                  pressableStyle={({ pressed }) => [
                     styles.captureOuter,
                     !cameraReady && styles.captureDisabled,
                     pressed && styles.capturePressed,
@@ -615,15 +615,15 @@ export default function BehaviorCaptureScreen() {
                       <View style={styles.captureLens} />
                     </View>
                   </LinearGradient>
-                </Pressable>
+                </SpringPress>
               ) : (
-                <Pressable
+                <SpringPress
                   accessibilityRole="button"
                   accessibilityLabel="Termina registrazione"
                   disabled={!canStop}
                   onPress={stopRecording}
                   hitSlop={16}
-                  style={[
+                  pressableStyle={[
                     styles.captureOuter,
                     !canStop && styles.captureDisabled,
                   ]}
@@ -639,7 +639,7 @@ export default function BehaviorCaptureScreen() {
                       <View style={styles.stopSquare} />
                     </View>
                   </LinearGradient>
-                </Pressable>
+                </SpringPress>
               )}
 
               <Text style={styles.hint}>

@@ -15,16 +15,15 @@ import Animated, {
   Easing,
   type SharedValue,
   useAnimatedProps,
-  useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withRepeat,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
 import { CuteIcon } from '../../components/CuteIcon';
+import { usePressSpring } from '../../components/pressSpring';
 import { useSession } from '../auth/SessionProvider';
 import { isApiConfigured } from '../auth/env';
 import { isPersistedId } from '../../lib/persistedId';
@@ -105,22 +104,26 @@ function TennisBall({ cx, cy, r, float, phase }: { cx: number; cy: number; r: nu
   );
 }
 
-/** Bolla rotonda con faccia di cane kawaii (scenografia). */
-function DogBubble({ cx, cy, r, flip }: { cx: number; cy: number; r: number; flip?: boolean }) {
+/** Oggetti del gioco: la scenografia resta gioiosa senza antropomorfizzare il cane. */
+function ToyBall({ cx, cy, r }: { cx: number; cy: number; r: number }) {
   return (
     <>
-      <Circle cx={cx} cy={cy} r={r} fill="#FFF6EC" stroke={colors.text} strokeWidth={2.4} />
-      <Ellipse cx={cx - r * 0.55} cy={cy - r * 0.35} rx={r * 0.22} ry={r * 0.34} fill={EAR} transform={flip ? `rotate(24 ${cx - r * 0.55} ${cy - r * 0.35})` : undefined} />
-      <Ellipse cx={cx + r * 0.55} cy={cy - r * 0.35} rx={r * 0.22} ry={r * 0.34} fill={EAR} transform={flip ? undefined : `rotate(-24 ${cx + r * 0.55} ${cy - r * 0.35})`} />
-      <Circle cx={cx - r * 0.3} cy={cy - r * 0.05} r={r * 0.09} fill={colors.text} />
-      <Circle cx={cx + r * 0.3} cy={cy - r * 0.05} r={r * 0.09} fill={colors.text} />
-      <Ellipse cx={cx} cy={cy + r * 0.18} rx={r * 0.14} ry={r * 0.1} fill={colors.accent} />
-      <Path d={`M${cx - r * 0.16} ${cy + r * 0.34} q${r * 0.16} ${r * 0.14} ${r * 0.32} 0`} stroke={colors.text} strokeWidth={2} strokeLinecap="round" fill="none" />
+      <Ellipse cx={cx} cy={cy + r + 5} rx={r * 0.9} ry={r * 0.25} fill={colors.text} opacity={0.12} />
+      <Circle cx={cx} cy={cy} r={r} fill="#F4D46B" stroke={colors.text} strokeWidth={2.2} />
+      <Path d={`M${cx - r * 0.85} ${cy - r * 0.15} C${cx - r * 0.25} ${cy + r * 0.45} ${cx + r * 0.28} ${cy + r * 0.45} ${cx + r * 0.85} ${cy - r * 0.15}`} stroke="#FFFFFF" strokeWidth={r * 0.13} fill="none" strokeLinecap="round" />
     </>
   );
 }
 
-const EAR = '#14385E';
+function Frisbee({ cx, cy, r, flip }: { cx: number; cy: number; r: number; flip?: boolean }) {
+  return (
+    <>
+      <Ellipse cx={cx} cy={cy + r * 0.9} rx={r * 0.9} ry={r * 0.22} fill={colors.text} opacity={0.12} />
+      <Ellipse cx={cx} cy={cy} rx={r * 1.15} ry={r * 0.56} fill="#FF8B74" stroke={colors.text} strokeWidth={2.2} transform={flip ? `rotate(-12 ${cx} ${cy})` : `rotate(12 ${cx} ${cy})`} />
+      <Ellipse cx={cx} cy={cy - 1} rx={r * 0.62} ry={r * 0.2} fill="none" stroke="#FFFFFF" strokeWidth={2} opacity={0.9} transform={flip ? `rotate(-12 ${cx} ${cy})` : `rotate(12 ${cx} ${cy})`} />
+    </>
+  );
+}
 
 /** Composizione scenografica Bau Match (scenografia, non il protagonista). */
 function MatchScene({ reducedMotion }: { reducedMotion: boolean }) {
@@ -141,9 +144,9 @@ function MatchScene({ reducedMotion }: { reducedMotion: boolean }) {
       {/* erbetta */}
       <Path d="M0 96 C24 88 44 96 64 92 C88 88 104 94 128 90 L128 112 L0 112 Z" fill="#9BD8CB" />
       <Path d="M0 102 C28 96 52 104 80 100 C100 97 116 102 128 100 L128 112 L0 112 Z" fill="#74C4A9" />
-      {/* bolle cane */}
-      <DogBubble cx={34} cy={72} r={22} />
-      <DogBubble cx={92} cy={76} r={17} flip />
+      {/* oggetti del gioco */}
+      <ToyBall cx={34} cy={72} r={22} />
+      <Frisbee cx={92} cy={76} r={17} flip />
       {/* cuoricino */}
       <Path d="M64 24 C61 18 52 20 52 27 C52 33 60 38 64 42 C68 38 76 33 76 27 C76 20 67 18 64 24 Z" fill="#FF8B74" />
       {/* palline che fluttuano */}
@@ -162,19 +165,6 @@ function AgilityMark() {
       <Rect x={0} y={38} width={86} height={8} rx={4} fill={colors.textOnPrimary} stroke={colors.text} strokeWidth={2} />
     </Svg>
   );
-}
-
-/** Press spring condiviso: scala 0.96 al tocco, rebound morbido. */
-function usePressSpring() {
-  const scale = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const onPressIn = () => {
-    scale.value = withSpring(0.96, { damping: 12, stiffness: 260 });
-  };
-  const onPressOut = () => {
-    scale.value = withSpring(1, { damping: 9, stiffness: 220 });
-  };
-  return { style, onPressIn, onPressOut };
 }
 
 function ArrowCircle({ tone }: { tone: 'onColor' | 'onLight' }) {

@@ -9,7 +9,9 @@ import {
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { colors, spacing } from '../theme/tokens';
+import { WorldBackdrop, worldForPath, type WorldKind } from './WorldBackdrop';
 
 export interface ScreenContainerProps {
   children: React.ReactNode;
@@ -19,6 +21,8 @@ export interface ScreenContainerProps {
   padded?: boolean;
   style?: ViewStyle;
   contentStyle?: ViewStyle;
+  /** Identità illustrata della zona; se omessa viene dedotta dalla route. */
+  world?: WorldKind;
 }
 
 /** Contenitore standard di schermata: sfondo freddo chiaro + safe area */
@@ -28,7 +32,10 @@ export function ScreenContainer({
   padded = true,
   style,
   contentStyle,
+  world,
 }: ScreenContainerProps) {
+  const pathname = usePathname();
+  const resolvedWorld = world ?? worldForPath(pathname);
   const inner = scroll ? (
     <ScrollView
       style={styles.flex}
@@ -52,6 +59,7 @@ export function ScreenContainer({
   return (
     <SafeAreaView style={[styles.safe, style]} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" />
+      <WorldBackdrop world={resolvedWorld} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -66,6 +74,7 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+    position: 'relative',
   },
   flex: {
     flex: 1,

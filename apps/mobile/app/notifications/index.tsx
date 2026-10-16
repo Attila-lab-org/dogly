@@ -21,6 +21,7 @@ import { StackScreenHeader } from '@/features/secondary/components';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, formatInsightTimestamp } from '@/features/home/api';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
+import { SpringPress } from '@/components/pressSpring';
 
 interface ResultItem {
   id: string;
@@ -62,27 +63,26 @@ export default function NotificationsScreen() {
     <ScreenContainer scroll style={styles.screen}>
       <StackScreenHeader title="Notifiche" />
 
-      <Pressable
+      <SpringPress
         accessibilityRole="button"
         onPress={() => router.push('/settings/notifications')}
         style={styles.settingsLink}
+        pressableStyle={styles.settingsLinkPressable}
       >
         <Ionicons name="options-outline" size={18} color={colors.teal} />
         <Text style={styles.settingsText}>Gestisci le notifiche</Text>
-      </Pressable>
+      </SpringPress>
 
       <Text style={styles.section}>Promemoria agenda</Text>
       {careEvents.length > 0 ? (
         <View style={styles.list}>
           {careEvents.map((event) => (
-            <Pressable
+            <SpringPress
               key={event.id}
               accessibilityRole="button"
               onPress={() => router.push(`/care/${event.id}` as never)}
-              style={({ pressed }) => [
-                styles.item,
-                pressed && styles.itemPressed,
-              ]}
+              style={styles.item}
+              pressableStyle={({ pressed }) => [styles.itemPressable, pressed && styles.itemPressed]}
             >
               <View style={[styles.icon, styles.iconCare]}>
                 <Ionicons
@@ -111,7 +111,7 @@ export default function NotificationsScreen() {
                 size={18}
                 color={colors.iconMuted}
               />
-            </Pressable>
+            </SpringPress>
           ))}
         </View>
       ) : (
@@ -124,7 +124,7 @@ export default function NotificationsScreen() {
       {results.length > 0 ? (
         <View style={styles.list}>
           {results.map((item) => (
-            <Pressable
+            <SpringPress
               key={item.id}
               accessibilityRole="button"
               onPress={() =>
@@ -137,10 +137,8 @@ export default function NotificationsScreen() {
                   },
                 } as never)
               }
-              style={({ pressed }) => [
-                styles.item,
-                pressed && styles.itemPressed,
-              ]}
+              style={styles.item}
+              pressableStyle={({ pressed }) => [styles.itemPressable, pressed && styles.itemPressed]}
             >
               <View style={[styles.icon, styles.iconResult]}>
                 <Ionicons
@@ -166,7 +164,7 @@ export default function NotificationsScreen() {
                 size={18}
                 color={colors.iconMuted}
               />
-            </Pressable>
+            </SpringPress>
           ))}
         </View>
       ) : (
@@ -201,6 +199,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     paddingVertical: spacing.xs,
   },
+  settingsLinkPressable: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   settingsText: {
     color: colors.teal,
     fontSize: typography.size.sm,
@@ -227,6 +226,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     ...shadows.card,
   },
+  itemPressable: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: 18 },
   itemPressed: {
     backgroundColor: colors.surfaceMuted,
   },

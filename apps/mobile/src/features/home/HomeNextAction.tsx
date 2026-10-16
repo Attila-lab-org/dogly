@@ -20,6 +20,8 @@ import { queryKeys } from '@/lib/queryClient';
 import { feedingPeriodsMock, foodProductsMock } from '@/mocks/secondary';
 import { foodSummary } from '@/features/dogs/profileSummary';
 import { colors, spacing, typography } from '@/theme/tokens';
+import Animated from 'react-native-reanimated';
+import { usePressSpring } from '@/components/pressSpring';
 
 const CARE_WINDOW_DAYS = 7;
 
@@ -40,6 +42,7 @@ export function HomeNextAction({
   dogName: string;
 }) {
   const router = useRouter();
+  const press = usePressSpring();
   const { userId, usingMockGate } = useSession();
   const enabled = !usingMockGate && isPersistedId(dogId);
 
@@ -132,30 +135,34 @@ export function HomeNextAction({
       : { bg: '#FFF5F1', iconBg: '#FFEBDD', icon: '#ED752B' };
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${action.title}. ${action.detail}`}
-      onPress={() => router.push(action.href as never)}
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: palette.bg },
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={[styles.iconWrap, { backgroundColor: palette.iconBg }]}>
-        <Ionicons name={action.icon} size={22} color={palette.icon} />
-      </View>
-      <View style={styles.copy}>
-        <Text style={styles.eyebrow}>OGGI</Text>
-        <Text style={styles.title} numberOfLines={1}>
-          {action.title}
-        </Text>
-        <Text style={styles.detail} numberOfLines={1}>
-          {action.detail}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-    </Pressable>
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${action.title}. ${action.detail}`}
+        onPress={() => router.push(action.href as never)}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={({ pressed }) => [
+          styles.row,
+          { backgroundColor: palette.bg },
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={[styles.iconWrap, { backgroundColor: palette.iconBg }]}>
+          <Ionicons name={action.icon} size={22} color={palette.icon} />
+        </View>
+        <View style={styles.copy}>
+          <Text style={styles.eyebrow}>OGGI</Text>
+          <Text style={styles.title} numberOfLines={1}>
+            {action.title}
+          </Text>
+          <Text style={styles.detail} numberOfLines={1}>
+            {action.detail}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+    </Animated.View>
   );
 }
 

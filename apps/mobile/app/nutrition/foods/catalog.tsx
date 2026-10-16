@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ScreenContainer } from '@/components';
+import Svg, { Rect } from 'react-native-svg';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
@@ -65,6 +66,24 @@ export default function FoodCatalogScreen() {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
+      <Svg
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 400 200"
+        preserveAspectRatio="xMaxYMin slice"
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
+        {/* scaffale del negozio */}
+        <Rect x={290} y={16} width={100} height={7} rx={3.5} fill={colors.border} />
+        <Rect x={300} y={-8} width={20} height={26} rx={4} fill={colors.primarySoft} />
+        <Rect x={326} y={-4} width={18} height={22} rx={4} fill={colors.accentSoft} />
+        <Rect x={350} y={-10} width={24} height={28} rx={5} fill={colors.warningSoft} />
+        <Rect x={290} y={64} width={100} height={7} rx={3.5} fill={colors.border} />
+        <Rect x={306} y={38} width={26} height={28} rx={5} fill={colors.surface} stroke={colors.border} />
+        <Rect x={342} y={42} width={20} height={24} rx={4} fill={colors.accentSoft} />
+      </Svg>
       <StackScreenHeader title="Catalogo" />
       <Text style={styles.hero}>Il cibo di {dog.name}</Text>
       <Text style={styles.lead}>

@@ -25,3 +25,5 @@ export type { CuteIconProps, CuteIconName } from './CuteIcon';
 export { DogIllustration } from './DogIllustration';
 export type { DogIllustrationProps } from './DogIllustration';
 export { Skeleton, SkeletonCard } from "./Skeleton";
+export { WorldBackdrop, worldForPath } from './WorldBackdrop';
+export type { WorldKind } from './WorldBackdrop';

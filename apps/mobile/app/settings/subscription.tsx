@@ -54,7 +54,21 @@ export default function SubscriptionScreen() {
     );
   }
 
-  if (!state) return null;
+  if (!state) {
+    // Fuori da live mode (mock gate dev o stato non ancora pronto): mai
+    // pagina bianca — empty state onesto con via d'uscita.
+    return (
+      <ScreenContainer>
+        <StackScreenHeader title="Abbonamento" />
+        <ErrorState
+          title="Il piano si attiva presto"
+          message="I piani arrivano quando il tuo account è pronto. Nel frattempo puoi usare Dogly con le analisi gratuite."
+          retryLabel="Torna indietro"
+          onRetry={() => router.back()}
+        />
+      </ScreenContainer>
+    );
+  }
   const { plan, renewsAt, usage } = state;
   const isPremium = plan !== 'FREE';
   const behaviorLimit = Math.max(1, usage.behaviorLimit);

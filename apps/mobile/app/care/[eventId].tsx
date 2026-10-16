@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  Easing,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { CuteIcon } from '@/components/CuteIcon';
 import { Button, ErrorState, ScreenContainer } from '@/components';
 import { formatCareDate } from '@/features/care/date';
 import {
@@ -14,6 +22,56 @@ import { CARE_TYPE_META } from '@/features/care/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+
+const BURST_OFFSETS = [
+  { x: -26, y: -30 },
+  { x: 0, y: -40 },
+  { x: 26, y: -30 },
+  { x: -14, y: -46 },
+  { x: 14, y: -46 },
+] as const;
+
+/** Paw burst leggero sul posto quando l'appuntamento è segnato fatto. */
+function PawBurst() {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: 480, easing: Easing.out(Easing.quad) });
+  }, [progress]);
+  return (
+    <View pointerEvents="none" style={styles.burstWrap}>
+      {BURST_OFFSETS.map((offset, index) => (
+        <BurstPaw key={index} progress={progress} offset={offset} index={index} />
+      ))}
+    </View>
+  );
+}
+
+function BurstPaw({
+  progress,
+  offset,
+  index,
+}: {
+  progress: SharedValue<number>;
+  offset: { x: number; y: number };
+  index: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const local = Math.min(1, Math.max(0, progress.value * 1.3 - index * 0.08));
+    return {
+      opacity: 1 - local,
+      transform: [
+        { translateX: offset.x * local },
+        { translateY: offset.y * local },
+        { scale: 0.6 + local * 0.7 },
+      ],
+    };
+  });
+  return (
+    <Animated.View style={[{ position: 'absolute' }, style]}>
+      <CuteIcon name="paw" size={14} color={colors.accent} secondary={colors.accent} />
+    </Animated.View>
+  );
+}
 
 export default function CareEventDetailScreen() {
   const router = useRouter();
@@ -55,14 +113,17 @@ export default function CareEventDetailScreen() {
   const meta = CARE_TYPE_META[event.eventType];
   const completed = event.status === 'COMPLETED';
 
+  const [celebrating, setCelebrating] = useState(false);
+
   const complete = async () => {
     setWorking(true);
     try {
       await completeCareEvent(event.id, dog.name);
-      router.replace('/care' as never);
+      // Micro-celebrazione sul posto, poi si torna all'agenda.
+      setCelebrating(true);
+      setTimeout(() => router.replace('/care' as never), 650);
     } catch {
       Alert.alert('Non riesco ad aggiornare', 'Riprova tra poco.');
-    } finally {
       setWorking(false);
     }
   };
@@ -96,6 +157,7 @@ export default function CareEventDetailScreen() {
       <StackScreenHeader title="Appuntamento" />
 
       <View style={styles.hero}>
+        {celebrating ? <PawBurst /> : null}
         <View style={styles.icon}>
           <Ionicons
             name={completed ? 'checkmark' : meta.icon}
@@ -170,6 +232,12 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
+  burstWrap: {
+    position: 'absolute',
+    top: 46,
+    alignSelf: 'center',
+    zIndex: 3,
+  },
   hero: {
     alignItems: 'center',
     padding: spacing.xl,

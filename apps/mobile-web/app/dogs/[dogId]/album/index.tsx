@@ -13,6 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Rect } from 'react-native-svg';
 import { EmptyState, ErrorState, ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { colors, spacing, typography } from '@/theme/tokens';

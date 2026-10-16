@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useReducedMotion } from 'react-native-reanimated';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
 import { useSession } from '../auth/SessionProvider';
 import { isApiConfigured } from '../auth/env';
@@ -31,6 +31,7 @@ import { listFeedingPeriods, listFoods } from '../nutrition/api';
 import { readDeviceLocationResult } from '../places/api';
 import { breedTipFor, coatTypeFor } from '../dogs/breedTraits';
 import { fetchDiaryPage } from './api';
+import { usePressSpring } from '../../components/pressSpring';
 import {
   JOYFUL_LINE,
   ageYearsFrom,
@@ -86,10 +87,45 @@ function airQualityLabel(weather: HeroWeather | null): string {
   return 'Media';
 }
 
-function dayIcon(dayPart: DayPart): keyof typeof Ionicons.glyphMap {
-  if (dayPart === 'morning') return 'sunny';
-  if (dayPart === 'afternoon') return 'partly-sunny';
-  return 'moon';
+type HeroScene = {
+  gradient: readonly [string, string];
+  orb: string;
+  horizon: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+/** The hero is a small world: time and weather change its light and texture. */
+function heroSceneFor(dayPart: DayPart, weatherCode: number | null | undefined): HeroScene {
+  if (weatherCode != null && weatherCode >= 51) {
+    return {
+      gradient: ['#3C6783', '#78A2C0'],
+      orb: '#BDE6F5',
+      horizon: '#6BC0BF',
+      icon: 'rainy-outline',
+    };
+  }
+  if (dayPart === 'morning') {
+    return {
+      gradient: ['#35618B', '#6798CA'],
+      orb: '#F7D27A',
+      horizon: '#58B9AF',
+      icon: 'sunny-outline',
+    };
+  }
+  if (dayPart === 'afternoon') {
+    return {
+      gradient: ['#345C89', '#6594C9'],
+      orb: '#9CD3FF',
+      horizon: '#67C9C2',
+      icon: 'partly-sunny-outline',
+    };
+  }
+  return {
+    gradient: ['#414573', '#7A72B7'],
+    orb: '#E6D6FF',
+    horizon: '#5479B7',
+    icon: 'moon-outline',
+  };
 }
 
 function startOfLocalDay(date: Date): number {
@@ -115,6 +151,8 @@ export function DogHero({
 }) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
+  const photoPress = usePressSpring(0.965);
+  const ctaPress = usePressSpring(0.98);
   const { userId, usingMockGate } = useSession();
   const careEvents = useCareEvents(dogId, dogName);
   const [secondaryReady, setSecondaryReady] = useState(false);
@@ -373,44 +411,52 @@ export function DogHero({
     weather != null ? `${Math.round(weather.temperatureC)}°` : '—';
   const humidityText = humidityLabel(weather?.humidityPct);
   const airText = airQualityLabel(weather);
+  const scene = heroSceneFor(dayPart, weather?.weatherCode);
 
   return (
-    <View style={styles.card}>
+    <LinearGradient colors={scene.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+      <View style={[styles.sceneOrb, { backgroundColor: scene.orb }]} pointerEvents="none" />
+      <View style={[styles.sceneHorizon, { backgroundColor: scene.horizon }]} pointerEvents="none" />
+      <View style={styles.sceneLine} pointerEvents="none" />
       <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${dogName}: tocca per il prossimo consiglio`}
-          onPress={advanceTip}
-          onLongPress={onPhotoLongPress}
-          delayLongPress={450}
-          style={styles.photoHit}
-        >
-          <LinearGradient
-            colors={[...ringColors]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.photoRing}
+        <Animated.View style={[styles.photoHit, photoPress.style]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${dogName}: tocca per il prossimo consiglio`}
+            onPress={advanceTip}
+            onLongPress={onPhotoLongPress}
+            delayLongPress={450}
+            onPressIn={photoPress.onPressIn}
+            onPressOut={photoPress.onPressOut}
+            style={styles.photoHit}
           >
-            <View style={styles.photoInner}>
-              {photoUri ? (
-                <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
-              ) : (
-                <View style={styles.photoPlaceholder} accessibilityLabel="Nessuna foto del cane">
-                  <Ionicons name="paw" size={28} color={colors.primary} />
-                </View>
-              )}
-            </View>
-          </LinearGradient>
-        </Pressable>
+            <LinearGradient
+              colors={[...ringColors]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.photoRing}
+            >
+              <View style={styles.photoInner}>
+                {photoUri ? (
+                  <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+                ) : (
+                  <View style={styles.photoPlaceholder} accessibilityLabel="Nessuna foto del cane">
+                    <Ionicons name="paw" size={28} color={colors.primary} />
+                  </View>
+                )}
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
 
         <View style={styles.copy}>
           <View style={styles.eyebrowRow}>
             <Ionicons
-              name={dayIcon(dayPart)}
+              name={scene.icon}
               size={14}
-              color={colors.iconHighlight}
+              color="#FDE68A"
             />
-            <Text style={styles.eyebrow}>Oggi per {dogName}</Text>
+            <Text style={styles.eyebrow}>OGGI CON {dogName.toUpperCase()}</Text>
           </View>
           <Text style={styles.headline} numberOfLines={3}>
             {headline}
@@ -421,37 +467,44 @@ export function DogHero({
       <View style={styles.metrics}>
         <Metric
           icon="thermometer-outline"
-          iconColor={colors.primaryBright}
+          iconColor="#7DD3FC"
           value={tempText}
           label="Temperatura"
         />
         <Metric
           icon="water-outline"
-          iconColor={colors.primary}
+          iconColor="#A7F3D0"
           value={humidityText}
           label="Umidità"
         />
         <Metric
           icon="leaf-outline"
-          iconColor={colors.accent}
+          iconColor="#FDE68A"
           value={airText}
           label="Qualità aria"
         />
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Parla con DOGly di ${dogName}`}
-        onPress={openAsk}
-        style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
-      >
-        <View style={styles.ctaPaw}>
-          <Ionicons name="paw" size={14} color="#FFFFFF" />
-        </View>
-        <Text style={styles.ctaText}>Parla con DOGly</Text>
-        <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-      </Pressable>
-    </View>
+      <Animated.View style={ctaPress.style}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Racconta a DOGly com'è andata con ${dogName}`}
+          onPress={openAsk}
+          onPressIn={ctaPress.onPressIn}
+          onPressOut={ctaPress.onPressOut}
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+        >
+          <View style={styles.ctaIcon}>
+            <Ionicons name="chatbubble-ellipses" size={17} color={colors.primary} />
+          </View>
+          <View style={styles.ctaCopy}>
+            <Text style={styles.ctaText}>Racconta un momento</Text>
+            <Text style={styles.ctaHint}>Scrivi, foto o voce</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={20} color={colors.primary} />
+        </Pressable>
+      </Animated.View>
+    </LinearGradient>
   );
 }
 
@@ -479,13 +532,43 @@ function Metric({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     ...shadows.card,
+  },
+  sceneOrb: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    right: -78,
+    top: -104,
+    opacity: 0.22,
+    backgroundColor: '#BDE6F5',
+  },
+  sceneHorizon: {
+    position: 'absolute',
+    width: 390,
+    height: 108,
+    borderRadius: 190,
+    left: -72,
+    bottom: -70,
+    opacity: 0.18,
+    backgroundColor: '#67C9C2',
+  },
+  sceneLine: {
+    position: 'absolute',
+    width: 120,
+    height: 3,
+    borderRadius: 2,
+    right: 22,
+    bottom: 92,
+    opacity: 0.22,
+    backgroundColor: '#FFFFFF',
+    transform: [{ rotate: '-9deg' }],
   },
   topRow: {
     flexDirection: 'row',
@@ -536,14 +619,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.medium,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    fontWeight: typography.weight.bold,
   },
   headline: {
-    color: colors.text,
-    fontSize: 20,
-    lineHeight: 26,
+    color: '#FFFFFF',
+    fontSize: 21,
+    lineHeight: 25,
     fontWeight: typography.weight.bold,
   },
   metrics: {
@@ -553,50 +637,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   metric: {
     flex: 1,
-    gap: 2,
+    gap: 4,
     paddingHorizontal: spacing.xs,
+    alignItems: 'center',
   },
   metricTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    justifyContent: 'center',
   },
   metricValue: {
-    color: colors.text,
+    color: '#FFFFFF',
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
   metricLabel: {
-    color: colors.textMuted,
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
-    marginLeft: 21,
+    textAlign: 'center',
   },
   cta: {
     minHeight: 52,
     borderRadius: 999,
-    backgroundColor: colors.primary,
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
+    shadowColor: '#071A3D',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 3,
   },
   ctaPressed: { opacity: 0.88 },
-  ctaPaw: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  ctaIcon: { width: 31, height: 31, borderRadius: 16, backgroundColor: '#CCFBF1', alignItems: 'center', justifyContent: 'center' },
+  ctaCopy: { flex: 1, gap: 1 },
   ctaText: {
-    flex: 1,
-    color: colors.textOnPrimary,
+    color: colors.primary,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
   },
+  ctaHint: { color: colors.textSecondary, fontSize: 11, fontWeight: typography.weight.medium },
 });

@@ -17,6 +17,16 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
 import { Button, ScreenContainer } from '@/components';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { hapticSuccess } from '@/lib/haptics';
+import { useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,6 +49,47 @@ const dogSchema = z.object({
 
 type DogDraft = z.infer<typeof dogSchema>;
 
+const CONFETTI = [
+  { x: -52, y: -40, c: '#14B8A6' },
+  { x: 0, y: -56, c: '#F6C94C' },
+  { x: 52, y: -40, c: '#FF8B74' },
+  { x: -34, y: -64, c: '#2563EB' },
+  { x: 34, y: -64, c: '#14B8A6' },
+] as const;
+
+/** La foto del cane appena aggiunta: scale-in + confetti leggeri. */
+function PhotoCelebration({ tick, children }: { tick: number; children: React.ReactNode }) {
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+  const burst = useSharedValue(0);
+  useEffect(() => {
+    if (!tick) return;
+    if (reducedMotion) return;
+    scale.value = 0.6;
+    scale.value = withSpring(1, { damping: 8, stiffness: 220 });
+    burst.value = 0;
+    burst.value = withTiming(1, { duration: 620, easing: Easing.out(Easing.quad) });
+  }, [tick, reducedMotion, scale, burst]);
+  const wrapStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const confettiStyle = useAnimatedStyle(() => ({ opacity: 1 - burst.value }));
+  return (
+    <View style={styles.celebrateWrap}>
+      <Animated.View style={confettiStyle} pointerEvents="none">
+        <Svg width={180} height={140} viewBox="0 0 180 140" style={styles.confettiSvg}>
+          {CONFETTI.map((dot, index) =>
+            index % 2 === 0 ? (
+              <Circle key={index} cx={90 + dot.x} cy={70 + dot.y} r={5} fill={dot.c} />
+            ) : (
+              <Rect key={index} x={86 + dot.x} y={66 + dot.y} width={8} height={8} rx={2} fill={dot.c} transform={`rotate(${index * 24} ${90 + dot.x} ${70 + dot.y})`} />
+            ),
+          )}
+        </Svg>
+      </Animated.View>
+      <Animated.View style={wrapStyle}>{children}</Animated.View>
+    </View>
+  );
+}
+
 export default function DogOnboardingScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -46,6 +97,7 @@ export default function DogOnboardingScreen() {
     useSession();
   const createDog = useCreateDogMutation();
   const [draft, setDraft] = useState<DogDraft>({ name: '', photoUri: null });
+  const [photoTick, setPhotoTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,17 +188,23 @@ export default function DogOnboardingScreen() {
       </View>
 
       <View style={styles.avatarSection}>
-        <DogAvatar
-          size={116}
-          photoUri={draft.photoUri}
-          dogName={draft.name || 'il tuo cane'}
-        />
+        <PhotoCelebration tick={draft.photoUri ? photoTick : 0}>
+          <DogAvatar
+            size={116}
+            photoUri={draft.photoUri}
+            dogName={draft.name || 'il tuo cane'}
+          />
+        </PhotoCelebration>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Aggiungi una foto del cane, facoltativa"
           onPress={async () => {
             const uri = await pickAvatarPhoto();
-            if (uri) setDraft((current) => ({ ...current, photoUri: uri }));
+            if (uri) {
+              void hapticSuccess();
+              setDraft((current) => ({ ...current, photoUri: uri }));
+              setPhotoTick((value) => value + 1);
+            }
           }}
           style={styles.photoAction}
         >
@@ -238,6 +296,8 @@ const styles = StyleSheet.create({
     fontSize: typography.size.md,
     lineHeight: typography.size.md * typography.lineHeight.relaxed,
   },
+  celebrateWrap: { alignItems: 'center', justifyContent: 'center' },
+  confettiSvg: { position: 'absolute' },
   avatarSection: {
     alignItems: 'center',
     marginTop: spacing.xxl,

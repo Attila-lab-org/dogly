@@ -8,6 +8,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import Svg, { Path } from 'react-native-svg';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { hapticLight } from '@/lib/haptics';
 import { Button, ScreenContainer } from '@/components';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -26,6 +29,9 @@ export default function WelcomeScreen() {
   const [busy, setBusy] = useState<'google' | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const enter = (delay: number) =>
+    reducedMotion ? undefined : FadeInDown.duration(380).delay(delay);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -61,6 +67,7 @@ export default function WelcomeScreen() {
   const configIncomplete = !usingMockGate && !authConfigured;
 
   const oauth = async () => {
+    void hapticLight();
     if (usingMockGate) {
       enterMock();
       return;
@@ -80,6 +87,7 @@ export default function WelcomeScreen() {
   };
 
   const oauthApple = async () => {
+    void hapticLight();
     // Mock gate dev: stesso comportamento della demo Google.
     if (usingMockGate) {
       enterMock();
@@ -117,8 +125,19 @@ export default function WelcomeScreen() {
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+      <Svg
+        pointerEvents="none"
+        style={styles.scene}
+        viewBox="0 0 400 200"
+        preserveAspectRatio="xMidYMax slice"
+        accessible={false}
+      >
+        <Path d="M0 120 C80 92 160 124 240 108 C320 92 360 116 400 104 L400 200 L0 200 Z" fill={colors.accentSoft} opacity={0.55} />
+        <Path d="M0 148 C110 128 210 152 300 140 C350 134 380 144 400 140 L400 200 L0 200 Z" fill={colors.accentSoft} />
+        <Path d="M300 40 m-18 0 a18 18 0 1 0 36 0 a18 18 0 1 0 -36 0" fill="#F6C94C" opacity={0.5} />
+      </Svg>
       <View style={styles.content}>
-        <View style={styles.hero}>
+        <Animated.View entering={enter(0)} style={styles.hero}>
           <View style={styles.logoBadge}>
             <Image
               source={logoMarkSource}
@@ -132,9 +151,9 @@ export default function WelcomeScreen() {
           <Text style={styles.promise}>
             Mostra un momento del tuo cane. Ti aiuto a capirlo con parole semplici.
           </Text>
-        </View>
+        </Animated.View>
 
-        <View style={styles.footer}>
+        <Animated.View entering={enter(160)} style={styles.footer}>
           {configIncomplete ? (
             <Text style={styles.error}>
               Configurazione incompleta: mancano le variabili Supabase. Contatta
@@ -179,7 +198,7 @@ export default function WelcomeScreen() {
           <Text style={styles.terms}>
             Continuando accetti i termini e l'informativa privacy del servizio.
           </Text>
-        </View>
+        </Animated.View>
       </View>
     </ScreenContainer>
   );
@@ -191,6 +210,13 @@ const styles = StyleSheet.create({
   },
   screen: {
     flex: 1,
+  },
+  scene: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 200,
   },
   content: {
     flex: 1,

@@ -18,6 +18,7 @@ import {
 import { syncCareReminders } from '@/features/care/store';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
+import { SpringPress } from '@/components/pressSpring';
 
 const OPTIONS: Array<{
   key: keyof NotificationPreferences;
@@ -67,12 +68,13 @@ export default function NotificationSettingsScreen() {
           {FREQUENCY_OPTIONS.map((option) => {
             const selected = prefs.frequency === option.id;
             return (
-              <Pressable
+              <SpringPress
                 key={option.id}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 onPress={() => setCheckInFrequency(option.id)}
-                style={[
+                style={styles.frequencyChip}
+                pressableStyle={[
                   styles.frequencyChip,
                   selected && styles.frequencyChipSelected,
                 ]}
@@ -85,7 +87,7 @@ export default function NotificationSettingsScreen() {
                 >
                   {option.title}
                 </Text>
-              </Pressable>
+              </SpringPress>
             );
           })}
         </View>

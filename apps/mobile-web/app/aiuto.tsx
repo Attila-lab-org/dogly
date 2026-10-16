@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { SpringPress } from '@/components/pressSpring';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   clearSavedVet,
@@ -160,15 +161,16 @@ export default function AiutoScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel="Torna alla Home"
               onPress={goBack}
               hitSlop={16}
               style={styles.back}
+              pressableStyle={styles.backPressable}
             >
               <Ionicons name="chevron-back" size={24} color={colors.text} />
-            </Pressable>
+            </SpringPress>
             <View style={styles.headerCopy}>
               <Text style={styles.eyebrow}>AIUTO RAPIDO</Text>
               <Text style={styles.title}>Numeri utili per {dog.name}</Text>
@@ -188,31 +190,34 @@ export default function AiutoScreen() {
                   </Text>
                   <Text style={styles.heroPhone}>{savedVet.phone}</Text>
                 </View>
-                <Pressable
+                <SpringPress
                   accessibilityRole="button"
                   accessibilityLabel="Opzioni veterinario"
                   onPress={() => setMenuOpen(true)}
                   hitSlop={10}
                   style={styles.moreBtn}
+                  pressableStyle={styles.moreBtnPressable}
                 >
                   <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-                </Pressable>
+                </SpringPress>
               </View>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel={`Chiama ${savedVet.name}`}
                 onPress={() => callPhone(savedVet.phone)}
                 style={styles.callFab}
+                pressableStyle={styles.callFabPressable}
               >
                 <Ionicons name="call" size={18} color="#FFFFFF" />
                 <Text style={styles.callFabText}>Chiama</Text>
-              </Pressable>
+              </SpringPress>
             </View>
           ) : (
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               onPress={() => openEditor(null)}
-              style={({ pressed }) => [styles.addVet, pressed && styles.pressed]}
+              style={styles.addVet}
+              pressableStyle={({ pressed }) => [styles.addVetPressable, pressed && styles.pressed]}
             >
               <View style={styles.heroBadge}>
                 <Ionicons name="add" size={22} color={ROSE} />
@@ -224,7 +229,7 @@ export default function AiutoScreen() {
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </Pressable>
+            </SpringPress>
           )}
 
           <View style={styles.segment}>
@@ -259,13 +264,14 @@ export default function AiutoScreen() {
                   ? locationFailureCopy(locationFailure)
                   : 'Serve la posizione per i numeri vicini.'}
               </Text>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 onPress={() => setLocationTick((v) => v + 1)}
                 style={styles.callFab}
+                pressableStyle={styles.callFabPressable}
               >
                 <Text style={styles.callFabText}>Attiva posizione</Text>
-              </Pressable>
+              </SpringPress>
               <Pressable
                 accessibilityRole="button"
                 onPress={() =>
@@ -289,18 +295,19 @@ export default function AiutoScreen() {
           ) : placesQuery.isError ? (
             <View style={styles.fallback}>
               <Text style={styles.muted}>Non riesco a caricare le cliniche.</Text>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 onPress={() => void placesQuery.refetch()}
                 style={styles.callFab}
+                pressableStyle={styles.callFabPressable}
               >
                 <Text style={styles.callFabText}>Riprova</Text>
-              </Pressable>
+              </SpringPress>
             </View>
           ) : places.length === 0 ? (
             <View style={styles.fallback}>
               <Text style={styles.muted}>Nessuna clinica qui intorno, per ora.</Text>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 onPress={() =>
                   openMapsQuery(
@@ -310,9 +317,10 @@ export default function AiutoScreen() {
                   )
                 }
                 style={styles.callFab}
+                pressableStyle={styles.callFabPressable}
               >
                 <Text style={styles.callFabText}>Apri mappa</Text>
-              </Pressable>
+              </SpringPress>
             </View>
           ) : (
             <View style={styles.list}>
@@ -430,11 +438,12 @@ function SegmentBtn({
   danger?: boolean;
 }) {
   return (
-    <Pressable
+    <SpringPress
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[
+      style={styles.segmentBtn}
+      pressableStyle={[
         styles.segmentBtn,
         active && (danger ? styles.segmentDanger : styles.segmentActive),
       ]}
@@ -448,7 +457,7 @@ function SegmentBtn({
       >
         {label}
       </Text>
-    </Pressable>
+    </SpringPress>
   );
 }
 
@@ -461,11 +470,12 @@ function PlaceRow({
 }) {
   return (
     <View style={styles.row}>
-      <Pressable
+      <SpringPress
         accessibilityRole="button"
         accessibilityLabel={`Apri ${place.name} sulla mappa`}
         onPress={() => void Linking.openURL(place.maps_url)}
         style={styles.rowMain}
+        pressableStyle={styles.rowMainPressable}
       >
         <View style={styles.rowCopy}>
           <Text style={styles.rowTitle} numberOfLines={1}>
@@ -473,25 +483,27 @@ function PlaceRow({
           </Text>
           <Text style={styles.rowMeta}>{formatDistance(place.distance_m)}</Text>
         </View>
-      </Pressable>
+      </SpringPress>
       {place.phone ? (
-        <Pressable
+        <SpringPress
           accessibilityRole="button"
           accessibilityLabel={`Chiama ${place.name}`}
           onPress={() => onCall(place.phone!)}
           style={styles.rowCall}
+          pressableStyle={styles.rowCallPressable}
         >
           <Ionicons name="call" size={18} color="#FFFFFF" />
-        </Pressable>
+        </SpringPress>
       ) : (
-        <Pressable
+        <SpringPress
           accessibilityRole="button"
           accessibilityLabel={`Apri mappa per ${place.name}`}
           onPress={() => void Linking.openURL(place.maps_url)}
           style={styles.rowMap}
+          pressableStyle={styles.rowMapPressable}
         >
           <Ionicons name="map-outline" size={18} color={ROSE_DEEP} />
-        </Pressable>
+        </SpringPress>
       )}
     </View>
   );
@@ -529,6 +541,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: '#FFFFFF',
   },
+  backPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   headerCopy: { flex: 1, gap: 2 },
   eyebrow: {
     color: ROSE,
@@ -585,6 +598,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
+  moreBtnPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
   addVet: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -596,6 +610,7 @@ const styles = StyleSheet.create({
     borderColor: '#F3D5CF',
     borderStyle: 'dashed',
   },
+  addVetPressable: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: 22 },
   pressed: { opacity: 0.85 },
   callFab: {
     minHeight: 48,
@@ -607,6 +622,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: spacing.lg,
   },
+  callFabPressable: { minHeight: 48, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: spacing.lg },
   callFabText: {
     color: '#FFFFFF',
     fontWeight: typography.weight.bold,
@@ -684,6 +700,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0E4E1',
   },
   rowMain: { flex: 1, minWidth: 0 },
+  rowMainPressable: { flex: 1, minWidth: 0, justifyContent: 'center' },
   rowCopy: { gap: 2 },
   rowTitle: {
     color: colors.text,
@@ -699,6 +716,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  rowCallPressable: { width: '100%', height: '100%', borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   rowMap: {
     width: 44,
     height: 44,
@@ -707,6 +725,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  rowMapPressable: { width: '100%', height: '100%', borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   note: {
     color: colors.textMuted,
     fontSize: 12,

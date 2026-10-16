@@ -1,8 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm install --frozen-lockfile=false && pnpm run build:web",
+  "buildCommand": "pnpm run build:web",
   "outputDirectory": "dist",
-  "installCommand": "pnpm install --frozen-lockfile=false",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "ignoreCommand": "[ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] && git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" \"$VERCEL_GIT_COMMIT_SHA\" -- . || exit 1",
   "framework": null,
   "env": {
     "EXPO_PUBLIC_SUPABASE_URL": "https://zcnzkpxgpbdspfmselwz.supabase.co",

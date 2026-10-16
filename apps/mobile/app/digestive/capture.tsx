@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import {
   colors,
   radius,
@@ -180,12 +181,12 @@ export default function DigestiveCaptureScreen() {
 
       <View style={styles.actions}>
         {phase === 'ready' ? (
-          <Pressable
+          <SpringPress
             accessibilityRole="button"
             accessibilityLabel="Scatta foto"
             onPress={() => void takePhoto()}
             hitSlop={12}
-            style={({ pressed }) => [
+            pressableStyle={({ pressed }) => [
               styles.shutter,
               pressed && styles.shutterPressed,
             ]}
@@ -194,7 +195,7 @@ export default function DigestiveCaptureScreen() {
             <View style={styles.shutterInner}>
               <Ionicons name="camera" size={28} color={colors.teal} />
             </View>
-          </Pressable>
+          </SpringPress>
         ) : null}
 
         {phase === 'preview' || phase === 'upload_failed' ? (

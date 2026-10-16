@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Chip, ErrorState, ScreenContainer } from '@/components';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
+import { SpringPress } from '@/components/pressSpring';
 import { demoFlags } from '@/mocks/demo';
 import {
   entitlementMock,
@@ -57,14 +58,14 @@ export default function PaywallScreen() {
     return (
       <ScreenContainer>
         <View style={styles.header}>
-          <Pressable
+          <SpringPress
             accessibilityRole="button"
             accessibilityLabel="Chiudi"
             onPress={() => router.back()}
             hitSlop={12}
           >
             <Ionicons name="close" size={26} color={colors.text} />
-          </Pressable>
+          </SpringPress>
         </View>
         <ErrorState
           title="Acquisti in arrivo"
@@ -89,14 +90,14 @@ export default function PaywallScreen() {
   return (
     <ScreenContainer scroll>
       <View style={styles.header}>
-        <Pressable
+        <SpringPress
           accessibilityRole="button"
           accessibilityLabel="Chiudi"
           onPress={() => router.back()}
           hitSlop={12}
         >
           <Ionicons name="close" size={26} color={colors.text} />
-        </Pressable>
+        </SpringPress>
       </View>
 
       <View style={styles.hero}>
@@ -132,7 +133,7 @@ export default function PaywallScreen() {
       {canPurchase ? plans.map((plan) => {
         const active = selected === plan.code;
         return (
-          <Pressable
+          <SpringPress
             key={plan.code}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
@@ -155,7 +156,7 @@ export default function PaywallScreen() {
                 color={active ? colors.primary : colors.textMuted}
               />
             </View>
-          </Pressable>
+          </SpringPress>
         );
       }) : (
         <Card style={styles.betaCard}>
@@ -183,13 +184,14 @@ export default function PaywallScreen() {
       )}
 
       {/* Il piano FREE resta sempre visibile come scelta (no dark pattern) */}
-      <Pressable
+      <SpringPress
         accessibilityRole="button"
         onPress={() => router.back()}
         style={styles.freeChoice}
+        pressableStyle={styles.freeChoicePressable}
       >
         <Text style={styles.freeChoiceText}>{freeChoiceLabel}</Text>
-      </Pressable>
+      </SpringPress>
 
       <Text style={styles.legal}>
         Nessun addebito prima della conferma dello store. Puoi annullare il
@@ -285,6 +287,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.border,
   },
+  planCardPressable: { width: '100%', flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderRadius: radius.md },
   planCardActive: {
     borderColor: colors.primary,
   },
@@ -322,6 +325,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     alignItems: 'center',
   },
+  freeChoicePressable: { width: '100%', alignItems: 'center', paddingVertical: spacing.xs },
   freeChoiceText: {
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,

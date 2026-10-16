@@ -6,6 +6,8 @@ import Animated from 'react-native-reanimated';
 import { usePressSpring } from '../../components/pressSpring';
 import { dayDistance, formatCareDate, relativeCareDate } from './date';
 import { CARE_TYPE_META, type CareEvent } from './types';
+import type { CareEventType } from './types';
+import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 
 const CARE = {
   text: '#1A2B48',
@@ -16,6 +18,16 @@ const CARE = {
   coral: '#FF8B74',
   peach: '#FFF1EE',
 } as const;
+
+/** Tinte per tipo di appuntamento (sfondi soft; il testo resta navy). */
+const TYPE_TINT: Record<CareEventType, { bg: string; icon: CuteIconName; iconBg: string; iconFg: string }> = {
+  VACCINE: { bg: '#E3EFFE', icon: 'bolt', iconBg: '#DBEAFE', iconFg: '#2563EB' },
+  VET_VISIT: { bg: '#FFF1EE', icon: 'heart', iconBg: '#FFE3D9', iconFg: '#EA580C' },
+  PARASITE_TREATMENT: { bg: '#DFF3EC', icon: 'leaf', iconBg: '#CCFBF1', iconFg: '#0D9488' },
+  EXAM: { bg: '#F0EBFB', icon: 'search', iconBg: '#E6DEF8', iconFg: '#7C3AED' },
+  THERAPY: { bg: '#F0EBFB', icon: 'paw', iconBg: '#E6DEF8', iconFg: '#7C3AED' },
+  OTHER: { bg: colors.surfaceMuted, icon: 'clock', iconBg: colors.surfaceMuted, iconFg: colors.textSecondary },
+};
 
 export function CareEventCard({
   event,
@@ -35,6 +47,7 @@ export function CareEventCard({
     .replace('.', '');
 
   const press = usePressSpring();
+  const tint = TYPE_TINT[event.eventType];
   return (
     <Animated.View style={press.style}>
     <Pressable
@@ -45,7 +58,7 @@ export function CareEventCard({
       onPressOut={press.onPressOut}
       style={({ pressed }) => [
         styles.card,
-        completed && styles.completedCard,
+        { backgroundColor: completed ? colors.surface : tint.bg },
         urgent && styles.urgentCard,
         pressed && styles.pressed,
       ]}
@@ -53,28 +66,16 @@ export function CareEventCard({
       <View
         style={[
           styles.dateBadge,
-          urgent ? styles.dateBadgeUrgent : styles.dateBadgeTeal,
-          completed && styles.dateBadgeDone,
+          completed
+            ? styles.dateBadgeDone
+            : { backgroundColor: tint.iconBg },
         ]}
       >
-        <Text
-          style={[
-            styles.dateDay,
-            urgent && styles.dateDayUrgent,
-            completed && styles.dateDayDone,
-          ]}
-        >
-          {dayLabel}
-        </Text>
-        <Text
-          style={[
-            styles.dateMonth,
-            urgent && styles.dateMonthUrgent,
-            completed && styles.dateMonthDone,
-          ]}
-        >
-          {monthLabel}
-        </Text>
+        {completed ? (
+          <Ionicons name="checkmark" size={22} color={colors.success} />
+        ) : (
+          <CuteIcon name={tint.icon} size={24} color={tint.iconFg} secondary={tint.iconBg} />
+        )}
       </View>
 
       <View style={styles.content}>
@@ -120,6 +121,9 @@ export function CareEventCard({
         ) : null}
       </View>
 
+      {event.reminderEnabled && !completed ? (
+        <Ionicons name="notifications-outline" size={16} color={CARE.teal} style={styles.bell} />
+      ) : null}
       <Ionicons name="chevron-forward" size={18} color={colors.iconMuted} />
     </Pressable>
     </Animated.View>
@@ -158,6 +162,7 @@ const styles = StyleSheet.create({
   dateBadgeTeal: {
     backgroundColor: CARE.tealSoft,
   },
+  bell: { marginRight: -4 },
   dateBadgeUrgent: {
     backgroundColor: CARE.peach,
   },

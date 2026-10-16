@@ -43,6 +43,9 @@ import {
 } from '@/features/realtime/MediaSourceSheet';
 import { purchasesEnabled } from '@/mocks/entitlements';
 import { ANALYSIS_POLL_TIMEOUT_MS } from '@/features/core/processingTimeout';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { SpringPress } from '@/components/pressSpring';
+import { WorldBackdrop } from '@/components/WorldBackdrop';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
 import {
@@ -128,6 +131,7 @@ export default function AskScreen() {
   const [mediaSheet, setMediaSheet] = useState<MediaSourceKind | null>(null);
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+  const reducedMotion = useReducedMotion();
   const digestPhotoHint = /feci|cacca|digest|pup[uù]|diarrea|escrement|foto chiara/i.test(
     `${latestAssistant?.turn?.media_prompt ?? ''} ${latestAssistant?.text ?? ''}`,
   );
@@ -808,10 +812,18 @@ export default function AskScreen() {
     return undefined;
   };
 
+  const starterPrompts = [
+    { label: `Com'è Oreo oggi?`, icon: 'sparkles-outline' as const },
+    { label: 'Ti mostro una foto', icon: 'images-outline' as const },
+    { label: 'Parliamo di cibo', icon: 'nutrition-outline' as const },
+  ];
+  const hasUserMessage = messages.some((message) => message.role === 'user');
+
   return <LinearGradient colors={['#EFF8FF', '#F8FBFF', '#FFFFFF']} style={styles.root}>
+    <WorldBackdrop world="ask" />
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Torna alla Home" onPress={() => router.replace('/(tabs)/home' as never)} style={styles.headerButton}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
+        <SpringPress accessibilityRole="button" accessibilityLabel="Torna alla Home" onPress={() => router.replace('/(tabs)/home' as never)} style={styles.headerButton} pressableStyle={styles.headerButtonPressable}><Ionicons name="chevron-back" size={24} color={colors.text} /></SpringPress>
         <View style={styles.headerIdentity}>
           <DogAvatar photoUri={dog.photoUri} dogName={dog.name} size={40} />
           <View style={styles.headerCopy}>
@@ -829,31 +841,33 @@ export default function AskScreen() {
             <Ionicons name="chatbubble" size={13} color="#FFFFFF" />
             <Text style={styles.modeChipTextActive}>Testo</Text>
           </View>
-          <Pressable
+          <SpringPress
             accessibilityRole="tab"
             accessibilityLabel="Passa a conversazione Voce"
             accessibilityState={{ selected: false }}
             onPress={() => router.push('/ask/live' as never)}
-            style={({ pressed }) => [styles.modeChip, pressed && styles.pressed]}
+            style={styles.modeChip}
+            pressableStyle={({ pressed }) => [styles.modeChipPressable, pressed && styles.pressed]}
           >
             <Ionicons name="mic" size={13} color={colors.primary} />
             <Text style={styles.modeChipText}>Voce</Text>
-          </Pressable>
+          </SpringPress>
         </View>
       </View>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
           {starting ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.muted}>Preparo la conversazione…</Text></View> : null}
           {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => void start()}><Text style={styles.retry}>Riprova</Text></Pressable></View> : null}
-          {messages.map((message, messageIndex) => <View key={message.id} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
+          {messages.map((message, messageIndex) => <Animated.View key={message.id} entering={reducedMotion ? undefined : FadeInDown.duration(260).delay(Math.min(messageIndex, 8) * 28)} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
             <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
+              {message.role === 'assistant' ? <Text style={styles.messageSender}>DOGLY</Text> : null}
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
               {message.attachmentUri ? <Image source={{ uri: message.attachmentUri }} style={styles.messageAttachment} accessibilityLabel="Foto condivisa nella conversazione" /> : null}
               {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId, message.retryRequestId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
               {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
-              {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <Pressable key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={({ pressed }) => [styles.questionOption, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></Pressable>)}</View> : null}
+              {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <SpringPress key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={styles.questionOption} pressableStyle={({ pressed }) => [styles.questionOptionPressable, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></SpringPress>)}</View> : null}
               {!sending && message.id === latestAssistantId && neededMedia === 'PHOTO' ? (
-                <Pressable
+                <SpringPress
                   accessibilityRole="button"
                   accessibilityLabel={
                     message.turn?.media_prompt ||
@@ -862,7 +876,8 @@ export default function AskScreen() {
                       : `Mostrami ${dog.name} in una foto`)
                   }
                   onPress={() => openMediaSheet('photo')}
-                  style={({ pressed }) => [styles.mediaCta, styles.mediaCtaPulse, pressed && styles.pressed]}
+                  style={[styles.mediaCta, styles.mediaCtaPulse]}
+                  pressableStyle={({ pressed }) => [styles.mediaCtaPressable, pressed && styles.pressed]}
                 >
                   <View style={styles.mediaIcon}>
                     <Ionicons name="camera" size={17} color={colors.primary} />
@@ -871,36 +886,38 @@ export default function AskScreen() {
                     {needsDigestivePhoto ? 'Aggiungi la foto' : 'Aggiungi una foto'}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                </Pressable>
+                </SpringPress>
               ) : null}
               {!sending && message.id === latestAssistantId && neededMedia === 'VIDEO' ? (
-                <Pressable
+                <SpringPress
                   accessibilityRole="button"
                   accessibilityLabel={
                     message.turn?.media_prompt || 'Mostrami questo momento in un video'
                   }
                   onPress={() => openMediaSheet('video')}
-                  style={({ pressed }) => [styles.mediaCta, styles.mediaCtaPulse, pressed && styles.pressed]}
+                  style={[styles.mediaCta, styles.mediaCtaPulse]}
+                  pressableStyle={({ pressed }) => [styles.mediaCtaPressable, pressed && styles.pressed]}
                 >
                   <View style={styles.mediaIcon}>
                     <Ionicons name="videocam" size={17} color={colors.primary} />
                   </View>
                   <Text style={styles.mediaTitle}>Aggiungi un video</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                </Pressable>
+                </SpringPress>
               ) : null}
-              {!sending && message.id === latestAssistantId && message.turn?.food_review_href ? <Pressable accessibilityRole="button" accessibilityLabel="Apri alimentazione" onPress={() => router.push('/nutrition/foods' as never)} style={({ pressed }) => [styles.mediaCta, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="nutrition-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Rivedi l’alimento</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></Pressable> : null}
+              {!sending && message.id === latestAssistantId && message.turn?.food_review_href ? <SpringPress accessibilityRole="button" accessibilityLabel="Apri alimentazione" onPress={() => router.push('/nutrition/foods' as never)} style={styles.mediaCta} pressableStyle={({ pressed }) => [styles.mediaCtaPressable, pressed && styles.pressed]}><View style={styles.mediaIcon}><Ionicons name="nutrition-outline" size={17} color={colors.primary} /></View><Text style={styles.mediaTitle}>Rivedi l’alimento</Text><Ionicons name="chevron-forward" size={16} color={colors.primary} /></SpringPress> : null}
               {!sending && message.id === latestAssistantId && message.turn?.save_to_moments_suggested ? (() => {
                 const uri = priorUserAttachmentUri(messageIndex);
                 if (!uri) return null;
                 const saved = Boolean(savedToMoments[message.id]);
                 return (
-                  <Pressable
+                  <SpringPress
                     accessibilityRole="button"
                     accessibilityLabel={saved ? 'Salvata nei Momenti' : 'Salva nei Momenti'}
                     disabled={saved || momentsBusy === message.id}
                     onPress={() => void saveAttachmentToMoments(message.id, uri)}
-                    style={({ pressed }) => [styles.saveMomentChip, pressed && styles.pressed]}
+                    style={styles.saveMomentChip}
+                    pressableStyle={({ pressed }) => [styles.saveMomentPressable, pressed && styles.pressed]}
                   >
                     {momentsBusy === message.id ? (
                       <ActivityIndicator size="small" color={colors.primary} />
@@ -914,12 +931,47 @@ export default function AskScreen() {
                     <Text style={[styles.saveMomentText, saved && styles.saveMomentTextDone]}>
                       {saved ? 'Nei Momenti' : 'Salva'}
                     </Text>
-                  </Pressable>
+                  </SpringPress>
                 );
               })() : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
             </View>
-          </View>)}
+          </Animated.View>)}
+          {!starting && !sending && !hasUserMessage && messages.length === 1 ? (
+            <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(320).delay(100)} style={styles.starterPanel}>
+              <View style={styles.starterHeading}>
+                <View style={styles.starterIcon}>
+                  <Ionicons name="sparkles" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.starterCopy}>
+                  <Text style={styles.starterTitle}>Da dove partiamo?</Text>
+                  <Text style={styles.starterSubtitle}>Scegli un punto o scrivimi liberamente.</Text>
+                </View>
+              </View>
+              <View style={styles.starterOptions}>
+                {starterPrompts.map((prompt) => (
+                  <SpringPress
+                    key={prompt.label}
+                    accessibilityRole="button"
+                    accessibilityLabel={prompt.label}
+                    onPress={() => {
+                      if (prompt.label === 'Ti mostro una foto') {
+                        openMediaSheet('photo');
+                      } else {
+                        void send(prompt.label);
+                      }
+                    }}
+                    pressableStyle={({ pressed }) => [styles.starterOption, pressed && styles.pressed]}
+                    scaleTo={0.97}
+                  >
+                    <Ionicons name={prompt.icon} size={16} color={colors.primary} />
+                    <Text style={styles.starterOptionText}>{prompt.label}</Text>
+                    <Ionicons name="arrow-up" size={14} color={colors.primary} />
+                  </SpringPress>
+                ))}
+              </View>
+            </Animated.View>
+          ) : null}
           {sending || mediaPhase ? (
             <View style={styles.thinking}>
               <ActivityIndicator size="small" color={colors.primary} />
@@ -934,61 +986,60 @@ export default function AskScreen() {
           ) : null}
         </ScrollView>
         <View style={styles.composerWrap}>
-          <TextInput
-            accessibilityLabel={'Scrivi a DOGly di ' + dog.name}
-            placeholder={'Raccontami di ' + dog.name + '…'}
-            placeholderTextColor={colors.textMuted}
-            value={draft}
-            onChangeText={(value) => setDraft(value.slice(0, 4000))}
-            multiline
-            maxLength={4000}
-            editable={!starting && !sending && !analyzing && Boolean(session)}
-            style={styles.input}
-            onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }}
-          />
-          <View style={styles.composerTools}>
-            <View style={styles.composerActions}>
-              <Pressable
+          <View style={styles.composerShell}>
+            <TextInput
+              accessibilityLabel={'Scrivi a DOGly di ' + dog.name}
+              placeholder={'Raccontami di ' + dog.name + '…'}
+              placeholderTextColor={colors.textMuted}
+              value={draft}
+              onChangeText={(value) => setDraft(value.slice(0, 4000))}
+              multiline
+              maxLength={4000}
+              editable={!starting && !sending && !analyzing && Boolean(session)}
+              style={styles.input}
+              onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }}
+            />
+            <View style={styles.composerTools}>
+              <View style={styles.composerActions}>
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Aggiungi una foto"
                 onPress={() => openMediaSheet('photo')}
                 disabled={sending || analyzing || !session}
-                style={({ pressed }) => [
-                  styles.mediaButton,
-                  neededMedia === 'PHOTO' && styles.mediaButtonLit,
-                  pressed && styles.pressed,
-                ]}
+                style={[styles.mediaButton, neededMedia === 'PHOTO' && styles.mediaButtonLit]}
+                pressableStyle={({ pressed }) => [styles.mediaButtonPressable, neededMedia === 'PHOTO' && styles.mediaButtonLit, pressed && styles.pressed]}
               >
                 <Ionicons
                   name={neededMedia === 'PHOTO' ? 'camera' : 'images-outline'}
                   size={20}
                   color={neededMedia === 'PHOTO' ? '#FFFFFF' : colors.primary}
                 />
-              </Pressable>
-              <Pressable
+                <Text style={[styles.mediaButtonText, neededMedia === 'PHOTO' && styles.mediaButtonTextLit]}>Foto</Text>
+              </SpringPress>
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Aggiungi un video"
                 onPress={() => openMediaSheet('video')}
                 disabled={sending || analyzing || !session}
-                style={({ pressed }) => [
-                  styles.mediaButton,
-                  neededMedia === 'VIDEO' && styles.mediaButtonLit,
-                  pressed && styles.pressed,
-                ]}
+                style={[styles.mediaButton, neededMedia === 'VIDEO' && styles.mediaButtonLit]}
+                pressableStyle={({ pressed }) => [styles.mediaButtonPressable, neededMedia === 'VIDEO' && styles.mediaButtonLit, pressed && styles.pressed]}
               >
                 <Ionicons
                   name={neededMedia === 'VIDEO' ? 'videocam' : 'videocam-outline'}
                   size={20}
                   color={neededMedia === 'VIDEO' ? '#FFFFFF' : colors.primary}
                 />
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={({ pressed }) => [styles.mic, dictating && styles.micActive, pressed && styles.pressed]}>
+                <Text style={[styles.mediaButtonText, neededMedia === 'VIDEO' && styles.mediaButtonTextLit]}>Video</Text>
+              </SpringPress>
+              <SpringPress accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={[styles.mic, dictating && styles.micActive]} pressableStyle={({ pressed }) => [styles.micPressable, dictating && styles.micActive, pressed && styles.pressed]}>
                 <Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} />
-              </Pressable>
+                <Text style={[styles.mediaButtonText, dictating && styles.mediaButtonTextLit]}>Voce</Text>
+              </SpringPress>
+              </View>
+              <SpringPress accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={[styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled]} pressableStyle={({ pressed }) => [styles.sendPressable, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
+                <SendArrow />
+              </SpringPress>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={({ pressed }) => [styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
-              <SendArrow />
-            </Pressable>
           </View>
         </View>
         <Text style={styles.disclaimer}>DOGly aiuta a leggere i comportamenti. Per sintomi o urgenze, contatta un veterinario.</Text>
@@ -1005,23 +1056,25 @@ export default function AskScreen() {
   </LinearGradient>;
 }
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, position: 'relative' },
   safe: { flex: 1 },
   header: {
-    minHeight: 56,
+    minHeight: 64,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(148,163,184,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.18)',
   },
-  headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  headerButtonPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE8F4' },
   headerIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
   headerCopy: { flex: 1, minWidth: 0, gap: 1 },
-  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.7 },
-  headerTitle: { color: colors.text, fontSize: typography.size.md, fontWeight: typography.weight.bold },
+  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.8 },
+  headerTitle: { color: colors.text, fontSize: typography.size.md, lineHeight: 19, fontWeight: typography.weight.bold, letterSpacing: -0.1 },
   modeSwitch: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1033,6 +1086,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(37,99,235,0.18)',
   },
   modeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  modeChipWrap: { borderRadius: 999 },
+  modeChipPressable: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1052,7 +1114,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   body: { flex: 1 },
-  scroll: { flex: 1 }, conversation: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }, intro: { backgroundColor: 'rgba(255,255,255,0.84)', borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(0,80,216,0.1)' }, sparkle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E6F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }, introTitle: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold, marginBottom: spacing.xs }, introText: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22 }, loading: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm }, muted: { color: colors.textMuted, fontSize: typography.size.sm }, error: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: '#FFF2F0' }, errorText: { color: colors.danger, flex: 1, fontSize: typography.size.sm }, retry: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, messageRow: { width: '100%', alignItems: 'flex-start' }, userRow: { alignItems: 'flex-end' }, bubble: { maxWidth: '88%', borderRadius: radius.lg, padding: spacing.md }, assistantBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4EDF6', borderBottomLeftRadius: 6 }, userBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 }, messageText: { color: colors.text, fontSize: typography.size.md, lineHeight: 23 }, userText: { color: '#FFFFFF' }, retryInside: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }, helpLink: { marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, helpLinkText: { color: colors.primary, fontWeight: typography.weight.bold }, memory: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: '#E4EDF6', paddingTop: spacing.md }, memoryLabel: { color: colors.text, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryText: { color: colors.textSecondary, marginTop: spacing.xs, fontSize: typography.size.sm, lineHeight: 19 }, memoryActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.md }, memoryButton: { backgroundColor: '#E6F1FF', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, memoryConfirm: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryReject: { color: colors.textMuted, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, thinking: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
+  scroll: { flex: 1 }, conversation: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }, intro: { backgroundColor: 'rgba(255,255,255,0.84)', borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(0,80,216,0.1)' }, sparkle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E6F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }, introTitle: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold, marginBottom: spacing.xs }, introText: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22 }, loading: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm }, muted: { color: colors.textMuted, fontSize: typography.size.sm }, error: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: '#FFF2F0' }, errorText: { color: colors.danger, flex: 1, fontSize: typography.size.sm }, retry: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, messageRow: { width: '100%', alignItems: 'flex-start' }, userRow: { alignItems: 'flex-end' }, bubble: { maxWidth: '92%', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 13 }, assistantBubble: { backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: '#DCE8F4', borderLeftWidth: 3, borderLeftColor: colors.accent, borderBottomLeftRadius: 7, shadowColor: colors.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 }, userBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 }, messageSender: { color: colors.accentPressed, fontSize: 10, lineHeight: 13, fontWeight: typography.weight.bold, letterSpacing: 1, marginBottom: 4 }, messageText: { color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: typography.weight.medium, letterSpacing: 0.05 }, userText: { color: '#FFFFFF', fontWeight: typography.weight.semibold },  retryInside: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }, helpLink: { marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, helpLinkText: { color: colors.primary, fontWeight: typography.weight.bold }, memory: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: '#E4EDF6', paddingTop: spacing.md }, memoryLabel: { color: colors.text, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryText: { color: colors.textSecondary, marginTop: spacing.xs, fontSize: typography.size.sm, lineHeight: 19 }, memoryActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.md }, memoryButton: { backgroundColor: '#E6F1FF', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, memoryConfirm: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryReject: { color: colors.textMuted, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, thinking: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
+  starterPanel: { marginTop: spacing.xs, padding: spacing.md, borderRadius: radius.lg, backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: '#DCE8F4', shadowColor: colors.text, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.06, shadowRadius: 14, elevation: 2 },
+  starterHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  starterIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  starterCopy: { flex: 1, gap: 2 },
+  starterTitle: { color: colors.text, fontSize: 16, lineHeight: 20, fontWeight: typography.weight.bold, letterSpacing: -0.1 },
+  starterSubtitle: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
+  starterOptions: { gap: spacing.xs },
+  starterOption: { minHeight: 38, borderRadius: radius.md, paddingHorizontal: spacing.sm, backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#DCE8F4', flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  starterOptionText: { flex: 1, color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: typography.weight.semibold },
   composerWrap: {
     width: '100%',
     maxWidth: 560,
@@ -1061,16 +1132,24 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     gap: spacing.sm,
   },
-  input: {
-    width: '100%',
-    minHeight: 56,
-    maxHeight: 140,
-    backgroundColor: '#FFFFFF',
+  composerShell: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: '#D7E6F4',
-    borderRadius: radius.lg,
+    padding: spacing.sm,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  input: {
+    width: '100%',
+    minHeight: 58,
+    maxHeight: 140,
     paddingHorizontal: spacing.md,
-    paddingVertical: 14,
+    paddingVertical: 12,
     color: colors.text,
     fontSize: typography.size.md,
     lineHeight: 22,
@@ -1080,29 +1159,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF3F8',
   },
-  composerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  mic: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E6F1FF' },
+  composerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  mic: { minWidth: 54, height: 40, paddingHorizontal: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#E6F1FF' },
+  micPressable: { width: '100%', height: '100%', borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   micActive: { backgroundColor: colors.primary },
   send: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  sendPressable: { width: '100%', height: '100%', borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   sendDisabled: { backgroundColor: '#B7C7DB' },
   pressed: { opacity: 0.82 },
   disclaimer: { width: '100%', maxWidth: 560, alignSelf: 'center', color: colors.textMuted, fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   mediaButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    minWidth: 54,
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
     backgroundColor: '#E6F1FF',
     borderWidth: 1.5,
     borderColor: 'transparent',
+  },
+  mediaButtonPressable: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   mediaButtonLit: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  questionOptions: { marginTop: spacing.md, gap: spacing.xs }, questionOption: { minHeight: 38, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#D7E6F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, questionOptionText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm },
+  mediaButtonText: { color: colors.primary, fontSize: 12, lineHeight: 15, fontWeight: typography.weight.bold, letterSpacing: 0.1 },
+  mediaButtonTextLit: { color: '#FFFFFF' },
+  questionOptions: { marginTop: spacing.md, gap: spacing.xs }, questionOption: { minHeight: 38, borderRadius: radius.md }, questionOptionPressable: { minHeight: 38, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#D7E6F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, questionOptionText: { flex: 1, color: colors.textSecondary, fontSize: typography.size.sm },
   messageAttachment: { width: 220, height: 160, borderRadius: radius.md, marginBottom: spacing.sm, resizeMode: 'cover' },
   mediaCta: {
     marginTop: spacing.md,
@@ -1113,6 +1211,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#E6F1FF',
     borderWidth: 1.5,
     borderColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  mediaCtaPressable: {
+    minHeight: 48,
+    alignSelf: 'stretch',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -1146,6 +1253,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F8FC',
     borderWidth: 1,
     borderColor: '#D7E6F4',
+  },
+  saveMomentPressable: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   saveMomentText: {
     color: colors.textSecondary,

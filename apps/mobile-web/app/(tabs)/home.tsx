@@ -21,6 +21,7 @@ import { DogHero } from '@/features/home/DogHero';
 import { HomeNextAction } from '@/features/home/HomeNextAction';
 import { DiaryVideoPreview } from '@/features/home/DiaryVideoPreview';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
 import { useNetworkStatus } from '@/features/home/useNetworkStatus';
 import { insightToneLabel } from '@/features/home/api';
@@ -30,12 +31,20 @@ import { fetchDogPhotos } from '@/features/photos/api';
 import { isPersistedId } from '@/lib/persistedId';
 import { useSession } from '@/features/auth/SessionProvider';
 import { purchasesEnabled } from '@/mocks/entitlements';
+import { SpringPress } from '@/components/pressSpring';
+import { usePressSpring } from '@/components/pressSpring';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
+  const reminderCount = useCareEvents(dog.id, dog.name).filter(
+    (event) =>
+      event.status === 'SCHEDULED' &&
+      event.reminderEnabled &&
+      Date.parse(event.scheduledAt) >= Date.now(),
+  ).length;
   const reducedMotion = useReducedMotion();
   // Entrata scenica: le entering animation di Reanimated corrono solo al
   // mount, quindi refresh/focus successivi non rianimano le sezioni.
@@ -59,6 +68,13 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.root}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['#EAF4FF', '#F4F8FC', colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 0.62 }}
+        style={StyleSheet.absoluteFill}
+      />
       <SafeAreaView edges={['top']} style={styles.safe}>
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
@@ -72,24 +88,38 @@ export default function HomeScreen() {
               <Text style={styles.wordmark}>Dogly</Text>
             </View>
             <View style={styles.headerActions}>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Aiuto rapido: veterinario e numeri utili"
                 onPress={() => router.push('/aiuto' as never)}
                 hitSlop={12}
-                style={[styles.headerIcon, styles.careIcon]}
+                pressableStyle={[styles.headerIcon, styles.careIcon]}
               >
                 <CuteIcon name="doctor" size={22} color="#D9796C" secondary="#FFFFFF" />
-              </Pressable>
-              <Pressable
+              </SpringPress>
+              <SpringPress
+                accessibilityRole="button"
+                accessibilityLabel={
+                  reminderCount > 0
+                    ? `Notifiche, ${reminderCount} promemoria attivi`
+                    : 'Notifiche'
+                }
+                onPress={() => router.push('/notifications' as never)}
+                hitSlop={12}
+                pressableStyle={styles.headerIcon}
+              >
+                <Ionicons name="notifications-outline" size={22} color={colors.text} />
+                {reminderCount > 0 ? <View style={styles.headerDot} /> : null}
+              </SpringPress>
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Apri il profilo del cane"
                 onPress={() => router.push('/(tabs)/rocky')}
                 hitSlop={12}
-                style={styles.headerIcon}
+                pressableStyle={styles.headerIcon}
               >
                 {dog.photoUri ? <Image source={{ uri: dog.photoUri }} style={styles.headerAvatar} /> : <Ionicons name="paw-outline" size={22} color={colors.text} />}
-              </Pressable>
+              </SpringPress>
             </View>
           </View>
 
@@ -99,14 +129,15 @@ export default function HomeScreen() {
               <Text style={styles.statusText}>
                 Sei offline. La conversazione e le nuove letture richiedono connessione.
               </Text>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Riprova connessione"
                 onPress={() => void network.refresh()}
                 hitSlop={8}
+                pressableStyle={styles.inlineRetry}
               >
                 <Text style={styles.statusRetry}>Riprova</Text>
-              </Pressable>
+              </SpringPress>
             </View>
           ) : null}
 
@@ -121,27 +152,36 @@ export default function HomeScreen() {
             <View style={styles.statusBanner} accessibilityLiveRegion="assertive">
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={styles.statusText}>Non sono riuscito ad aggiornare i momenti.</Text>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Riprova a caricare i momenti"
                 onPress={refetch}
                 hitSlop={8}
+                pressableStyle={styles.inlineRetry}
               >
                 <Text style={styles.statusRetry}>Riprova</Text>
-              </Pressable>
+              </SpringPress>
             </View>
           ) : null}
 
-          <Animated.View entering={sceneEnter(0)}>
+          <Animated.View entering={sceneEnter(0)} style={styles.heroStage}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['#D2E7F8', '#E7F3FC', '#F4F9FF', colors.background]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View pointerEvents="none" style={styles.heroStageOrb} />
             <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} birthDate={dog.birthDate} ageLabel={dog.ageLabel} sizeLabel={dog.sizeLabel} />
           </Animated.View>
 
-          {processingEventId ? (
-            <Pressable
+           {processingEventId ? (
+             <SpringPress
               accessibilityRole="button"
               accessibilityLabel={`Apri la lettura in corso di ${dog.name}`}
               onPress={() => router.push(`/behavior/processing/${processingEventId}`)}
-              style={styles.processingBanner}
+               pressableStyle={styles.processingBanner}
             >
               <View style={styles.processingIcon}>
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -151,7 +191,7 @@ export default function HomeScreen() {
                 <Text style={styles.processingText}>Puoi aprire lo stato e ritrovare il risultato nel Diario.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-            </Pressable>
+             </SpringPress>
           ) : null}
 
           <Animated.View entering={sceneEnter(90)}>
@@ -163,14 +203,17 @@ export default function HomeScreen() {
               <View>
                 <Text style={styles.sectionTitle}>Momenti recenti</Text>
               </View>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Apri album"
                 onPress={() => router.push(`/dogs/${dog.id}/album` as never)}
                 hitSlop={8}
+                pressableStyle={styles.sectionAction}
               >
-                <Text style={styles.seeAll}>Vedi tutti</Text>
-              </Pressable>
+                <Ionicons name="images-outline" size={15} color={colors.primary} />
+                <Text style={styles.sectionActionText}>Album</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </SpringPress>
             </View>
           </Animated.View>
 
@@ -180,8 +223,8 @@ export default function HomeScreen() {
                 <Skeleton key={i} style={{ flex: 1, aspectRatio: 1 }} height={100} borderRadius={14} />
               ))}
             </View>
-          ) : photos.isError ? (
-            <Pressable onPress={() => void photos.refetch()} accessibilityRole="button"><Text style={styles.seeAll}>Non riesco a caricare le foto · Riprova</Text></Pressable>
+           ) : photos.isError ? (
+            <SpringPress onPress={() => void photos.refetch()} accessibilityRole="button" pressableStyle={styles.inlineRetry}><Text style={styles.seeAll}>Non riesco a caricare le foto · Riprova</Text></SpringPress>
           ) : (photos.data ?? []).length > 0 ? (
             <ScrollView
               horizontal
@@ -191,39 +234,37 @@ export default function HomeScreen() {
               decelerationRate="fast"
             >
               {(photos.data ?? []).slice(0, 8).map((photo) => (
-                <Pressable
+                <MomentCard
                   key={photo.id}
-                  accessibilityRole="button"
                   accessibilityLabel={photo.caption || 'Apri momento'}
                   onPress={() =>
                     router.push(
                       `/dogs/${dog.id}/album/photo/${photo.id}?albumId=${photo.albumId}` as never,
                     )
                   }
-                  style={({ pressed }) => [styles.momentCard, pressed && styles.pressed]}
-                >
-                  <Image source={{ uri: photo.thumbnailUri }} style={styles.momentPhoto} />
-                  <Text style={styles.momentCaption} numberOfLines={1}>
-                    {photo.caption || formatMomentStamp(photo.takenAt)}
-                  </Text>
-                </Pressable>
+                  photoUri={photo.thumbnailUri}
+                  caption={photo.caption || formatMomentStamp(photo.takenAt)}
+                />
               ))}
             </ScrollView>
-          ) : <Pressable accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} style={styles.emptyInsight}>
+           ) : <SpringPress accessibilityRole="button" onPress={() => router.push(`/dogs/${dog.id}/album` as never)} pressableStyle={styles.emptyInsight}>
             <CuteIcon name="play" size={24} color={colors.accent} secondary={colors.accentSoft} />
             <Text style={styles.emptyText}>Aggiungi i primi Momenti di {dog.name}</Text>
-          </Pressable>}
+           </SpringPress>}
 
           {recentInsights.length > 0 ? (
             <>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Le ultime osservazioni</Text>
-                <Pressable
+                <SpringPress
                   onPress={() => router.push('/(tabs)/diary')}
                   accessibilityRole="button"
+                  pressableStyle={styles.sectionAction}
                 >
-                  <Text style={styles.seeAll}>Diario</Text>
-                </Pressable>
+                  <Ionicons name="book-outline" size={15} color={colors.primary} />
+                  <Text style={styles.sectionActionText}>Diario</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                </SpringPress>
               </View>
               <ScrollView
                 horizontal
@@ -289,6 +330,34 @@ function insightCoverIcon(label: string, tone: InsightTone): CuteIconName {
   return 'paw';
 }
 
+function MomentCard({
+  photoUri,
+  caption,
+  onPress,
+  accessibilityLabel,
+}: {
+  photoUri: string;
+  caption: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  const press = usePressSpring(0.975);
+  return (
+    <Animated.View style={[styles.momentCard, press.style]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+      >
+        <Image source={{ uri: photoUri }} style={styles.momentPhoto} />
+        <Text style={styles.momentCaption} numberOfLines={1}>{caption}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 function InsightMomentCard({
   insight,
   onPress,
@@ -297,6 +366,7 @@ function InsightMomentCard({
   onPress: () => void;
 }) {
   const [mediaFailed, setMediaFailed] = useState(false);
+  const press = usePressSpring(0.975);
   const icon = insightCoverIcon(insight.label, insight.tone);
   // Behavior moments are usually video; never feed a video URL into <Image>
   // (that produced the empty grey tiles).
@@ -307,12 +377,14 @@ function InsightMomentCard({
   const hasRealMedia = showVideo || showPhoto;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Apri: ${insight.label}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.momentCard, pressed && styles.pressed]}
-    >
+    <Animated.View style={[styles.momentCard, press.style]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Apri: ${insight.label}`}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+      >
       <View style={styles.insightMedia}>
         <LinearGradient
           colors={[...TONE_COVER[insight.tone]]}
@@ -365,7 +437,8 @@ function InsightMomentCard({
       <Text style={styles.momentCaption} numberOfLines={1}>
         {insight.timestampLabel}
       </Text>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -379,6 +452,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     gap: spacing.md,
+  },
+  heroStage: {
+    position: 'relative',
+    marginHorizontal: -20,
+    marginVertical: -10,
+    paddingHorizontal: 16,
+    paddingTop: 26,
+    paddingBottom: 42,
+    borderRadius: 42,
+    overflow: 'hidden',
+  },
+  heroStageOrb: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    right: -104,
+    top: -136,
+    backgroundColor: 'rgba(125,211,252,0.16)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -405,6 +497,17 @@ const styles = StyleSheet.create({
   },
   careIcon: { backgroundColor: '#FFF1EE' },
   headerAvatar: { width: 34, height: 34, borderRadius: 17 },
+  headerDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
   hStrip: { marginHorizontal: -spacing.lg },
   hStripContent: {
     paddingHorizontal: spacing.lg,
@@ -442,6 +545,9 @@ const styles = StyleSheet.create({
   processingText: { color: colors.textSecondary, fontSize: typography.size.xs },
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: spacing.lg },
   sectionTitle: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
+  sectionAction: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primarySoft },
+  sectionActionText: { color: colors.primary, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
+  inlineRetry: { paddingHorizontal: 6, paddingVertical: 5, borderRadius: radius.full },
   seeAll: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
   insightMedia: {
     width: '100%',

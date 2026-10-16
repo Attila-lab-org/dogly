@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, ErrorState, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { colors, spacing, typography } from '@/theme/tokens';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { usePersonalPatterns } from '@/features/patterns/api';
@@ -51,7 +52,7 @@ export default function PatternsScreen() {
         </Card>
       ) : (
         patterns.map((pattern) => (
-          <Pressable
+          <SpringPress
             key={pattern.id}
             accessibilityRole="button"
             onPress={() => router.push(`/patterns/${pattern.id}`)}
@@ -95,7 +96,7 @@ export default function PatternsScreen() {
                 )}
               </View>
             </Card>
-          </Pressable>
+          </SpringPress>
         ))
       )}
 

@@ -38,6 +38,7 @@ import { hapticLight } from '@/lib/haptics';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogIllustration } from '@/components/DogIllustration';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { WorldBackdrop } from '@/components/WorldBackdrop';
 
 type DiaryFilter = 'ALL' | DiaryDomain;
 type TimelineItem =
@@ -346,6 +347,7 @@ export default function DiaryScreen() {
   }, [groups]);
   return (
     <View style={styles.root}>
+      <WorldBackdrop world="diary" />
       <SafeAreaView edges={['top']} style={styles.safe}>
         <View style={styles.content}>
           <Text style={styles.title}>Il diario di {dog.name}</Text>

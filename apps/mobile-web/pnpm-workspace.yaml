@@ -1,3 +1,5 @@
+allowBuilds:
+  '@sentry/cli': set this to true or false
 auditConfig:
   ignoreGhsas:
     - GHSA-86w9-cpqp-85rv

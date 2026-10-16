@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { Button, ErrorState, ScreenContainer } from '@/components';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { hapticLight } from '@/lib/haptics';
 import Animated from 'react-native-reanimated';
 import { usePressSpring } from '@/components/pressSpring';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
@@ -195,6 +197,27 @@ export default function FoodsScreen() {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
+      <Svg
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 400 240"
+        preserveAspectRatio="xMaxYMin slice"
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
+        {/* scaffale della dispensa */}
+        <Rect x={272} y={24} width={118} height={8} rx={4} fill={colors.border} />
+        <Rect x={286} y={-4} width={26} height={30} rx={5} fill={colors.accentSoft} />
+        <Rect x={320} y={2} width={22} height={24} rx={5} fill={colors.primarySoft} />
+        <Rect x={350} y={-2} width={28} height={28} rx={6} fill={colors.warningSoft} />
+        <Rect x={272} y={74} width={118} height={8} rx={4} fill={colors.border} />
+        <Rect x={292} y={46} width={30} height={30} rx={6} fill={colors.surface} stroke={colors.border} />
+        <Path d="M296 60 h22" stroke={colors.accentSoft} strokeWidth={5} strokeLinecap="round" />
+        <Circle cx={344} cy={60} r={14} fill={colors.accentSoft} />
+        {/* ciotolina in basso */}
+        <Path d="M28 206 h44 c2 14 -6 20 -22 20 c-16 0 -24 -6 -22 -20 Z" fill={colors.accentSoft} opacity={0.5} />
+      </Svg>
       <StackScreenHeader title={`Cibo di ${dog.name}`} />
       <Text style={styles.pageHero}>Cibo di {dog.name}</Text>
       <Text style={styles.pageLead}>
@@ -208,7 +231,10 @@ export default function FoodsScreen() {
       />
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push('/nutrition/foods/scan' as never)}
+        onPress={() => {
+          void hapticLight();
+          router.push('/nutrition/foods/scan' as never);
+        }}
         style={styles.manualLink}
       >
         <Ionicons name="camera-outline" size={16} color={colors.primary} />
@@ -246,9 +272,12 @@ export default function FoodsScreen() {
 
       {!foods.length ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Nessun alimento ancora</Text>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="nutrition-outline" size={30} color={colors.accent} />
+          </View>
+          <Text style={styles.emptyTitle}>La dispensa di {dog.name} è vuota</Text>
           <Text style={styles.emptyBody}>
-            Cerca nel catalogo e scegli con un tap. Ci vuole un attimo.
+            Aggiungi quello che mangia: la prossima volta basta un tap.
           </Text>
         </View>
       ) : null}
@@ -427,6 +456,16 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
   },
   empty: {
     paddingVertical: spacing.xxl,

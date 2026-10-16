@@ -3,7 +3,6 @@ import {
   Alert,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -27,22 +26,12 @@ import {
   type CareEventType,
 } from '@/features/care/types';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { SpringPress } from '@/components/pressSpring';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useNotificationPreferences } from '@/features/notifications/store';
-import { colors, shadows, spacing, typography } from '@/theme/tokens';
+import { colors, radius, spacing, typography } from '@/theme/tokens';
 
 const TIME_OPTIONS = [9, 10, 15, 18] as const;
-
-const CARE = {
-  bg: '#F8FAFC',
-  text: '#1A2B48',
-  muted: '#64748B',
-  border: '#EDF2F7',
-  teal: '#2DAAAB',
-  tealSoft: '#E0F7F6',
-  coral: '#FF8B74',
-  peach: '#FFF1EE',
-} as const;
 
 export default function NewCareEventScreen() {
   const router = useRouter();
@@ -124,31 +113,37 @@ export default function NewCareEventScreen() {
   };
 
   return (
-    <ScreenContainer scroll style={styles.screen}>
+    <ScreenContainer scroll>
       <StackScreenHeader title="Nuovo promemoria" />
 
       <Text style={styles.step}>Cosa vuoi ricordare?</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.typeRow}
-      >
+      <View style={styles.typeGrid}>
         {CARE_EVENT_TYPES.map((type) => {
           const meta = CARE_TYPE_META[type];
           const selected = eventType === type;
           return (
-            <Pressable
+            <SpringPress
               key={type}
               accessibilityRole="button"
               accessibilityState={{ selected }}
               onPress={() => chooseType(type)}
-              style={[styles.typeChip, selected && styles.typeChipSelected]}
+              pressableStyle={[
+                styles.typeCard,
+                selected && styles.typeCardSelected,
+              ]}
             >
-              <Ionicons
-                name={meta.icon}
-                size={16}
-                color={selected ? colors.textOnPrimary : CARE.teal}
-              />
+              <View
+                style={[
+                  styles.typeIcon,
+                  selected && styles.typeIconSelected,
+                ]}
+              >
+                <Ionicons
+                  name={meta.icon}
+                  size={21}
+                  color={selected ? colors.textOnPrimary : colors.primary}
+                />
+              </View>
               <Text
                 style={[
                   styles.typeLabel,
@@ -157,17 +152,17 @@ export default function NewCareEventScreen() {
               >
                 {meta.label}
               </Text>
-            </Pressable>
+            </SpringPress>
           );
         })}
-      </ScrollView>
+      </View>
 
       <Text style={styles.label}>Titolo</Text>
       <TextInput
         value={title}
         onChangeText={setTitle}
         placeholder="Es. Richiamo vaccino"
-        placeholderTextColor={CARE.muted}
+        placeholderTextColor={colors.textMuted}
         maxLength={120}
         style={styles.input}
       />
@@ -185,7 +180,7 @@ export default function NewCareEventScreen() {
           <Ionicons
             name={allDay ? 'checkbox' : 'square-outline'}
             size={19}
-            color={allDay ? CARE.teal : CARE.muted}
+            color={allDay ? colors.primary : colors.textMuted}
           />
           <Text style={styles.allDayText}>Senza orario</Text>
         </Pressable>
@@ -193,12 +188,13 @@ export default function NewCareEventScreen() {
       {!allDay ? (
         <View style={styles.timeRow}>
           {TIME_OPTIONS.map((option) => (
-            <Pressable
+            <SpringPress
               key={option}
               accessibilityRole="button"
               accessibilityState={{ selected: hour === option }}
               onPress={() => setHour(option)}
-              style={[
+              scaleTo={0.92}
+              pressableStyle={[
                 styles.timeChip,
                 hour === option && styles.timeChipSelected,
               ]}
@@ -211,7 +207,7 @@ export default function NewCareEventScreen() {
               >
                 {String(option).padStart(2, '0')}:00
               </Text>
-            </Pressable>
+            </SpringPress>
           ))}
         </View>
       ) : null}
@@ -221,7 +217,7 @@ export default function NewCareEventScreen() {
           <Ionicons
             name="notifications-outline"
             size={21}
-            color={CARE.teal}
+            color={colors.accent}
           />
         </View>
         <View style={styles.reminderCopy}>
@@ -233,8 +229,8 @@ export default function NewCareEventScreen() {
         <Switch
           value={reminderEnabled}
           onValueChange={setReminderEnabled}
-          trackColor={{ false: CARE.border, true: CARE.tealSoft }}
-          thumbColor={reminderEnabled ? CARE.teal : CARE.muted}
+          trackColor={{ false: colors.border, true: colors.accentSoft }}
+          thumbColor={reminderEnabled ? colors.accent : colors.textMuted}
           accessibilityLabel="Avvisami il giorno prima"
         />
       </View>
@@ -247,7 +243,7 @@ export default function NewCareEventScreen() {
         <Ionicons
           name={showDetails ? 'remove-circle-outline' : 'add-circle-outline'}
           size={20}
-          color={CARE.teal}
+          color={colors.primary}
         />
         <Text style={styles.detailsToggleText}>
           {showDetails ? 'Nascondi dettagli' : 'Aggiungi luogo o nota'}
@@ -260,7 +256,7 @@ export default function NewCareEventScreen() {
             value={location}
             onChangeText={setLocation}
             placeholder="Luogo o veterinario (facoltativo)"
-            placeholderTextColor={CARE.muted}
+            placeholderTextColor={colors.textMuted}
             maxLength={160}
             style={styles.input}
           />
@@ -268,7 +264,7 @@ export default function NewCareEventScreen() {
             value={notes}
             onChangeText={setNotes}
             placeholder="Nota (facoltativa)"
-            placeholderTextColor={CARE.muted}
+            placeholderTextColor={colors.textMuted}
             maxLength={1000}
             multiline
             style={[styles.input, styles.notes]}
@@ -278,7 +274,6 @@ export default function NewCareEventScreen() {
 
       <Button
         title="Aggiungi all’agenda"
-        variant="secondary"
         onPress={save}
         loading={saving}
         style={styles.save}
@@ -288,59 +283,69 @@ export default function NewCareEventScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: CARE.bg,
-  },
   step: {
     marginBottom: spacing.md,
-    color: CARE.text,
+    color: colors.text,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
-  typeRow: {
+  typeGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    paddingBottom: spacing.xl,
+    marginBottom: spacing.xl,
   },
-  typeChip: {
-    flexDirection: 'row',
+  typeCard: {
+    width: '31%',
+    minHeight: 92,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
-    minHeight: 40,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 9999,
+    padding: spacing.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: CARE.border,
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  typeChipSelected: {
-    borderColor: CARE.teal,
-    backgroundColor: CARE.teal,
+  typeCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  typeIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  typeIconSelected: {
+    backgroundColor: colors.primary,
   },
   typeLabel: {
-    color: CARE.text,
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
+    textAlign: 'center',
   },
   typeLabelSelected: {
-    color: colors.textOnPrimary,
+    color: colors.primary,
   },
   label: {
     marginBottom: spacing.sm,
-    color: CARE.text,
+    color: colors.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
   input: {
     minHeight: 54,
     marginBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: CARE.border,
-    borderRadius: 16,
-    backgroundColor: CARE.bg,
-    color: CARE.text,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    color: colors.text,
     fontSize: typography.size.md,
   },
   timeHeader: {
@@ -351,7 +356,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   labelInline: {
-    color: CARE.text,
+    color: colors.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
@@ -361,7 +366,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   allDayText: {
-    color: CARE.muted,
+    color: colors.textSecondary,
     fontSize: typography.size.xs,
   },
   timeRow: {
@@ -374,17 +379,17 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 9999,
-    backgroundColor: CARE.bg,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: CARE.border,
+    borderColor: colors.border,
   },
   timeChipSelected: {
-    borderColor: CARE.teal,
-    backgroundColor: CARE.teal,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
   },
   timeText: {
-    color: CARE.muted,
+    color: colors.textSecondary,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
   },
@@ -396,11 +401,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CARE.border,
-    ...shadows.card,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentSoft,
   },
   reminderIcon: {
     width: 38,
@@ -408,20 +410,20 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CARE.tealSoft,
+    backgroundColor: colors.surface,
   },
   reminderCopy: {
     flex: 1,
   },
   reminderTitle: {
-    color: CARE.text,
+    color: colors.text,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },
   reminderDescription: {
     marginTop: spacing.xxs,
-    color: CARE.muted,
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
   },
   detailsToggle: {
     flexDirection: 'row',
@@ -431,7 +433,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   detailsToggleText: {
-    color: CARE.teal,
+    color: colors.primary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.semibold,
   },

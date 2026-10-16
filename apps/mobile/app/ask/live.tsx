@@ -6,7 +6,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -27,6 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
+import { SpringPress } from '@/components/pressSpring';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   connectLiveWebRtc,
@@ -205,14 +205,14 @@ export default function AskLiveScreen() {
     <LinearGradient colors={['#E8F4FF', '#F4F7FB', '#FFFFFF']} style={styles.root}>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.topBar}>
-          <Pressable
+          <SpringPress
             accessibilityRole="button"
             accessibilityLabel="Chiudi"
             onPress={() => void finish()}
-            style={styles.iconBtn}
+            pressableStyle={styles.iconBtn}
           >
             <Ionicons name="close" size={24} color={colors.text} />
-          </Pressable>
+          </SpringPress>
           <View style={styles.timerWrap}>
             <Animated.View style={styles.timerRing} />
             <Text
@@ -241,18 +241,18 @@ export default function AskLiveScreen() {
               Profilo.
             </Text>
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel="Inizia conversazione vocale"
               onPress={() => void startLive()}
-              style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+              pressableStyle={({ pressed }) => [styles.cta, pressed && styles.pressed]}
             >
               <Ionicons name="mic" size={20} color="#FFFFFF" />
               <Text style={styles.ctaText}>Inizia</Text>
-            </Pressable>
-            <Pressable onPress={() => router.back()} style={styles.secondary}>
+            </SpringPress>
+            <SpringPress onPress={() => router.back()} pressableStyle={styles.secondary}>
               <Text style={styles.secondaryText}>Torna al testo</Text>
-            </Pressable>
+            </SpringPress>
           </Animated.View>
         ) : (
           <Animated.View entering={FadeIn.duration(400)} style={styles.stage}>
@@ -270,14 +270,14 @@ export default function AskLiveScreen() {
               <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
             ) : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel="Termina conversazione"
               onPress={() => void finish('Conversazione vocale terminata.')}
-              style={({ pressed }) => [styles.endBtn, pressed && styles.pressed]}
+              pressableStyle={({ pressed }) => [styles.endBtn, pressed && styles.pressed]}
             >
               <Text style={styles.endText}>Termina</Text>
-            </Pressable>
+            </SpringPress>
           </Animated.View>
         )}
       </SafeAreaView>
