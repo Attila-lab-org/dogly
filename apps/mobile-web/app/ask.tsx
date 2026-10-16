@@ -46,6 +46,9 @@ import { ANALYSIS_POLL_TIMEOUT_MS } from '@/features/core/processingTimeout';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SpringPress } from '@/components/pressSpring';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
+import { GuideOverlay } from '@/features/guide/GuideOverlay';
+import { useGuide } from '@/features/guide/useGuide';
+import { useGuideTargets } from '@/features/guide/useGuideTargets';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
 import {
@@ -86,7 +89,7 @@ export default function AskScreen() {
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[]; intent?: string | string[] }>();
+  const params = useLocalSearchParams<{ eventId?: string | string[]; source?: string | string[]; sessionId?: string | string[]; entryId?: string | string[]; intent?: string | string[]; guide?: string | string[] }>();
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const source = Array.isArray(params.source) ? params.source[0] : params.source;
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
@@ -132,6 +135,13 @@ export default function AskScreen() {
   const latestAssistantId = [...messages].reverse().find((message) => message.role === 'assistant')?.id;
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const reducedMotion = useReducedMotion();
+  const guideParam = Array.isArray(params.guide) ? params.guide[0] : params.guide;
+  const guide = useGuide({ page: 'ask', dogId: dog.id, dogName: dog.name, force: guideParam === '1' });
+  const { anchor, measureTarget } = useGuideTargets();
+  const setConversationRef = useCallback((node: ScrollView | null) => {
+    scrollRef.current = node;
+    anchor('conversation')(node);
+  }, [anchor]);
   const digestPhotoHint = /feci|cacca|digest|pup[uù]|diarrea|escrement|foto chiara/i.test(
     `${latestAssistant?.turn?.media_prompt ?? ''} ${latestAssistant?.text ?? ''}`,
   );
@@ -831,31 +841,9 @@ export default function AskScreen() {
             <Text style={styles.headerTitle} numberOfLines={1}>Su {dog.name}</Text>
           </View>
         </View>
-        <View style={styles.modeSwitch} accessibilityRole="tablist">
-          <View
-            style={[styles.modeChip, styles.modeChipActive]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: true }}
-            accessibilityLabel="Modalità Testo"
-          >
-            <Ionicons name="chatbubble" size={13} color="#FFFFFF" />
-            <Text style={styles.modeChipTextActive}>Testo</Text>
-          </View>
-          <SpringPress
-            accessibilityRole="tab"
-            accessibilityLabel="Passa a conversazione Voce"
-            accessibilityState={{ selected: false }}
-            onPress={() => router.push('/ask/live' as never)}
-            style={styles.modeChip}
-            pressableStyle={({ pressed }) => [styles.modeChipPressable, pressed && styles.pressed]}
-          >
-            <Ionicons name="mic" size={13} color={colors.primary} />
-            <Text style={styles.modeChipText}>Voce</Text>
-          </SpringPress>
-        </View>
       </View>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
-        <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={setConversationRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
           {starting ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.muted}>Preparo la conversazione…</Text></View> : null}
           {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => void start()}><Text style={styles.retry}>Riprova</Text></Pressable></View> : null}
           {messages.map((message, messageIndex) => <Animated.View key={message.id} entering={reducedMotion ? undefined : FadeInDown.duration(260).delay(Math.min(messageIndex, 8) * 28)} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
@@ -986,10 +974,16 @@ export default function AskScreen() {
           ) : null}
         </ScrollView>
         <View style={styles.composerWrap}>
-          <View style={styles.composerShell}>
+          <View ref={anchor('composer')} style={[styles.composerShell, dictating && styles.composerShellListening]}>
+            {dictating ? (
+              <View style={styles.dictationBanner} accessibilityLiveRegion="polite">
+                <View style={styles.dictationPulse} />
+                <Text style={styles.dictationBannerText}>Ti ascolto… tocca Detta per fermare</Text>
+              </View>
+            ) : null}
             <TextInput
               accessibilityLabel={'Scrivi a DOGly di ' + dog.name}
-              placeholder={'Raccontami di ' + dog.name + '…'}
+              placeholder={dictating ? 'Sto ascoltando…' : 'Raccontami di ' + dog.name + '…'}
               placeholderTextColor={colors.textMuted}
               value={draft}
               onChangeText={(value) => setDraft(value.slice(0, 4000))}
@@ -1000,7 +994,7 @@ export default function AskScreen() {
               onSubmitEditing={() => { if (Platform.OS !== 'web') void send(draft); }}
             />
             <View style={styles.composerTools}>
-              <View style={styles.composerActions}>
+              <View ref={anchor('media')} style={styles.composerActions}>
               <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel="Aggiungi una foto"
@@ -1033,7 +1027,18 @@ export default function AskScreen() {
               </SpringPress>
               <SpringPress accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={[styles.mic, dictating && styles.micActive]} pressableStyle={({ pressed }) => [styles.micPressable, dictating && styles.micActive, pressed && styles.pressed]}>
                 <Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} />
-                <Text style={[styles.mediaButtonText, dictating && styles.mediaButtonTextLit]}>Voce</Text>
+                <Text style={[styles.mediaButtonText, dictating && styles.mediaButtonTextLit]}>Detta</Text>
+              </SpringPress>
+              <SpringPress
+                accessibilityRole="button"
+                accessibilityLabel="Parla con DOGly"
+                onPress={() => router.push('/ask/live' as never)}
+                disabled={!session}
+                style={styles.voiceButton}
+                pressableStyle={({ pressed }) => [styles.voiceButtonPressable, pressed && styles.pressed]}
+              >
+                <Ionicons name="pulse" size={16} color={colors.primary} />
+                <Text style={styles.voiceButtonText}>Parla</Text>
               </SpringPress>
               </View>
               <SpringPress accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={[styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled]} pressableStyle={({ pressed }) => [styles.sendPressable, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
@@ -1051,6 +1056,15 @@ export default function AskScreen() {
         onClose={() => setMediaSheet(null)}
         onCapture={onMediaSheetCapture}
         onLibrary={onMediaSheetLibrary}
+      />
+      <GuideOverlay
+        visible={guide.visible}
+        page="ask"
+        dogName={dog.name}
+        locale={guide.locale}
+        onLocaleChange={guide.setLocale}
+        onClose={guide.close}
+        measureTarget={measureTarget}
       />
     </SafeAreaView>
   </LinearGradient>;
@@ -1075,43 +1089,26 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, minWidth: 0, gap: 1 },
   eyebrow: { color: colors.primary, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.8 },
   headerTitle: { color: colors.text, fontSize: typography.size.md, lineHeight: 19, fontWeight: typography.weight.bold, letterSpacing: -0.1 },
-  modeSwitch: {
+  voiceButton: {
+    width: 48,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    padding: 3,
+    gap: 4,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(37,99,235,0.18)',
   },
-  modeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+  voiceButtonPressable: {
     borderRadius: 999,
   },
-  modeChipWrap: { borderRadius: 999 },
-  modeChipPressable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
-  modeChipActive: { backgroundColor: colors.primary },
-  modeChipText: {
+  voiceButtonText: {
     color: colors.primary,
     fontWeight: typography.weight.bold,
-    fontSize: 12,
-  },
-  modeChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: typography.weight.bold,
-    fontSize: 12,
+    fontSize: 10,
   },
   body: { flex: 1 },
   scroll: { flex: 1 }, conversation: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl }, intro: { backgroundColor: 'rgba(255,255,255,0.84)', borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(0,80,216,0.1)' }, sparkle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E6F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm }, introTitle: { color: colors.text, fontSize: typography.size.xl, fontWeight: typography.weight.bold, marginBottom: spacing.xs }, introText: { color: colors.textSecondary, fontSize: typography.size.md, lineHeight: 22 }, loading: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm }, muted: { color: colors.textMuted, fontSize: typography.size.sm }, error: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: '#FFF2F0' }, errorText: { color: colors.danger, flex: 1, fontSize: typography.size.sm }, retry: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, messageRow: { width: '100%', alignItems: 'flex-start' }, userRow: { alignItems: 'flex-end' }, bubble: { maxWidth: '92%', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 13 }, assistantBubble: { backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: '#DCE8F4', borderLeftWidth: 3, borderLeftColor: colors.accent, borderBottomLeftRadius: 7, shadowColor: colors.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 1 }, userBubble: { backgroundColor: colors.primary, borderBottomRightRadius: 6 }, messageSender: { color: colors.accentPressed, fontSize: 10, lineHeight: 13, fontWeight: typography.weight.bold, letterSpacing: 1, marginBottom: 4 }, messageText: { color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: typography.weight.medium, letterSpacing: 0.05 }, userText: { color: '#FFFFFF', fontWeight: typography.weight.semibold },  retryInside: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }, helpLink: { marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }, helpLinkText: { color: colors.primary, fontWeight: typography.weight.bold }, memory: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: '#E4EDF6', paddingTop: spacing.md }, memoryLabel: { color: colors.text, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryText: { color: colors.textSecondary, marginTop: spacing.xs, fontSize: typography.size.sm, lineHeight: 19 }, memoryActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.md }, memoryButton: { backgroundColor: '#E6F1FF', borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, memoryConfirm: { color: colors.primary, fontWeight: typography.weight.bold, fontSize: typography.size.sm }, memoryReject: { color: colors.textMuted, fontWeight: typography.weight.semibold, fontSize: typography.size.sm }, thinking: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
@@ -1143,6 +1140,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 4,
+  },
+  composerShellListening: {
+    borderColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.18,
+  },
+  dictationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+  },
+  dictationPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  dictationBannerText: {
+    color: colors.accentPressed,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.semibold,
   },
   input: {
     width: '100%',

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, ScreenContainer } from '@/components';
 import {
@@ -41,8 +41,8 @@ const OPTIONS: Array<{
     icon: 'heart-outline',
     iconBg: '#E0F2FE',
     iconColor: '#0284C7',
-    title: 'Come sta oggi',
-    description: 'Promemoria occasionali, senza messaggi ripetitivi.',
+    title: 'Promemoria check-in',
+    description: 'Chiedimi occasionalmente come sta il mio cane.',
   },
 ];
 
@@ -62,7 +62,7 @@ export default function NotificationSettingsScreen() {
         Le modifiche vengono salvate subito.
       </Text>
 
-      <Text style={styles.section}>Come sta oggi</Text>
+      <Text style={styles.section}>Frequenza del check-in</Text>
       <Card style={styles.frequencyCard}>
         <View style={styles.frequencyRow}>
           {FREQUENCY_OPTIONS.map((option) => {
@@ -71,9 +71,11 @@ export default function NotificationSettingsScreen() {
               <SpringPress
                 key={option.id}
                 accessibilityRole="button"
+                accessibilityLabel={option.title}
+                accessibilityHint={option.description}
                 accessibilityState={{ selected }}
                 onPress={() => setCheckInFrequency(option.id)}
-                style={styles.frequencyChip}
+                style={styles.frequencyOption}
                 pressableStyle={[
                   styles.frequencyChip,
                   selected && styles.frequencyChipSelected,
@@ -91,6 +93,9 @@ export default function NotificationSettingsScreen() {
             );
           })}
         </View>
+        <Text style={styles.frequencyDescription} accessibilityLiveRegion="polite">
+          {FREQUENCY_OPTIONS.find((option) => option.id === prefs.frequency)?.description}
+        </Text>
       </Card>
 
       <Text style={styles.section}>Cosa ricevere</Text>
@@ -143,8 +148,8 @@ export default function NotificationSettingsScreen() {
           />
         </View>
         <Text style={styles.noteText}>
-          Il telefono chiede il permesso solo quando attivi il primo
-          promemoria.
+          Il check-in compare dentro DOGly. Il permesso del telefono riguarda
+          solo i promemoria dell’agenda.
         </Text>
       </View>
     </ScreenContainer>
@@ -178,9 +183,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  frequencyChip: {
+  frequencyOption: {
     flex: 1,
-    minHeight: 40,
+    minWidth: 0,
+  },
+  frequencyChip: {
+    width: '100%',
+    minHeight: 48,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
@@ -196,9 +207,16 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
+    textAlign: 'center',
   },
   frequencyTextSelected: {
     color: colors.teal,
+  },
+  frequencyDescription: {
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.relaxed,
   },
   group: {
     borderRadius: 20,

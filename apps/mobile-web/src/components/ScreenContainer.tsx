@@ -12,6 +12,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import { colors, spacing } from '../theme/tokens';
 import { WorldBackdrop, worldForPath, type WorldKind } from './WorldBackdrop';
+import { GuideOverlay } from '../features/guide/GuideOverlay';
+import { guidePageForPath } from '../features/guide/copy';
+import { useGuide } from '../features/guide/useGuide';
 
 export interface ScreenContainerProps {
   children: React.ReactNode;
@@ -36,6 +39,8 @@ export function ScreenContainer({
 }: ScreenContainerProps) {
   const pathname = usePathname();
   const resolvedWorld = world ?? worldForPath(pathname);
+  const guidePage = guidePageForPath(pathname);
+  const guide = useGuide({ page: guidePage, dogName: 'il tuo cane' });
   const inner = scroll ? (
     <ScrollView
       style={styles.flex}
@@ -66,6 +71,16 @@ export function ScreenContainer({
       >
         {inner}
       </KeyboardAvoidingView>
+      {guidePage ? (
+        <GuideOverlay
+          visible={guide.visible}
+          page={guidePage}
+          dogName="il tuo cane"
+          locale={guide.locale}
+          onLocaleChange={guide.setLocale}
+          onClose={guide.close}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

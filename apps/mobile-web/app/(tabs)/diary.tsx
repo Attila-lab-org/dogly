@@ -39,6 +39,7 @@ import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogIllustration } from '@/components/DogIllustration';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
+import { PageGuide } from '@/features/guide/PageGuide';
 
 type DiaryFilter = 'ALL' | DiaryDomain;
 type TimelineItem =
@@ -540,6 +541,7 @@ export default function DiaryScreen() {
           )}
         </View>
       </SafeAreaView>
+      <PageGuide page="diary" dogId={dog.id} dogName={dog.name} />
     </View>
   );
 }

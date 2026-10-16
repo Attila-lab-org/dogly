@@ -7,17 +7,17 @@ export const FREQUENCY_OPTIONS: Array<{
 }> = [
   {
     id: 'light',
-    title: 'Leggero',
-    description: 'Qualche volta a settimana, solo un saluto.',
+    title: 'Ogni 3 giorni',
+    description: 'Un breve saluto ogni pochi giorni.',
   },
   {
     id: 'normal',
-    title: 'Normale',
-    description: 'Un saluto quando apri l’app, se manca.',
+    title: 'Ogni giorno',
+    description: 'Un breve check-in una volta al giorno.',
   },
   {
     id: 'monitoring',
-    title: 'Monitoraggio',
-    description: 'Più presente per un periodo in cui vuoi stare vicino.',
+    title: 'A ogni apertura',
+    description: 'Un check-in ogni volta che apri DOGly.',
   },
 ];

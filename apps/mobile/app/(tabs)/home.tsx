@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   Pressable,
   ScrollView,
@@ -33,17 +34,27 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { purchasesEnabled } from '@/mocks/entitlements';
 import { SpringPress } from '@/components/pressSpring';
 import { usePressSpring } from '@/components/pressSpring';
+import {
+  hydrateReadNotificationKeys,
+  notificationKey,
+  useReadNotificationKeys,
+} from '@/features/notifications/readState';
 
 const logoMarkSource = require('../../assets/brand/dogly-logo-mark.png');
 
 export default function HomeScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
-  const reminderCount = useCareEvents(dog.id, dog.name).filter(
+  const readKeys = useReadNotificationKeys();
+  React.useEffect(() => {
+    void hydrateReadNotificationKeys();
+  }, []);
+  const unreadReminderCount = useCareEvents(dog.id, dog.name).filter(
     (event) =>
       event.status === 'SCHEDULED' &&
       event.reminderEnabled &&
-      Date.parse(event.scheduledAt) >= Date.now(),
+      Date.parse(event.scheduledAt) >= Date.now() &&
+      !readKeys.has(notificationKey('care', event.id)),
   ).length;
   const reducedMotion = useReducedMotion();
   // Entrata scenica: le entering animation di Reanimated corrono solo al
@@ -52,6 +63,16 @@ export default function HomeScreen() {
     reducedMotion ? undefined : FadeInUp.duration(320).delay(delay);
   const { usage, recentInsights, processingEventId, loading, error, refetch } =
     useHomeData(dog.id);
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refetch();
+    });
+    return () => subscription.remove();
+  }, [refetch]);
+  const unreadResultCount = recentInsights.filter(
+    (insight) => !readKeys.has(notificationKey('result', insight.eventId)),
+  ).length;
+  const unreadNotificationCount = unreadReminderCount + unreadResultCount;
   const network = useNetworkStatus();
   const { usingMockGate } = useSession();
   const photos = useQuery({
@@ -100,8 +121,8 @@ export default function HomeScreen() {
               <SpringPress
                 accessibilityRole="button"
                 accessibilityLabel={
-                  reminderCount > 0
-                    ? `Notifiche, ${reminderCount} promemoria attivi`
+                  unreadNotificationCount > 0
+                    ? `Notifiche, ${unreadNotificationCount} non lette`
                     : 'Notifiche'
                 }
                 onPress={() => router.push('/notifications' as never)}
@@ -109,7 +130,7 @@ export default function HomeScreen() {
                 pressableStyle={styles.headerIcon}
               >
                 <Ionicons name="notifications-outline" size={22} color={colors.text} />
-                {reminderCount > 0 ? <View style={styles.headerDot} /> : null}
+                {unreadNotificationCount > 0 ? <View style={styles.headerDot} /> : null}
               </SpringPress>
               <SpringPress
                 accessibilityRole="button"

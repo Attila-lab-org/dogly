@@ -52,17 +52,17 @@ function steppedRng(start = 0.42, step = 0.37): () => number {
 afterEach(() => setAgilityStorageBackend(null));
 
 describe('speed ramp (rebalanced: easier, lives instead of timer)', () => {
-  it('ramps 24 → 40 u/s over 90s and clamps', () => {
-    expect(speedAt(0)).toBe(24);
-    expect(speedAt(45_000)).toBe(32);
-    expect(speedAt(90_000)).toBe(40);
-    expect(speedAt(-5)).toBe(24);
-    expect(speedAt(500_000)).toBe(40);
+  it('ramps 20 → 34 u/s over 90s and clamps', () => {
+    expect(speedAt(0)).toBe(20);
+    expect(speedAt(45_000)).toBe(27);
+    expect(speedAt(90_000)).toBe(34);
+    expect(speedAt(-5)).toBe(20);
+    expect(speedAt(500_000)).toBe(34);
   });
 
   it('keeps the safety gap +15% wider than before', () => {
-    expect(minGapMs(0)).toBe(1210);
-    expect(minGapMs(AGILITY_MAX_MS)).toBe(805);
+    expect(minGapMs(0)).toBe(1500);
+    expect(minGapMs(AGILITY_MAX_MS)).toBe(1000);
   });
 });
 
@@ -94,10 +94,10 @@ describe('jump physics', () => {
   it('parabola: 0 at start/end, peak in the middle', () => {
     expect(jumpHeightAt(null, 100)).toBe(0);
     expect(jumpHeightAt(1000, 1000)).toBe(0);
-    expect(jumpHeightAt(1000, 1000 + 650)).toBe(0);
-    const mid = jumpHeightAt(1000, 1000 + 325);
-    expect(mid).toBeCloseTo(26, 0);
-    const quarter = jumpHeightAt(1000, 1000 + 162.5);
+    expect(jumpHeightAt(1000, 1000 + 760)).toBe(0);
+    const mid = jumpHeightAt(1000, 1000 + 380);
+    expect(mid).toBeCloseTo(36, 0);
+    const quarter = jumpHeightAt(1000, 1000 + 190);
     expect(quarter).toBeGreaterThan(0);
     expect(quarter).toBeLessThan(mid);
   });

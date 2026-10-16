@@ -6,7 +6,7 @@
  *   in mock gate dev mostra i mock; con API attiva e lista vuota → empty
  *   state onesto, mai notifiche inventate.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,12 @@ import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, formatInsightTimestamp } from '@/features/home/api';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
 import { SpringPress } from '@/components/pressSpring';
+import {
+  hydrateReadNotificationKeys,
+  markNotificationRead,
+  notificationKey,
+  useReadNotificationKeys,
+} from '@/features/notifications/readState';
 
 interface ResultItem {
   id: string;
@@ -33,7 +39,12 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const { userId, usingMockGate } = useSession();
+  const readKeys = useReadNotificationKeys();
   const realEnabled = Boolean(userId) && isApiConfigured() && !usingMockGate;
+
+  useEffect(() => {
+    void hydrateReadNotificationKeys();
+  }, []);
 
   const careEvents = useCareEvents(dog.id, dog.name).filter(
     (event) =>
@@ -80,7 +91,10 @@ export default function NotificationsScreen() {
             <SpringPress
               key={event.id}
               accessibilityRole="button"
-              onPress={() => router.push(`/care/${event.id}` as never)}
+              onPress={() => {
+                void markNotificationRead(notificationKey('care', event.id));
+                router.push(`/care/${event.id}` as never);
+              }}
               style={styles.item}
               pressableStyle={({ pressed }) => [styles.itemPressable, pressed && styles.itemPressed]}
             >
@@ -94,10 +108,10 @@ export default function NotificationsScreen() {
               <View style={styles.copy}>
                 <View style={styles.titleRow}>
                   <View style={styles.titleWithDot}>
-                    <View style={styles.unreadDot} />
-                    <Text style={styles.title}>{event.title}</Text>
+                    {!readKeys.has(notificationKey('care', event.id)) ? <View style={styles.unreadDot} /> : null}
+                    <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{event.title}</Text>
                   </View>
-                  <Text style={styles.timestamp}>
+                  <Text style={styles.timestamp} numberOfLines={1}>
                     {relativeCareDate(event.scheduledAt)}
                   </Text>
                 </View>
@@ -127,7 +141,8 @@ export default function NotificationsScreen() {
             <SpringPress
               key={item.id}
               accessibilityRole="button"
-              onPress={() =>
+              onPress={() => {
+                void markNotificationRead(notificationKey('result', item.id));
                 router.push({
                   pathname: '/ask',
                   params: {
@@ -135,8 +150,8 @@ export default function NotificationsScreen() {
                     source: 'behavior',
                     intent: 'revisit',
                   },
-                } as never)
-              }
+                } as never);
+              }}
               style={styles.item}
               pressableStyle={({ pressed }) => [styles.itemPressable, pressed && styles.itemPressed]}
             >
@@ -150,10 +165,10 @@ export default function NotificationsScreen() {
               <View style={styles.copy}>
                 <View style={styles.titleRow}>
                   <View style={styles.titleWithDot}>
-                    <View style={styles.unreadDot} />
-                    <Text style={styles.title}>{item.title}</Text>
+                    {!readKeys.has(notificationKey('result', item.id)) ? <View style={styles.unreadDot} /> : null}
+                    <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{item.title}</Text>
                   </View>
-                  <Text style={styles.timestamp}>{item.whenLabel}</Text>
+                  <Text style={styles.timestamp} numberOfLines={1}>{item.whenLabel}</Text>
                 </View>
                 <Text style={styles.description}>
                   Analisi di {dog.name} completata
@@ -226,7 +241,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     ...shadows.card,
   },
-  itemPressable: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: 18 },
+  itemPressable: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: 18,
+  },
   itemPressed: {
     backgroundColor: colors.surfaceMuted,
   },
@@ -245,17 +267,20 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
+    minWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
+    minWidth: 0,
   },
   titleWithDot: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minWidth: 0,
   },
   unreadDot: {
     width: 8,
@@ -265,19 +290,26 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
+    minWidth: 0,
     color: '#1A2B48',
     fontSize: 15,
     fontWeight: typography.weight.medium,
+    lineHeight: 20,
   },
   timestamp: {
+    flexShrink: 0,
+    maxWidth: 72,
     color: '#8295A8',
     fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
+    textAlign: 'right',
   },
   description: {
     marginTop: spacing.xxs,
+    flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.size.xs,
+    lineHeight: 16,
   },
   emptySection: {
     marginBottom: spacing.md,

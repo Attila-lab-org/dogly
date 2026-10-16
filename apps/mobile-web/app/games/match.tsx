@@ -18,7 +18,6 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
   withSequence,
   withSpring,
   withTiming,
@@ -30,20 +29,22 @@ import { useDogProfile } from '@/features/core/useDogProfile';
 import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import { MatchPiece } from '@/features/games/matchPieces';
 import {
-  MATCH_BLITZ_MS,
   MATCH_CHAIN_LINES,
+  MATCH_LIVES,
   MATCH_COLS,
-  MATCH_FINAL_SECONDS,
   MATCH_RESHUFFLE_LINE,
-  MATCH_ROCKET_LINE,
   MATCH_ROWS,
   MATCH_START_LINE,
   chainScore,
   findClears,
   hasAnyMove,
   indexOf,
+  isMatchGameOver,
   isValidSwap,
   loadMatchBest,
+  livesAfterMistake,
+  matchLevelGoal,
+  matchPieceCountForLevel,
   matchEndgameLine,
   randomBoard,
   removeDropRefill,
@@ -297,29 +298,28 @@ function RocketSweep({
 }
 
 /** Barra tempo che pulsa corallo sotto i 10 secondi. */
-function TimeBarFill({ fraction, urgent }: { fraction: number; urgent: boolean }) {
-  const pulse = useSharedValue(1);
-  useEffect(() => {
-    if (!urgent) return;
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(0.55, { duration: 380, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1, { duration: 380, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      true,
-    );
-  }, [urgent, pulse]);
-  const style = useAnimatedStyle(() => ({ opacity: urgent ? pulse.value : 1 }));
+function MatchLives({ lives }: { lives: number }) {
   return (
-    <Animated.View
-      style={[
-        styles.timeBarFill,
-        { width: `${fraction * 100}%` },
-        urgent && styles.timeBarFillUrgent,
-        style,
-      ]}
-    />
+    <View style={styles.matchLives} accessibilityLabel={`${lives} vite rimaste`}>
+      {[0, 1, 2].map((index) => (
+        <CuteIcon
+          key={`${index}-${lives > index}`}
+          name="heart"
+          size={18}
+          color={lives > index ? '#FF8B74' : colors.surfaceMuted}
+          secondary={lives > index ? '#FF8B74' : colors.surfaceMuted}
+        />
+      ))}
+    </View>
+  );
+}
+
+function LevelUpBanner({ level }: { level: number }) {
+  return (
+    <Animated.View entering={FadeIn.duration(220)} style={styles.levelUpBanner} pointerEvents="none">
+      <CuteIcon name="paw" size={18} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
+      <Text style={styles.levelUpText}>Livello {level}!</Text>
+    </Animated.View>
   );
 }
 
@@ -339,7 +339,11 @@ export default function MatchGameScreen() {
   const [resolving, setResolving] = useState(false);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [levelProgress, setLevelProgress] = useState(0);
+  const [lives, setLives] = useState(MATCH_LIVES);
+  const [levelUpTick, setLevelUpTick] = useState(0);
+  const [doneReason, setDoneReason] = useState<'lives' | 'complete'>('lives');
   const [commentary, setCommentary] = useState<{ id: number; text: string } | null>(null);
   const [expression, setExpression] = useState<BuddyExpression>('focused');
   const [scorePopup, setScorePopup] = useState<{ id: number; text: string; index: number | null } | null>(null);
@@ -354,7 +358,10 @@ export default function MatchGameScreen() {
   const [shownScore, setShownScore] = useState(0);
   const [cellSize, setCellSize] = useState(48);
 
-  const startedAt = useRef(0);
+  const levelRef = useRef(1);
+  const levelProgressRef = useRef(0);
+  const levelUpPending = useRef(false);
+  const livesRef = useRef(MATCH_LIVES);
   const commentarySeq = useRef(0);
   const commentaryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupSeq = useRef(0);
@@ -397,15 +404,22 @@ export default function MatchGameScreen() {
   const startGame = () => {
     timeouts.current.forEach(clearTimeout);
     timeouts.current = [];
-    const fresh = randomBoard(Math.random);
+    const fresh = randomBoard(Math.random, matchPieceCountForLevel(1));
     setBoard(fresh);
     setBoardTick((tick) => tick + 1);
-    startedAt.current = Date.now();
     setSelected(null);
     setClearing(new Set());
     setResolving(false);
     setScore(0);
-    setElapsed(0);
+    levelRef.current = 1;
+    levelProgressRef.current = 0;
+    levelUpPending.current = false;
+    livesRef.current = MATCH_LIVES;
+    setLevel(1);
+    setLevelProgress(0);
+    setLives(MATCH_LIVES);
+    setLevelUpTick(0);
+    setDoneReason('lives');
     setWeekRank(null);
     setShareDone(false);
     setPulse(null);
@@ -440,24 +454,27 @@ export default function MatchGameScreen() {
     });
   };
 
-  // Timer Blitz 60s.
-  useEffect(() => {
-    if (phase !== 'playing') return;
-    let saidCountdown = false;
-    const timer = setInterval(() => {
-      const now = Date.now() - startedAt.current;
-      setElapsed(now);
-      if (!saidCountdown && now >= MATCH_BLITZ_MS - 10_000 && now < MATCH_BLITZ_MS) {
-        saidCountdown = true;
-        say(MATCH_FINAL_SECONDS, 'focused');
-      }
-      if (now >= MATCH_BLITZ_MS) {
-        clearInterval(timer);
-        finish();
-      }
-    }, 250);
-    return () => clearInterval(timer);
-  }, [phase, dog.id, realEnabled]);
+  const advanceLevel = () => {
+    const nextLevel = levelRef.current + 1;
+    levelRef.current = nextLevel;
+    levelProgressRef.current = 0;
+    levelUpPending.current = false;
+    setLevel(nextLevel);
+    setLevelProgress(0);
+    setLevelUpTick(Date.now());
+    setSelected(null);
+    setClearing(new Set());
+    setResolving(false);
+    setBoard(randomBoard(Math.random, matchPieceCountForLevel(nextLevel)));
+    setBoardTick((tick) => tick + 1);
+    void hapticSuccess();
+    say(
+      nextLevel >= 3
+        ? `Livello ${nextLevel}! Ora serve più precisione.`
+        : `Livello ${nextLevel}! Le zampine prendono ritmo.`,
+      'celebrate',
+    );
+  };
 
   /** Risolve una catena alla volta con animazioni scaglionate. */
   const resolveChain = (chainIndex: number) => {
@@ -465,6 +482,10 @@ export default function MatchGameScreen() {
     if (cells.size === 0) {
       setResolving(false);
       setClearing(new Set());
+      if (levelUpPending.current) {
+        advanceLevel();
+        return;
+      }
       if (!hasAnyMove(boardRef.current)) {
         setBoard(reshuffle(boardRef.current, Math.random));
         setBoardTick((tick) => tick + 1);
@@ -476,6 +497,11 @@ export default function MatchGameScreen() {
     setClearing(cells);
     const points = chainScore(cells.size, chainIndex);
     setScore((value) => value + points);
+    const goal = matchLevelGoal(levelRef.current);
+    const nextProgress = levelProgressRef.current + points;
+    levelProgressRef.current = nextProgress;
+    setLevelProgress(Math.min(nextProgress, goal));
+    if (nextProgress >= goal) levelUpPending.current = true;
     const anchor = cells.size > 0 ? Math.min(...cells) : null;
     popup(`+${points}`, anchor);
     if (rockets > 0) {
@@ -503,7 +529,9 @@ export default function MatchGameScreen() {
       );
     }
     later(reducedMotion ? 60 : 260, () => {
-      setBoard((current) => removeDropRefill(current, cells, Math.random).board);
+      setBoard((current) =>
+        removeDropRefill(current, cells, Math.random, matchPieceCountForLevel(levelRef.current)).board,
+      );
       setBoardTick((tick) => tick + 1);
       setClearing(new Set());
       later(reducedMotion ? 60 : 300, () => resolveChain(chainIndex + 1));
@@ -524,6 +552,14 @@ export default function MatchGameScreen() {
       // swap non valido: wiggle e deseleziona
       setInvalid({ index: selected, tick: Date.now() });
       setSelected(null);
+      const nextLives = livesAfterMistake(livesRef.current);
+      livesRef.current = nextLives;
+      setLives(nextLives);
+      say(nextLives > 0 ? `Occhio: ti resta${nextLives === 1 ? '' : 'no'} ${nextLives} vit${nextLives === 1 ? 'a' : 'e'}.` : 'Le vite sono finite.', 'sad');
+      if (isMatchGameOver(nextLives)) {
+        setDoneReason('lives');
+        later(reducedMotion ? 60 : 320, finish);
+      }
       return;
     }
     void hapticSelection();
@@ -557,8 +593,8 @@ export default function MatchGameScreen() {
     transform: [{ translateX: shake.value }],
   }));
 
-  const remainingSeconds = Math.max(0, Math.ceil((MATCH_BLITZ_MS - elapsed) / 1000));
-  const timeFraction = 1 - Math.min(1, elapsed / MATCH_BLITZ_MS);
+  const levelGoal = matchLevelGoal(level);
+  const levelFraction = Math.min(1, levelProgress / levelGoal);
 
   const grid = useMemo(() => board.map((piece, index) => ({ piece, index })), [board]);
 
@@ -577,7 +613,7 @@ export default function MatchGameScreen() {
           <Text style={styles.introText}>
             Tocca una tessera e una vicina per scambiarle.{'\n'}
             Tre in fila scoppiano; quattro fanno il razzo.{'\n'}
-            Sessanta secondi, catene a moltiplicatore!
+            Supera i livelli: hai tre vite e nessun cronometro.
           </Text>
           {best > 0 ? (
             <Text style={styles.introBest}>Il vostro record: {best} punti</Text>
@@ -602,10 +638,13 @@ export default function MatchGameScreen() {
               <CuteIcon name="paw" size={16} color={colors.accent} secondary={colors.accent} />
               <Text style={styles.hudScoreText}>{score}</Text>
             </View>
-            <View style={styles.timeBarTrack} accessibilityLabel={`${remainingSeconds} secondi rimasti`}>
-              <TimeBarFill fraction={timeFraction} urgent={remainingSeconds <= 10 && remainingSeconds > 0} />
+            <View style={styles.levelHud} accessibilityLabel={`Livello ${level}, ${levelProgress} di ${levelGoal} punti`}>
+              <Text style={styles.levelLabel}>LIVELLO {level}</Text>
+              <View style={styles.levelTrack}>
+                <View style={[styles.levelFill, { width: `${levelFraction * 100}%` }]} />
+              </View>
             </View>
-            <Text style={styles.hudTime}>{remainingSeconds}s</Text>
+            <MatchLives lives={lives} />
           </View>
 
           <Animated.View style={[styles.boardWrap, shakeStyle]}>
@@ -663,6 +702,7 @@ export default function MatchGameScreen() {
                 <Text style={styles.scorePopupText}>{scorePopup.text}</Text>
               </Animated.View>
             ) : null}
+            {levelUpTick ? <LevelUpBanner key={levelUpTick} level={level} /> : null}
           </Animated.View>
         </View>
       ) : null}
@@ -670,6 +710,7 @@ export default function MatchGameScreen() {
       {phase === 'done' ? (
         <View style={styles.doneWrap}>
           <Text style={styles.doneLabel}>Punteggio</Text>
+          <Text style={styles.doneLevel}>Livello raggiunto: {level}</Text>
           <View style={styles.doneScoreRow}>
             <CuteIcon name="paw" size={30} color={colors.accent} secondary={colors.accent} />
             <Text style={styles.doneScore} accessibilityLabel={`Punteggio finale ${score}`}>
@@ -680,6 +721,9 @@ export default function MatchGameScreen() {
             <Text style={styles.doneBest}>Nuovo record personale!</Text>
           ) : best > 0 ? (
             <Text style={styles.doneBestPlain}>Record personale: {best}</Text>
+          ) : null}
+          {doneReason === 'lives' ? (
+            <Text style={styles.doneBestPlain}>Le vite sono finite. Riprova con calma: non c’è nessun tempo da battere.</Text>
           ) : null}
           {realEnabled ? (
             <Text style={styles.doneRank}>
@@ -787,23 +831,35 @@ const styles = StyleSheet.create({
   hud: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   hudScore: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hudScoreText: { color: colors.text, fontSize: typography.size.lg, fontWeight: typography.weight.bold },
-  timeBarTrack: {
+  levelHud: {
     flex: 1,
-    height: 10,
+    gap: 3,
+    minWidth: 92,
+  },
+  levelLabel: { color: colors.primary, fontSize: 10, fontWeight: typography.weight.bold, letterSpacing: 0.6 },
+  levelTrack: {
+    height: 8,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceMuted,
     overflow: 'hidden',
   },
-  timeBarFill: { height: '100%', borderRadius: radius.full, backgroundColor: colors.accent },
-  timeBarFillUrgent: { backgroundColor: colors.danger },
-  sweep: { position: 'absolute' },
-  hudTime: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    fontWeight: typography.weight.bold,
-    minWidth: 30,
-    textAlign: 'right',
+  levelFill: { height: '100%', borderRadius: radius.full, backgroundColor: colors.accent },
+  matchLives: { flexDirection: 'row', gap: 2, alignItems: 'center' },
+  levelUpBanner: {
+    position: 'absolute',
+    top: '42%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    ...shadows.raised,
   },
+  levelUpText: { color: colors.textOnPrimary, fontSize: typography.size.md, fontWeight: typography.weight.bold },
+  sweep: { position: 'absolute' },
   boardWrap: {
     borderRadius: radius.lg,
     overflow: 'hidden',
@@ -869,6 +925,7 @@ const styles = StyleSheet.create({
   commentatorText: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.medium },
   doneWrap: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl },
   doneLabel: { color: colors.textSecondary, fontSize: typography.size.sm, fontWeight: typography.weight.medium },
+  doneLevel: { color: colors.primary, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
   doneScoreRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   doneScore: { color: colors.text, fontSize: 56, fontWeight: typography.weight.bold },
   doneBest: { color: colors.accent, fontSize: typography.size.sm, fontWeight: typography.weight.bold },

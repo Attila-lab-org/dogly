@@ -17,6 +17,7 @@ import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { GamesSection } from '@/features/social/GamesSection';
 import { NearbyPlacesSection } from '@/features/social/NearbyPlacesSection';
 import { getLastSeenPhotoId } from '@/features/social/storySeen';
+import { PageGuide } from '@/features/guide/PageGuide';
 
 export default function SocialScreen() {
   const PAGE_SIZE = 24;
@@ -122,7 +123,8 @@ export default function SocialScreen() {
         <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(320).delay(180)}>
           <NearbyPlacesSection />
         </Animated.View>
-      </ScrollView>
+    </ScrollView>
+    <PageGuide page="social" dogId={dog.id} dogName={dog.name} />
     </SafeAreaView>
   );
 }

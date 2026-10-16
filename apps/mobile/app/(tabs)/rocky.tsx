@@ -115,7 +115,6 @@ export default function DogProfileTabScreen() {
               </View>
             </>
           ) : null}
-          <ProfileLink icon="sparkles-outline" title="Quanto mi conosci" detail="Il profilo personale cresce con ogni momento condiviso." onPress={() => router.push(`/dogs/${dog.id}/knowledge` as never)} />
           <ProfileLink icon="bookmark-outline" title="Informazioni che ricordo" detail="Puoi rivederle, correggerle o eliminarle." onPress={() => router.push(`/dogs/${dog.id}/memories` as never)} />
         </View>
       </Animated.ScrollView>

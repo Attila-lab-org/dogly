@@ -21,6 +21,7 @@ import { SpringPress } from '@/components/pressSpring';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
 import { hapticLight } from '@/lib/haptics';
 import { colors, shadows } from '@/theme/tokens';
+import { PageGuide } from '@/features/guide/PageGuide';
 
 export default function DogProfileTabScreen() {
   const router = useRouter();
@@ -115,10 +116,10 @@ export default function DogProfileTabScreen() {
               </View>
             </>
           ) : null}
-          <ProfileLink icon="sparkles-outline" title="Quanto mi conosci" detail="Il profilo personale cresce con ogni momento condiviso." onPress={() => router.push(`/dogs/${dog.id}/knowledge` as never)} />
           <ProfileLink icon="bookmark-outline" title="Informazioni che ricordo" detail="Puoi rivederle, correggerle o eliminarle." onPress={() => router.push(`/dogs/${dog.id}/memories` as never)} />
         </View>
       </Animated.ScrollView>
+      <PageGuide page="profile" dogId={dog.id} dogName={dog.name} />
     </View>
   );
 }

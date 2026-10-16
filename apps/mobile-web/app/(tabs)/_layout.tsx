@@ -164,7 +164,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="social"
         options={{
-          title: 'Momenti',
+          title: 'Social',
           tabBarIcon: ({ color, size, focused }) => (
             <TabIcon name="people" outline="people-outline" color={color as string} size={size} focused={focused} />
           ),

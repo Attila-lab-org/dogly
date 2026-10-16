@@ -88,7 +88,7 @@ function airQualityLabel(weather: HeroWeather | null): string {
 }
 
 type HeroScene = {
-  gradient: readonly [string, string];
+  gradient: readonly [string, string, string];
   orb: string;
   horizon: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -98,7 +98,7 @@ type HeroScene = {
 function heroSceneFor(dayPart: DayPart, weatherCode: number | null | undefined): HeroScene {
   if (weatherCode != null && weatherCode >= 51) {
     return {
-      gradient: ['#3C6783', '#78A2C0'],
+      gradient: ['#3C6783', '#78A2C0', colors.background],
       orb: '#BDE6F5',
       horizon: '#6BC0BF',
       icon: 'rainy-outline',
@@ -106,7 +106,7 @@ function heroSceneFor(dayPart: DayPart, weatherCode: number | null | undefined):
   }
   if (dayPart === 'morning') {
     return {
-      gradient: ['#35618B', '#6798CA'],
+      gradient: ['#35618B', '#6798CA', colors.background],
       orb: '#F7D27A',
       horizon: '#58B9AF',
       icon: 'sunny-outline',
@@ -114,14 +114,14 @@ function heroSceneFor(dayPart: DayPart, weatherCode: number | null | undefined):
   }
   if (dayPart === 'afternoon') {
     return {
-      gradient: ['#345C89', '#6594C9'],
+      gradient: ['#345C89', '#6594C9', colors.background],
       orb: '#9CD3FF',
       horizon: '#67C9C2',
       icon: 'partly-sunny-outline',
     };
   }
   return {
-    gradient: ['#414573', '#7A72B7'],
+    gradient: ['#414573', '#7A72B7', colors.background],
     orb: '#E6D6FF',
     horizon: '#5479B7',
     icon: 'moon-outline',
@@ -414,10 +414,27 @@ export function DogHero({
   const scene = heroSceneFor(dayPart, weather?.weatherCode);
 
   return (
-    <LinearGradient colors={scene.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+    <LinearGradient
+      colors={scene.gradient}
+      locations={[0, 0.56, 1]}
+      start={{ x: 0.12, y: 0 }}
+      end={{ x: 0.38, y: 1 }}
+      style={styles.card}
+    >
       <View style={[styles.sceneOrb, { backgroundColor: scene.orb }]} pointerEvents="none" />
       <View style={[styles.sceneHorizon, { backgroundColor: scene.horizon }]} pointerEvents="none" />
       <View style={styles.sceneLine} pointerEvents="none" />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          'rgba(244,249,255,0)',
+          'rgba(244,249,255,0.18)',
+          'rgba(244,249,255,0.72)',
+          '#F4F9FF',
+        ]}
+        locations={[0, 0.34, 0.76, 1]}
+        style={styles.cardFade}
+      />
       <View style={styles.topRow}>
         <Animated.View style={[styles.photoHit, photoPress.style]}>
           <Pressable
@@ -537,7 +554,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.lg,
-    ...shadows.card,
+    ...shadows.none,
   },
   sceneOrb: {
     position: 'absolute',
@@ -569,6 +586,13 @@ const styles = StyleSheet.create({
     opacity: 0.22,
     backgroundColor: '#FFFFFF',
     transform: [{ rotate: '-9deg' }],
+  },
+  cardFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 240,
   },
   topRow: {
     flexDirection: 'row',

@@ -10,7 +10,28 @@ export const MATCH_COLS = 6;
 export const MATCH_ROWS = 7;
 export const MATCH_PIECES = 5;
 export const BOARD_SIZE = MATCH_COLS * MATCH_ROWS;
-export const MATCH_BLITZ_MS = 60_000;
+/** Progressione senza cronometro: il livello sale quando si raggiunge il traguardo. */
+export const MATCH_LIVES = 3;
+export const MATCH_LEVEL_GOALS: readonly number[] = [30, 70, 125, 200, 300, 430];
+
+export function matchLevelGoal(level: number): number {
+  if (level <= 0) return MATCH_LEVEL_GOALS[0];
+  const known = MATCH_LEVEL_GOALS[level - 1];
+  return known ?? MATCH_LEVEL_GOALS[MATCH_LEVEL_GOALS.length - 1] + (level - MATCH_LEVEL_GOALS.length) * 170;
+}
+
+/** Tre tipi all'inizio, poi quattro e infine il set completo: la board cresce davvero di difficoltà. */
+export function matchPieceCountForLevel(level: number): number {
+  return Math.min(MATCH_PIECES, Math.max(3, level + 2));
+}
+
+export function livesAfterMistake(lives: number): number {
+  return Math.max(0, lives - 1);
+}
+
+export function isMatchGameOver(lives: number): boolean {
+  return lives <= 0;
+}
 
 export type Board = number[];
 
@@ -134,11 +155,12 @@ export function hasAnyMove(board: Board): boolean {
 }
 
 /** Board iniziale: nessun match presente e almeno una mossa possibile. */
-export function randomBoard(rng: () => number): Board {
+export function randomBoard(rng: () => number, pieceCount = MATCH_PIECES): Board {
+  const safePieceCount = Math.min(MATCH_PIECES, Math.max(3, pieceCount));
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const board: Board = Array.from(
       { length: BOARD_SIZE },
-      () => Math.floor(rng() * MATCH_PIECES) % MATCH_PIECES,
+      () => Math.floor(rng() * safePieceCount) % safePieceCount,
     );
     // Ripara eventuali match iniziali sostituendo le celle coinvolte.
     for (let fix = 0; fix < 50; fix += 1) {
@@ -147,7 +169,7 @@ export function randomBoard(rng: () => number): Board {
       for (const line of lines) {
         for (const cell of line) {
           board[cell] =
-            (board[cell] + 1 + Math.floor(rng() * (MATCH_PIECES - 1))) % MATCH_PIECES;
+            (board[cell] + 1 + Math.floor(rng() * (safePieceCount - 1))) % safePieceCount;
         }
       }
     }
@@ -156,7 +178,7 @@ export function randomBoard(rng: () => number): Board {
   // Fallback pragmatico: board casuale con reshuffle applicato a valle.
   return Array.from(
     { length: BOARD_SIZE },
-    () => Math.floor(rng() * MATCH_PIECES) % MATCH_PIECES,
+    () => Math.floor(rng() * safePieceCount) % safePieceCount,
   );
 }
 
@@ -181,7 +203,13 @@ export interface DropResult {
 }
 
 /** Rimuove le celle, fa cadere per gravità e riempie dall'alto (RNG). */
-export function removeDropRefill(board: Board, cells: Set<number>, rng: () => number): DropResult {
+export function removeDropRefill(
+  board: Board,
+  cells: Set<number>,
+  rng: () => number,
+  pieceCount = MATCH_PIECES,
+): DropResult {
+  const safePieceCount = Math.min(MATCH_PIECES, Math.max(3, pieceCount));
   const next: Board = [...board];
   cells.forEach((cell) => {
     next[cell] = -1;
@@ -202,7 +230,7 @@ export function removeDropRefill(board: Board, cells: Set<number>, rng: () => nu
         next[target] = value;
         if (before !== value) falls.set(target, 1);
       } else {
-        next[target] = Math.floor(rng() * MATCH_PIECES) % MATCH_PIECES;
+        next[target] = Math.floor(rng() * safePieceCount) % safePieceCount;
         refilled.push(target);
         falls.set(target, 2);
       }

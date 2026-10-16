@@ -5,6 +5,7 @@
  */
 import {
   BOARD_SIZE,
+  MATCH_LIVES,
   MATCH_COLS,
   MATCH_ROWS,
   areAdjacent,
@@ -13,8 +14,12 @@ import {
   findLines,
   hasAnyMove,
   indexOf,
+  isMatchGameOver,
   isValidSwap,
   loadMatchBest,
+  livesAfterMistake,
+  matchLevelGoal,
+  matchPieceCountForLevel,
   matchEndgameLine,
   randomBoard,
   removeDropRefill,
@@ -224,5 +229,25 @@ describe('best score persistence', () => {
     expect(await saveMatchBest(150, 'dog-1')).toBe(150);
     expect(await loadMatchBest('dog-1')).toBe(150);
     expect(await loadMatchBest('dog-2')).toBe(0);
+  });
+});
+
+describe('level and lives progression', () => {
+  it('has no timer and increases the board difficulty by level', () => {
+    expect(MATCH_LIVES).toBe(3);
+    expect(matchLevelGoal(1)).toBeLessThan(matchLevelGoal(2));
+    expect(matchLevelGoal(2)).toBeLessThan(matchLevelGoal(3));
+    expect(matchPieceCountForLevel(1)).toBe(3);
+    expect(matchPieceCountForLevel(2)).toBe(4);
+    expect(matchPieceCountForLevel(3)).toBe(5);
+    expect(randomBoard(steppedRng(), matchPieceCountForLevel(1))).toHaveLength(BOARD_SIZE);
+    expect(randomBoard(steppedRng(), matchPieceCountForLevel(3))).toHaveLength(BOARD_SIZE);
+  });
+
+  it('uses lives for mistakes and ends at zero', () => {
+    expect(livesAfterMistake(3)).toBe(2);
+    expect(livesAfterMistake(1)).toBe(0);
+    expect(isMatchGameOver(1)).toBe(false);
+    expect(isMatchGameOver(0)).toBe(true);
   });
 });

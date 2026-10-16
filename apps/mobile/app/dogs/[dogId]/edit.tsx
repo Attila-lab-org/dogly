@@ -4,19 +4,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Image,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenContainer } from '@/components';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
+import { ApiError } from '@/lib/apiClient';
 import { DogAvatar } from '@/features/core/components';
 import {
   useDogProfile,
@@ -25,8 +25,6 @@ import {
 import { profileChangesToUpdateBody } from '@/features/dogs/profilePatch';
 import { isLocalPhotoUri, persistDogAvatar } from '@/features/dogs/avatar';
 import { useSession } from '@/features/auth/SessionProvider';
-import { useAvatarPalette } from '@/features/dogs/avatarTint';
-import { StackScreenHeader } from '@/features/secondary/components';
 import { pickAvatarPhoto } from '@/features/photos/share';
 import { BreedPicker } from '@/features/dogs/BreedPicker';
 import { SpringPress } from '@/components/pressSpring';
@@ -34,7 +32,9 @@ import {
   breedLabelFromSelection,
   breedSelectionFromLabel,
 } from '@/features/dogs/breeds';
-import { BirthdayPicker } from '@/features/dogs/AgeBirthdayPicker';
+import {
+  BirthdayPicker,
+} from '@/features/dogs/AgeBirthdayPicker';
 import {
   ageFromBirthDate,
   ageLabelFromYears,
@@ -54,6 +54,11 @@ import {
 } from '@/features/me/api';
 
 const SIZES = ['Taglia piccola', 'Taglia media', 'Taglia grande'] as const;
+const SIZE_META: Record<(typeof SIZES)[number], { iconSize: number }> = {
+  'Taglia piccola': { iconSize: 19 },
+  'Taglia media': { iconSize: 23 },
+  'Taglia grande': { iconSize: 27 },
+};
 const VOICE_OPTIONS: { value: AskVoiceGender; label: string; hint: string }[] = [
   { value: 'FEMALE', label: 'Femminile', hint: 'Luminosa e chiara' },
   { value: 'MALE', label: 'Maschile', hint: 'Calda e posata' },
@@ -70,8 +75,14 @@ const SEX_META: Record<DogSex, {
   UNKNOWN: { hint: 'Da scegliere', icon: 'help-circle-outline', tint: '#EEF2F7', iconColor: '#708096' },
 };
 
+const SEX_ILLUSTRATIONS: Record<'MALE' | 'FEMALE', number> = {
+  MALE: require('../../../assets/images/dog-sex-male.png'),
+  FEMALE: require('../../../assets/images/dog-sex-female.png'),
+};
+
 export default function DogEditScreen() {
   const params = useLocalSearchParams<{ dogId?: string | string[] }>();
+  const router = useRouter();
   const routeDogId = Array.isArray(params.dogId) ? params.dogId[0] : params.dogId;
   const { dog } = useDogProfile(routeDogId);
   const { userId } = useSession();
@@ -101,12 +112,57 @@ export default function DogEditScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
-  const palette = useAvatarPalette(dogId, photoUri);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [profileVisibility, setProfileVisibility] = useState(
+    dog.profileVisibility,
+  );
+  const [savedProfileVisibility, setSavedProfileVisibility] = useState(
+    dog.profileVisibility,
+  );
   const dirtyRef = useRef(false);
   const saveInFlightRef = useRef(false);
   const changeVersionRef = useRef(0);
-  const markDirty = () => { changeVersionRef.current += 1; dirtyRef.current = true; setSaveState('idle'); };
+  const hydratedDogIdRef = useRef<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveRef = useRef<(() => Promise<void>) | null>(null);
+  const formRef = useRef({
+    ownerName,
+    voiceGender,
+    name,
+    sex,
+    birthDate,
+    sizeLabel,
+    weightKg,
+    breedSelection,
+    photoUri,
+    pendingPhotoUri,
+    profileVisibility,
+  });
+  formRef.current = {
+    ownerName,
+    voiceGender,
+    name,
+    sex,
+    birthDate,
+    sizeLabel,
+    weightKg,
+    breedSelection,
+    photoUri,
+    pendingPhotoUri,
+    profileVisibility,
+  };
+  const dogRef = useRef(dog);
+  dogRef.current = dog;
+  const meProfileRef = useRef(meQuery.data);
+  meProfileRef.current = meQuery.data;
+  const savedVisibilityRef = useRef(savedProfileVisibility);
+  savedVisibilityRef.current = savedProfileVisibility;
+  const markDirty = () => {
+    changeVersionRef.current += 1;
+    dirtyRef.current = true;
+    setFeedback(null);
+    setSaveState('idle');
+  };
 
   const notify = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -115,12 +171,6 @@ export default function DogEditScreen() {
     }
     Alert.alert(title, message);
   };
-  const [profileVisibility, setProfileVisibility] = useState(
-    dog.profileVisibility,
-  );
-  const [savedProfileVisibility, setSavedProfileVisibility] = useState(
-    dog.profileVisibility,
-  );
   const visibilityQuery = useQuery({
     queryKey: profileVisibilityQueryKey(dogId),
     queryFn: () => getProfileVisibility(dogId),
@@ -150,6 +200,22 @@ export default function DogEditScreen() {
     }
   }, [dog.photoUri, pendingPhotoUri, uploadingPhoto]);
 
+  // A deep link can mount before GET /v1/dogs has resolved. Hydrate the form
+  // from the real dog once it arrives; otherwise the placeholder "Il tuo cane"
+  // could be sent back by the autosave request.
+  useEffect(() => {
+    if (!dog.id || hydratedDogIdRef.current === dog.id || dirtyRef.current) return;
+    hydratedDogIdRef.current = dog.id;
+    setName(dog.name);
+    setSex(dog.sex);
+    setBirthDate(dog.birthDate);
+    setSizeLabel(dog.sizeLabel);
+    setWeightKg(dog.weightKg === null ? '' : String(dog.weightKg).replace('.', ','));
+    setBreedSelection(breedSelectionFromLabel(dog.breedLabel));
+    setProfileVisibility(dog.profileVisibility);
+    setSavedProfileVisibility(dog.profileVisibility);
+  }, [dog.id, dog.name, dog.sex, dog.birthDate, dog.sizeLabel, dog.weightKg, dog.breedLabel, dog.profileVisibility]);
+
   useEffect(() => {
     if (meQuery.data?.display_name != null) {
       setOwnerName(meQuery.data.display_name);
@@ -167,20 +233,37 @@ export default function DogEditScreen() {
     markDirty();
   };
 
+  const scheduleSave = (delayMs = 650) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void saveRef.current?.();
+    }, delayMs);
+  };
+
   const save = async () => {
     if (!dirtyRef.current || saveInFlightRef.current) return;
+    const form = formRef.current;
+    const currentDog = dogRef.current;
+    const currentMe = meProfileRef.current;
+    const currentSavedVisibility = savedVisibilityRef.current;
+    if (!currentDog.id || (routeDogId && currentDog.id !== routeDogId)) {
+      notify('Profilo in caricamento', 'Attendi che i dati di Oreo siano pronti e riprova.');
+      setSaveState('error');
+      return;
+    }
     saveInFlightRef.current = true;
     const saveVersion = changeVersionRef.current;
     setSaveState('saving');
     let photoUploadedOnSave = false;
     if (
       dogId &&
-      photoUri &&
-      isLocalPhotoUri(photoUri)
+      form.photoUri &&
+      isLocalPhotoUri(form.photoUri)
     ) {
       setUploadingPhoto(true);
       try {
-        const savedUrl = await persistDogAvatar(dogId, photoUri);
+        const savedUrl = await persistDogAvatar(dogId, form.photoUri);
         if (savedUrl) setPhotoUri(savedUrl);
         applyAvatarToCache(savedUrl);
         if (userId) {
@@ -202,7 +285,7 @@ export default function DogEditScreen() {
         setUploadingPhoto(false);
       }
     }
-    if (pendingPhotoUri && !photoUploadedOnSave) {
+    if (form.pendingPhotoUri && !photoUploadedOnSave) {
       notify(
         'Foto non ancora salvata',
         'Tocca nuovamente la foto e completa il caricamento prima di uscire.',
@@ -211,13 +294,13 @@ export default function DogEditScreen() {
       saveInFlightRef.current = false;
       return;
     }
-    if (!name.trim()) {
+    if (!form.name.trim()) {
       notify('Nome richiesto', 'Il nome del cane è obbligatorio.');
       setSaveState('error');
       saveInFlightRef.current = false;
       return;
     }
-    if (!birthDate) {
+    if (!form.birthDate) {
       notify(
         'Data di nascita',
         'Scegli la data di nascita sul calendario: l’età si calcola da sola.',
@@ -226,10 +309,10 @@ export default function DogEditScreen() {
       saveInFlightRef.current = false;
       return;
     }
-    const breedLabel = breedLabelFromSelection(breedSelection);
-    const ageLabel = ageLabelFromYears(ageFromBirthDate(birthDate));
-    const parsedWeight = weightKg.trim()
-      ? Number(weightKg.trim().replace(',', '.'))
+    const breedLabel = breedLabelFromSelection(form.breedSelection);
+    const ageLabel = ageLabelFromYears(ageFromBirthDate(form.birthDate));
+    const parsedWeight = form.weightKg.trim()
+      ? Number(form.weightKg.trim().replace(',', '.'))
       : null;
     if (
       parsedWeight !== null &&
@@ -242,9 +325,9 @@ export default function DogEditScreen() {
     }
 
     try {
-      const nextOwnerName = ownerName.trim() || null;
-      const currentOwnerName = meQuery.data?.display_name ?? null;
-      const currentVoice = meQuery.data?.ask_voice_gender ?? 'FEMALE';
+      const nextOwnerName = form.ownerName.trim() || null;
+      const currentOwnerName = currentMe?.display_name ?? null;
+      const currentVoice = currentMe?.ask_voice_gender ?? 'FEMALE';
       const mePatch: {
         display_name?: string | null;
         ask_voice_gender?: AskVoiceGender;
@@ -252,40 +335,41 @@ export default function DogEditScreen() {
       if (userId && nextOwnerName !== currentOwnerName) {
         mePatch.display_name = nextOwnerName;
       }
-      if (userId && voiceGender !== currentVoice) {
-        mePatch.ask_voice_gender = voiceGender;
+      if (userId && form.voiceGender !== currentVoice) {
+        mePatch.ask_voice_gender = form.voiceGender;
       }
       if (userId && Object.keys(mePatch).length > 0) {
         await updateMe.mutateAsync(mePatch);
       }
       if (dogId) {
-        const profilePatch = profileChangesToUpdateBody(dog, {
-          name: name.trim(),
-          sex,
+        const profilePatch = profileChangesToUpdateBody(currentDog, {
+          name: form.name.trim(),
+          sex: form.sex,
           ageLabel,
-          birthDate,
-          sizeLabel,
+          birthDate: form.birthDate,
+          sizeLabel: form.sizeLabel,
           weightKg: parsedWeight,
           breedLabel,
-          isMix: breedSelection.kind === 'mixed',
+          isMix: form.breedSelection.kind === 'mixed',
         });
         if (Object.keys(profilePatch).length > 0) {
           await updateMutation.mutateAsync(profilePatch);
         }
-        if (profileVisibility !== savedProfileVisibility) {
+        if (form.profileVisibility !== currentSavedVisibility) {
           try {
             const savedVisibility = await apiSetVisibility(
               dogId,
-              profileVisibility === 'public' ? 'PUBLIC' : 'PRIVATE',
-              profileVisibility === 'public' ? 'public-profile-v1' : undefined,
+              form.profileVisibility === 'public' ? 'PUBLIC' : 'PRIVATE',
+              form.profileVisibility === 'public' ? 'public-profile-v1' : undefined,
             );
             const confirmed = savedVisibility?.visibility
               ? savedVisibility.visibility === 'PUBLIC'
                 ? 'public'
                 : 'private'
-              : profileVisibility;
+              : form.profileVisibility;
             setProfileVisibility(confirmed);
             setSavedProfileVisibility(confirmed);
+            savedVisibilityRef.current = confirmed;
             if (savedVisibility) {
               queryClient.setQueryData(profileVisibilityQueryKey(dogId), savedVisibility);
             }
@@ -304,25 +388,56 @@ export default function DogEditScreen() {
         dirtyRef.current = false;
         setSaveState('saved');
       } else {
+        // A newer edit happened while the request was in flight. Keep it dirty
+        // so the debounce effect immediately persists the newer snapshot.
         dirtyRef.current = true;
         setSaveState('idle');
       }
-    } catch {
-      notify(
-        'Salvataggio non riuscito',
-        'Controlla la connessione e riprova.',
-      );
+    } catch (error) {
+      // Keep the technical cause in the console for diagnosis while showing
+      // a calm, actionable message to the owner.
+      console.error('[DogEdit] save failed', error);
+      const message = error instanceof ApiError && (error.status === 401 || error.status === 403)
+        ? 'La sessione è scaduta. Accedi di nuovo per salvare.'
+        : error instanceof Error && /network|timeout|raggiungere/i.test(error.message)
+          ? 'Controlla la connessione e riprova.'
+          : 'Il profilo non è stato aggiornato. Riprova tra poco.';
+      notify('Salvataggio non riuscito', message);
       setSaveState('error');
     } finally {
       saveInFlightRef.current = false;
+      if (dirtyRef.current && changeVersionRef.current !== saveVersion) {
+        scheduleSave();
+      }
     }
+  };
+
+  saveRef.current = save;
+
+  const handleBack = async () => {
+    if (saveInFlightRef.current) {
+      notify('Salvataggio in corso', 'Attendi qualche secondo prima di uscire.');
+      return;
+    }
+    if (dirtyRef.current) {
+      await saveRef.current?.();
+      if (dirtyRef.current) return;
+    }
+    router.back();
   };
 
   useEffect(() => {
     if (!dirtyRef.current) return;
-    const timer = setTimeout(() => void save(), 650);
-    return () => clearTimeout(timer);
+    scheduleSave();
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    };
   }, [ownerName, voiceGender, name, sex, birthDate, sizeLabel, weightKg, breedSelection, profileVisibility, pendingPhotoUri]);
+
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
 
   const saveBusy = saveState === 'saving' || updateMutation.isPending || updateMe.isPending || uploadingPhoto;
   const saveLabel = saveBusy
@@ -338,39 +453,153 @@ export default function DogEditScreen() {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <StackScreenHeader title="Modifica profilo" />
-      <View style={[styles.saveBar, saveState === 'error' && styles.saveBarError]} accessibilityLiveRegion="polite">
-        <Ionicons name={saveIcon} size={17} color={saveState === 'error' ? colors.danger : colors.teal} />
-        <Text style={styles.saveBarText}>{saveLabel}</Text>
-        <Text style={styles.saveBarHint}>Le modifiche si salvano automaticamente</Text>
+      <View style={styles.referenceHeader}>
+        <SpringPress
+          accessibilityRole="button"
+          accessibilityLabel="Indietro"
+          onPress={() => void handleBack()}
+          pressableStyle={styles.backButton}
+        >
+          <Ionicons name="chevron-back" size={31} color={colors.text} />
+        </SpringPress>
+        <Text style={styles.headerTitle}>Modifica profilo</Text>
+        <View style={styles.headerBalance} />
       </View>
+      <SpringPress
+        accessibilityRole={saveState === 'error' ? 'button' : 'text'}
+        accessibilityLabel={saveState === 'error' ? 'Riprova salvataggio' : saveBusy ? saveLabel : 'Salvato automaticamente'}
+        disabled={saveState !== 'error' || saveBusy}
+        onPress={() => void saveRef.current?.()}
+        style={styles.saveBarPress}
+        pressableStyle={[styles.saveBar, saveState === 'error' && styles.saveBarError]}
+        accessibilityLiveRegion="polite"
+      >
+        <Ionicons name={saveIcon} size={20} color={saveState === 'error' ? colors.danger : colors.teal} />
+        <Text style={[styles.saveBarText, saveState === 'error' && styles.saveBarTextError]}>{saveState === 'error' ? `${saveLabel} · Tocca per riprovare` : saveBusy ? saveLabel : 'Salvato automaticamente'}</Text>
+      </SpringPress>
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
-      <View style={styles.profileHero}>
-        <LinearGradient
-          colors={[palette.heroFrom, palette.heroTo]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.profileHeroGradient}
+      <View style={styles.identityRow}>
+        <SpringPress
+          accessibilityRole="button"
+          accessibilityLabel="Cambia foto profilo"
+          disabled={uploadingPhoto}
+          onPress={() => void selectAndUploadPhoto()}
+          pressableStyle={styles.identityPhotoPress}
         >
-          <View style={styles.profileHeroCopy}>
-            <Text style={styles.profileHeroEyebrow}>IL MONDO DI</Text>
-            <Text style={styles.profileHeroTitle}>{name || dog.name || 'Il tuo cane'}</Text>
-            <Text style={styles.profileHeroBody}>
-              Ogni dettaglio rende DOGly più preciso e personale.
-            </Text>
+          <View style={styles.identityPhotoHalo}>
+            <DogAvatar size={130} photoUri={photoUri} dogName={name || dog.name} />
           </View>
-          <View style={styles.profileHeroAvatar}>
-            <DogAvatar photoUri={photoUri} dogName={name || dog.name} size={94} />
-            <View style={styles.profileHeroSpark}>
-              <Ionicons name="sparkles" size={14} color={colors.textOnPrimary} />
-            </View>
+          <View style={styles.photoBadgeLarge}>
+            <Ionicons name="camera" size={22} color="#FFFFFF" />
           </View>
-        </LinearGradient>
+        </SpringPress>
+        <View style={styles.identityDetails}>
+          <Text style={styles.label}>Nome</Text>
+          <TextInput
+            value={name}
+            onChangeText={(value) => { setName(value); markDirty(); }}
+            style={[styles.input, styles.identityInput]}
+            placeholderTextColor={colors.textMuted}
+            accessibilityLabel="Nome del cane"
+          />
+        </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Come ti chiama DOGly</Text>
-      <Text style={styles.label}>Nome con cui DOGly ti chiama</Text>
+      <View style={styles.divider} />
+      <Text style={styles.sectionHeading}>Sesso</Text>
+      <View style={styles.sexGrid}>
+        {SEX_OPTIONS.filter((option) => option.value !== 'UNKNOWN').map((option) => (
+          <SpringPress
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sex === option.value }}
+            onPress={() => { setSex(option.value); markDirty(); }}
+            style={styles.sexCardWrap}
+            pressableStyle={[styles.sexCard, sex === option.value && styles.sexCardSelected]}
+          >
+            <Image source={SEX_ILLUSTRATIONS[option.value as 'MALE' | 'FEMALE']} style={styles.sexIllustration} resizeMode="contain" accessibilityLabel={`${option.label}, illustrazione`} />
+            <Text style={[styles.sexLabel, sex === option.value && styles.sexLabelSelected]}>{option.label}</Text>
+            <View style={[styles.radio, sex === option.value && styles.radioSelected]}>
+              {sex === option.value ? <Ionicons name="checkmark" size={17} color="#FFFFFF" /> : null}
+            </View>
+          </SpringPress>
+        ))}
+      </View>
+      <SpringPress
+        accessibilityRole="button"
+        accessibilityState={{ selected: sex === 'UNKNOWN' }}
+        onPress={() => { setSex('UNKNOWN'); markDirty(); }}
+        pressableStyle={[styles.unknownCard, sex === 'UNKNOWN' && styles.unknownCardSelected]}
+      >
+        <View style={[styles.unknownIcon, sex === 'UNKNOWN' && styles.unknownIconSelected]}>
+          <Text style={[styles.unknownQuestion, sex === 'UNKNOWN' && styles.unknownQuestionSelected]}>?</Text>
+        </View>
+        <Text style={[styles.unknownLabel, sex === 'UNKNOWN' && styles.unknownLabelSelected]}>Non so</Text>
+        <View style={[styles.radio, sex === 'UNKNOWN' && styles.radioSelected]}>
+          {sex === 'UNKNOWN' ? <Ionicons name="checkmark" size={17} color="#FFFFFF" /> : null}
+        </View>
+      </SpringPress>
+
+      <Text style={styles.sectionHeading}>Data di nascita</Text>
+      <View style={styles.profileField}>
+        <BirthdayPicker
+          value={birthDate}
+          ageYears={ageYears}
+          onChange={(date) => { setBirthDate(date); markDirty(); }}
+          testID="edit-birthday"
+        />
+      </View>
+
+      <Text style={styles.sectionHeading}>Taglia</Text>
+      <View style={styles.sizeGrid}>
+        {SIZES.map((size) => (
+          <SpringPress
+            key={size}
+            onPress={() => { setSizeLabel(size); markDirty(); }}
+            pressableStyle={[styles.sizeCard, sizeLabel === size && styles.sizeCardActive]}
+          >
+            <MaterialCommunityIcons name="dog-side" size={SIZE_META[size].iconSize} color={sizeLabel === size ? '#FFFFFF' : colors.primary} />
+            <Text style={[styles.sizeText, sizeLabel === size && styles.sizeTextActive]}>{size}</Text>
+            {sizeLabel === size ? <Ionicons name="checkmark-circle" size={23} color="#FFFFFF" /> : null}
+          </SpringPress>
+        ))}
+      </View>
+
+      <View style={styles.fieldRow}>
+        <View style={styles.fieldHalf}>
+          <Text style={styles.label}>Peso (kg, facoltativo)</Text>
+          <View style={styles.suffixField}>
+            <TextInput
+              value={weightKg}
+              onChangeText={(value) => { setWeightKg(value); markDirty(); }}
+              keyboardType="decimal-pad"
+              placeholder="12"
+              placeholderTextColor={colors.textMuted}
+              style={styles.suffixInput}
+              accessibilityLabel="Peso in chilogrammi"
+            />
+            <Text style={styles.suffix}>kg</Text>
+          </View>
+        </View>
+        <View style={styles.fieldHalf}>
+          <Text style={styles.label}>Razza</Text>
+          <View style={styles.breedField}>
+            <BreedPicker
+              value={breedSelection}
+              onChange={(value) => { setBreedSelection(value); markDirty(); }}
+              testID="edit-breed"
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+      <View style={styles.sectionHeadingRow}>
+        <View style={styles.sectionIcon}><Ionicons name="chatbubble-ellipses" size={19} color="#FFFFFF" /></View>
+        <Text style={styles.sectionHeadingLarge}>Le tue preferenze</Text>
+      </View>
+      <Text style={styles.label}>Come ti chiama DOGly</Text>
       <TextInput
         value={ownerName}
         onChangeText={(value) => { setOwnerName(value); markDirty(); }}
@@ -380,177 +609,41 @@ export default function DogEditScreen() {
         style={styles.input}
         testID="owner-display-name"
       />
-
-      <Text style={styles.label}>Voce di DOGly (Live)</Text>
-      <Text style={styles.voiceHint}>
-        Si sente solo nella conversazione vocale. Puoi cambiarla quando vuoi.
-      </Text>
-      <View style={styles.chips}>
+      <Text style={styles.sectionLabel}>Voce di DOGly · Live</Text>
+      <View style={styles.voiceGrid}>
         {VOICE_OPTIONS.map((option) => (
           <SpringPress
             key={option.value}
             accessibilityRole="button"
             accessibilityState={{ selected: voiceGender === option.value }}
             onPress={() => { setVoiceGender(option.value); markDirty(); }}
-            pressableStyle={[
-              styles.chip,
-              styles.voiceChip,
-              voiceGender === option.value && styles.chipActive,
-            ]}
+            pressableStyle={[styles.voiceCard, voiceGender === option.value && styles.voiceCardSelected, option.value === 'FEMALE' && styles.voiceCardFemale]}
           >
-            <Ionicons
-              name={option.value === 'FEMALE' ? 'sparkles-outline' : 'planet-outline'}
-              size={16}
-              color={voiceGender === option.value ? '#FFFFFF' : colors.primary}
-            />
-            <View>
-              <Text
-                style={[
-                  styles.chipText,
-                  voiceGender === option.value && styles.chipTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-              <Text
-                style={[
-                  styles.voiceChipHint,
-                  voiceGender === option.value && styles.voiceChipHintActive,
-                ]}
-              >
-                {option.hint}
-              </Text>
+            <Ionicons name="pulse-outline" size={34} color={voiceGender === option.value ? colors.teal : colors.coral} />
+            <View style={styles.voiceCopy}>
+              <Text style={[styles.voiceLabel, voiceGender === option.value && styles.voiceLabelSelected]}>{option.label}</Text>
+              <Text style={styles.voiceHintSmall}>{option.hint}</Text>
+            </View>
+            <View style={[styles.radio, voiceGender === option.value && styles.radioSelected]}>
+              {voiceGender === option.value ? <Ionicons name="checkmark" size={17} color="#FFFFFF" /> : null}
             </View>
           </SpringPress>
         ))}
       </View>
+      <Text style={styles.voiceHint}>Solo per la conversazione vocale. Puoi cambiarla quando vuoi.</Text>
 
-      <Text style={styles.sectionTitle}>Il profilo di {name.trim() || dog.name}</Text>
-
-      <SpringPress
-        accessibilityRole="button"
-        accessibilityLabel="Cambia foto profilo"
-        disabled={uploadingPhoto}
-        onPress={() => void selectAndUploadPhoto()}
-        pressableStyle={styles.profilePhotoCard}
-      >
-        <View style={styles.avatarHalo}>
-          <DogAvatar size={112} photoUri={photoUri} dogName={name || dog.name} />
-        </View>
-        <View style={styles.photoCopy}>
-          <Text style={styles.photoTitle}>Foto di {name || dog.name}</Text>
-          <Text style={styles.photoStatus}>
-            {uploadingPhoto ? 'Salvataggio in corso…' : 'Tocca per cambiarla'}
-          </Text>
-        </View>
-        <View style={styles.photoBadge}>
-          <Ionicons name="camera" size={16} color="#FFFFFF" />
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-      </SpringPress>
-
-      <Text style={styles.label}>Nome</Text>
-      <TextInput
-        value={name}
-        onChangeText={(value) => { setName(value); markDirty(); }}
-        style={styles.input}
-        placeholderTextColor={colors.textMuted}
-      />
-
-      <Text style={styles.label}>Sesso</Text>
-      <View style={styles.chips}>
-        {SEX_OPTIONS.map((option) => (
-          <SpringPress
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: sex === option.value }}
-            onPress={() => { setSex(option.value); markDirty(); }}
-            style={styles.sexCardWrap}
-            pressableStyle={[styles.sexCard, sex === option.value && styles.sexCardSelected]}
-          >
-            <View style={[styles.sexAvatar, { backgroundColor: SEX_META[option.value].tint }]}>
-              <Ionicons name={SEX_META[option.value].icon} size={22} color={SEX_META[option.value].iconColor} />
-            </View>
-            <Text style={[styles.sexLabel, sex === option.value && styles.sexLabelSelected]}>{option.label}</Text>
-            <Text style={styles.sexHint}>{SEX_META[option.value].hint}</Text>
-            {sex === option.value ? <View style={styles.sexCheck}><Ionicons name="checkmark" size={11} color="#FFFFFF" /></View> : null}
-          </SpringPress>
-        ))}
+      <View style={styles.divider} />
+      <View style={styles.sectionHeadingRow}>
+        <View style={styles.sectionIcon}><Ionicons name="lock-closed" size={18} color="#FFFFFF" /></View>
+        <Text style={styles.sectionHeadingLarge}>Visibilità del profilo</Text>
       </View>
-
-      <Text style={styles.label}>Data di nascita</Text>
-      <View style={styles.profileField}>
-        <BirthdayPicker
-          value={birthDate}
-          ageYears={ageYears}
-          onChange={(date) => {
-            setBirthDate(date);
-            markDirty();
-          }}
-          testID="edit-birthday"
-        />
-      </View>
-      {birthDate && ageYears !== null ? (
-        <Text style={styles.ageHint} accessibilityLiveRegion="polite">
-          Età calcolata: {ageLabelFromYears(ageYears)}
-        </Text>
-      ) : (
-        <Text style={styles.ageHint}>
-          Scegli la data sul calendario: l’età si aggiorna da sola.
-        </Text>
-      )}
-
-      <Text style={styles.label}>Taglia</Text>
-      <View style={styles.chips}>
-        {SIZES.map((size) => (
-          <SpringPress
-            key={size}
-            onPress={() => { setSizeLabel(size); markDirty(); }}
-            pressableStyle={[styles.chip, sizeLabel === size && styles.chipActive]}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                sizeLabel === size && styles.chipTextActive,
-              ]}
-            >
-              {size}
-            </Text>
-          </SpringPress>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Peso (kg, facoltativo)</Text>
-      <TextInput
-        value={weightKg}
-        onChangeText={(value) => { setWeightKg(value); markDirty(); }}
-        keyboardType="decimal-pad"
-        placeholder="Es. 12,5"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
-      />
-
-      <Text style={styles.label}>Razza</Text>
-      <View style={styles.breedField}>
-        <BreedPicker
-          value={breedSelection}
-          onChange={(value) => { setBreedSelection(value); markDirty(); }}
-          testID="edit-breed"
-        />
-      </View>
-
-      <Text style={styles.label}>Visibilità profilo</Text>
-      <Text style={styles.visibilityHint}>
-        Privato di default. Il profilo pubblico è opt-in e richiede consenso
-        esplicito (revocabile subito).
-      </Text>
-      <View style={styles.chips}>
+      <View style={styles.visibilityGrid}>
         {(
           [
-            ['private', 'Privato'],
-            ['public', 'Pubblico'],
+            ['private', 'Privato', 'lock-closed'],
+            ['public', 'Pubblico', 'globe-outline'],
           ] as const
-        ).map(([value, label]) => (
+        ).map(([value, label, icon]) => (
           <SpringPress
             key={value}
             accessibilityRole="button"
@@ -563,22 +656,17 @@ export default function DogEditScreen() {
                 markDirty();
               }
             }}
-            pressableStyle={[
-              styles.chip,
-              profileVisibility === value && styles.chipActive,
-            ]}
+            pressableStyle={[styles.visibilityCard, profileVisibility === value && styles.visibilityCardSelected]}
           >
-            <Text
-              style={[
-                styles.chipText,
-                profileVisibility === value && styles.chipTextActive,
-              ]}
-            >
-              {label}
-            </Text>
+            <Ionicons name={icon} size={27} color={profileVisibility === value ? '#FFFFFF' : colors.primary} />
+            <Text style={[styles.visibilityLabel, profileVisibility === value && styles.visibilityLabelSelected]}>{label}</Text>
+            {profileVisibility === value ? <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" /> : null}
           </SpringPress>
         ))}
       </View>
+      <Text style={styles.visibilityCardHint}>
+        Il profilo è privato di default. Per renderlo pubblico serve il tuo consenso, revocabile in qualsiasi momento.
+      </Text>
     </ScreenContainer>
   );
 }
@@ -636,23 +724,94 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
+    paddingTop: 8,
     paddingBottom: spacing.xxxl,
+    backgroundColor: '#FFFEFC',
   },
-  feedback: { color: colors.danger, fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed },
+  referenceHeader: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 46,
+    height: 46,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerBalance: { width: 46, height: 46 },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: colors.text,
+    fontSize: 25,
+    fontWeight: typography.weight.bold,
+    letterSpacing: -0.7,
+  },
+  feedback: { color: colors.danger, fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed, marginBottom: spacing.md },
   saveBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     alignSelf: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: '#E8F8F4',
+    paddingVertical: 4,
+    marginBottom: spacing.xl,
+  },
+  saveBarPress: { alignSelf: 'center' },
+  saveBarError: { paddingHorizontal: spacing.md, borderRadius: radius.full, backgroundColor: '#FFF0F0' },
+  saveBarText: { color: colors.teal, fontSize: 18, fontWeight: typography.weight.medium },
+  saveBarTextError: { color: colors.danger },
+  saveBarHint: { display: 'none' },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  identityPhotoPress: { width: 144, height: 144, alignItems: 'center', justifyContent: 'center' },
+  identityPhotoHalo: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    padding: 5,
+    backgroundColor: '#FFFFFF',
+    ...shadows.raised,
+  },
+  photoBadgeLarge: {
+    position: 'absolute',
+    right: -2,
+    bottom: 2,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.teal,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.raised,
+  },
+  identityDetails: { flex: 1, minWidth: 0 },
+  identityInput: { fontSize: 22, minHeight: 68, marginBottom: 0 },
+  divider: { height: 1, backgroundColor: '#D9E3EF', marginVertical: spacing.lg },
+  sectionHeading: {
+    color: colors.text,
+    fontSize: 22,
+    lineHeight: 30,
+    fontWeight: typography.weight.bold,
     marginBottom: spacing.md,
   },
-  saveBarError: { backgroundColor: '#FFF0F0' },
-  saveBarText: { color: colors.teal, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
-  saveBarHint: { color: colors.textMuted, fontSize: 11 },
+  sectionLabel: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: typography.weight.semibold,
+    marginBottom: spacing.sm,
+  },
+  sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+  sectionIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.teal, alignItems: 'center', justifyContent: 'center' },
+  sectionHeadingLarge: { color: colors.text, fontSize: 24, fontWeight: typography.weight.bold, letterSpacing: -0.5 },
   sectionTitle: {
     fontSize: typography.size.md,
     fontWeight: typography.weight.semibold,
@@ -707,34 +866,34 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   label: {
-    fontSize: typography.size.sm,
+    fontSize: 17,
     fontWeight: typography.weight.semibold,
-    color: '#1A2B48',
+    color: colors.text,
     marginBottom: spacing.xs,
-  },
-  ageHint: {
-    marginTop: -spacing.sm,
-    marginBottom: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * 1.35,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#EDF2F7',
+    borderColor: '#D5E5FB',
     borderRadius: 16,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
-    fontSize: typography.size.md,
-    color: '#1A2B48',
+    fontSize: 19,
+    color: colors.text,
     backgroundColor: '#FFFFFF',
-    minHeight: 52,
+    minHeight: 64,
   },
   breedField: {
     marginBottom: spacing.lg,
   },
   profileField: {
+    marginBottom: spacing.md,
+  },
+  ageHint: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: 17,
+    marginTop: -spacing.md,
     marginBottom: spacing.lg,
   },
   chips: {
@@ -762,35 +921,150 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: typography.weight.semibold,
   },
-  sexCardWrap: { flex: 1, minWidth: 88 },
+  sexGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  sexCardWrap: { flex: 1, minWidth: 0 },
   sexCard: {
-    minHeight: 112,
+    minHeight: 190,
     borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F7F9FC',
-    borderWidth: 1,
-    borderColor: '#E8EEF5',
+    justifyContent: 'flex-end',
+    backgroundColor: '#FFF7F8',
+    borderWidth: 1.5,
+    borderColor: '#FFD7DE',
     position: 'relative',
   },
   sexCardSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FFFB',
     borderColor: colors.teal,
     borderWidth: 2,
   },
-  sexAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sexIllustration: {
+    width: '92%',
+    height: 116,
+    marginBottom: 3,
+  },
+  sexLabel: { color: colors.text, fontSize: 17, fontWeight: typography.weight.bold, marginBottom: 4 },
+  sexLabelSelected: { color: colors.text },
+  radio: {
+    width: 31,
+    height: 31,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: '#D8E4F1',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
-  sexLabel: { color: colors.text, fontSize: 13, fontWeight: typography.weight.semibold },
-  sexLabelSelected: { color: colors.teal },
-  sexHint: { color: colors.textMuted, fontSize: 10, marginTop: 3, textAlign: 'center' },
+  radioSelected: { backgroundColor: colors.teal, borderColor: colors.teal },
+  unknownCard: {
+    minHeight: 70,
+    borderRadius: 17,
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#D8E4F1',
+    backgroundColor: '#FFFFFF',
+    marginBottom: spacing.lg,
+  },
+  unknownCardSelected: { borderColor: colors.teal, backgroundColor: '#F0FFFB' },
+  unknownIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 3,
+    borderColor: '#7C91B3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unknownIconSelected: { borderColor: colors.teal },
+  unknownQuestion: { color: '#7C91B3', fontSize: 26, fontWeight: typography.weight.bold },
+  unknownQuestionSelected: { color: colors.teal },
+  unknownLabel: { flex: 1, color: '#61789C', fontSize: 20, fontWeight: typography.weight.semibold },
+  unknownLabelSelected: { color: colors.text },
+  sizeGrid: { flexDirection: 'row', gap: 6, marginBottom: spacing.xl },
+  sizeCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 65,
+    borderRadius: 16,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    borderWidth: 1.5,
+    borderColor: '#D8E4F1',
+    backgroundColor: '#FFFFFF',
+  },
+  sizeCardActive: { backgroundColor: colors.teal, borderColor: colors.teal },
+  sizeText: { flexShrink: 1, color: '#61789C', fontSize: 12, lineHeight: 15, fontWeight: typography.weight.semibold, textAlign: 'center' },
+  sizeTextActive: { color: '#FFFFFF' },
+  fieldRow: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.md },
+  fieldHalf: { flex: 1, minWidth: 0 },
+  suffixField: {
+    minHeight: 64,
+    borderWidth: 1.5,
+    borderColor: '#D5E5FB',
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  suffixInput: { flex: 1, color: colors.text, fontSize: 20, paddingVertical: 0 },
+  suffix: { color: '#7187AA', fontSize: 18 },
+  voiceGrid: { flexDirection: 'row', gap: 8 },
+  voiceCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 96,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    borderColor: '#BEEBE2',
+    backgroundColor: '#F0FFFB',
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  voiceCardFemale: { borderColor: '#FFD4DD', backgroundColor: '#FFF7F8' },
+  voiceCardSelected: { borderColor: colors.teal, borderWidth: 2 },
+  voiceCopy: { flex: 1, minWidth: 0 },
+  voiceLabel: { color: colors.text, fontSize: 14, fontWeight: typography.weight.bold },
+  voiceLabelSelected: { color: colors.text },
+  voiceHintSmall: { color: '#6F86AA', fontSize: 11, lineHeight: 14, marginTop: 3 },
+  visibilityGrid: { flexDirection: 'row', gap: 8 },
+  visibilityCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 78,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    borderColor: '#D8E4F1',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  visibilityCardSelected: { backgroundColor: colors.teal, borderColor: colors.teal },
+  visibilityLabel: { flexShrink: 1, color: '#61789C', fontSize: 14, fontWeight: typography.weight.bold },
+  visibilityLabelSelected: { color: '#FFFFFF' },
+  visibilityCardHint: {
+    color: '#6980A5',
+    backgroundColor: '#ECFBF5',
+    borderRadius: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing.md,
+  },
   sexCheck: {
     position: 'absolute',
     top: 7,
