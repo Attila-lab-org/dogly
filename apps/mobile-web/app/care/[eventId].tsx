@@ -15,6 +15,8 @@ import { formatCareDate } from '@/features/care/date';
 import {
   completeCareEvent,
   removeCareEvent,
+  postponeCareEvent,
+  skipCareEvent,
   useCareEvents,
   useCareEventsHydrating,
 } from '@/features/care/store';
@@ -84,6 +86,7 @@ export default function CareEventDetailScreen() {
   const hydrating = useCareEventsHydrating(dog.id);
   const event = events.find((item) => item.id === eventId);
   const [working, setWorking] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
 
   if (!event && hydrating) {
     // Apertura da notifica (cold-start): l'idratazione degli eventi è in
@@ -113,8 +116,6 @@ export default function CareEventDetailScreen() {
   const meta = CARE_TYPE_META[event.eventType];
   const completed = event.status === 'COMPLETED';
 
-  const [celebrating, setCelebrating] = useState(false);
-
   const complete = async () => {
     setWorking(true);
     try {
@@ -126,6 +127,18 @@ export default function CareEventDetailScreen() {
       Alert.alert('Non riesco ad aggiornare', 'Riprova tra poco.');
       setWorking(false);
     }
+  };
+
+  const postpone = async () => {
+    setWorking(true);
+    try { await postponeCareEvent(event.id, dog.name); router.replace('/care' as never); }
+    catch { Alert.alert('Non riesco a rimandare', 'Riprova tra poco.'); setWorking(false); }
+  };
+
+  const skip = async () => {
+    setWorking(true);
+    try { await skipCareEvent(event.id); router.replace('/care' as never); }
+    catch { Alert.alert('Non riesco a saltare', 'Riprova tra poco.'); setWorking(false); }
   };
 
   const remove = () => {
@@ -202,6 +215,12 @@ export default function CareEventDetailScreen() {
           loading={working}
           style={styles.primary}
         />
+      ) : null}
+      {!completed ? (
+        <View style={styles.secondaryActions}>
+          <Button title="Rimanda a domani" variant="outline" onPress={postpone} disabled={working} />
+          <Button title="Salta questa volta" variant="outline" onPress={skip} disabled={working} />
+        </View>
       ) : null}
       <Button
         title="Elimina"
@@ -317,6 +336,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.xl,
   },
+  secondaryActions: { gap: spacing.sm, marginTop: spacing.md },
   loading: {
     flex: 1,
     alignItems: 'center',

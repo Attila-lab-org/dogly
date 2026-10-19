@@ -149,7 +149,7 @@ export default function WelcomeScreen() {
           <Text style={styles.wordmark}>DOGLY</Text>
           <Text style={styles.tagline}>Il tuo cane, finalmente capito.</Text>
           <Text style={styles.promise}>
-            Mostra un momento del tuo cane. Ti aiuto a capirlo con parole semplici.
+            Accedi una volta per ritrovare passeggiate, Diario e Social in ogni scheda.
           </Text>
         </Animated.View>
 

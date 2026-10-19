@@ -121,11 +121,11 @@ function diaryWowSnippet(value: string, maxChars = 110): string {
 }
 
 /**
- * DiaryItem API → DiaryEntry UI. FOOD_LABEL non è un dominio del Diario
- * (sez. 5.1: solo behavior + digestive) → restituisce null.
+ * DiaryItem API → DiaryEntry UI. FOOD_LABEL resta nel diario come voce
+ * alimentazione, senza trasformarla in un consiglio clinico.
  */
 export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
-  if (item.domain !== 'BEHAVIOR' && item.domain !== 'DIGESTIVE') return null;
+  if (item.domain !== 'BEHAVIOR' && item.domain !== 'DIGESTIVE' && item.domain !== 'FOOD_LABEL') return null;
   const mediaDeleted =
     item.retention_state === 'DELETED' || item.retention_state === 'DELETE_PENDING';
   const subtitle =
@@ -146,6 +146,8 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
       ? item.status === 'COMPLETED'
         ? probabilisticInsightLabel(item.title)
         : 'Momento video'
+      : item.domain === 'FOOD_LABEL'
+        ? (item.title || 'Alimentazione')
       : item.title === 'Controllo digestione'
         ? 'Osservazione digestiva'
         : simplifyDigestiveOwnerCopy(item.title, {

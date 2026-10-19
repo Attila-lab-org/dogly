@@ -576,7 +576,7 @@ export default function SquirrelGameScreen() {
             </Text>
           ) : (
             <Text style={styles.doneBestPlain}>
-              Accedi per entrare nella classifica del quartiere.
+              Il tuo record personale resta qui.
             </Text>
           )}
           <AvatarActor size={88} expression={score > 5 ? 'celebrate' : 'sad'} photoUri={dog.photoUri} dogName={dog.name} />

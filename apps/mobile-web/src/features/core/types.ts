@@ -69,7 +69,7 @@ export interface LastInsight {
 }
 
 /** Domini rappresentati nella timeline unificata del Diario (sez. 5.1). */
-export type DiaryDomain = 'BEHAVIOR' | 'DIGESTIVE';
+export type DiaryDomain = 'BEHAVIOR' | 'DIGESTIVE' | 'FOOD_LABEL';
 
 export interface DiaryEntry {
   id: string;

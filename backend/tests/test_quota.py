@@ -27,25 +27,16 @@ async def test_reserve_commit_refund_cycle(state: AppState):
     assert ledger.behavior_reserved == 0 and ledger.behavior_used == 1
 
 
-async def test_production_does_not_block_when_purchases_are_closed(
+async def test_production_still_blocks_when_purchases_are_closed(
     state: AppState, monkeypatch: pytest.MonkeyPatch
 ):
-    from app.config import Settings, get_settings
     from app.domains import billing
-
-    monkeypatch.setattr(
-        billing,
-        "_quota_blocks_when_exhausted",
-        lambda: False,
-    )
-    get_settings.cache_clear()
-    monkeypatch.setattr(
-        "app.config.get_settings",
-        lambda: Settings(app_env="production", purchases_enabled=False),
-    )
+    monkeypatch.setattr(billing, "_quota_blocks_when_exhausted", lambda: True)
     quota = QuotaService(state.store)
     user = "user-quota-beta"
-    for _ in range(6):
+    for _ in range(3):
+        await quota.reserve(user, AnalysisDomain.BEHAVIOR)
+    with pytest.raises(QuotaExceeded):
         await quota.reserve(user, AnalysisDomain.BEHAVIOR)
 
 

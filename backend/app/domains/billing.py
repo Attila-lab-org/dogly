@@ -21,13 +21,12 @@ from app.domains.repository import (
 
 
 def _quota_blocks_when_exhausted() -> bool:
-    """Enforce hard limits only when the user can actually upgrade."""
-    from app.config import get_settings
+    """Quota exhaustion is always a hard stop.
 
-    settings = get_settings()
-    if settings.purchases_enabled:
-        return True
-    return settings.app_env.strip().lower() not in {"staging", "production"}
+    Purchase availability is a product concern; it must never turn a quota
+    check into an unlimited free allowance.
+    """
+    return True
 
 
 class QuotaExceeded(ApiError):

@@ -35,6 +35,7 @@ import { purchasesEnabled } from '@/mocks/entitlements';
 import { SpringPress } from '@/components/pressSpring';
 import { usePressSpring } from '@/components/pressSpring';
 import { PageGuide } from '@/features/guide/PageGuide';
+import { WalkLaunchCard } from '@/features/walk/WalkLaunchCard';
 import {
   hydrateReadNotificationKeys,
   notificationKey,
@@ -222,6 +223,8 @@ export default function HomeScreen() {
           <Animated.View entering={sceneEnter(90)}>
             <HomeNextAction dogId={dog.id} dogName={dog.name} />
           </Animated.View>
+
+          <WalkLaunchCard dogName={dog.name} />
 
           <Animated.View entering={sceneEnter(180)}>
             <View style={styles.sectionHeader}>

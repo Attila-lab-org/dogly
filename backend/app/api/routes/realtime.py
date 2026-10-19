@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from typing import Annotated, Any
@@ -572,13 +573,15 @@ async def create_realtime_turn(
                         state.engine, user_id=user_id, event_id=body.event_id
                     ),
                 )
-            history = await realtime_db.load_history_db(
-                state.engine, session_id=session_id, user_id=user_id
-            )
-            previous_memory = await realtime_db.load_conversation_memory_db(
-                state.engine,
-                user_id=user_id,
-                dog_id=str(session["dog_id"]),
+            history, previous_memory = await asyncio.gather(
+                realtime_db.load_history_db(
+                    state.engine, session_id=session_id, user_id=user_id
+                ),
+                realtime_db.load_conversation_memory_db(
+                    state.engine,
+                    user_id=user_id,
+                    dog_id=str(session["dog_id"]),
+                ),
             )
             history = (
                 history

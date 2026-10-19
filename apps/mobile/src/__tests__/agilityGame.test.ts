@@ -52,17 +52,17 @@ function steppedRng(start = 0.42, step = 0.37): () => number {
 afterEach(() => setAgilityStorageBackend(null));
 
 describe('speed ramp (rebalanced: easier, lives instead of timer)', () => {
-  it('ramps 24 → 40 u/s over 90s and clamps', () => {
-    expect(speedAt(0)).toBe(24);
-    expect(speedAt(45_000)).toBe(32);
-    expect(speedAt(90_000)).toBe(40);
-    expect(speedAt(-5)).toBe(24);
-    expect(speedAt(500_000)).toBe(40);
+  it('ramps 20 → 34 u/s over 90s and clamps', () => {
+    expect(speedAt(0)).toBe(20);
+    expect(speedAt(45_000)).toBe(27);
+    expect(speedAt(90_000)).toBe(34);
+    expect(speedAt(-5)).toBe(20);
+    expect(speedAt(500_000)).toBe(34);
   });
 
   it('keeps the safety gap +15% wider than before', () => {
-    expect(minGapMs(0)).toBe(1210);
-    expect(minGapMs(AGILITY_MAX_MS)).toBe(805);
+    expect(minGapMs(0)).toBe(1500);
+    expect(minGapMs(AGILITY_MAX_MS)).toBe(1000);
   });
 });
 
@@ -94,10 +94,10 @@ describe('jump physics', () => {
   it('parabola: 0 at start/end, peak in the middle', () => {
     expect(jumpHeightAt(null, 100)).toBe(0);
     expect(jumpHeightAt(1000, 1000)).toBe(0);
-    expect(jumpHeightAt(1000, 1000 + 650)).toBe(0);
-    const mid = jumpHeightAt(1000, 1000 + 325);
-    expect(mid).toBeCloseTo(26, 0);
-    const quarter = jumpHeightAt(1000, 1000 + 162.5);
+    expect(jumpHeightAt(1000, 1000 + 760)).toBe(0);
+    const mid = jumpHeightAt(1000, 1000 + 380);
+    expect(mid).toBeCloseTo(36, 0);
+    const quarter = jumpHeightAt(1000, 1000 + 190);
     expect(quarter).toBeGreaterThan(0);
     expect(quarter).toBeLessThan(mid);
   });
@@ -123,11 +123,18 @@ describe('collisions', () => {
     expect(collides(0, cones, now)).toBe(true);
   });
 
-  it('tunnel is reversed: safe grounded, crash when airborne', () => {
+  it('keeps a vertical jump safe while the dog is descending over the obstacle', () => {
+    const hurdle = at('hurdle', 0);
+    const now = hitTime(0);
+    expect(collides(0, hurdle, now, now - 500)).toBe(false);
+    expect(collides(0, hurdle, now, now - 760)).toBe(true);
+  });
+
+  it('tunnel follows the same jump rule as every other obstacle', () => {
     const tunnel = at('tunnel', 0);
     const now = hitTime(0);
-    expect(collides(0, tunnel, now)).toBe(false);
-    expect(collides(10, tunnel, now)).toBe(true);
+    expect(collides(0, tunnel, now)).toBe(true);
+    expect(collides(OBSTACLE_DIMS.tunnel.h + 2, tunnel, now)).toBe(false);
   });
 
   it('cleared means fully past the dog', () => {
@@ -209,12 +216,12 @@ describe('bonus bones and near-miss', () => {
     expect(boneCollected(14, 20, 20)).toBe(false);
   });
 
-  it('near-miss triggers only within 2u of the obstacle top, never on tunnel', () => {
+  it('near-miss triggers only within 2u of the obstacle top', () => {
     expect(isNearMiss(OBSTACLE_DIMS.hurdle.h + 1, 'hurdle')).toBe(true);
     expect(isNearMiss(OBSTACLE_DIMS.hurdle.h + 4, 'hurdle')).toBe(false);
     expect(isNearMiss(0, 'hurdle')).toBe(false);
     expect(isNearMiss(OBSTACLE_DIMS.cones.h + 1, 'cones')).toBe(true);
-    expect(isNearMiss(OBSTACLE_DIMS.cones.h + 1, 'tunnel')).toBe(false);
+    expect(isNearMiss(OBSTACLE_DIMS.tunnel.h + 1, 'tunnel')).toBe(true);
   });
 });
 

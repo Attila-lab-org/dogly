@@ -123,11 +123,18 @@ describe('collisions', () => {
     expect(collides(0, cones, now)).toBe(true);
   });
 
-  it('tunnel is reversed: safe grounded, crash when airborne', () => {
+  it('keeps a vertical jump safe while the dog is descending over the obstacle', () => {
+    const hurdle = at('hurdle', 0);
+    const now = hitTime(0);
+    expect(collides(0, hurdle, now, now - 500)).toBe(false);
+    expect(collides(0, hurdle, now, now - 760)).toBe(true);
+  });
+
+  it('tunnel follows the same jump rule as every other obstacle', () => {
     const tunnel = at('tunnel', 0);
     const now = hitTime(0);
-    expect(collides(0, tunnel, now)).toBe(false);
-    expect(collides(10, tunnel, now)).toBe(true);
+    expect(collides(0, tunnel, now)).toBe(true);
+    expect(collides(OBSTACLE_DIMS.tunnel.h + 2, tunnel, now)).toBe(false);
   });
 
   it('cleared means fully past the dog', () => {
@@ -209,12 +216,12 @@ describe('bonus bones and near-miss', () => {
     expect(boneCollected(14, 20, 20)).toBe(false);
   });
 
-  it('near-miss triggers only within 2u of the obstacle top, never on tunnel', () => {
+  it('near-miss triggers only within 2u of the obstacle top', () => {
     expect(isNearMiss(OBSTACLE_DIMS.hurdle.h + 1, 'hurdle')).toBe(true);
     expect(isNearMiss(OBSTACLE_DIMS.hurdle.h + 4, 'hurdle')).toBe(false);
     expect(isNearMiss(0, 'hurdle')).toBe(false);
     expect(isNearMiss(OBSTACLE_DIMS.cones.h + 1, 'cones')).toBe(true);
-    expect(isNearMiss(OBSTACLE_DIMS.cones.h + 1, 'tunnel')).toBe(false);
+    expect(isNearMiss(OBSTACLE_DIMS.tunnel.h + 1, 'tunnel')).toBe(true);
   });
 });
 

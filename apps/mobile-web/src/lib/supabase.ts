@@ -9,20 +9,33 @@ import {
 } from '../features/auth/env';
 
 /**
- * Supabase Auth storage → SecureStore nativo / sessionStorage web (Spec V1
- * sez. 5.3). Valori lunghi spezzati in chunk (limite SecureStore ~2KB).
+ * Supabase Auth storage → SecureStore nativo / localStorage web. Sul web la
+ * sessione deve restare disponibile tra schede e ricaricamenti, così l'accesso
+ * non ricompare ogni volta che si apre una pagina nuova. Valori lunghi spezzati
+ * in chunk (limite SecureStore ~2KB).
  */
 
 const CHUNK = 1800;
 
 const webAuthStorage = {
   async getItem(key: string): Promise<string | null> {
-    return globalThis.sessionStorage?.getItem(key) ?? null;
+    const local = globalThis.localStorage?.getItem(key);
+    if (local !== null && local !== undefined) return local;
+
+    // Migrazione trasparente delle sessioni create dalle versioni precedenti.
+    const legacy = globalThis.sessionStorage?.getItem(key);
+    if (legacy !== null && legacy !== undefined) {
+      globalThis.localStorage?.setItem(key, legacy);
+      return legacy;
+    }
+    return null;
   },
   async setItem(key: string, value: string): Promise<void> {
-    globalThis.sessionStorage?.setItem(key, value);
+    globalThis.localStorage?.setItem(key, value);
+    globalThis.sessionStorage?.removeItem(key);
   },
   async removeItem(key: string): Promise<void> {
+    globalThis.localStorage?.removeItem(key);
     globalThis.sessionStorage?.removeItem(key);
   },
 };

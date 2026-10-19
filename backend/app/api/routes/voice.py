@@ -41,7 +41,7 @@ async def transcribe_voice(
                 6,
             ),
         ),
-        operation="voice.transcribe",
+        operation="owner_story.transcribe",
         domain=AnalysisDomain.OWNER_STORY,
         event_id=new_id(),
         user_id=user_id,

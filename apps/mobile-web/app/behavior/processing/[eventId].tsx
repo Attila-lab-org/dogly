@@ -162,7 +162,7 @@ export default function BehaviorProcessingScreen() {
               ...(sessionId ? { sessionId } : {}),
             },
           } as never),
-        850,
+        250,
       );
     }
   }, [returnTo, sessionId, useApi, query.data, router]);

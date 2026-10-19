@@ -355,6 +355,7 @@ export default function DiaryScreen() {
             La storia delle sue giornate, una pagina alla volta.
           </Text>
 
+
           <View style={styles.search}>
             <Ionicons name="search" size={18} color={colors.iconMuted} />
             <TextInput

@@ -26,6 +26,7 @@ import {
   type LocationFailureReason,
   type NearbyPlace,
 } from '@/features/places/api';
+import { WalkParkSheet } from '@/features/walk/WalkParkSheet';
 
 function mapsSearchUrl(query: string, coords?: { lat: number; lng: number } | null) {
   if (coords) {
@@ -75,6 +76,7 @@ export function NearbyPlacesSection() {
     useState<LocationFailureReason | null>(null);
   const [locationTick, setLocationTick] = useState(0);
   const [placesTimedOut, setPlacesTimedOut] = useState(false);
+  const [selectedPark, setSelectedPark] = useState<NearbyPlace | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -225,7 +227,7 @@ export function NearbyPlacesSection() {
             style={styles.placesScroller}
           >
             {previewPlaces.map((place) => (
-              <PlaceCard key={place.id} place={place} />
+              <PlaceCard key={place.id} place={place} onSelect={place.kind === 'PARK' ? setSelectedPark : undefined} />
             ))}
           </ScrollView>
           <SpringPress
@@ -244,11 +246,12 @@ export function NearbyPlacesSection() {
           </SpringPress>
         </View>
       )}
+      <WalkParkSheet park={selectedPark} onClose={() => setSelectedPark(null)} />
     </View>
   );
 }
 
-function PlaceCard({ place }: { place: NearbyPlace }) {
+function PlaceCard({ place, onSelect }: { place: NearbyPlace; onSelect?: (place: NearbyPlace) => void }) {
   const isVet = place.kind === 'VET';
   const phoneHref = place.phone ? `tel:${place.phone}` : null;
   return (
@@ -256,7 +259,7 @@ function PlaceCard({ place }: { place: NearbyPlace }) {
       <SpringPress
         accessibilityRole="button"
         accessibilityLabel={`Apri ${place.name} sulla mappa`}
-        onPress={() => void Linking.openURL(place.maps_url)}
+        onPress={() => onSelect ? onSelect(place) : void Linking.openURL(place.maps_url)}
         pressableStyle={styles.placeMain}
         scaleTo={0.98}
       >

@@ -535,7 +535,7 @@ export default function AgilityGameScreen() {
           if (
             obstacle.spawnAtMs <= now &&
             !clearedIds.current.has(obstacle.id) &&
-            collides(dogY, obstacle, now)
+            collides(dogY, obstacle, now, jumpStart.current)
           ) {
             clearedIds.current.add(obstacle.id);
             lastHitAt.current = now;
@@ -653,7 +653,7 @@ export default function AgilityGameScreen() {
           <Text style={styles.introTitle}>Corri e salta!</Text>
           <Text style={styles.introText}>
             Muretti e birilli si saltano con un tap.{'\n'}
-            Il tunnel NO: ci passi dentro da solo.{'\n'}
+            Anche il tunnel si supera con un salto.{'\n'}
             Raccogli gli ossicini in salto: valgono punti!
           </Text>
           {best > 0 ? (
@@ -809,7 +809,7 @@ export default function AgilityGameScreen() {
             </Text>
           ) : (
             <Text style={styles.doneBestPlain}>
-              Accedi per entrare nella classifica del quartiere.
+              Il tuo record personale resta qui.
             </Text>
           )}
           <AvatarActor size={88} expression={score > 8 ? 'celebrate' : 'sad'} photoUri={dog.photoUri} dogName={dog.name} />

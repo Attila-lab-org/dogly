@@ -16,11 +16,12 @@ from app.providers.openai_reasoner import _estimate_openai_cost
 
 
 async def request_personal_json(settings, *, task: str, payload: dict,
-                                image_url: str | None = None) -> tuple[dict, ProviderUsage]:
+                                image_url: str | None = None,
+                                operation: str = "reasoner.personal") -> tuple[dict, ProviderUsage]:
     if settings.ai_kill_switch or settings.reasoner_kill_switch or not settings.openai_api_key:
         raise ApiError(ErrorCode.PROCESSING_FAILED, "DOGly non riesce ad analizzare ora. Riprova.", retryable=True)
     await check_daily_budget(get_engine(settings), role="reasoner",
-                            budget_usd=settings.reasoner_budget_usd_per_day, operation=task)
+                            budget_usd=settings.reasoner_budget_usd_per_day, operation=operation)
     started = time.perf_counter()
     content: Any = json.dumps(jsonable_encoder({"task": task, **payload}), ensure_ascii=False)
     if image_url:
@@ -59,7 +60,8 @@ async def request_personal_json(settings, *, task: str, payload: dict,
 
 async def recognize_attachment(settings, *, image_url: str, user_text: str) -> tuple[dict, ProviderUsage]:
     raw, usage = await request_personal_json(settings, task="Descrivi il soggetto realmente visibile senza diagnosi o consigli. Restituisci JSON con description (stringa), domains (lista tra BEHAVIOR, DIGESTIVE, NUTRITION, CARE, GENERAL). Serve solo a recuperare il contesto pertinente.",
-        payload={"owner_message": user_text}, image_url=image_url)
+        payload={"owner_message": user_text}, image_url=image_url,
+        operation="realtime.attachment_recognition")
     if not isinstance(raw.get("description"), str) or not raw["description"].strip():
         raise ApiError(ErrorCode.PROCESSING_FAILED, "Non riesco a leggere la foto. Riprova.", retryable=True)
     allowed = {"BEHAVIOR", "DIGESTIVE", "NUTRITION", "CARE", "GENERAL"}

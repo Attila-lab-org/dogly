@@ -62,8 +62,8 @@ describe('mapDiaryItemToEntry', () => {
     ).toBe(true);
   });
 
-  it('FOOD_LABEL non è un dominio del Diario → null', () => {
-    expect(mapDiaryItemToEntry(diaryItem({ domain: 'FOOD_LABEL' }))).toBeNull();
+  it('FOOD_LABEL entra nel Diario come voce alimentazione', () => {
+    expect(mapDiaryItemToEntry(diaryItem({ domain: 'FOOD_LABEL' }))?.domain).toBe('FOOD_LABEL');
   });
 
   it('stato non completato → sottotitolo di stato onesto', () => {

@@ -11,8 +11,10 @@ export const AGILITY_FIELD_W = 100;
 export const DOG_X = 18;
 export const DOG_W = 8;
 export const DOG_H = 10;
-export const JUMP_MS = 650;
-export const JUMP_HEIGHT_U = 26;
+// Salto più alto e leggibile: il giocatore ha una finestra reale per superare
+// muretti e birilli anche su schermi piccoli o con un tap leggermente tardivo.
+export const JUMP_MS = 760;
+export const JUMP_HEIGHT_U = 36;
 
 export type ObstacleKind = 'hurdle' | 'cones' | 'tunnel';
 
@@ -37,21 +39,21 @@ export interface AgilityObstacle {
 }
 
 /**
- * Velocità smooth: 24 → 40 u/s su 90s (ribilanciata: il gioco deve durare
- * mediamente 60-90s anche a chi è alle prime partite).
+ * Velocità smooth: 20 → 34 u/s su 90s. Il mondo cresce con calma, così il
+ * salto resta leggibile anche alle prime partite.
  */
 export function speedAt(elapsedMs: number): number {
   const progress = Math.min(1, Math.max(0, elapsedMs / 90_000));
-  return 24 + progress * 16;
+  return 20 + progress * 14;
 }
 
 /**
- * Gap minimo di sicurezza tra due spawn (in ms di percorrenza alla
- * velocità corrente): 1210 → 805 ms (+15% dopo il ribilanciamento).
+ * Gap minimo di sicurezza tra due spawn: più spazio tra gli ostacoli e una
+ * progressione che diventa impegnativa senza diventare frustrante.
  */
 export function minGapMs(elapsedMs: number): number {
   const progress = Math.min(1, Math.max(0, elapsedMs / AGILITY_MAX_MS));
-  return Math.round(1210 - progress * 405);
+  return Math.round(1500 - progress * 500);
 }
 
 function rollKind(roll: number): ObstacleKind {
@@ -68,11 +70,17 @@ export function buildAgilitySchedule(
 ): AgilityObstacle[] {
   const obstacles: AgilityObstacle[] = [];
   // Nessun ostacolo nei primi 2 secondi: il giocatore prende il ritmo.
-  let t = options.startAtMs ?? 2100;
+  // Una partenza più ampia lascia il tempo di capire il gesto prima del primo ostacolo.
+  let t = options.startAtMs ?? 3000;
   let id = options.startId ?? 0;
   while (t < durationMs - 600) {
     const speed = speedAt(t);
-    obstacles.push({ id, kind: rollKind(rng()), spawnAtMs: Math.round(t), speed });
+    // Nei primi passaggi insegniamo il gesto: il tunnel arriva dopo, così un
+    // tap di prova non viene punito da una regola ancora non presentata.
+    const kind = obstacles.length < 3
+      ? (rng() < 0.55 ? 'hurdle' : 'cones')
+      : rollKind(rng());
+    obstacles.push({ id, kind, spawnAtMs: Math.round(t), speed });
     id += 1;
     const gap = minGapMs(t) + rng() * 650;
     t += gap;
@@ -99,9 +107,8 @@ export function isJumping(jumpStartMs: number | null, nowMs: number): boolean {
 }
 
 /**
- * Collisione AABB: ostacolo nel range del cane e cane "basso" per
- * muretto/birilli; per il tunnel vale l'opposto: se sei in aria mentre
- * lo attraversi, sbatti la testa.
+ * Collisione AABB: tutti gli ostacoli si superano con lo stesso gesto,
+ * il salto. Non esistono più regole separate per il tunnel.
  */
 export const HITBOX_MARGIN_U = 1.2;
 
@@ -109,14 +116,17 @@ export function collides(
   dogY: number,
   obstacle: AgilityObstacle,
   nowMs: number,
+  jumpStartMs: number | null = null,
 ): boolean {
   const spec = OBSTACLE_DIMS[obstacle.kind];
   const x = obstacleX(obstacle, nowMs);
   const overlapX =
     x < DOG_X + DOG_W - HITBOX_MARGIN_U && x + spec.w > DOG_X + HITBOX_MARGIN_U;
   if (!overlapX) return false;
-  if (obstacle.kind === 'tunnel') {
-    return dogY > 2;
+  // Un salto è un'azione unica: una volta partito, il cane supera l'ostacolo
+  // per tutta la parabola e non può "atterrare" sopra mentre sta scendendo.
+  if (jumpStartMs !== null && nowMs - jumpStartMs >= 0 && nowMs - jumpStartMs < JUMP_MS) {
+    return false;
   }
   return dogY < spec.h;
 }
@@ -196,7 +206,6 @@ export function boneCollected(dogY: number, boneY: number, boneX: number): boole
  * contatto — il cane era in aria ma di pochissimo.
  */
 export function isNearMiss(dogYAtClear: number, kind: ObstacleKind): boolean {
-  if (kind === 'tunnel') return false;
   const margin = dogYAtClear - OBSTACLE_DIMS[kind].h;
   return dogYAtClear > 0 && margin <= 2;
 }
@@ -230,7 +239,7 @@ export function agilityEndgameLine(score: number): string {
 /** Telecronaca di Oreo. */
 export const AGILITY_START_LINE = 'Al via! Corri con me!';
 export const AGILITY_JUMP_LINES: readonly string[] = ['Salto!', 'Via!', 'Su!'];
-export const AGILITY_TUNNEL_LINE = 'Il tunnel: si passa dentro!';
+export const AGILITY_TUNNEL_LINE = 'Il tunnel: si salta!';
 export const AGILITY_COMBO_LINE = 'Combo x2!';
 
 /* ------------------------------------------------------------------ */

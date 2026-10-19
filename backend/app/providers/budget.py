@@ -30,6 +30,27 @@ class BudgetExceededError(RuntimeError):
         )
 
 
+# A role budget is a shared daily cap. Keep the mapping explicit so a new
+# provider operation cannot silently create a second, unmetered allowance.
+ROLE_OPERATIONS: dict[str, tuple[str, ...]] = {
+    "observer": ("observer.observe",),
+    "reasoner": (
+        "reasoner.interpret",
+        "reasoner.refine_context",
+        "reasoner.personal",
+        "digestive.reason",
+        "realtime.attachment_recognition",
+        "realtime.chat",
+    ),
+    "digestive_vision": (
+        "digestive_vision.observe_stool",
+        "digestive_vision.verify_anomaly_focus",
+    ),
+    "owner_transcription": ("owner_story.transcribe", "voice.transcribe"),
+    "realtime_live": ("realtime.live",),
+}
+
+
 async def check_daily_budget(
     engine: AsyncEngine | None,
     *,
@@ -48,17 +69,20 @@ async def check_daily_budget(
             text("select pg_advisory_xact_lock(hashtext('ai_budget:' || :role))"),
             {"role": role},
         )
+        operations = tuple(dict.fromkeys((*ROLE_OPERATIONS.get(role, ()), operation)))
+        placeholders = ", ".join(f":operation_{index}" for index in range(len(operations)))
+        params = {f"operation_{index}": value for index, value in enumerate(operations)}
         spent = (
             await conn.execute(
                 text(
-                    """
+                    f"""
                     select coalesce(sum(cost_usd), 0.0)
                     from internal.ai_cost_events
-                    where operation = :operation
+                    where operation in ({placeholders})
                       and created_at >= current_date
                     """
                 ),
-                {"operation": operation},
+                params,
             )
         ).scalar()
     if (spent or 0.0) >= budget_usd:

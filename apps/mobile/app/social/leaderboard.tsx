@@ -227,7 +227,7 @@ export default function LeaderboardScreen() {
       {!enabled ? (
         <View style={styles.emptyCard}>
           <AvatarActor size={92} expression="happy" photoUri={dog.photoUri} dogName={dog.name} />
-          <Text style={styles.emptyTitle}>Accedi per giocare la classifica</Text>
+          <Text style={styles.emptyTitle}>La classifica si apre con il tuo primo record</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Gioca a ${GAME_LABELS[game]}`}

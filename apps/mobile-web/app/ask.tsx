@@ -290,7 +290,7 @@ export default function AskScreen() {
           if (pendingAnalysis.source === 'digestive') {
             const event = await getDigestiveEvent(pendingAnalysis.eventId);
             if (!isTerminalDigestiveStatus(event.status)) {
-              await new Promise((r) => setTimeout(r, 2000));
+              await new Promise((r) => setTimeout(r, 1000));
               continue;
             }
             markDigestiveUploadCompletedForEvent(pendingAnalysis.eventId);
@@ -320,7 +320,7 @@ export default function AskScreen() {
           } else {
             const event = await getBehaviorEvent(pendingAnalysis.eventId);
             if (!isTerminalBehaviorStatus(event.status)) {
-              await new Promise((r) => setTimeout(r, 2000));
+              await new Promise((r) => setTimeout(r, 1000));
               continue;
             }
             markUploadCompletedForEvent(pendingAnalysis.eventId);

@@ -68,6 +68,7 @@ async def model_digestive_result(state, *, event, digestive_context):
         state.settings,
         task="Interpreta l'osservazione per questo cane, con parole semplici",
         payload=payload,
+        operation="digestive.reason",
     )
     result = ModelDigestiveResult.model_validate(raw)
     result.reasoning_version = VERSION

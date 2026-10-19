@@ -20,6 +20,7 @@ import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogHero } from '@/features/home/DogHero';
 import { HomeNextAction } from '@/features/home/HomeNextAction';
+import { WalkLaunchCard } from '@/features/walk/WalkLaunchCard';
 import { DiaryVideoPreview } from '@/features/home/DiaryVideoPreview';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCareEvents } from '@/features/care/store';
@@ -218,6 +219,8 @@ export default function HomeScreen() {
           <Animated.View entering={sceneEnter(90)}>
             <HomeNextAction dogId={dog.id} dogName={dog.name} />
           </Animated.View>
+
+          <WalkLaunchCard dogName={dog.name} />
 
           <Animated.View entering={sceneEnter(180)}>
             <View style={styles.sectionHeader}>

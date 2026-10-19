@@ -125,6 +125,9 @@ function entryStatusBadge(entry: DiaryEntry): StatusBadge | null {
 
 function entryIconTone(entry: DiaryEntry): IconTone {
   const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
+  if (entry.domain === 'FOOD_LABEL') {
+    return { name: 'paw', bg: '#FFF1D6', fg: '#C56A08' };
+  }
   if (entry.domain === 'DIGESTIVE') {
     if (/morbid|variazion|flag|controll|attenzione/i.test(haystack)) {
       return { name: 'alert', bg: '#FFF1EE', fg: '#EA580C' };
@@ -356,6 +359,7 @@ export default function DiaryScreen() {
             La storia delle sue giornate, una pagina alla volta.
           </Text>
 
+
           <View style={styles.search}>
             <Ionicons name="search" size={18} color={colors.iconMuted} />
             <TextInput
@@ -433,14 +437,16 @@ export default function DiaryScreen() {
                     ? `Il diario di ${dog.name} aspetta la prima storia`
                     : filter === 'BEHAVIOR'
                       ? 'Nessun momento osservato, per ora'
-                      : 'Nessun controllo digestione nel diario'
+                      : filter === 'DIGESTIVE'
+                        ? 'Nessun controllo digestione nel diario'
+                        : 'Nessun momento nel diario'
               }
               message={
                 debouncedSearch
                   ? 'Prova con un’altra parola, oppure cancella la ricerca.'
                   : filter === 'DIGESTIVE'
                     ? `In chat possiamo guardare insieme la digestione di ${dog.name}: qui resterà il riassunto.`
-                    : filter === 'BEHAVIOR'
+                  : filter === 'BEHAVIOR'
                       ? `In chat mandami un video di ${dog.name}: qui resterà il momento, in parole semplici.`
                       : `Parliamone in chat: i momenti di ${dog.name} resteranno qui, leggeri.`
               }

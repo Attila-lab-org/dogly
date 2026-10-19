@@ -320,6 +320,56 @@ export async function completeCareEvent(
   }
 }
 
+/** Rimanda un appuntamento mantenendo la ricorrenza e il promemoria. */
+export async function postponeCareEvent(
+  eventId: string,
+  dogName: string,
+  days = 1,
+): Promise<void> {
+  const event = careEventById(eventId);
+  if (!event || event.status !== 'SCHEDULED') return;
+  const nextDate = new Date(event.scheduledAt);
+  nextDate.setDate(nextDate.getDate() + days);
+  const previous = event;
+  await cancelCareReminder(event.notificationId);
+  events = events.map((item) => item.id === eventId ? { ...item, scheduledAt: nextDate.toISOString(), notificationId: null, updatedAt: new Date().toISOString() } : item);
+  emit();
+  try {
+    if ((await getAccessToken()) && isPersistedId(eventId)) {
+      await api.patch(`/v1/care-events/${eventId}`, { scheduled_at: nextDate.toISOString() });
+    }
+    const notificationId = await scheduleCareReminder({ ...previous, scheduledAt: nextDate.toISOString(), notificationId: null }, dogName);
+    if (notificationId) {
+      events = events.map((item) => item.id === eventId ? { ...item, notificationId } : item);
+      emit();
+    }
+  } catch (err) {
+    events = events.map((item) => item.id === eventId ? previous : item);
+    emit();
+    if (previous.reminderEnabled) await scheduleCareReminder(previous, dogName);
+    throw err;
+  }
+}
+
+/** Salta una scadenza conservandola nello storico come annullata. */
+export async function skipCareEvent(eventId: string): Promise<void> {
+  const event = careEventById(eventId);
+  if (!event || event.status !== 'SCHEDULED') return;
+  await cancelCareReminder(event.notificationId);
+  const updatedAt = new Date().toISOString();
+  events = events.map((item) => item.id === eventId ? { ...item, status: 'CANCELLED', notificationId: null, updatedAt } : item);
+  emit();
+  if ((await getAccessToken()) && isPersistedId(eventId)) {
+    try {
+      await api.patch(`/v1/care-events/${eventId}`, { status: 'CANCELLED' });
+    } catch (err) {
+      events = events.map((item) => item.id === eventId ? event : item);
+      emit();
+      throw err;
+    }
+  }
+}
+
 /**
  * Rimuove ottimisticamente l'evento + cancella il promemoria, poi
  * sincronizza col backend. Se il remoto fallisce, fa rollback

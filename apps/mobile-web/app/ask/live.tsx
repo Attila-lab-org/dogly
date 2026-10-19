@@ -42,6 +42,10 @@ function formatClock(totalSeconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const LIVE_LIMIT_SECONDS = 15 * 60;
+const LIVE_SILENCE_TIMEOUT_SECONDS = 60;
+const LIVE_SPEECH_LEVEL_THRESHOLD = 0.035;
+
 export default function AskLiveScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
@@ -56,6 +60,9 @@ export default function AskLiveScreen() {
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
   const startingRef = useRef(false);
   const mountedRef = useRef(true);
+  const finishRef = useRef<((note?: string) => Promise<void>) | null>(null);
+  const finishingRef = useRef(false);
+  const silentSecondsRef = useRef(0);
   const level = useSharedValue(0);
   const breath = useSharedValue(1);
   const ringWarn = useSharedValue(0);
@@ -71,17 +78,34 @@ export default function AskLiveScreen() {
 
   useEffect(() => {
     if (phase !== 'live') return;
+    silentSecondsRef.current = 0;
     const timer = setInterval(() => {
       const mic = handleRef.current?.getAnalyserLevel() ?? 0;
       level.value = withTiming(mic, { duration: 80 });
-      setElapsedSeconds((current) => current + 1);
+      if (mic >= LIVE_SPEECH_LEVEL_THRESHOLD) {
+        silentSecondsRef.current = 0;
+      } else {
+        silentSecondsRef.current += 1;
+        if (silentSecondsRef.current >= LIVE_SILENCE_TIMEOUT_SECONDS) {
+          void finishRef.current?.('Live terminato dopo 1 minuto di silenzio.');
+          return;
+        }
+      }
+      setElapsedSeconds((current) => {
+        const next = current + 1;
+        if (next >= LIVE_LIMIT_SECONDS) {
+          void finishRef.current?.('Live ha raggiunto il limite di 15 minuti.');
+        }
+        return next;
+      });
     }, 1000);
     return () => clearInterval(timer);
   }, [phase, level]);
 
   const finish = useCallback(
     async (note?: string) => {
-      if (phase === 'ending') return;
+      if (phase === 'ending' || finishingRef.current) return;
+      finishingRef.current = true;
       setPhase('ending');
       handleRef.current?.stop();
       handleRef.current = null;
@@ -101,6 +125,7 @@ export default function AskLiveScreen() {
     },
     [phase, router],
   );
+  finishRef.current = finish;
 
   const startLive = useCallback(async () => {
     if (startingRef.current || handleRef.current) return;
@@ -109,6 +134,8 @@ export default function AskLiveScreen() {
     const liveSessionKey = `live-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     setError(null);
     setElapsedSeconds(0);
+    finishingRef.current = false;
+    silentSecondsRef.current = 0;
     setConn('connecting');
     setPhase('live');
     try {

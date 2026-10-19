@@ -107,9 +107,8 @@ export function isJumping(jumpStartMs: number | null, nowMs: number): boolean {
 }
 
 /**
- * Collisione AABB: ostacolo nel range del cane e cane "basso" per
- * muretto/birilli; per il tunnel vale l'opposto: se sei in aria mentre
- * lo attraversi, sbatti la testa.
+ * Collisione AABB: tutti gli ostacoli si superano con lo stesso gesto,
+ * il salto. Non esistono più regole separate per il tunnel.
  */
 export const HITBOX_MARGIN_U = 1.2;
 
@@ -117,14 +116,17 @@ export function collides(
   dogY: number,
   obstacle: AgilityObstacle,
   nowMs: number,
+  jumpStartMs: number | null = null,
 ): boolean {
   const spec = OBSTACLE_DIMS[obstacle.kind];
   const x = obstacleX(obstacle, nowMs);
   const overlapX =
     x < DOG_X + DOG_W - HITBOX_MARGIN_U && x + spec.w > DOG_X + HITBOX_MARGIN_U;
   if (!overlapX) return false;
-  if (obstacle.kind === 'tunnel') {
-    return dogY > 2;
+  // Un salto è un'azione unica: una volta partito, il cane supera l'ostacolo
+  // per tutta la parabola e non può "atterrare" sopra mentre sta scendendo.
+  if (jumpStartMs !== null && nowMs - jumpStartMs >= 0 && nowMs - jumpStartMs < JUMP_MS) {
+    return false;
   }
   return dogY < spec.h;
 }
@@ -204,7 +206,6 @@ export function boneCollected(dogY: number, boneY: number, boneX: number): boole
  * contatto — il cane era in aria ma di pochissimo.
  */
 export function isNearMiss(dogYAtClear: number, kind: ObstacleKind): boolean {
-  if (kind === 'tunnel') return false;
   const margin = dogYAtClear - OBSTACLE_DIMS[kind].h;
   return dogYAtClear > 0 && margin <= 2;
 }
@@ -238,7 +239,7 @@ export function agilityEndgameLine(score: number): string {
 /** Telecronaca di Oreo. */
 export const AGILITY_START_LINE = 'Al via! Corri con me!';
 export const AGILITY_JUMP_LINES: readonly string[] = ['Salto!', 'Via!', 'Su!'];
-export const AGILITY_TUNNEL_LINE = 'Il tunnel: si passa dentro!';
+export const AGILITY_TUNNEL_LINE = 'Il tunnel: si salta!';
 export const AGILITY_COMBO_LINE = 'Combo x2!';
 
 /* ------------------------------------------------------------------ */
