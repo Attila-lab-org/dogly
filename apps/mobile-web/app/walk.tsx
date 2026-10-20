@@ -18,8 +18,17 @@ import { parsePark, visitedPark, type WalkPark } from '@/features/walk/progress'
 type Phase = 'intro' | 'active' | 'summary';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'local';
 
-function clock(seconds: number): string { const minutes = Math.floor(seconds / 60); return `${minutes}:${String(seconds % 60).padStart(2, '0')}`; }
+function clock(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safe / 60);
+  return `${minutes}:${String(safe % 60).padStart(2, '0')}`;
+}
 function distanceLabel(meters: number): string { return `${(meters / 1000).toFixed(2).replace('.', ',')} km`; }
+/** Seconds for the open walk window. `windowStartedAt <= 0` means frozen (intro / ended). */
+function liveSeconds(accumulated: number, windowStartedAt: number): number {
+  if (windowStartedAt <= 0) return accumulated;
+  return accumulated + Math.floor((Date.now() - windowStartedAt) / 1000);
+}
 
 function WalkMap({ active, compact = false, routePoints = [], dogName }: { active: boolean; compact?: boolean; routePoints?: WalkPoint[]; dogName?: string }) {
   const pulse = useSharedValue(1);
@@ -108,17 +117,59 @@ function Metric({ icon, value, label, accent = colors.primary }: { icon: keyof t
 
 export default function WalkScreen() {
   const router = useRouter(); const params = useLocalSearchParams(); const { dog } = useDogProfile(); const reducedMotion = useReducedMotion();
-  const [phase, setPhase] = useState<Phase>('active'); const [isPaused, setIsPaused] = useState(false); const [elapsed, setElapsed] = useState(0); const [routePoints, setRoutePoints] = useState<WalkPoint[]>([]); const [trackingNotice, setTrackingNotice] = useState<string | null>(null); const includeRoute = true; const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [phase, setPhase] = useState<Phase>('intro'); const [isPaused, setIsPaused] = useState(false); const [elapsed, setElapsed] = useState(0); const [routePoints, setRoutePoints] = useState<WalkPoint[]>([]); const [trackingNotice, setTrackingNotice] = useState<string | null>(null); const includeRoute = true; const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const trackingActive = useRef(false); const pausedRef = useRef(false); const startedAt = useRef<string | null>(null); const activeWindowStartedAt = useRef(0); const accumulatedSeconds = useRef(0); const pointsRef = useRef<WalkPoint[]>([]); const stopTrackingRef = useRef<(() => void) | null>(null);
   const distanceMeters = totalDistance(routePoints); const steps = estimatedSteps(distanceMeters); const selectedPark = useMemo<WalkPark | null>(() => { const id = typeof params.parkId === 'string' ? params.parkId : ''; const name = typeof params.parkName === 'string' ? params.parkName : ''; const lat = Number(params.parkLat); const lng = Number(params.parkLng); return parsePark({ id, name, lat, lng }); }, [params.parkId, params.parkName, params.parkLat, params.parkLng]); const phaseTitle = useMemo(() => phase === 'intro' ? `Un momento solo per ${dog.name}` : phase === 'active' ? `${dog.name} sta esplorando` : 'Che bella uscita', [dog.name, phase]);
-  useEffect(() => { if (phase !== 'active' || isPaused) return; const timer = setInterval(() => setElapsed(accumulatedSeconds.current + Math.floor((Date.now() - activeWindowStartedAt.current) / 1000)), 1000); return () => clearInterval(timer); }, [phase, isPaused]);
+  useEffect(() => {
+    if (phase !== 'active' || isPaused) return;
+    const timer = setInterval(() => {
+      // After Termina (or before Inizia) the window is frozen — never tick from epoch 0.
+      if (!trackingActive.current || activeWindowStartedAt.current <= 0) return;
+      setElapsed(liveSeconds(accumulatedSeconds.current, activeWindowStartedAt.current));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [phase, isPaused]);
   useEffect(() => () => { stopTrackingRef.current?.(); }, []);
 
   const beginTracking = async () => { try { const stop = await startLocationTracking((point) => { setRoutePoints((current) => { const last = current[current.length - 1]; if (last && Math.abs(last.latitude - point.latitude) < 0.000001 && Math.abs(last.longitude - point.longitude) < 0.000001) return current; const next = [...current, point]; pointsRef.current = next; return next; }); }); if (!trackingActive.current || pausedRef.current) stop(); else stopTrackingRef.current = stop; setTrackingNotice(null); } catch (error) { setTrackingNotice(error instanceof Error && error.message === 'LOCATION_DENIED' ? 'La posizione è disattivata: puoi comunque salvare tempo e passi.' : 'Percorso non disponibile: il riepilogo continuerà a funzionare.'); } };
   const start = () => { trackingActive.current = true; pausedRef.current = false; stopTrackingRef.current?.(); startedAt.current = new Date().toISOString(); activeWindowStartedAt.current = Date.now(); accumulatedSeconds.current = 0; pointsRef.current = []; setRoutePoints([]); setElapsed(0); setIsPaused(false); setSaveStatus('idle'); setTrackingNotice(null); setPhase('active'); void beginTracking(); };
-  const pause = () => { pausedRef.current = true; accumulatedSeconds.current += Math.floor((Date.now() - activeWindowStartedAt.current) / 1000); setElapsed(accumulatedSeconds.current); stopTrackingRef.current?.(); stopTrackingRef.current = null; setIsPaused(true); };
+  const pause = () => {
+    pausedRef.current = true;
+    accumulatedSeconds.current = liveSeconds(accumulatedSeconds.current, activeWindowStartedAt.current);
+    activeWindowStartedAt.current = 0;
+    setElapsed(accumulatedSeconds.current);
+    stopTrackingRef.current?.();
+    stopTrackingRef.current = null;
+    setIsPaused(true);
+  };
   const resume = () => { pausedRef.current = false; activeWindowStartedAt.current = Date.now(); setIsPaused(false); void beginTracking(); };
-  const stop = () => { trackingActive.current = false; pausedRef.current = false; const finalSeconds = isPaused ? accumulatedSeconds.current : accumulatedSeconds.current + Math.floor((Date.now() - activeWindowStartedAt.current) / 1000); const finalPoints = pointsRef.current; const finalDistance = totalDistance(finalPoints); const finalSteps = estimatedSteps(finalDistance); setElapsed(finalSeconds); setIsPaused(false); stopTrackingRef.current?.(); stopTrackingRef.current = null; setPhase('summary'); setSaveStatus('saving'); void saveWalk({ dogId: dog.id, startedAt: startedAt.current ?? new Date().toISOString(), endedAt: new Date().toISOString(), durationSeconds: finalSeconds, distanceMeters: finalDistance, stepsEstimate: finalSteps, routePoints: finalPoints, park: selectedPark, parkVisited: visitedPark(selectedPark, finalPoints) }).then((saved) => setSaveStatus(saved ? 'saved' : 'local')); };
+  const stop = () => {
+    trackingActive.current = false;
+    pausedRef.current = false;
+    const finalSeconds = liveSeconds(accumulatedSeconds.current, isPaused ? 0 : activeWindowStartedAt.current);
+    accumulatedSeconds.current = finalSeconds;
+    activeWindowStartedAt.current = 0; // freeze — summary must not keep counting
+    const finalPoints = pointsRef.current;
+    const finalDistance = totalDistance(finalPoints);
+    const finalSteps = estimatedSteps(finalDistance);
+    setElapsed(finalSeconds);
+    setIsPaused(false);
+    stopTrackingRef.current?.();
+    stopTrackingRef.current = null;
+    setPhase('summary');
+    setSaveStatus('saving');
+    void saveWalk({
+      dogId: dog.id,
+      startedAt: startedAt.current ?? new Date().toISOString(),
+      endedAt: new Date().toISOString(),
+      durationSeconds: finalSeconds,
+      distanceMeters: finalDistance,
+      stepsEstimate: finalSteps,
+      routePoints: finalPoints,
+      park: selectedPark,
+      parkVisited: visitedPark(selectedPark, finalPoints),
+    }).then((saved) => setSaveStatus(saved ? 'saved' : 'local'));
+  };
   const share = async () => { const result = await shareWalkCard({ dogName: dog.name, duration: clock(elapsed), distance: distanceLabel(distanceMeters), steps: String(steps), date: new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }), routePoints, includeRoute }); if (result === 'copied') Alert.alert('Riepilogo pronto', 'La passeggiata è stata copiata negli appunti.'); };
 
   return <LinearGradient colors={['#EAF8F4', '#F5FAFC', '#FFFFFF']} style={styles.root}><SafeAreaView style={styles.safe} edges={['top', 'bottom']}><View style={styles.topBar}><SpringPress accessibilityRole="button" accessibilityLabel="Chiudi passeggiata" onPress={() => router.back()} pressableStyle={styles.closeButton}><Ionicons name="close" size={23} color={colors.text} /></SpringPress><View style={styles.topTitle}><Text style={styles.topEyebrow}>DOGLY</Text><Text style={styles.topLabel}>PASSEGGIATA</Text></View><View style={styles.topSpacer} /></View>
