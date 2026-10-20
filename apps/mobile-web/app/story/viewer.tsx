@@ -6,7 +6,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AccessibilityInfo,
   Alert,
-  Image,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -19,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { DogAvatar } from '@/features/core/components';
+import { SignedImage } from '@/features/home/SignedImage';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
   fetchStories,
@@ -62,7 +62,8 @@ export default function StoryViewerScreen() {
       lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
     enabled: Boolean(dogId),
     retry: 1,
-    refetchInterval: 60_000,
+    // No interval remint of gallery signed URLs while the viewer is open.
+    staleTime: 5 * 60_000,
   });
 
   const photos = useMemo(
@@ -233,7 +234,7 @@ export default function StoryViewerScreen() {
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
-      <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      <SignedImage uri={uri} style={StyleSheet.absoluteFill} />
       <View style={[styles.scrimTop, { height: insets.top + 72 }]} pointerEvents="none" />
       <View style={[styles.scrimBottom, { height: insets.bottom + 40 }]} pointerEvents="none" />
 

@@ -203,3 +203,142 @@ async def test_signed_read_maps_transient_storage_error_to_timeout() -> None:
             ttl_seconds=60,
         )
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_signed_read_reuses_cached_url_for_same_object() -> None:
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        assert request.method == "POST"
+        return httpx.Response(
+            200,
+            json={
+                "signedURL": (
+                    "/object/sign/dog-avatars/users/u/dogs/d/avatar/a.jpg"
+                    f"?token=stable-{calls}"
+                )
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+    first = await provider.create_signed_read_url(
+        bucket="dog-avatars",
+        path="users/u/dogs/d/avatar/a.jpg",
+        ttl_seconds=3600,
+    )
+    second = await provider.create_signed_read_url(
+        bucket="dog-avatars",
+        path="users/u/dogs/d/avatar/a.jpg",
+        ttl_seconds=3600,
+    )
+    assert first == second
+    assert calls == 1
+    assert "token=stable-1" in first
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_signed_read_reuses_short_mint_for_longer_caller_ttl() -> None:
+    """Worker mint(600) must not thrash when diary later asks for 3600."""
+    calls = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "signedURL": (
+                    "/object/sign/behavior-raw/users/u/v.mp4"
+                    f"?token=short-{calls}"
+                )
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+    first = await provider.create_signed_read_url(
+        bucket="behavior-raw",
+        path="users/u/v.mp4",
+        ttl_seconds=600,
+    )
+    second = await provider.create_signed_read_url(
+        bucket="behavior-raw",
+        path="users/u/v.mp4",
+        ttl_seconds=3600,
+    )
+    assert first == second
+    assert calls == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_signed_read_keeps_longer_url_when_shorter_remint_arrives() -> None:
+    calls = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "signedURL": (
+                    "/object/sign/dog-avatars/users/u/a.jpg"
+                    f"?token=wave-{calls}"
+                )
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = SupabaseStorageProvider(
+        Settings(
+            supabase_url="https://project.supabase.co",
+            supabase_service_role_key="sb_secret_test",
+        ),
+        client=client,
+    )
+    long_url = await provider.create_signed_read_url(
+        bucket="dog-avatars",
+        path="users/u/a.jpg",
+        ttl_seconds=3600,
+    )
+    # Bypass get() by clearing lifetime artificially: mint short via put path
+    # after forcing a remint (invalidate then short TTL).
+    provider._read_cache.invalidate(bucket="dog-avatars", path="users/u/a.jpg")
+    short_url = await provider.create_signed_read_url(
+        bucket="dog-avatars",
+        path="users/u/a.jpg",
+        ttl_seconds=600,
+    )
+    assert short_url != long_url
+    # Re-seed long entry then ensure a short remint does not replace it.
+    provider._read_cache.put(
+        bucket="dog-avatars",
+        path="users/u/a.jpg",
+        url=long_url,
+        ttl_seconds=3600,
+    )
+    kept = provider._read_cache.put(
+        bucket="dog-avatars",
+        path="users/u/a.jpg",
+        url=short_url,
+        ttl_seconds=600,
+    )
+    assert kept == long_url
+    await client.aclose()

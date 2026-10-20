@@ -69,6 +69,9 @@ async def get_diary(
     dog_id: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query(max_length=80)] = None,
     status: Annotated[str | None, Query(max_length=40)] = None,
+    # Home strip only needs media_kind (play affordance); signing videos there
+    # remints behavior-raw URLs that the client never downloads.
+    include_media: Annotated[bool, Query()] = True,
 ) -> DiaryPage:
     if state.engine is not None:
         return await diary_db.list_diary_page(
@@ -80,7 +83,8 @@ async def get_diary(
             dog_id=dog_id,
             q=q,
             status=status,
-            storage=state.storage,
+            storage=state.storage if include_media else None,
+            include_media=include_media,
         )
 
     store = state.store
@@ -164,19 +168,21 @@ async def get_diary(
 
     page, next_cursor = paginate_desc(entries, cursor=cursor, limit=limit)
     signed: dict[tuple[str, str], str] = {}
-    for kind, bucket in (("VIDEO", "behavior-raw"), ("PHOTO", "digestive-raw")):
-        paths = [
-            entry.media_path
-            for entry in page
-            if entry.media_kind == kind and entry.media_path
-        ]
-        if paths:
-            urls = await state.storage.create_signed_read_urls(
-                bucket=bucket,
-                paths=paths,
-                ttl_seconds=600,
-            )
-            signed.update({(kind, path): url for path, url in urls.items()})
+    if include_media:
+        for kind, bucket in (("VIDEO", "behavior-raw"), ("PHOTO", "digestive-raw")):
+            paths = [
+                entry.media_path
+                for entry in page
+                if entry.media_kind == kind and entry.media_path
+            ]
+            if paths:
+                urls = await state.storage.create_signed_read_urls(
+                    bucket=bucket,
+                    paths=paths,
+                    # Align with avatar/gallery (1h): list refreshes reuse the same URL.
+                    ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
+                )
+                signed.update({(kind, path): url for path, url in urls.items()})
     return DiaryPage(
         items=[
             DiaryItem(
@@ -191,7 +197,7 @@ async def get_diary(
                 retention_state=entry.retention_state,
                 media_url=(
                     signed.get((entry.media_kind, entry.media_path))
-                    if entry.media_kind and entry.media_path
+                    if include_media and entry.media_kind and entry.media_path
                     else None
                 ),
                 media_kind=entry.media_kind,

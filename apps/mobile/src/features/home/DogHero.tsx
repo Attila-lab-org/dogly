@@ -5,7 +5,6 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image,
   InteractionManager,
   Pressable,
   StyleSheet,
@@ -23,6 +22,7 @@ import { isApiConfigured } from '../auth/env';
 import { isPersistedId } from '../../lib/persistedId';
 import { api } from '../../lib/apiClient';
 import { queryKeys } from '../../lib/queryClient';
+import { SignedImage } from './SignedImage';
 import { localDayKey } from '../checkin/persistence';
 import { useCareEvents } from '../care/store';
 import { usePersonalPatterns } from '../patterns/api';
@@ -438,7 +438,7 @@ export function DogHero({
             >
               <View style={styles.photoInner}>
                 {photoUri ? (
-                  <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+                  <SignedImage uri={photoUri} style={styles.photo} />
                 ) : (
                   <View style={styles.photoPlaceholder} accessibilityLabel="Nessuna foto del cane">
                     <Ionicons name="paw" size={28} color={colors.primary} />

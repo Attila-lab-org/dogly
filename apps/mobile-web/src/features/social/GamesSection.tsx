@@ -5,7 +5,7 @@
  * classifica completa si apre da "Vedi classifica".
  */
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, Ellipse, LinearGradient as SvgLinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
 import { CuteIcon } from '../../components/CuteIcon';
+import { SignedImage } from '../home/SignedImage';
 import { usePressSpring } from '../../components/pressSpring';
 import { useSession } from '../auth/SessionProvider';
 import { isApiConfigured } from '../auth/env';
@@ -55,8 +56,8 @@ function MiniCrown() {
 function MiniAvatar({ entry, size }: { entry: LeaderboardEntry; size: number }) {
   if (entry.avatar_url) {
     return (
-      <Image
-        source={{ uri: entry.avatar_url }}
+      <SignedImage
+        uri={entry.avatar_url}
         style={{ width: size, height: size, borderRadius: size / 2 }}
         accessibilityLabel={`Foto di ${entry.dog_name}`}
       />

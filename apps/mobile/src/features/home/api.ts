@@ -49,6 +49,8 @@ export interface FetchDiaryOptions {
   limit?: number;
   q?: string;
   status?: string;
+  /** When false, backend skips signed media URLs (Home strip). */
+  includeMedia?: boolean;
 }
 
 /** GET /v1/diary con filtri opzionali (sez. 5.1 timeline unificata). */
@@ -62,16 +64,23 @@ export async function fetchDiaryPage(options: FetchDiaryOptions = {}): Promise<D
   if (options.dogId) params.push(`dog_id=${encodeURIComponent(options.dogId)}`);
   if (options.q?.trim()) params.push(`q=${encodeURIComponent(options.q.trim())}`);
   if (options.status) params.push(`status=${encodeURIComponent(options.status)}`);
+  if (options.includeMedia === false) params.push('include_media=false');
   const query = params.length > 0 ? `?${params.join('&')}` : '';
   return api.get<DiaryPage>(`/v1/diary${query}`);
 }
 
 /**
- * Carica pagine behavior finché trova l'ultima analisi completata.
- * Eventi digestive/care non possono quindi spingere l'insight fuori pagina.
+ * Home “ultime osservazioni”: metadata only — no behavior-raw signed URLs.
+ * The strip uses a play affordance; Diario loads media when visible.
  */
 export async function fetchHomeBehaviorPage(dogId: string): Promise<DiaryPage> {
-  return fetchDiaryPage({ dogId, domain: 'BEHAVIOR', status: 'COMPLETED', limit: 8 });
+  return fetchDiaryPage({
+    dogId,
+    domain: 'BEHAVIOR',
+    status: 'COMPLETED',
+    limit: 8,
+    includeMedia: false,
+  });
 }
 
 /** GET /v1/usage → UsageSummary del dominio core (sez. 21). */
@@ -212,13 +221,17 @@ export function insightToneLabel(tone: InsightTone): string {
 }
 
 function toLastInsight(item: ApiDiaryItem, now: Date): LastInsight {
+  const kind = item.media_kind ?? null;
+  // Never attach VIDEO signed URLs to Home cards (egress storm if reminted).
+  const mediaUri =
+    kind === 'VIDEO' ? null : (item.media_url ?? null);
   return {
     eventId: item.id,
     label: probabilisticInsightLabel(item.title),
     timestampLabel: formatInsightTimestamp(item.created_at, now),
     tone: insightToneFromTitle(item.title),
-    mediaUri: item.media_url ?? null,
-    mediaKind: item.media_kind ?? null,
+    mediaUri,
+    mediaKind: kind,
   };
 }
 

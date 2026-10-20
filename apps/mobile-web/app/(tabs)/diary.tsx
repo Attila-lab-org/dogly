@@ -8,11 +8,11 @@
  * Stati onesti: empty/error/loading senza dati inventati; in mock gate
  * dev i dati mock restano, senza paginazione simulata.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
+  type ViewToken,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -159,7 +159,15 @@ function StatusBadgeView({ badge }: { badge: StatusBadge }) {
  * Copertina 16:9 della card: la logica media (digestive illustrata, video
  * per-piattaforma, foto con fallback) vive in DiaryMediaCover.
  */
-function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void }) {
+function DiaryCard({
+  entry,
+  onPress,
+  mediaActive = true,
+}: {
+  entry: DiaryEntry;
+  onPress: () => void;
+  mediaActive?: boolean;
+}) {
   const badge = entryStatusBadge(entry);
   const icon = entryIconTone(entry);
   const press = usePressSpring();
@@ -194,7 +202,11 @@ function DiaryCard({ entry, onPress }: { entry: DiaryEntry; onPress: () => void 
         style={({ pressed }) => [styles.mediaCard, pressed && styles.entryCardPressed]}
       >
         <View style={styles.mediaTop}>
-          <DiaryMediaCover entry={entry} badgeLabel={badge?.label ?? null} />
+          <DiaryMediaCover
+            entry={entry}
+            badgeLabel={badge?.label ?? null}
+            mediaActive={mediaActive}
+          />
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.rowTitle}>{entry.title}</Text>
@@ -303,6 +315,8 @@ export default function DiaryScreen() {
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: realEnabled,
+    // Diary pages carry signed media_url — keep stable across remounts.
+    staleTime: 5 * 60_000,
   });
 
   const entries = useMemo<DiaryEntry[]>(() => {
@@ -349,6 +363,25 @@ export default function DiaryScreen() {
     });
     return items;
   }, [groups]);
+
+  const [visibleEntryIds, setVisibleEntryIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const next = new Set<string>();
+      for (const token of viewableItems) {
+        const key = token.key != null ? String(token.key) : '';
+        if (key && !key.startsWith('header-')) next.add(key);
+      }
+      setVisibleEntryIds(next);
+    },
+  ).current;
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 35,
+    minimumViewTime: 120,
+  }).current;
+
   return (
     <View style={styles.root}>
       <WorldBackdrop world="diary" />
@@ -475,9 +508,11 @@ export default function DiaryScreen() {
               showsVerticalScrollIndicator={false}
               data={timelineItems}
               keyExtractor={(item) => item.key}
-              initialNumToRender={12}
-              maxToRenderPerBatch={12}
-              windowSize={7}
+              initialNumToRender={6}
+              maxToRenderPerBatch={6}
+              windowSize={5}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={viewabilityConfig}
               onEndReachedThreshold={0.4}
               onEndReached={() => {
                 if (
@@ -515,6 +550,7 @@ export default function DiaryScreen() {
                   <Animated.View entering={entering}>
                     <DiaryCard
                       entry={entry}
+                      mediaActive={visibleEntryIds.has(entry.id)}
                       onPress={() =>
                         router.push({
                           pathname: '/ask',

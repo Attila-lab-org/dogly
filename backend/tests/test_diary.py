@@ -57,3 +57,33 @@ async def test_diary_digestive_score_never_leaks_other_users(
     )
     assert resp.status_code == 200, resp.text
     assert [item["digestive_score"] for item in resp.json()["items"]] == [5]
+
+
+async def test_diary_include_media_false_skips_signed_urls(
+    client: httpx.AsyncClient, auth_headers, state, user_id
+):
+    """Home strip uses include_media=false to avoid reminting storage URLs."""
+    dog_id = await create_dog(client, auth_headers)
+    state.store.fecal_events["fec-media"] = _fecal_event(
+        "fec-media", dog_id, user_id, 4
+    )
+
+    with_media = await client.get(
+        "/v1/diary",
+        headers=auth_headers,
+        params={"domain": "DIGESTIVE", "include_media": "true"},
+    )
+    assert with_media.status_code == 200, with_media.text
+    item = with_media.json()["items"][0]
+    assert item["media_kind"] == "PHOTO"
+    assert item["media_url"]
+
+    lean = await client.get(
+        "/v1/diary",
+        headers=auth_headers,
+        params={"domain": "DIGESTIVE", "include_media": "false"},
+    )
+    assert lean.status_code == 200, lean.text
+    lean_item = lean.json()["items"][0]
+    assert lean_item["media_kind"] == "PHOTO"
+    assert lean_item["media_url"] is None

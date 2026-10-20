@@ -62,8 +62,8 @@ describe('mapDiaryItemToEntry', () => {
     ).toBe(true);
   });
 
-  it('FOOD_LABEL entra nel Diario come voce alimentazione', () => {
-    expect(mapDiaryItemToEntry(diaryItem({ domain: 'FOOD_LABEL' }))?.domain).toBe('FOOD_LABEL');
+  it('FOOD_LABEL non è un dominio del Diario → null', () => {
+    expect(mapDiaryItemToEntry(diaryItem({ domain: 'FOOD_LABEL' }))).toBeNull();
   });
 
   it('stato non completato → sottotitolo di stato onesto', () => {
@@ -131,6 +131,30 @@ describe('deriveHomeState (sez. 6 Home)', () => {
     );
     expect(derived.processingEventId).toBeNull();
     expect(derived.lastInsight).toBeNull();
+  });
+
+  it('Home insights drop VIDEO mediaUri even if API returned a signed URL', () => {
+    const derived = deriveHomeState(
+      [
+        diaryItem({
+          id: 'vid-1',
+          media_kind: 'VIDEO',
+          media_url: 'https://storage.test/behavior-raw/v.mp4?token=abc',
+          created_at: '2026-09-04T12:00:00Z',
+        }),
+        diaryItem({
+          id: 'pic-1',
+          domain: 'DIGESTIVE',
+          media_kind: 'PHOTO',
+          media_url: 'https://storage.test/digestive-raw/p.jpg?token=xyz',
+          created_at: '2026-09-04T11:00:00Z',
+        }),
+      ],
+      now,
+    );
+    expect(derived.lastInsight?.eventId).toBe('vid-1');
+    expect(derived.lastInsight?.mediaKind).toBe('VIDEO');
+    expect(derived.lastInsight?.mediaUri).toBeNull();
   });
 
   it('recentInsights tiene al massimo otto COMPLETED, più recenti prima', () => {

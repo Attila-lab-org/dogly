@@ -11,6 +11,7 @@ import httpx
 
 from app.config import Settings
 from app.contracts.errors import ApiError, ErrorCode
+from app.providers.signed_url_cache import SignedUrlCache
 
 logger = logging.getLogger("dogly.storage")
 
@@ -29,6 +30,8 @@ class SupabaseStorageProvider:
         self._key = settings.supabase_service_role_key
         self._client = client or httpx.AsyncClient(timeout=30.0)
         self._owns = client is None
+        # Same object → same signed URL string while valid (cuts Image/video re-downloads).
+        self._read_cache = SignedUrlCache()
 
     def _headers(self) -> dict[str, str]:
         headers = {"apikey": self._key}
@@ -108,6 +111,7 @@ class SupabaseStorageProvider:
             json={"prefixes": [path]},
         )
         response.raise_for_status()
+        self._read_cache.invalidate(bucket=bucket, path=path)
 
     async def upload_bytes(self, *, bucket: str, path: str, data: bytes, content_type: str) -> None:
         url = f"{self._base}/storage/v1/object/{bucket}/{quote(path, safe='/')}"
@@ -118,7 +122,17 @@ class SupabaseStorageProvider:
         )
         response.raise_for_status()
 
+    def _normalize_signed(self, signed: object) -> str:
+        if not signed:
+            raise RuntimeError("Supabase signed read response missing URL")
+        if str(signed).startswith("http"):
+            return str(signed)
+        return f"{self._base}/storage/v1{signed}"
+
     async def create_signed_read_url(self, *, bucket: str, path: str, ttl_seconds: int) -> str:
+        cached = self._read_cache.get(bucket=bucket, path=path, ttl_seconds=ttl_seconds)
+        if cached:
+            return cached
         url = f"{self._base}/storage/v1/object/sign/{bucket}/{quote(path, safe='/')}"
         try:
             response = await self._client.post(
@@ -134,12 +148,10 @@ class SupabaseStorageProvider:
             )
         response.raise_for_status()
         data = response.json()
-        signed = data.get("signedURL") or data.get("signedUrl")
-        if not signed:
-            raise RuntimeError("Supabase signed read response missing URL")
-        if str(signed).startswith("http"):
-            return str(signed)
-        return f"{self._base}/storage/v1{signed}"
+        signed = self._normalize_signed(data.get("signedURL") or data.get("signedUrl"))
+        return self._read_cache.put(
+            bucket=bucket, path=path, url=signed, ttl_seconds=ttl_seconds
+        )
 
     async def create_signed_read_urls(
         self, *, bucket: str, paths: list[str], ttl_seconds: int
@@ -147,12 +159,24 @@ class SupabaseStorageProvider:
         """Create a batch of signed URLs in one Storage request."""
         if not paths:
             return {}
+        result: dict[str, str] = {}
+        missing: list[str] = []
+        for path in paths:
+            cached = self._read_cache.get(
+                bucket=bucket, path=path, ttl_seconds=ttl_seconds
+            )
+            if cached:
+                result[path] = cached
+            else:
+                missing.append(path)
+        if not missing:
+            return result
         url = f"{self._base}/storage/v1/object/sign/{bucket}"
         try:
             response = await self._client.post(
                 url,
                 headers={**self._headers(), "Content-Type": "application/json"},
-                json={"expiresIn": ttl_seconds, "paths": paths},
+                json={"expiresIn": ttl_seconds, "paths": missing},
             )
         except httpx.TransportError as exc:
             raise TimeoutError("Supabase Storage is temporarily unavailable") from exc
@@ -163,17 +187,18 @@ class SupabaseStorageProvider:
         rows = payload.get("signedURLs") if isinstance(payload, dict) else payload
         if not isinstance(rows, list):
             raise TypeError("Supabase batch signed read response is invalid")
-        result: dict[str, str] = {}
         for row in rows:
             if not isinstance(row, dict):
                 continue
             path = row.get("path")
-            signed = row.get("signedURL") or row.get("signedUrl")
-            if path and signed:
-                result[str(path)] = (
-                    str(signed)
-                    if str(signed).startswith("http")
-                    else f"{self._base}/storage/v1{signed}"
+            signed_raw = row.get("signedURL") or row.get("signedUrl")
+            if path and signed_raw:
+                signed = self._normalize_signed(signed_raw)
+                result[str(path)] = self._read_cache.put(
+                    bucket=bucket,
+                    path=str(path),
+                    url=signed,
+                    ttl_seconds=ttl_seconds,
                 )
         return result
 

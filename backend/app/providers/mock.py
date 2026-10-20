@@ -229,7 +229,9 @@ class MockStorageProvider:
         return url, expires_at
 
     async def create_signed_read_url(self, *, bucket: str, path: str, ttl_seconds: int) -> str:
-        return f"https://storage.mock.local/{bucket}/read/{path}?ttl={ttl_seconds}"
+        # Stable identity (no unique query): same object → same URL string.
+        del ttl_seconds
+        return f"https://storage.mock.local/{bucket}/read/{path}"
 
     async def create_signed_read_urls(
         self, *, bucket: str, paths: list[str], ttl_seconds: int

@@ -37,18 +37,27 @@ export function useHomeData(dogId: string): HomeDataState {
     queryKey: [...queryKeys.user(userId ?? 'anon'), 'usage'],
     queryFn: fetchUsageSummary,
     enabled: realEnabled,
+    staleTime: 5 * 60_000,
   });
 
   const behaviorQuery = useQuery({
     queryKey: [...queryKeys.diary(userId ?? 'anon', dogId), 'home-behavior'],
     queryFn: () => fetchHomeBehaviorPage(dogId),
     enabled: realEnabled,
+    // Home must not remint on AppState/reconnect/tab remount storms.
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   const activityQuery = useQuery({
     queryKey: [...queryKeys.diary(userId ?? 'anon', dogId), 'home-activity'],
-    queryFn: () => fetchDiaryPage({ dogId, limit: 1 }),
+    // Metadata-only: home only needs “any activity?” not signed media.
+    queryFn: () => fetchDiaryPage({ dogId, limit: 1, includeMedia: false }),
     enabled: realEnabled,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   const behaviorItems = behaviorQuery.data?.items;

@@ -9,13 +9,14 @@
  * - PHOTO: <Image> con fallback onError allo stesso placeholder.
  */
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { colors, radius, shadows, spacing, typography } from '../../theme/tokens';
 import { CuteIcon } from '../../components/CuteIcon';
 import type { DiaryEntry } from '../core/types';
 import { DiaryVideoPreview } from './DiaryVideoPreview';
+import { SignedImage } from './SignedImage';
 
 type DigestiveMood = {
   label: string;
@@ -206,9 +207,12 @@ export function VideoPlayOverlay() {
 export function DiaryMediaCover({
   entry,
   badgeLabel,
+  mediaActive = true,
 }: {
   entry: DiaryEntry;
   badgeLabel: string | null;
+  /** False for off-screen diary rows — avoids downloading behavior-raw. */
+  mediaActive?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -223,10 +227,17 @@ export function DiaryMediaCover({
     return (
       <DiaryVideoPreview
         uri={entry.mediaUri}
+        active={mediaActive}
         fallback={
           <TealPlaceholder icon="play" accessibilityLabel="Video del momento" />
         }
       />
+    );
+  }
+
+  if (!mediaActive) {
+    return (
+      <TealPlaceholder icon="paw" accessibilityLabel="Foto del momento" />
     );
   }
 
@@ -243,8 +254,8 @@ export function DiaryMediaCover({
   }
 
   return (
-    <Image
-      source={{ uri: entry.mediaUri }}
+    <SignedImage
+      uri={entry.mediaUri}
       style={styles.photo}
       accessibilityLabel="Foto del momento"
       onError={() => setFailed(true)}

@@ -53,4 +53,12 @@ describe('avatar tint palette', () => {
     expect(await loadAvatarTint('dog-1', 'file:///b.jpg')).toBeNull();
     expect(await loadAvatarTint('dog-2', 'file:///a.jpg')).toBeNull();
   });
+
+  it('reuses tint cache when only the signed query changes', async () => {
+    setAvatarTintBackend(memoryStorage());
+    const base =
+      'https://x.supabase.co/storage/v1/object/sign/dog-avatars/u/d/a.jpg';
+    await saveAvatarTint('dog-1', `${base}?token=aaa`, '#8b5a2b');
+    expect(await loadAvatarTint('dog-1', `${base}?token=bbb`)).toBe('#8b5a2b');
+  });
 });

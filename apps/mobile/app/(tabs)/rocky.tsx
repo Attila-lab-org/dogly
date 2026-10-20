@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { isPersistedId } from '@/lib/persistedId';
 import { usePersonalPatterns } from '@/features/patterns/api';
 import { DogCareOverview } from '@/features/dogs/DogCareOverview';
 import { useAvatarPalette } from '@/features/dogs/avatarTint';
+import { SignedImage } from '@/features/home/SignedImage';
 import { usePressSpring } from '@/components/pressSpring';
 import { SpringPress } from '@/components/pressSpring';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
@@ -39,7 +40,7 @@ export default function DogProfileTabScreen() {
   const heroParallax = useAnimatedStyle(() => ({
     transform: [{ translateY: Math.max(0, scrollY.value) * 0.35 }],
   }));
-  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id), staleTime: 30_000 });
+  const photos = useQuery({ queryKey: ['gallery-dog-photos', dog.id, 3], queryFn: () => fetchDogPhotos(dog.id, 3), enabled: !usingMockGate && isPersistedId(dog.id), staleTime: 5 * 60_000 });
   const patterns = usePersonalPatterns(dog.id);
   const learned = patterns.patterns.filter((item) => item.state !== 'ARCHIVED').slice(0, 2);
   const meta = [currentAgeLabel(dog.birthDate, dog.ageLabel), sexLabel(dog.sex)].filter(Boolean).join(' · ');
@@ -57,7 +58,7 @@ export default function DogProfileTabScreen() {
           />
           {dog.photoUri ? (
             <Animated.View style={[styles.heroPhotoWrap, heroParallax]}>
-              <Image source={{ uri: dog.photoUri }} style={styles.heroPhoto} accessibilityLabel={`Foto di ${dog.name}`} />
+              <SignedImage uri={dog.photoUri} style={styles.heroPhoto} accessibilityLabel={`Foto di ${dog.name}`} />
             </Animated.View>
           ) : <View style={styles.heroEmpty}><Ionicons name="paw-outline" size={70} color={colors.primary} /><Text style={styles.emptyText}>Aggiungi la sua foto da Modifica</Text></View>}
           <View pointerEvents="none" style={[styles.heroTint, { backgroundColor: palette.heroFrom }]} />
@@ -74,7 +75,7 @@ export default function DogProfileTabScreen() {
         <View style={[styles.sheet, { backgroundColor: palette.heroTo }]}>
           <View style={styles.identity}>
             <View style={[styles.identityAvatarWrap, { borderColor: palette.heroFrom }]}>
-              {dog.photoUri ? <Image source={{ uri: dog.photoUri }} style={styles.identityAvatar} accessibilityLabel={`Avatar di ${dog.name}`} /> : <Ionicons name="paw" size={22} color={palette.heroFrom} />}
+              {dog.photoUri ? <SignedImage uri={dog.photoUri} style={styles.identityAvatar} accessibilityLabel={`Avatar di ${dog.name}`} /> : <Ionicons name="paw" size={22} color={palette.heroFrom} />}
             </View>
             <View style={styles.identityCopy}><Text style={styles.name}>{dog.name || 'Il tuo cane'}</Text>{meta ? <Text style={styles.meta}>{meta}</Text> : null}</View>
             <ProfileAction icon="create-outline" label="Modifica profilo" accessibilityLabel={`Modifica profilo di ${dog.name}`} onPress={() => router.push(`/dogs/${dog.id}/edit` as never)} />

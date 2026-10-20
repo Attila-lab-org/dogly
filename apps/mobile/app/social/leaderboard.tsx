@@ -5,7 +5,7 @@
  * giocare/sfidare gli amici. Corona duotone vera sul vincitore.
  */
 import React, { useMemo, useState } from 'react';
-import { Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -14,6 +14,7 @@ import { ScreenContainer, SkeletonCard } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { AvatarActor } from '@/features/core/AvatarActor';
+import { SignedImage } from '@/features/home/SignedImage';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
 import { isApiConfigured } from '@/features/auth/env';
@@ -63,8 +64,8 @@ function Medal({ place }: { place: 2 | 3 }) {
 function PodiumAvatar({ entry, size }: { entry: LeaderboardEntry; size: number }) {
   if (entry.avatar_url) {
     return (
-      <Image
-        source={{ uri: entry.avatar_url }}
+      <SignedImage
+        uri={entry.avatar_url}
         style={{ width: size, height: size, borderRadius: size / 2 }}
         accessibilityLabel={`Foto di ${entry.dog_name}`}
       />
@@ -138,8 +139,8 @@ function BoardRow({ entry }: { entry: LeaderboardEntry }) {
     <View style={[styles.row, entry.is_mine && styles.rowMine]}>
       <Text style={styles.rank}>#{entry.rank}</Text>
       {entry.avatar_url ? (
-        <Image
-          source={{ uri: entry.avatar_url }}
+        <SignedImage
+          uri={entry.avatar_url}
           style={styles.avatar}
           accessibilityLabel={`Foto di ${entry.dog_name}`}
         />

@@ -69,18 +69,25 @@ async def photos_with_urls(
     return [photo.model_copy(update={"photo_url": urls.get(photo.storage_path)}) for photo in photos]
 
 
+async def _album_cover_path(
+    album: DogAlbumOut, state: AppState, user_id: str
+) -> str | None:
+    if not album.cover_photo_id:
+        return None
+    if state.engine is not None:
+        return await gallery_db.get_album_cover_path(
+            state.engine, user_id=user_id, album_id=album.id
+        )
+    photo = state.store.dog_photos.get(album.cover_photo_id)
+    if photo is not None and photo.owner_id == user_id:
+        return photo.storage_path
+    return None
+
+
 async def album_with_cover(
     album: DogAlbumOut, state: AppState, user_id: str
 ) -> DogAlbumOut:
-    if not album.cover_photo_id:
-        return album
-    if state.engine is not None:
-        path = await gallery_db.get_album_cover_path(
-            state.engine, user_id=user_id, album_id=album.id
-        )
-    else:
-        photo = state.store.dog_photos.get(album.cover_photo_id)
-        path = photo.storage_path if photo is not None and photo.owner_id == user_id else None
+    path = await _album_cover_path(album, state, user_id)
     if not path:
         return album
     try:
@@ -94,19 +101,50 @@ async def album_with_cover(
     return album.model_copy(update={"cover_url": url})
 
 
+async def albums_with_covers(
+    albums: list[DogAlbumOut], state: AppState, user_id: str
+) -> list[DogAlbumOut]:
+    """Resolve cover paths then batch-sign so remints stay cache-stable."""
+    pairs: list[tuple[DogAlbumOut, str | None]] = []
+    for album in albums:
+        pairs.append((album, await _album_cover_path(album, state, user_id)))
+    paths = [path for _, path in pairs if path]
+    urls: dict[str, str] = {}
+    batch = getattr(state.storage, "create_signed_read_urls", None)
+    if paths and callable(batch):
+        try:
+            urls = await batch(
+                bucket=GALLERY_BUCKET,
+                paths=paths,
+                ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
+            )
+        except Exception:  # noqa: BLE001 -- fall back to per-album signing
+            return list(
+                await asyncio.gather(
+                    *(album_with_cover(album, state, user_id) for album in albums)
+                )
+            )
+    elif paths:
+        return list(
+            await asyncio.gather(
+                *(album_with_cover(album, state, user_id) for album in albums)
+            )
+        )
+    return [
+        album
+        if not path
+        else album.model_copy(update={"cover_url": urls.get(path)})
+        for album, path in pairs
+    ]
+
+
 @router.get("/dogs/{dog_id}/albums", response_model=DogAlbumListResponse)
 async def list_albums(dog_id: str, state: StateDep, user_id: UserIdDep) -> DogAlbumListResponse:
     if state.engine is not None:
         items = await gallery_db.list_albums(state.engine, user_id=user_id, dog_id=dog_id)
     else:
         items = gallery_domain.list_albums(state.store, user_id=user_id, dog_id=dog_id)
-    return DogAlbumListResponse(
-        items=list(
-            await asyncio.gather(
-                *(album_with_cover(item, state, user_id) for item in items)
-            )
-        )
-    )
+    return DogAlbumListResponse(items=await albums_with_covers(items, state, user_id))
 
 
 @router.get("/dogs/{dog_id}/photos", response_model=DogPhotoListResponse)

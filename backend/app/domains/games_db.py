@@ -112,7 +112,7 @@ async def leaderboard(
         signed = await storage.create_signed_read_urls(
             bucket="dog-avatars",
             paths=public_paths,
-            ttl_seconds=600,
+            ttl_seconds=3600,
         )
 
     def to_entry(row) -> LeaderboardEntryOut:

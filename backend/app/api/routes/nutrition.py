@@ -82,7 +82,7 @@ async def _food_out_with_label(
         url = await create_read(
             bucket=digestive_domain.FOOD_BUCKET,
             path=product.image_path,
-            ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 1800),
+            ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
         )
     except Exception:  # noqa: BLE001 -- reference image is best-effort
         return output

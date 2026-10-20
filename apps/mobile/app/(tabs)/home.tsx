@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  AppState,
   Image,
   Pressable,
   ScrollView,
@@ -21,7 +20,7 @@ import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogHero } from '@/features/home/DogHero';
 import { HomeNextAction } from '@/features/home/HomeNextAction';
 import { WalkLaunchCard } from '@/features/walk/WalkLaunchCard';
-import { DiaryVideoPreview } from '@/features/home/DiaryVideoPreview';
+import { SignedImage } from '@/features/home/SignedImage';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
@@ -64,12 +63,10 @@ export default function HomeScreen() {
     reducedMotion ? undefined : FadeInUp.duration(320).delay(delay);
   const { usage, recentInsights, processingEventId, loading, error, refetch } =
     useHomeData(dog.id);
-  React.useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refetch();
-    });
-    return () => subscription.remove();
-  }, [refetch]);
+  // Home media policy (egress):
+  // - no AppState→active refetch (removed)
+  // - home-behavior uses include_media=false (no behavior-raw signing)
+  // - VIDEO cards are play-affordance only (no DiaryVideoPreview download)
   const unreadResultCount = recentInsights.filter(
     (insight) => !readKeys.has(notificationKey('result', insight.eventId)),
   ).length;
@@ -80,7 +77,7 @@ export default function HomeScreen() {
     queryKey: ['gallery-dog-photos', dog.id, 8],
     queryFn: () => fetchDogPhotos(dog.id, 8),
     enabled: !usingMockGate && isPersistedId(dog.id),
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
   });
 
   const behaviorRemaining = usage
@@ -140,7 +137,7 @@ export default function HomeScreen() {
                 hitSlop={12}
                 pressableStyle={styles.headerIcon}
               >
-                {dog.photoUri ? <Image source={{ uri: dog.photoUri }} style={styles.headerAvatar} /> : <Ionicons name="paw-outline" size={22} color={colors.text} />}
+                {dog.photoUri ? <SignedImage uri={dog.photoUri} style={styles.headerAvatar} /> : <Ionicons name="paw-outline" size={22} color={colors.text} />}
               </SpringPress>
             </View>
           </View>
@@ -375,7 +372,7 @@ function MomentCard({
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
       >
-        <Image source={{ uri: photoUri }} style={styles.momentPhoto} />
+        <SignedImage uri={photoUri} style={styles.momentPhoto} />
         <Text style={styles.momentCaption} numberOfLines={1}>{caption}</Text>
       </Pressable>
     </Animated.View>
@@ -396,9 +393,10 @@ function InsightMomentCard({
   // (that produced the empty grey tiles).
   const kind =
     insight.mediaKind ?? (insight.mediaUri ? ('VIDEO' as const) : null);
-  const showVideo = kind === 'VIDEO' && Boolean(insight.mediaUri) && !mediaFailed;
+  // Home strip: never download behavior-raw for thumbnails (8 cards × refetch).
+  // Photos stay; videos use a lightweight play affordance until Diario.
   const showPhoto = kind === 'PHOTO' && Boolean(insight.mediaUri) && !mediaFailed;
-  const hasRealMedia = showVideo || showPhoto;
+  const showVideoAfford = kind === 'VIDEO';
 
   return (
     <Animated.View style={[styles.momentCard, press.style]}>
@@ -416,26 +414,21 @@ function InsightMomentCard({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        {showVideo && insight.mediaUri ? (
-          <DiaryVideoPreview
-            uri={insight.mediaUri}
-            fallback={
-              <View style={styles.insightIconWrap}>
-                <CuteIcon name="play" size={34} color="#FFFFFF" secondary="#FFFFFF" />
-              </View>
-            }
-          />
-        ) : null}
         {showPhoto && insight.mediaUri ? (
-          <Image
-            source={{ uri: insight.mediaUri }}
+          <SignedImage
+            uri={insight.mediaUri}
             style={styles.insightPhoto}
             onError={() => setMediaFailed(true)}
           />
         ) : null}
-        {!hasRealMedia ? (
+        {!showPhoto ? (
           <View style={styles.insightIconWrap}>
-            <CuteIcon name={icon} size={36} color="#FFFFFF" secondary="#FFFFFF" />
+            <CuteIcon
+              name={showVideoAfford ? 'play' : icon}
+              size={36}
+              color="#FFFFFF"
+              secondary="#FFFFFF"
+            />
           </View>
         ) : null}
         <LinearGradient

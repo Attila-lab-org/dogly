@@ -1,7 +1,6 @@
 import React, { type ReactElement } from 'react';
 import {
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CuteIcon } from '@/components/CuteIcon';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 import type { AlbumPhoto, PhotoAlbum } from './types';
+import { SignedImage } from '../home/SignedImage';
 
 /** Gap stile Instagram (profilo): quasi a filo. */
 const GRID_GAP = 2;
@@ -41,7 +41,7 @@ export function PhotoThumbnail({
       delayLongPress={280}
       style={[styles.thumb, { width: size, height: size }]}
     >
-      <Image source={{ uri: photo.thumbnailUri }} style={styles.thumbImage} />
+      <SignedImage uri={photo.thumbnailUri} style={styles.thumbImage} />
       {showTrash ? (
         <Pressable
           accessibilityRole="button"
@@ -140,7 +140,7 @@ export function AlbumCard({
     >
       <View style={styles.albumCover}>
         {coverUri ? (
-          <Image source={{ uri: coverUri }} style={styles.albumCoverImage} />
+          <SignedImage uri={coverUri} style={styles.albumCoverImage} />
         ) : (
           <CuteIcon name="play" size={28} color={colors.accent} secondary={colors.accentSoft} />
         )}

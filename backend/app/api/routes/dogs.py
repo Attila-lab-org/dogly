@@ -36,19 +36,7 @@ async def _delete_replaced_avatar(storage, path: str) -> None:
         )
 
 
-async def to_out(dog: DogRec, state: AppState) -> DogOut:
-    photo_url = None
-    if dog.photo_path:
-        create_read = getattr(state.storage, "create_signed_read_url", None)
-        if callable(create_read):
-            try:
-                photo_url = await create_read(
-                    bucket=AVATAR_BUCKET,
-                    path=dog.photo_path,
-                    ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
-                )
-            except Exception:  # noqa: BLE001 -- avatar read URL is best-effort
-                photo_url = None
+def _dog_out(dog: DogRec, photo_url: str | None) -> DogOut:
     return DogOut(
         id=dog.id,
         name=dog.name,
@@ -63,6 +51,47 @@ async def to_out(dog: DogRec, state: AppState) -> DogOut:
         photo_url=photo_url,
         created_at=dog.created_at,
     )
+
+
+async def to_out(dog: DogRec, state: AppState) -> DogOut:
+    photo_url = None
+    if dog.photo_path:
+        create_read = getattr(state.storage, "create_signed_read_url", None)
+        if callable(create_read):
+            try:
+                photo_url = await create_read(
+                    bucket=AVATAR_BUCKET,
+                    path=dog.photo_path,
+                    ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
+                )
+            except Exception:  # noqa: BLE001 -- avatar read URL is best-effort
+                photo_url = None
+    return _dog_out(dog, photo_url)
+
+
+async def dogs_with_urls(dogs: list[DogRec], state: AppState) -> list[DogOut]:
+    """Sign dog avatars in one Storage request when the adapter supports it."""
+    paths = [dog.photo_path for dog in dogs if dog.photo_path]
+    urls: dict[str, str] = {}
+    batch = getattr(state.storage, "create_signed_read_urls", None)
+    if paths and callable(batch):
+        try:
+            urls = await batch(
+                bucket=AVATAR_BUCKET,
+                paths=paths,
+                ttl_seconds=max(state.settings.storage_signed_url_ttl_seconds, 3600),
+            )
+        except Exception:  # noqa: BLE001 -- fall back to per-dog signing
+            return [await to_out(dog, state) for dog in dogs]
+    elif paths:
+        return [await to_out(dog, state) for dog in dogs]
+    return [
+        _dog_out(
+            dog,
+            urls.get(dog.photo_path) if dog.photo_path else None,
+        )
+        for dog in dogs
+    ]
 
 
 async def _record_guard(state: StateDep, guard: IdempotencyDep, body: dict) -> None:
@@ -82,7 +111,7 @@ async def list_dogs(state: StateDep, user_id: UserIdDep) -> DogListResponse:
         items = await dogs_db.list_dogs(state.engine, user_id=user_id)
     else:
         items = state.store.list_dogs(user_id)
-    return DogListResponse(items=[await to_out(d, state) for d in items])
+    return DogListResponse(items=await dogs_with_urls(items, state))
 
 
 @router.post("/dogs", response_model=DogOut, status_code=201)

@@ -29,6 +29,7 @@ import {
   consumerEvidenceSections,
   showPrimaryAdvice,
 } from '../behavior/consumerPresentation';
+import { SignedImage } from '../home/SignedImage';
 
 export { SectionHeader };
 
@@ -58,10 +59,9 @@ export function DogAvatar({
       ]}
     >
       {hasPhoto ? (
-        <Image
-          source={{ uri: photoUri as string }}
+        <SignedImage
+          uri={photoUri as string}
           style={{ width: size, height: size, borderRadius: size / 2 }}
-          accessibilityIgnoresInvertColors
         />
       ) : (
         <Ionicons name="paw" size={size * 0.45} color={colors.textMuted} />

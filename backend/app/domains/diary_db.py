@@ -59,6 +59,7 @@ async def list_diary_page(
     q: str | None = None,
     status: str | None = None,
     storage: StorageProvider | None = None,
+    include_media: bool = True,
 ) -> DiaryPage:
     params: dict[str, Any] = {
         "user_id": user_id,
@@ -180,7 +181,7 @@ async def list_diary_page(
         next_cursor = encode_cursor(_TimelineEntry(page_rows[-1]))
 
     signed: dict[tuple[str, str], str] = {}
-    if storage:
+    if include_media and storage:
         for kind, bucket in (("VIDEO", "behavior-raw"), ("PHOTO", "digestive-raw")):
             paths = [
                 str(row["media_path"])
@@ -191,7 +192,7 @@ async def list_diary_page(
                 urls = await storage.create_signed_read_urls(
                     bucket=bucket,
                     paths=paths,
-                    ttl_seconds=600,
+                    ttl_seconds=3600,
                 )
                 signed.update({(kind, path): url for path, url in urls.items()})
 
@@ -219,7 +220,7 @@ async def list_diary_page(
                 ),
                 media_url=(
                     signed.get((row.get("media_kind"), row.get("media_path")))
-                    if row.get("media_kind") and row.get("media_path")
+                    if include_media and row.get("media_kind") and row.get("media_path")
                     else None
                 ),
                 media_kind=row.get("media_kind"),

@@ -109,11 +109,13 @@ async function storage(): Promise<KeyValueStorage | null> {
 }
 
 function tintKey(dogId: string, photoUri: string): string {
+  // Stable across signed-URL remints (ignore ?token=…).
+  const pathOnly = photoUri.split('?')[0] ?? photoUri;
   let hash = 0;
-  for (let i = 0; i < photoUri.length; i += 1) {
-    hash = (hash * 31 + photoUri.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < pathOnly.length; i += 1) {
+    hash = (hash * 31 + pathOnly.charCodeAt(i)) >>> 0;
   }
-  return `dogs:avatar-tint:v1:${dogId}:${hash.toString(36)}`;
+  return `dogs:avatar-tint:v2:${dogId}:${hash.toString(36)}`;
 }
 
 export async function loadAvatarTint(

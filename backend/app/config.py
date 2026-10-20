@@ -105,7 +105,9 @@ class Settings(BaseSettings):
 
     # --- Storage ---
     storage_provider: str = "mock"
-    storage_signed_url_ttl_seconds: int = 600
+    # UI media (avatar/gallery/diary) should stay cache-stable for ~1h.
+    # Worker one-shots still clamp with min(..., 600) at call sites.
+    storage_signed_url_ttl_seconds: int = 3600
     behavior_raw_bucket: str = "behavior-raw"
 
     # --- Billing ---

@@ -76,7 +76,8 @@ export function useDogProfile(preferredDogId?: string): DogProfileState {
     queryKey: userId ? dogsQueryKey(userId) : ['dogs', 'anon'],
     queryFn: listDogs,
     enabled,
-    staleTime: 30_000,
+    // Longer stale window: each dogs refetch remints avatar signed URLs.
+    staleTime: 5 * 60_000,
     placeholderData: (previous) => previous,
   });
 
