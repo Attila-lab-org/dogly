@@ -148,7 +148,7 @@ export default function HomeScreen() {
             <View style={styles.statusBanner} accessibilityLiveRegion="polite">
               <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
               <Text style={styles.statusText}>
-                Sei offline. La conversazione e le nuove letture richiedono connessione.
+                Sei offline — ci riproviamo da soli appena torna la connessione.
               </Text>
               <SpringPress
                 accessibilityRole="button"
@@ -172,10 +172,10 @@ export default function HomeScreen() {
           {error && !network.offline ? (
             <View style={styles.statusBanner} accessibilityLiveRegion="assertive">
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
-              <Text style={styles.statusText}>Non sono riuscito ad aggiornare i momenti.</Text>
+              <Text style={styles.statusText}>Non vedo i momenti nuovi per un attimo. Riprovo?</Text>
               <SpringPress
                 accessibilityRole="button"
-                accessibilityLabel="Riprova a caricare i momenti"
+                accessibilityLabel="Riprova a vedere i momenti"
                 onPress={refetch}
                 hitSlop={8}
                 pressableStyle={styles.inlineRetry}
@@ -211,7 +211,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.processingCopy}>
                 <Text style={styles.processingTitle}>Sto leggendo il vostro momento</Text>
-                <Text style={styles.processingText}>Puoi aprire lo stato e ritrovare il risultato nel Diario.</Text>
+                <Text style={styles.processingText}>Ti avviso quando è pronta: la ritrovi nel Diario.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
              </SpringPress>
@@ -313,9 +313,9 @@ export default function HomeScreen() {
               <Text style={behaviorRemaining <= 0 ? styles.quotaWarning : styles.quota}>
                 {behaviorRemaining <= 0
                   ? purchasesEnabled
-                    ? 'Hai usato le letture disponibili. Puoi continuare dal tuo piano.'
-                    : 'Le letture disponibili torneranno presto.'
-                  : `${behaviorRemaining} ${behaviorRemaining === 1 ? 'lettura disponibile' : 'letture disponibili'} questo mese.`}
+                    ? 'Le letture di questo mese sono finite. Puoi continuare dal tuo piano.'
+                    : 'Le letture di questo mese sono finite: tornano all’inizio del mese prossimo.'
+                  : 'Le letture di questo mese stanno finendo.'}
               </Text>
             ) : null}
           </View>

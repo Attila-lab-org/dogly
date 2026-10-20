@@ -8,6 +8,7 @@ import {
   ErrorState,
   ScreenContainer,
 } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import {
   useLifestyle,
@@ -114,14 +115,15 @@ export default function LifestyleScreen() {
   return (
     <ScreenContainer padded={false}>
       <View style={styles.topBar}>
-        <Pressable
+        <SpringPress
           accessibilityRole="button"
           accessibilityLabel="Indietro"
           onPress={() => router.back()}
           hitSlop={12}
+          scaleTo={0.9}
         >
           <Ionicons name="chevron-back" size={26} color="#1A2B48" />
-        </Pressable>
+        </SpringPress>
         <Text style={styles.topTitle}>Routine e abitudini</Text>
         <View style={styles.topSpacer} />
       </View>

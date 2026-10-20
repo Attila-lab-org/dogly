@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ErrorState, ScreenContainer } from '@/components';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
+import { hapticSuccess } from '@/lib/haptics';
 import {
   reviewPattern,
   usePersonalPatterns,
@@ -147,6 +148,7 @@ export default function PatternDetailScreen() {
         setArchivedPattern({ ...pattern, state: 'ARCHIVED' });
       }
       await patternsQuery.refetch();
+      void hapticSuccess();
       setReviewed(action);
       setOutcome('recorded');
     } catch {

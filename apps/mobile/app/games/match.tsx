@@ -23,6 +23,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
@@ -618,15 +619,14 @@ export default function MatchGameScreen() {
           {best > 0 ? (
             <Text style={styles.introBest}>Il vostro record: {best} punti</Text>
           ) : null}
-          <Pressable
+          <SpringPress
             accessibilityRole="button"
             accessibilityLabel="Inizia la partita"
             onPress={startGame}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-          >
+              pressableStyle={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
             <CuteIcon name="play" size={18} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
             <Text style={styles.primaryButtonText}>Inizia</Text>
-          </Pressable>
+          </SpringPress>
         </View>
       ) : null}
 
@@ -771,15 +771,14 @@ export default function MatchGameScreen() {
               </Text>
             </Pressable>
           ) : null}
-          <Pressable
+          <SpringPress
             accessibilityRole="button"
             accessibilityLabel="Rigioca"
             onPress={startGame}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-          >
+              pressableStyle={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
             <CuteIcon name="play" size={18} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
             <Text style={styles.primaryButtonText}>Rigioca</Text>
-          </Pressable>
+          </SpringPress>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Torna ai giochi"

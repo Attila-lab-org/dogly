@@ -275,9 +275,12 @@ export default function DogEditScreen() {
         setPendingPhotoUri(null);
         photoUploadedOnSave = true;
       } catch (error) {
-        const detail =
-          error instanceof Error ? error.message : 'Errore sconosciuto';
-        notify('Foto non salvata', detail);
+        // Causa tecnica solo in console; al proprietario un messaggio calmo.
+        console.error('[DogEdit] photo upload failed', error);
+        notify(
+          'Foto non salvata',
+          'Non sono riuscito a caricarla. Controlla la connessione e riprova.',
+        );
         setSaveState('error');
         saveInFlightRef.current = false;
         return;

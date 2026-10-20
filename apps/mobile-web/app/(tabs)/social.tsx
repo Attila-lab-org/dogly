@@ -27,6 +27,7 @@ import Svg, {
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
+import { SpringPress } from '@/components/pressSpring';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { GamesSection } from '@/features/social/GamesSection';
 import { NearbyPlacesSection } from '@/features/social/NearbyPlacesSection';
@@ -314,7 +315,7 @@ export default function SocialScreen() {
               }}
               style={[styles.segmentItem, showGames && styles.segmentActive]}
             >
-              <Ionicons name="game-controller" size={17} color={showGames ? '#087D6B' : '#59788D'} />
+              <Ionicons name="game-controller" size={17} color={showGames ? colors.tealDeep : colors.textSecondary} />
               <Text style={showGames ? styles.segmentActiveText : styles.segmentText}>Giochi</Text>
             </Pressable>
             <Pressable
@@ -327,7 +328,7 @@ export default function SocialScreen() {
               }}
               style={[styles.segmentItem, !showGames && styles.segmentActive]}
             >
-              <Ionicons name="location-outline" size={17} color={!showGames ? '#087D6B' : '#59788D'} />
+              <Ionicons name="location-outline" size={17} color={!showGames ? colors.tealDeep : colors.textSecondary} />
               <Text style={!showGames ? styles.segmentActiveText : styles.segmentText}>Luoghi</Text>
             </Pressable>
           </View>
@@ -348,18 +349,18 @@ export default function SocialScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8FCFB' },
+  safe: { flex: 1, backgroundColor: colors.background },
   discoverHeader: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: 10 },
-  discoverTitle: { color: '#102D46', fontSize: 28, lineHeight: 33, fontWeight: typography.weight.bold, letterSpacing: -0.8 },
-  segment: { minHeight: 48, borderRadius: 25, borderWidth: 1, borderColor: '#D9E8E8', flexDirection: 'row', padding: 3, backgroundColor: 'rgba(255,255,255,0.72)' },
-  segmentActive: { backgroundColor: '#DDF6EA' },
+  discoverTitle: { color: colors.text, fontSize: 28, lineHeight: 33, fontWeight: typography.weight.bold, letterSpacing: -0.8 },
+  segment: { minHeight: 48, borderRadius: 25, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', padding: 3, backgroundColor: 'rgba(255,255,255,0.72)' },
+  segmentActive: { backgroundColor: colors.tealPale },
   segmentItem: { flex: 1, borderRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  segmentActiveText: { color: '#16364A', fontSize: 15, fontWeight: typography.weight.bold },
-  segmentText: { color: '#59788D', fontSize: 15, fontWeight: typography.weight.semibold },
+  segmentActiveText: { color: colors.text, fontSize: 15, fontWeight: typography.weight.bold },
+  segmentText: { color: colors.textSecondary, fontSize: 15, fontWeight: typography.weight.semibold },
   content: { paddingBottom: spacing.xxxl, gap: spacing.md },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  eyebrow: { color: '#087D6B', fontSize: 11, fontWeight: typography.weight.bold, letterSpacing: 1.6 },
-  title: { color: '#102D46', fontSize: 32, lineHeight: 37, fontWeight: typography.weight.bold, letterSpacing: -1.1, marginTop: 3 },
+  eyebrow: { color: colors.tealDeep, fontSize: 11, fontWeight: typography.weight.bold, letterSpacing: 1.6 },
+  title: { color: colors.text, fontSize: 32, lineHeight: 37, fontWeight: typography.weight.bold, letterSpacing: -1.1, marginTop: 3 },
   headerPaw: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   connectionHero: { minHeight: 272, alignItems: 'center', justifyContent: 'center', gap: 7, marginHorizontal: spacing.lg, overflow: 'hidden' },
   storyAvatarWrap: { width: 176, height: 176, alignItems: 'center', justifyContent: 'center' },
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#CBD8D4',
   },
-  connectionAvatar: { width: 150, height: 150, borderRadius: 75, borderWidth: 8, borderColor: '#FFFFFF', backgroundColor: '#EFF8F4', alignItems: 'center', justifyContent: 'center', shadowColor: '#0E4D52', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
+  connectionAvatar: { width: 150, height: 150, borderRadius: 75, borderWidth: 8, borderColor: '#FFFFFF', backgroundColor: '#EFF8F4', alignItems: 'center', justifyContent: 'center', shadowColor: colors.text, shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
   storyAdd: {
     position: 'absolute',
     right: 2,
@@ -388,19 +389,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 2,
   },
-  connectionTitle: { color: '#16364A', fontSize: 20, lineHeight: 23, fontWeight: typography.weight.bold, textAlign: 'center' },
-  weekCard: { marginHorizontal: spacing.lg, padding: spacing.lg, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.88)', borderWidth: 1, borderColor: '#DDEFE8', shadowColor: '#0E4D52', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  connectionTitle: { color: colors.text, fontSize: 20, lineHeight: 23, fontWeight: typography.weight.bold, textAlign: 'center' },
+  weekCard: { marginHorizontal: spacing.lg, padding: spacing.lg, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.88)', borderWidth: 1, borderColor: colors.border, shadowColor: colors.text, shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
   weekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-  weekTitle: { color: '#16364A', fontSize: 21, fontWeight: typography.weight.bold },
+  weekTitle: { color: colors.text, fontSize: 21, fontWeight: typography.weight.bold },
   weekStats: { flexDirection: 'row', alignItems: 'stretch' },
   weekStat: { flex: 1, alignItems: 'center', gap: 3 },
-  weekDivider: { width: 1, backgroundColor: '#D8E9E4', marginVertical: 3 },
-  weekValue: { color: '#102D46', fontSize: 26, lineHeight: 29, fontWeight: typography.weight.bold },
-  weekLabel: { color: '#31596F', fontSize: 12, textAlign: 'center' },
-  weekDelta: { color: '#6E8780', fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 5 },
-  continueButton: { marginHorizontal: spacing.lg, minHeight: 58, borderRadius: 29, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#163F52', shadowColor: '#163F52', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 3 },
+  weekDivider: { width: 1, backgroundColor: colors.border, marginVertical: 3 },
+  weekValue: { color: colors.text, fontSize: 26, lineHeight: 29, fontWeight: typography.weight.bold },
+  weekLabel: { color: colors.textSecondary, fontSize: 12, textAlign: 'center' },
+  weekDelta: { color: colors.textMuted, fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 5 },
+  continueButton: { marginHorizontal: spacing.lg, minHeight: 58, borderRadius: 29, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: colors.text, shadowColor: colors.text, shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 3 },
   continueText: { flex: 1, color: '#FFFFFF', fontSize: 16, fontWeight: typography.weight.bold },
   recentLink: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: spacing.sm },
-  recentText: { color: '#0A4D79', fontSize: 14, fontWeight: typography.weight.semibold, textDecorationLine: 'underline' },
+  recentText: { color: colors.primary, fontSize: 14, fontWeight: typography.weight.semibold, textDecorationLine: 'underline' },
   pressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
 });

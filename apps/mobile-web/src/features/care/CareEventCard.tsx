@@ -10,13 +10,13 @@ import type { CareEventType } from './types';
 import { CuteIcon, type CuteIconName } from '../../components/CuteIcon';
 
 const CARE = {
-  text: '#1A2B48',
+  text: colors.text,
   muted: '#64748B',
-  border: '#EDF2F7',
-  teal: '#2DAAAB',
-  tealSoft: '#E0F7F6',
-  coral: '#FF8B74',
-  peach: '#FFF1EE',
+  border: colors.border,
+  teal: colors.accent,
+  tealSoft: colors.tealMist,
+  coral: colors.coral,
+  peach: colors.coralSoft,
 } as const;
 
 /** Tinte per tipo di appuntamento (sfondi soft; il testo resta navy). */
@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   urgentCard: {
-    borderColor: '#FBCFC5',
-    backgroundColor: '#FFFBFA',
+    borderColor: colors.coralPale,
+    backgroundColor: colors.surface,
   },
   completedCard: {
     opacity: 0.78,

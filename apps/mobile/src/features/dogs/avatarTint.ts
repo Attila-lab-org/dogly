@@ -1,20 +1,35 @@
 /**
- * Tinta del profilo dal colore dominante della foto del cane.
- * Web: canvas 1×1 (getImageData). Nativa: nessuna API pixel disponibile
- * senza moduli nativi → palette default (documentato; il profilo resta
- * brand teal). Cache per dogId+photoUri nel kv (pattern checkin).
- * La tinta colora solo SFONDI e accenti soft, mai il testo.
+ * Tinta vivace dal colore del cane (PO 2026-10: niente "tortora" ovunque).
+ * Estrazione: griglia 8×8 sul thumbnail (canvas web), scelto il pixel
+ * CLUSTER più saturo — non la media — con clamp di qualità
+ * (saturazione ≥ 0.25, lightness 0.35–0.75); se nulla passa → teal brand.
+ * Uso: SOLO accenti piccoli (chip meta, bordo/glow avatar, velo hero a
+ * bassa opacità). Mai sfondo pagina: resta `colors.background` brand.
+ * Cache invariata (kv per dogId+photoUri, pattern checkin).
+ * Nativa: nessuna API pixel senza moduli nativi → teal brand (documentato).
  */
 import { useEffect, useState } from 'react';
 import type { KeyValueStorage } from '../checkin/persistence';
 
 export interface AvatarPalette {
-  /** Gradiente hero: dal tint soft allo sfondo pagina. */
-  heroFrom: string;
-  heroTo: string;
-  /** Soft per chip/pill (solo sfondi). */
-  chip: string;
+  /** Accento vivace del pelo (chip meta, bordo avatar). */
+  accent: string;
+  /** Soft dell'accento per piccoli fondi (chip). */
+  accentSoft: string;
+  /** Colore del velo hero (va applicato con `veilOpacity`). */
+  veil: string;
+  veilOpacity: number;
 }
+
+const BRAND_ACCENT = '#14B8A6';
+const BRAND_ACCENT_SOFT = '#CCFBF1';
+
+export const DEFAULT_AVATAR_PALETTE: AvatarPalette = {
+  accent: BRAND_ACCENT,
+  accentSoft: BRAND_ACCENT_SOFT,
+  veil: BRAND_ACCENT,
+  veilOpacity: 0.13,
+};
 
 function hexToRgb(hex: string): [number, number, number] | null {
   const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -41,24 +56,55 @@ export function mixWithWhite(hex: string, amount: number): string {
   );
 }
 
-export const DEFAULT_AVATAR_PALETTE: AvatarPalette = {
-  heroFrom: '#DBEAFE',
-  heroTo: '#F4F7FB',
-  chip: '#CCFBF1',
-};
+/** HSL da RGB (0-255). */
+export function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+  else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+  else h = ((rn - gn) / d + 4) / 6;
+  return { h: h * 360, s, l };
+}
 
-/** Palette profilo dal colore dominante (soft: mai per il testo). */
+const MIN_SATURATION = 0.25;
+const MIN_LIGHTNESS = 0.35;
+const MAX_LIGHTNESS = 0.75;
+
+/**
+ * Il colore "vivace" del cane: il pixel più saturo che supera i clamp di
+ * qualità (niente fango da media). Ritorna null se nessuno passa.
+ */
+export function pickVividColor(samples: Array<[number, number, number]>): string | null {
+  let best: { hex: string; s: number } | null = null;
+  for (const [r, g, b] of samples) {
+    const { s, l } = rgbToHsl(r, g, b);
+    if (s < MIN_SATURATION || l < MIN_LIGHTNESS || l > MAX_LIGHTNESS) continue;
+    if (!best || s > best.s) best = { hex: toHex(r, g, b), s };
+  }
+  return best?.hex ?? null;
+}
+
+/** Palette accenti dalla tinta vivace (mai sfondo pagina). */
 export function paletteFromDominant(dominant: string | null): AvatarPalette {
   if (!dominant || !hexToRgb(dominant)) return DEFAULT_AVATAR_PALETTE;
   return {
-    heroFrom: mixWithWhite(dominant, 0.72),
-    heroTo: mixWithWhite(dominant, 0.94),
-    chip: mixWithWhite(dominant, 0.82),
+    accent: dominant,
+    accentSoft: mixWithWhite(dominant, 0.82),
+    veil: dominant,
+    veilOpacity: 0.13,
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Estrazione colore (web via canvas; nativa → null = palette default)  */
+/* Estrazione colore (web via canvas; nativa → null = teal brand)       */
 /* ------------------------------------------------------------------ */
 
 async function computeDominantWeb(photoUri: string): Promise<string | null> {
@@ -75,18 +121,23 @@ async function computeDominantWeb(photoUri: string): Promise<string | null> {
         img.src = url;
       });
       const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
+      canvas.width = 8;
+      canvas.height = 8;
       const context = canvas.getContext('2d');
       if (!context) return null;
-      context.drawImage(image, 0, 0, 1, 1);
-      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
-      return toHex(r, g, b);
+      context.drawImage(image, 0, 0, 8, 8);
+      const data = context.getImageData(0, 0, 8, 8).data;
+      const samples: Array<[number, number, number]> = [];
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 128) continue; // ignora i trasparenti
+        samples.push([data[i], data[i + 1], data[i + 2]]);
+      }
+      return pickVividColor(samples);
     } finally {
       URL.revokeObjectURL(url);
     }
   } catch {
-    // CORS o formato non leggibile: palette default, mai bloccare il profilo.
+    // CORS o formato non leggibile: teal brand, mai bloccare il profilo.
     return null;
   }
 }
@@ -109,13 +160,11 @@ async function storage(): Promise<KeyValueStorage | null> {
 }
 
 function tintKey(dogId: string, photoUri: string): string {
-  // Stable across signed-URL remints (ignore ?token=…).
-  const pathOnly = photoUri.split('?')[0] ?? photoUri;
   let hash = 0;
-  for (let i = 0; i < pathOnly.length; i += 1) {
-    hash = (hash * 31 + pathOnly.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < photoUri.length; i += 1) {
+    hash = (hash * 31 + photoUri.charCodeAt(i)) >>> 0;
   }
-  return `dogs:avatar-tint:v2:${dogId}:${hash.toString(36)}`;
+  return `dogs:avatar-tint:v1:${dogId}:${hash.toString(36)}`;
 }
 
 export async function loadAvatarTint(
@@ -146,7 +195,7 @@ export async function saveAvatarTint(
 }
 
 /**
- * Palette del profilo per questo cane: cache → calcolo (web) → default.
+ * Palette accenti per questo cane: cache → calcolo (web) → teal brand.
  * Il risultato è sempre una palette valida (mai null).
  */
 export function useAvatarPalette(

@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Button, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { useSession } from '@/features/auth/SessionProvider';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {

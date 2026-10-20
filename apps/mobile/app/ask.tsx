@@ -45,6 +45,8 @@ import { purchasesEnabled } from '@/mocks/entitlements';
 import { ANALYSIS_POLL_TIMEOUT_MS } from '@/features/core/processingTimeout';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SpringPress } from '@/components/pressSpring';
+import { hapticLight, hapticSelection } from '@/lib/haptics';
+import { ThinkingDots } from '@/components/ThinkingDots';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
@@ -912,7 +914,7 @@ export default function AskScreen() {
                   </SpringPress>
                 );
               })() : null}
-              {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} style={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></Pressable><Pressable disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></Pressable></View></View> : null}
+              {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><SpringPress disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} pressableStyle={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></SpringPress><SpringPress disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></SpringPress></View></View> : null}
             </View>
           </Animated.View>)}
           {!starting && !sending && !hasUserMessage && messages.length === 1 ? (
@@ -952,7 +954,7 @@ export default function AskScreen() {
           ) : null}
           {sending || mediaPhase ? (
             <View style={styles.thinking}>
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ThinkingDots />
               <Text style={styles.muted}>
                 {mediaPhase === 'uploading'
                   ? 'Carico il momento…'
@@ -1015,7 +1017,7 @@ export default function AskScreen() {
                 />
                 <Text style={[styles.mediaButtonText, neededMedia === 'VIDEO' && styles.mediaButtonTextLit]}>Video</Text>
               </SpringPress>
-              <SpringPress accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={toggleDictation} disabled={sending || !session} style={[styles.mic, dictating && styles.micActive]} pressableStyle={({ pressed }) => [styles.micPressable, dictating && styles.micActive, pressed && styles.pressed]}>
+              <SpringPress accessibilityRole="button" accessibilityLabel={dictating ? 'Ferma dettatura' : 'Detta un messaggio'} onPress={() => { void hapticSelection(); toggleDictation(); }} disabled={sending || !session} style={[styles.mic, dictating && styles.micActive]} pressableStyle={({ pressed }) => [styles.micPressable, dictating && styles.micActive, pressed && styles.pressed]}>
                 <Ionicons name={dictating ? 'mic' : 'mic-outline'} size={19} color={dictating ? '#FFFFFF' : colors.primary} />
                 <Text style={[styles.mediaButtonText, dictating && styles.mediaButtonTextLit]}>Detta</Text>
               </SpringPress>
@@ -1031,7 +1033,7 @@ export default function AskScreen() {
                 <Text style={styles.voiceButtonText}>Parla</Text>
               </SpringPress>
               </View>
-              <SpringPress accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => void send(draft)} disabled={!draft.trim() || sending || !session} style={[styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled]} pressableStyle={({ pressed }) => [styles.sendPressable, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
+              <SpringPress accessibilityRole="button" accessibilityLabel="Invia messaggio" onPress={() => { void hapticLight(); void send(draft); }} disabled={!draft.trim() || sending || !session} style={[styles.send, (!draft.trim() || sending || !session) && styles.sendDisabled]} pressableStyle={({ pressed }) => [styles.sendPressable, (!draft.trim() || sending || !session) && styles.sendDisabled, pressed && styles.pressed]}>
                 <SendArrow />
               </SpringPress>
             </View>

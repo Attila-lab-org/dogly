@@ -8,6 +8,9 @@ module.exports = {
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    // expo-image è ESM-only: nei test (ambiente node) arriva solo come
+    // rendering, mai valutato → stub leggero.
+    '^expo-image$': '<rootDir>/src/__tests__/expoImageStub.tsx',
   },
   testMatch: ['**/__tests__/**/*.test.(ts|tsx)'],
 };

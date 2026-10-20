@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { DogAvatar } from '@/features/core/components';
+import { SpringPress } from '@/components/pressSpring';
 import { SignedImage } from '@/features/home/SignedImage';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import {
@@ -184,7 +185,7 @@ export default function StoryViewerScreen() {
         queryClient.invalidateQueries({ queryKey: ['gallery-albums', dogId] }),
       ]);
     } catch {
-      Alert.alert('Momento non salvato', 'La storia � ancora disponibile. Riprova.');
+      Alert.alert('Momento non salvato', 'La storia è ancora disponibile. Riprova.');
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -211,7 +212,7 @@ export default function StoryViewerScreen() {
     return (
       <View style={[styles.root, styles.centered]}>
         <StatusBar barStyle="light-content" />
-        <Text style={styles.loadingText}>Carico le storie…</Text>
+        <Text style={styles.loadingText}>Carico le storieâ€¦</Text>
       </View>
     );
   }
@@ -221,9 +222,9 @@ export default function StoryViewerScreen() {
       <View style={[styles.root, styles.centered]}>
         <StatusBar barStyle="light-content" />
         <Text style={styles.loadingText}>Nessuna storia ancora.</Text>
-        <Pressable accessibilityRole="button" onPress={close} style={styles.closeFab}>
+        <SpringPress accessibilityRole="button" accessibilityLabel="Chiudi la storia" onPress={close} pressableStyle={styles.closeFab} scaleTo={0.92}>
           <Ionicons name="close" size={22} color="#FFFFFF" />
-        </Pressable>
+        </SpringPress>
       </View>
     );
   }
@@ -250,7 +251,7 @@ export default function StoryViewerScreen() {
         onPress={() => void saveMoment()}
         style={{ position: 'absolute', bottom: insets.bottom + 24, alignSelf: 'center', zIndex: 3, backgroundColor: 'rgba(0,0,0,0.7)', padding: 14, borderRadius: 24 }}
       >
-        <Text style={styles.loadingText}>{saving ? 'Salvataggio�' : savedIds.includes(photo.id) ? 'Conservata nei Momenti' : 'Conserva nei Momenti'}</Text>
+        <Text style={styles.loadingText}>{saving ? 'Salvataggio…' : savedIds.includes(photo.id) ? 'Conservata nei Momenti' : 'Conserva nei Momenti'}</Text>
       </Pressable>
       <View style={[styles.chrome, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.progressRow} pointerEvents="none">

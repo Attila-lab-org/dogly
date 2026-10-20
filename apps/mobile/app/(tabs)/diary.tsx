@@ -32,13 +32,14 @@ import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 import { DiaryMediaCover } from '@/features/home/DiaryMediaCover';
-import { usePressSpring } from '@/components/pressSpring';
+import { SpringPress, usePressSpring } from '@/components/pressSpring';
 import { SkeletonCard } from '@/components/Skeleton';
 import { hapticLight } from '@/lib/haptics';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogIllustration } from '@/components/DogIllustration';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
+import { PageGuide } from '@/features/guide/PageGuide';
 
 type DiaryFilter = 'ALL' | DiaryDomain;
 type TimelineItem =
@@ -124,6 +125,9 @@ function entryStatusBadge(entry: DiaryEntry): StatusBadge | null {
 
 function entryIconTone(entry: DiaryEntry): IconTone {
   const haystack = `${entry.title} ${entry.subtitle ?? ''}`.toLocaleLowerCase('it-IT');
+  if (entry.domain === 'FOOD_LABEL') {
+    return { name: 'paw', bg: '#FFF1D6', fg: '#C56A08' };
+  }
   if (entry.domain === 'DIGESTIVE') {
     if (/morbid|variazion|flag|controll|attenzione/i.test(haystack)) {
       return { name: 'alert', bg: '#FFF1EE', fg: '#EA580C' };
@@ -180,7 +184,7 @@ function DiaryCard({
   const deleted = entry.mediaDeleted ? (
     <View style={styles.deletedRow}>
       <Ionicons name="trash-bin-outline" size={12} color={colors.iconMuted} />
-      <Text style={styles.deletedText}>Video non più disponibile</Text>
+      <Text style={styles.deletedText}>Questo video non c’è più</Text>
     </View>
   ) : null;
 
@@ -421,7 +425,7 @@ export default function DiaryScreen() {
             {FILTERS.map((f) => {
               const active = filter === f.key;
               return (
-                <Pressable
+                <SpringPress
                   key={f.key}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
@@ -429,7 +433,8 @@ export default function DiaryScreen() {
                     void hapticLight();
                     setFilter(f.key);
                   }}
-                  style={[styles.filterPill, active && styles.filterPillActive]}
+                  scaleTo={0.94}
+                  pressableStyle={[styles.filterPill, active && styles.filterPillActive]}
                   testID={`diary-filter-${f.key.toLowerCase()}`}
                 >
                   <Text
@@ -437,7 +442,7 @@ export default function DiaryScreen() {
                   >
                     {f.label}
                   </Text>
-                </Pressable>
+                </SpringPress>
               );
             })}
           </ScrollView>
@@ -466,14 +471,16 @@ export default function DiaryScreen() {
                     ? `Il diario di ${dog.name} aspetta la prima storia`
                     : filter === 'BEHAVIOR'
                       ? 'Nessun momento osservato, per ora'
-                      : 'Nessun controllo digestione nel diario'
+                      : filter === 'DIGESTIVE'
+                        ? 'Nessun controllo della pancia, per ora'
+                        : 'Nessun momento nel diario'
               }
               message={
                 debouncedSearch
                   ? 'Prova con un’altra parola, oppure cancella la ricerca.'
                   : filter === 'DIGESTIVE'
                     ? `In chat possiamo guardare insieme la digestione di ${dog.name}: qui resterà il riassunto.`
-                    : filter === 'BEHAVIOR'
+                  : filter === 'BEHAVIOR'
                       ? `In chat mandami un video di ${dog.name}: qui resterà il momento, in parole semplici.`
                       : `Parliamone in chat: i momenti di ${dog.name} resteranno qui, leggeri.`
               }
@@ -577,6 +584,7 @@ export default function DiaryScreen() {
           )}
         </View>
       </SafeAreaView>
+      <PageGuide page="diary" dogId={dog.id} dogName={dog.name} />
     </View>
   );
 }
@@ -594,7 +602,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
   title: {
@@ -655,10 +663,10 @@ const styles = StyleSheet.create({
   },
   timeline: {
     flex: 1,
-    marginHorizontal: -20,
+    marginHorizontal: -spacing.lg,
   },
   timelineContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 48,
   },
   groupHeader: {

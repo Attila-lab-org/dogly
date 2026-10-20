@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { ScreenContainer, SkeletonCard } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { AvatarActor } from '@/features/core/AvatarActor';
@@ -266,14 +267,13 @@ export default function LeaderboardScreen() {
               <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
               <Text style={styles.playButtonText}>Gioca ora</Text>
             </Pressable>
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel="Sfida gli amici"
               onPress={challengeFriends}
-              style={({ pressed }) => [styles.challengeButton, pressed && styles.pressed]}
-            >
+              pressableStyle={({ pressed }) => [styles.challengeButton, pressed && styles.pressed]}>
               <Text style={styles.challengeText}>Sfida gli amici</Text>
-            </Pressable>
+            </SpringPress>
           </View>
         </View>
       ) : items.length <= 2 ? (
@@ -300,14 +300,13 @@ export default function LeaderboardScreen() {
               <CuteIcon name="play" size={16} color={colors.textOnPrimary} secondary={colors.textOnPrimary} />
               <Text style={styles.playButtonText}>Gioca ora</Text>
             </Pressable>
-            <Pressable
+            <SpringPress
               accessibilityRole="button"
               accessibilityLabel="Sfida gli amici"
               onPress={challengeFriends}
-              style={({ pressed }) => [styles.challengeButton, pressed && styles.pressed]}
-            >
+              pressableStyle={({ pressed }) => [styles.challengeButton, pressed && styles.pressed]}>
               <Text style={styles.challengeText}>Sfida gli amici</Text>
-            </Pressable>
+            </SpringPress>
           </View>
         </View>
       ) : (

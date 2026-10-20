@@ -2,6 +2,8 @@
  * Card scaffale per il catalogo alimenti: pack grande, tap = scegli.
  */
 import React from 'react';
+import Animated from 'react-native-reanimated';
+import { usePressSpring } from '../../components/pressSpring';
 import {
   Image,
   Pressable,
@@ -39,6 +41,7 @@ export function FoodShelfCard({
   width: number;
   onPress: () => void;
 }) {
+  const press = usePressSpring();
   const meta = [item.package_size, item.food_form, item.variant]
     .filter(Boolean)
     .filter((value, index, all) => all.indexOf(value) === index)
@@ -46,10 +49,13 @@ export function FoodShelfCard({
     .join(' · ');
 
   return (
+    <Animated.View style={press.style}>
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${item.brand ?? ''} ${item.name ?? 'Alimento'}`}
       onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       style={({ pressed }) => [
         styles.card,
         { width },
@@ -87,6 +93,7 @@ export function FoodShelfCard({
         </Text>
       ) : null}
     </Pressable>
+    </Animated.View>
   );
 }
 

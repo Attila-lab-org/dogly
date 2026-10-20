@@ -275,9 +275,12 @@ export default function DogEditScreen() {
         setPendingPhotoUri(null);
         photoUploadedOnSave = true;
       } catch (error) {
-        const detail =
-          error instanceof Error ? error.message : 'Errore sconosciuto';
-        notify('Foto non salvata', detail);
+        // Causa tecnica solo in console; al proprietario un messaggio calmo.
+        console.error('[DogEdit] photo upload failed', error);
+        notify(
+          'Foto non salvata',
+          'Non sono riuscito a caricarla. Controlla la connessione e riprova.',
+        );
         setSaveState('error');
         saveInFlightRef.current = false;
         return;
@@ -450,6 +453,15 @@ export default function DogEditScreen() {
     : saveState === 'error'
       ? 'alert-circle-outline'
       : 'checkmark-circle-outline';
+  const profileFields = [
+    name.trim(),
+    birthDate,
+    sex && sex !== 'UNKNOWN' ? sex : '',
+    sizeLabel,
+    breedSelection.kind !== 'unknown' ? breedLabelFromSelection(breedSelection) : '',
+  ];
+  const profileComplete = profileFields.filter(Boolean).length;
+  const profileProgress = profileComplete / profileFields.length;
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
@@ -477,6 +489,13 @@ export default function DogEditScreen() {
         <Ionicons name={saveIcon} size={20} color={saveState === 'error' ? colors.danger : colors.teal} />
         <Text style={[styles.saveBarText, saveState === 'error' && styles.saveBarTextError]}>{saveState === 'error' ? `${saveLabel} · Tocca per riprovare` : saveBusy ? saveLabel : 'Salvato automaticamente'}</Text>
       </SpringPress>
+      <View style={styles.completeness} accessibilityLabel={`Profilo completo al ${Math.round(profileProgress * 100)} per cento`}>
+        <View style={styles.completenessHeader}>
+          <Text style={styles.completenessTitle}>Profilo {profileComplete === profileFields.length ? 'completo' : 'in corso'}</Text>
+          <Text style={styles.completenessValue}>{profileComplete}/{profileFields.length}</Text>
+        </View>
+        <View style={styles.completenessTrack}><View style={[styles.completenessFill, { width: `${profileProgress * 100}%` }]} /></View>
+      </View>
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 
       <View style={styles.identityRow}>
@@ -750,6 +769,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.7,
   },
   feedback: { color: colors.danger, fontSize: typography.size.sm, lineHeight: typography.size.sm * typography.lineHeight.relaxed, marginBottom: spacing.md },
+  completeness: { marginBottom: spacing.lg, padding: spacing.md, borderRadius: 16, backgroundColor: '#F0FAF8', borderWidth: 1, borderColor: '#D6F0EA' },
+  completenessHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
+  completenessTitle: { color: colors.text, fontSize: typography.size.sm, fontWeight: typography.weight.bold },
+  completenessValue: { color: colors.teal, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
+  completenessTrack: { height: 7, borderRadius: 99, overflow: 'hidden', backgroundColor: '#DDEEEA' },
+  completenessFill: { height: '100%', borderRadius: 99, backgroundColor: colors.teal },
   saveBar: {
     flexDirection: 'row',
     alignItems: 'center',

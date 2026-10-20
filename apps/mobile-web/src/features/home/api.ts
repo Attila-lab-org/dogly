@@ -107,14 +107,14 @@ const IN_PROGRESS_STATUSES = new Set<string>([
 ]);
 
 const NON_COMPLETED_LABELS: Record<string, string> = {
-  DRAFT: 'Bozza',
+  DRAFT: 'In preparazione',
   UPLOADING: 'Caricamento in corso',
-  QUEUED: 'In coda',
+  QUEUED: 'In attesa un attimo',
   OBSERVING: 'Sto osservando il video',
   INTERPRETING: 'Sto osservando il video',
   FAILED_RETRYABLE: 'Nuovo tentativo in corso',
   PROCESSING: 'Sto osservando la foto',
-  REJECTED_QUALITY: 'Video non adatto',
+  REJECTED_QUALITY: 'Questo video non si legge bene',
   INSUFFICIENT_IMAGE: 'Foto non abbastanza chiara',
   FAILED_TERMINAL: 'Non sono riuscito a leggere il momento',
   CANCELLED: 'Annullata',
@@ -154,7 +154,7 @@ export function mapDiaryItemToEntry(item: ApiDiaryItem): DiaryEntry | null {
     item.domain === 'BEHAVIOR'
       ? item.status === 'COMPLETED'
         ? probabilisticInsightLabel(item.title)
-        : 'Momento video'
+        : 'Momento in lettura'
       : item.title === 'Controllo digestione'
         ? 'Osservazione digestiva'
         : simplifyDigestiveOwnerCopy(item.title, {

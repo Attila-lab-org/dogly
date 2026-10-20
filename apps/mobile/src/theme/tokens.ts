@@ -22,6 +22,26 @@ export const colors = {
   // Accento corallo caldo (pareggio coi token web).
   coral: '#FF8B74',
   coralSoft: '#FFF1EE',
+  lavenderSoft: '#EEF2FF',
+  curveHeader: '#DDF2F8',
+
+  /**
+   * Scale "mondi" armonizzate (palette unica brand, PO 2026-10):
+   * ogni area (Social, Agenda, giochi) usa tinte soft derivate dalle scale
+   * brand — niente palette locali spurie (es. verde menta) in pagina.
+   */
+  tealDeep: '#0B6B60',
+  tealVivid: '#069A86',
+  tealPale: '#DDF6EA',
+  tealMist: '#EAF8F3',
+  coralVivid: '#F97362',
+  coralPale: '#FFE3D9',
+  bluePale: '#E3EFFE',
+  blueMist: '#EAF3FD',
+  amber: '#F6C94C',
+  amberPale: '#FFF3D6',
+  lavenderPale: '#F0EBFB',
+  lavenderDeep: '#7C3AED',
 
   text: '#0E2A47',
   textSecondary: '#64748B',

@@ -21,7 +21,7 @@ import { usePressSpring } from '@/components/pressSpring';
 import { SpringPress } from '@/components/pressSpring';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
 import { hapticLight } from '@/lib/haptics';
-import { colors, shadows } from '@/theme/tokens';
+import { colors, shadows, spacing } from '@/theme/tokens';
 import { PageGuide } from '@/features/guide/PageGuide';
 
 export default function DogProfileTabScreen() {
@@ -48,11 +48,11 @@ export default function DogProfileTabScreen() {
   const extraMeta = [dog.breedLabel, dog.sizeLabel, dog.weightKg ? `${String(dog.weightKg).replace('.', ',')} kg` : null].filter(Boolean).join(' · ');
   return (
     <View style={styles.root}>
-      <WorldBackdrop world="profile" accent={palette.heroFrom} />
+      <WorldBackdrop world="profile" accent={palette.accent} />
       <Animated.ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} onScroll={scrollHandler} scrollEventThrottle={16}>
         <View style={styles.hero}>
           <LinearGradient
-            colors={[palette.heroFrom, palette.heroTo]}
+            colors={[colors.bluePale, colors.background]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={StyleSheet.absoluteFill}
@@ -62,7 +62,7 @@ export default function DogProfileTabScreen() {
               <SignedImage uri={dog.photoUri} style={styles.heroPhoto} accessibilityLabel={`Foto di ${dog.name}`} />
             </Animated.View>
           ) : <View style={styles.heroEmpty}><Ionicons name="paw-outline" size={70} color={colors.primary} /><Text style={styles.emptyText}>Aggiungi la sua foto da Modifica</Text></View>}
-          <View pointerEvents="none" style={[styles.heroTint, { backgroundColor: palette.heroFrom }]} />
+          <View pointerEvents="none" style={[styles.heroTint, { backgroundColor: palette.veil, opacity: palette.veilOpacity }]} />
           <LinearGradient colors={['rgba(14,42,71,0)', 'rgba(14,42,71,0.66)']} style={styles.heroShade} pointerEvents="none" />
           <View style={styles.heroLabel} pointerEvents="none">
             <Text style={styles.heroEyebrow}>IL MONDO DI</Text>
@@ -73,10 +73,10 @@ export default function DogProfileTabScreen() {
             <SpringPress accessibilityRole="button" accessibilityLabel="Impostazioni" onPress={() => router.push('/settings')} pressableStyle={styles.heroButton}><Ionicons name="settings-outline" size={24} color={colors.text} /></SpringPress>
           </SafeAreaView>
         </View>
-        <View style={[styles.sheet, { backgroundColor: palette.heroTo }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
           <View style={styles.identity}>
-            <View style={[styles.identityAvatarWrap, { borderColor: palette.heroFrom }]}>
-              {dog.photoUri ? <SignedImage uri={dog.photoUri} style={styles.identityAvatar} accessibilityLabel={`Avatar di ${dog.name}`} /> : <Ionicons name="paw" size={22} color={palette.heroFrom} />}
+            <View style={[styles.identityAvatarWrap, { borderColor: palette.accentSoft }]}>
+              {dog.photoUri ? <SignedImage uri={dog.photoUri} style={styles.identityAvatar} accessibilityLabel={`Avatar di ${dog.name}`} /> : <Ionicons name="paw" size={22} color={palette.accent} />}
             </View>
             <View style={styles.identityCopy}><Text style={styles.name}>{dog.name || 'Il tuo cane'}</Text>{meta ? <Text style={styles.meta}>{meta}</Text> : null}</View>
             <ProfileAction icon="create-outline" label="Modifica profilo" accessibilityLabel={`Modifica profilo di ${dog.name}`} onPress={() => router.push(`/dogs/${dog.id}/edit` as never)} />
@@ -183,13 +183,13 @@ const styles = StyleSheet.create({
   heroPhoto: { width: '100%', height: '100%', resizeMode: 'cover' },
   heroEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   heroShade: StyleSheet.absoluteFill,
-  heroTint: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0.16 },
+  heroTint: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   heroLabel: { position: 'absolute', left: 18, bottom: 28, gap: 2 },
   heroEyebrow: { color: 'rgba(255,255,255,0.84)', fontSize: 11, fontWeight: '800', letterSpacing: 1.4 },
   heroWorldName: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.4 },
   heroControls: { position: 'absolute', top: 0, left: 0, right: 0, padding: 16, flexDirection: 'row', justifyContent: 'space-between' },
   heroButton: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.88)', alignItems: 'center', justifyContent: 'center' },
-  sheet: { marginTop: -32, borderTopLeftRadius: 30, borderTopRightRadius: 30, backgroundColor: 'rgba(248,250,252,0.93)', padding: 18, gap: 16 },
+  sheet: { marginTop: -32, borderTopLeftRadius: 30, borderTopRightRadius: 30, backgroundColor: 'rgba(248,250,252,0.93)', padding: spacing.lg, gap: spacing.lg },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   identityAvatarWrap: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF6FF', borderWidth: 2, borderColor: 'rgba(37,99,235,0.16)', overflow: 'hidden' },
   identityAvatar: { width: '100%', height: '100%' },

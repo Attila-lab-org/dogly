@@ -32,7 +32,7 @@ import { isApiConfigured } from '@/features/auth/env';
 import { queryKeys } from '@/lib/queryClient';
 import { fetchDiaryPage, mapDiaryItemToEntry } from '@/features/home/api';
 import { DiaryMediaCover } from '@/features/home/DiaryMediaCover';
-import { usePressSpring } from '@/components/pressSpring';
+import { SpringPress, usePressSpring } from '@/components/pressSpring';
 import { SkeletonCard } from '@/components/Skeleton';
 import { hapticLight } from '@/lib/haptics';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
@@ -184,7 +184,7 @@ function DiaryCard({
   const deleted = entry.mediaDeleted ? (
     <View style={styles.deletedRow}>
       <Ionicons name="trash-bin-outline" size={12} color={colors.iconMuted} />
-      <Text style={styles.deletedText}>Video non più disponibile</Text>
+      <Text style={styles.deletedText}>Questo video non c’è più</Text>
     </View>
   ) : null;
 
@@ -425,7 +425,7 @@ export default function DiaryScreen() {
             {FILTERS.map((f) => {
               const active = filter === f.key;
               return (
-                <Pressable
+                <SpringPress
                   key={f.key}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
@@ -433,7 +433,8 @@ export default function DiaryScreen() {
                     void hapticLight();
                     setFilter(f.key);
                   }}
-                  style={[styles.filterPill, active && styles.filterPillActive]}
+                  scaleTo={0.94}
+                  pressableStyle={[styles.filterPill, active && styles.filterPillActive]}
                   testID={`diary-filter-${f.key.toLowerCase()}`}
                 >
                   <Text
@@ -441,7 +442,7 @@ export default function DiaryScreen() {
                   >
                     {f.label}
                   </Text>
-                </Pressable>
+                </SpringPress>
               );
             })}
           </ScrollView>
@@ -471,7 +472,7 @@ export default function DiaryScreen() {
                     : filter === 'BEHAVIOR'
                       ? 'Nessun momento osservato, per ora'
                       : filter === 'DIGESTIVE'
-                        ? 'Nessun controllo digestione nel diario'
+                        ? 'Nessun controllo della pancia, per ora'
                         : 'Nessun momento nel diario'
               }
               message={
@@ -601,7 +602,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
   title: {
@@ -662,10 +663,10 @@ const styles = StyleSheet.create({
   },
   timeline: {
     flex: 1,
-    marginHorizontal: -20,
+    marginHorizontal: -spacing.lg,
   },
   timelineContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 48,
   },
   groupHeader: {

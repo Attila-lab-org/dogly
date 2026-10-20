@@ -17,14 +17,14 @@ import { CARE_TYPE_META } from '@/features/care/types';
 import { colors, shadows, spacing, typography } from '@/theme/tokens';
 
 const CARE = {
-  bg: '#F8FAFC',
-  text: '#1A2B48',
+  bg: colors.background,
+  text: colors.text,
   muted: '#64748B',
-  border: '#EDF2F7',
-  teal: '#2DAAAB',
-  tealSoft: '#E0F7F6',
-  coral: '#FF8B74',
-  peach: '#FFF1EE',
+  border: colors.border,
+  teal: colors.accent,
+  tealSoft: colors.tealMist,
+  coral: colors.coral,
+  peach: colors.coralSoft,
 } as const;
 
 export default function CareAgendaScreen() {
@@ -181,9 +181,9 @@ export default function CareAgendaScreen() {
           <View style={styles.emptyIcon}>
             <Ionicons name="calendar-outline" size={30} color={CARE.teal} />
           </View>
-          <Text style={styles.emptyTitle}>Nessun appuntamento</Text>
+          <Text style={styles.emptyTitle}>{`L’agenda di ${dog.name} è leggera`}</Text>
           <Text style={styles.emptyText}>
-            Aggiungi il prossimo vaccino o una visita.
+            Segna la prossima visita o il vaccino: ti avviso io il giorno prima.
           </Text>
         </View>
       )}
@@ -207,7 +207,7 @@ export default function CareAgendaScreen() {
 
       {view === 'upcoming' && overdue.length > 0 ? (
         <>
-          <Text style={[styles.sectionTitle, styles.overdueTitle]}>Scaduti</Text>
+          <Text style={[styles.sectionTitle, styles.overdueTitle]}>In ritardo</Text>
           <View style={styles.list}>
             {overdue.map((event) => (
               <View key={event.id} style={styles.overdueWrap}>
@@ -275,8 +275,8 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   nextCardUrgent: {
-    borderColor: '#FBCFC5',
-    backgroundColor: '#FFFBFA',
+    borderColor: colors.coralPale,
+    backgroundColor: colors.surface,
   },
   pressed: {
     opacity: 0.88,

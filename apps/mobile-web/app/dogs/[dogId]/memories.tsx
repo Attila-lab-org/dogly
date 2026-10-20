@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Button, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -180,14 +181,15 @@ export default function DogMemoriesScreen() {
           const editing = editingId === item.id;
           return (
             <View style={styles.memoryCard}>
-              <Pressable
+              <SpringPress
                 accessibilityRole="button"
                 accessibilityState={{ expanded: open }}
                 onPress={() => {
                   setOpenId(open ? null : item.id);
                   setEditingId(null);
                 }}
-                style={styles.memoryHeader}
+                scaleTo={0.985}
+                pressableStyle={styles.memoryHeader}
               >
                 <View style={styles.memoryIcon}>
                   <Ionicons name="heart-outline" size={18} color={colors.accent} />
@@ -217,7 +219,7 @@ export default function DogMemoriesScreen() {
                   size={19}
                   color={colors.textMuted}
                 />
-              </Pressable>
+              </SpringPress>
               {editing ? (
                 <View style={styles.editor}>
                   {draft.map((fact, index) => (

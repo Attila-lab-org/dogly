@@ -12,15 +12,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { Skeleton } from '@/components/Skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { CuteIcon, type CuteIconName } from '@/components/CuteIcon';
 import { DogHero } from '@/features/home/DogHero';
 import { HomeNextAction } from '@/features/home/HomeNextAction';
-import { WalkLaunchCard } from '@/features/walk/WalkLaunchCard';
-import { SignedImage } from '@/features/home/SignedImage';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useCareEvents } from '@/features/care/store';
 import { useHomeData } from '@/features/home/useHomeData';
@@ -34,6 +32,9 @@ import { useSession } from '@/features/auth/SessionProvider';
 import { purchasesEnabled } from '@/mocks/entitlements';
 import { SpringPress } from '@/components/pressSpring';
 import { usePressSpring } from '@/components/pressSpring';
+import { PageGuide } from '@/features/guide/PageGuide';
+import { WalkLaunchCard } from '@/features/walk/WalkLaunchCard';
+import { SignedImage } from '@/features/home/SignedImage';
 import {
   hydrateReadNotificationKeys,
   notificationKey,
@@ -101,7 +102,8 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.headerRow}>
+          <View style={styles.sceneLayer}>
+            <View style={styles.headerRow}>
             <View style={styles.brand} accessible accessibilityLabel="Dogly">
               <Image source={logoMarkSource} style={styles.logoMark} resizeMode="contain" />
               <Text style={styles.wordmark}>Dogly</Text>
@@ -146,7 +148,7 @@ export default function HomeScreen() {
             <View style={styles.statusBanner} accessibilityLiveRegion="polite">
               <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
               <Text style={styles.statusText}>
-                Sei offline. La conversazione e le nuove letture richiedono connessione.
+                Sei offline — ci riproviamo da soli appena torna la connessione.
               </Text>
               <SpringPress
                 accessibilityRole="button"
@@ -170,10 +172,10 @@ export default function HomeScreen() {
           {error && !network.offline ? (
             <View style={styles.statusBanner} accessibilityLiveRegion="assertive">
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
-              <Text style={styles.statusText}>Non sono riuscito ad aggiornare i momenti.</Text>
+              <Text style={styles.statusText}>Non vedo i momenti nuovi per un attimo. Riprovo?</Text>
               <SpringPress
                 accessibilityRole="button"
-                accessibilityLabel="Riprova a caricare i momenti"
+                accessibilityLabel="Riprova a vedere i momenti"
                 onPress={refetch}
                 hitSlop={8}
                 pressableStyle={styles.inlineRetry}
@@ -195,6 +197,8 @@ export default function HomeScreen() {
             <DogHero dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} breedLabel={dog.breedLabel} birthDate={dog.birthDate} ageLabel={dog.ageLabel} sizeLabel={dog.sizeLabel} />
           </Animated.View>
 
+          <HomePawTrail />
+
            {processingEventId ? (
              <SpringPress
               accessibilityRole="button"
@@ -207,7 +211,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.processingCopy}>
                 <Text style={styles.processingTitle}>Sto leggendo il vostro momento</Text>
-                <Text style={styles.processingText}>Puoi aprire lo stato e ritrovare il risultato nel Diario.</Text>
+                <Text style={styles.processingText}>Ti avviso quando è pronta: la ritrovi nel Diario.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.primary} />
              </SpringPress>
@@ -305,17 +309,19 @@ export default function HomeScreen() {
             </>
           ) : null}
 
-          {behaviorRemaining !== null && behaviorRemaining <= 2 ? (
-            <Text style={behaviorRemaining <= 0 ? styles.quotaWarning : styles.quota}>
-              {behaviorRemaining <= 0
-                ? purchasesEnabled
-                  ? 'Hai usato le letture disponibili. Puoi continuare dal tuo piano.'
-                  : 'Le letture disponibili torneranno presto.'
-                : `${behaviorRemaining} ${behaviorRemaining === 1 ? 'lettura disponibile' : 'letture disponibili'} questo mese.`}
-            </Text>
-          ) : null}
+            {behaviorRemaining !== null && behaviorRemaining <= 2 ? (
+              <Text style={behaviorRemaining <= 0 ? styles.quotaWarning : styles.quota}>
+                {behaviorRemaining <= 0
+                  ? purchasesEnabled
+                    ? 'Le letture di questo mese sono finite. Puoi continuare dal tuo piano.'
+                    : 'Le letture di questo mese sono finite: tornano all’inizio del mese prossimo.'
+                  : 'Le letture di questo mese stanno finendo.'}
+              </Text>
+            ) : null}
+          </View>
         </ScrollView>
       </SafeAreaView>
+      <PageGuide page="home" dogId={dog.id} dogName={dog.name} />
     </View>
   );
 }
@@ -332,6 +338,57 @@ function formatMomentStamp(iso: string): string {
   if (diff <= 0) return `Oggi ${time}`;
   if (diff === 1) return `Ieri ${time}`;
   return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+}
+
+const PAW_TRAIL = [
+  { left: '58%', top: '3%', size: 68, rotate: '-14deg', opacity: 0.34 },
+  { left: '43%', top: '13%', size: 60, rotate: '12deg', opacity: 0.3 },
+  { left: '63%', top: '23%', size: 50, rotate: '-18deg', opacity: 0.27 },
+  { left: '48%', top: '33%', size: 44, rotate: '14deg', opacity: 0.23 },
+  { left: '68%', top: '43%', size: 38, rotate: '-16deg', opacity: 0.2 },
+  { left: '54%', top: '53%', size: 32, rotate: '15deg', opacity: 0.17 },
+  { left: '42%', top: '63%', size: 28, rotate: '-18deg', opacity: 0.14 },
+  { left: '58%', top: '73%', size: 24, rotate: '16deg', opacity: 0.12 },
+  { left: '47%', top: '83%', size: 21, rotate: '-13deg', opacity: 0.1 },
+  { left: '62%', top: '92%', size: 18, rotate: '14deg', opacity: 0.08 },
+] as const;
+
+function HomePawTrail() {
+  const reducedMotion = useReducedMotion();
+  return (
+    <View pointerEvents="none" style={styles.pawTrail}>
+      <LinearGradient
+        colors={[
+          'rgba(244,249,255,0.62)',
+          'rgba(244,249,255,0.24)',
+          'rgba(255,255,255,0)',
+        ]}
+        locations={[0, 0.26, 1]}
+        start={{ x: 0.46, y: 0 }}
+        end={{ x: 0.55, y: 1 }}
+        style={styles.pawWash}
+      />
+      {PAW_TRAIL.map((paw, index) => (
+        <Animated.View
+          key={`${paw.left}-${paw.top}`}
+          entering={reducedMotion ? undefined : FadeIn.duration(700).delay(index * 55)}
+          style={[
+            styles.pawMark,
+            {
+              left: paw.left,
+              top: paw.top,
+              width: paw.size,
+              height: paw.size,
+              opacity: paw.opacity,
+              transform: [{ rotate: paw.rotate }],
+            },
+          ]}
+        >
+          <CuteIcon name="paw" size={paw.size} color="#7898F2" secondary="#7898F2" />
+        </Animated.View>
+      ))}
+    </View>
+  );
 }
 
 const TONE_COVER: Record<InsightTone, readonly [string, string]> = {
@@ -463,6 +520,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   safe: { flex: 1 },
   content: {
+    position: 'relative',
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
@@ -470,13 +528,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     gap: spacing.md,
   },
+  sceneLayer: { position: 'relative', width: '100%' },
   heroStage: {
+    zIndex: 0,
     position: 'relative',
     marginHorizontal: -20,
     marginVertical: -10,
     paddingHorizontal: 16,
     paddingTop: 26,
-    paddingBottom: 42,
+    paddingBottom: 60,
     borderRadius: 42,
     overflow: 'hidden',
   },
@@ -488,6 +548,22 @@ const styles = StyleSheet.create({
     right: -104,
     top: -136,
     backgroundColor: 'rgba(125,211,252,0.16)',
+  },
+  pawTrail: {
+    position: 'relative',
+    zIndex: 0,
+    width: '100%',
+    height: 330,
+    marginTop: -90,
+    marginBottom: -255,
+    overflow: 'visible',
+    borderRadius: 42,
+  },
+  pawWash: { ...StyleSheet.absoluteFill },
+  pawMark: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerRow: {
     flexDirection: 'row',

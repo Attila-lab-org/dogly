@@ -10,6 +10,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, ScreenContainer } from '@/components';
+import { SpringPress } from '@/components/pressSpring';
+import { hapticLight } from '@/lib/haptics';
 import Svg, { Rect } from 'react-native-svg';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
