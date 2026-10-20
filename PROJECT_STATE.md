@@ -1,6 +1,6 @@
 # PROJECT STATE — Dogly
 
-Ultimo aggiornamento: 2026-09-06 • Branch: `main`
+Ultimo aggiornamento: 2026-10-20 • Branch: `main`
 
 ## Gate corrente
 
