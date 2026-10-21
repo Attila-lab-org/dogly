@@ -45,8 +45,10 @@ import { purchasesEnabled } from '@/mocks/entitlements';
 import { ANALYSIS_POLL_TIMEOUT_MS } from '@/features/core/processingTimeout';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SpringPress } from '@/components/pressSpring';
-import { hapticLight, hapticSelection } from '@/lib/haptics';
+import { hapticLight, hapticSelection, hapticSuccess } from '@/lib/haptics';
 import { ThinkingDots } from '@/components/ThinkingDots';
+import { postBehaviorFeedback } from '@/features/behavior/api';
+import { postDigestiveFeedback } from '@/features/digestive/api';
 import { WorldBackdrop } from '@/components/WorldBackdrop';
 
 import { readHomeMessage, takeHomeMessage } from '@/features/realtime/homeMessage';
@@ -103,10 +105,18 @@ export default function AskScreen() {
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dictating, setDictating] = useState(false);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [mediaPhase, setMediaPhase] = useState<'uploading' | 'analyzing' | null>(null);
   const [pendingAnalysis, setPendingAnalysis] = useState<{
     eventId: string;
     source: 'behavior' | 'digestive';
+  } | null>(null);
+  /** Feedback 3-vie della lettura in chat (turno → evento reale). */
+  const [analysisFeedback, setAnalysisFeedback] = useState<{
+    turnId: string;
+    eventId: string;
+    source: 'behavior' | 'digestive';
+    chosen: 'YES' | 'NO' | 'UNKNOWN' | null;
   } | null>(null);
   /** Episodio agganciato (diario / post-analisi): ogni turno resta su QUESTA lettura. */
   const [pinnedAnalysis, setPinnedAnalysis] = useState<{
@@ -384,6 +394,12 @@ export default function AskScreen() {
           setPinnedAnalysis({
             eventId: pendingAnalysis.eventId,
             source: pendingAnalysis.source,
+          });
+          setAnalysisFeedback({
+            turnId: turn.id,
+            eventId: pendingAnalysis.eventId,
+            source: pendingAnalysis.source,
+            chosen: null,
           });
           setMediaPhase(null);
           setPendingAnalysis(null);
@@ -711,6 +727,25 @@ export default function AskScreen() {
     setDraft((current) => `${current}${current ? ' ' : ''}${text}`.slice(0, 4000));
   }, []);
 
+  const submitAnalysisFeedback = useCallback(
+    async (value: 'YES' | 'NO' | 'UNKNOWN') => {
+      const target = analysisFeedback;
+      if (!target || target.chosen) return;
+      void hapticSuccess();
+      setAnalysisFeedback({ ...target, chosen: value });
+      try {
+        if (target.source === 'digestive') {
+          await postDigestiveFeedback(target.eventId, value);
+        } else {
+          await postBehaviorFeedback(target.eventId, value);
+        }
+      } catch {
+        // Feedback best-effort: il grazie resta visibile, il backend può riprovare alla prossima apertura.
+      }
+    },
+    [analysisFeedback],
+  );
+
   const toggleDictation = useCallback(() => {
     if (dictating) {
       dictationRef.current?.stop();
@@ -837,14 +872,14 @@ export default function AskScreen() {
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.conversation} keyboardShouldPersistTaps="handled">
           {starting ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.muted}>Preparo la conversazione…</Text></View> : null}
-          {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><Pressable onPress={() => void start()}><Text style={styles.retry}>Riprova</Text></Pressable></View> : null}
+          {error && !sending ? <View style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text><SpringPress onPress={() => void start()} scaleTo={0.94} pressableStyle={styles.retryInside}><Text style={styles.retry}>Riprova</Text></SpringPress></View> : null}
           {messages.map((message, messageIndex) => <Animated.View key={message.id} entering={reducedMotion ? undefined : FadeInDown.duration(260).delay(Math.min(messageIndex, 8) * 28)} style={[styles.messageRow, message.role === 'user' && styles.userRow]}>
             <View style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
               {message.role === 'assistant' ? <Text style={styles.messageSender}>DOGLY</Text> : null}
               <Text style={[styles.messageText, message.role === 'user' && styles.userText]}>{message.text}</Text>
-              {message.attachmentUri ? <Image source={{ uri: message.attachmentUri }} style={styles.messageAttachment} accessibilityLabel="Foto condivisa nella conversazione" /> : null}
-              {message.failed ? <Pressable accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId, message.retryRequestId); }} style={styles.retryInside}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></Pressable> : null}
-              {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} style={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></Pressable> : null}
+              {message.attachmentUri ? <SpringPress accessibilityRole="button" accessibilityLabel="Apri la foto condivisa" onPress={() => setPreviewUri(message.attachmentUri ?? null)} scaleTo={0.97}><Image source={{ uri: message.attachmentUri }} style={styles.messageAttachment} accessibilityLabel="Foto condivisa nella conversazione" /></SpringPress> : null}
+              {message.failed ? <SpringPress accessibilityRole="button" onPress={() => { setMessages((current) => removeFailedRetryPair(current, message.id)); void send(message.retryText ?? '', message.retryAttachmentUri ? { uri: message.retryAttachmentUri, purpose: message.retryText ?? 'Foto condivisa nella conversazione' } : undefined, message.retryPhotoId, message.retryRequestId); }} pressableStyle={styles.retryInside} scaleTo={0.94}><Ionicons name="refresh" size={15} color={colors.primary} /><Text style={styles.retry}>Riprova</Text></SpringPress> : null}
+              {message.turn?.terminal_state === 'SAFETY_INTERRUPT' ? <SpringPress accessibilityRole="button" onPress={() => router.push({ pathname: '/help', params: { returnTo: 'ask' } } as never)} pressableStyle={styles.helpLink}><Text style={styles.helpLinkText}>Apri l’assistenza</Text><Ionicons name="arrow-forward" size={15} color={colors.primary} /></SpringPress> : null}
               {!sending && message.id === latestAssistantId && message.turn?.question_options?.length ? <View style={styles.questionOptions}>{message.turn.question_options.map((option) => <SpringPress key={option} accessibilityRole="button" onPress={() => void send(option)} disabled={sending} style={styles.questionOption} pressableStyle={({ pressed }) => [styles.questionOptionPressable, pressed && styles.pressed]}><Text style={styles.questionOptionText}>{option}</Text><Ionicons name="arrow-up" size={14} color={colors.primary} /></SpringPress>)}</View> : null}
               {!sending && message.id === latestAssistantId && neededMedia === 'PHOTO' ? (
                 <SpringPress
@@ -914,6 +949,21 @@ export default function AskScreen() {
                   </SpringPress>
                 );
               })() : null}
+              {message.role === 'assistant' && analysisFeedback?.turnId === message.id ? (
+                analysisFeedback.chosen ? (
+                  <View style={styles.feedbackThanks}>
+                    <Ionicons name="checkmark-circle" size={15} color={colors.accent} />
+                    <Text style={styles.feedbackThanksText}>Grazie, mi aiuti a capire {dog.name} meglio.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.feedbackRow} accessibilityLabel="Il tuo parere su questa lettura">
+                    <Text style={styles.feedbackLabel}>Ti ci ritrovi?</Text>
+                    <SpringPress accessibilityRole="button" accessibilityLabel="Sì, ci ritrovo" onPress={() => void submitAnalysisFeedback('YES')} pressableStyle={styles.feedbackChip} scaleTo={0.95}><Text style={styles.feedbackChipText}>Sì</Text></SpringPress>
+                    <SpringPress accessibilityRole="button" accessibilityLabel="Non proprio" onPress={() => void submitAnalysisFeedback('NO')} pressableStyle={styles.feedbackChip} scaleTo={0.95}><Text style={styles.feedbackChipText}>Non proprio</Text></SpringPress>
+                    <SpringPress accessibilityRole="button" accessibilityLabel="Non lo so" onPress={() => void submitAnalysisFeedback('UNKNOWN')} pressableStyle={styles.feedbackChip} scaleTo={0.95}><Text style={styles.feedbackChipText}>Non lo so</Text></SpringPress>
+                  </View>
+                )
+              ) : null}
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><SpringPress disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} pressableStyle={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></SpringPress><SpringPress disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></SpringPress></View></View> : null}
             </View>
           </Animated.View>)}
@@ -1049,6 +1099,21 @@ export default function AskScreen() {
         onCapture={onMediaSheetCapture}
         onLibrary={onMediaSheetLibrary}
       />
+      {previewUri ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Chiudi anteprima foto"
+          onPress={() => setPreviewUri(null)}
+          style={styles.previewBackdrop}
+        >
+          <Image
+            source={{ uri: previewUri }}
+            style={styles.previewImage}
+            resizeMode="contain"
+            accessibilityLabel="Foto condivisa nella conversazione, a schermo intero"
+          />
+        </Pressable>
+      ) : null}
     </SafeAreaView>
   </LinearGradient>;
 }
@@ -1174,6 +1239,14 @@ const styles = StyleSheet.create({
   sendPressable: { width: '100%', height: '100%', borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   sendDisabled: { backgroundColor: '#B7C7DB' },
   pressed: { opacity: 0.82 },
+  feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
+  feedbackLabel: { color: colors.textSecondary, fontSize: typography.size.xs, fontWeight: typography.weight.semibold },
+  feedbackChip: { borderRadius: radius.full, backgroundColor: colors.accentSoft, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1 },
+  feedbackChipText: { color: colors.accentPressed, fontSize: typography.size.xs, fontWeight: typography.weight.bold },
+  feedbackThanks: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.sm },
+  feedbackThanksText: { color: colors.accentPressed, fontSize: typography.size.xs, fontWeight: typography.weight.semibold },
+  previewBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlayDark, alignItems: 'center', justifyContent: 'center', zIndex: 30 },
+  previewImage: { width: '92%', height: '82%', borderRadius: radius.lg },
   disclaimer: { width: '100%', maxWidth: 560, alignSelf: 'center', color: colors.textMuted, fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   mediaButton: {
     minWidth: 54,

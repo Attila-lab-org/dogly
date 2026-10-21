@@ -55,7 +55,11 @@ export function dogVoiceLine(intent: BehaviorIntent | null): string {
   return DOG_VOICE_LINES[intent ?? 'INSUFFICIENT'];
 }
 
-/** Gives older stored headlines the same direct tone as new analyses. */
+/**
+ * Gives older stored headlines the same direct tone as new analyses.
+ * This is deliberately small: it never rewrites the explanation or safety
+ * copy, where uncertainty can be meaningful.
+ */
 export function directResultHeadline(value: string | null | undefined): string {
   const text = sanitizeOwnerCopy(value ?? '');
   if (!text) return text;
@@ -147,13 +151,13 @@ export function processingCompanionCopy(
   finishing: boolean,
 ): { title: string; detail?: string } {
   if (finishing || status === 'COMPLETED') {
-    return { title: 'Lettura pronta ✓' };
+    return { title: 'Lettura pronta!' };
   }
   if (status === 'FAILED_RETRYABLE') {
     return { title: 'Ci riprovo…' };
   }
   if (status === 'QUEUED') {
-    return { title: 'Video ricevuto ✓' };
+    return { title: 'Video ricevuto!' };
   }
   if (status === 'OBSERVING') {
     return {

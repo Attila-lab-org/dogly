@@ -60,8 +60,9 @@ export default function AskLiveScreen() {
   const handleRef = useRef<LiveWebRtcHandle | null>(null);
   const startingRef = useRef(false);
   const mountedRef = useRef(true);
-  const silentSecondsRef = useRef(0);
+  const finishRef = useRef<((note?: string) => Promise<void>) | null>(null);
   const finishingRef = useRef(false);
+  const silentSecondsRef = useRef(0);
   const level = useSharedValue(0);
   const breath = useSharedValue(1);
   const ringWarn = useSharedValue(0);
@@ -101,8 +102,6 @@ export default function AskLiveScreen() {
     return () => clearInterval(timer);
   }, [phase, level]);
 
-  const finishRef = useRef<((note?: string) => Promise<void>) | null>(null);
-
   const finish = useCallback(
     async (note?: string) => {
       if (phase === 'ending' || finishingRef.current) return;
@@ -135,8 +134,8 @@ export default function AskLiveScreen() {
     const liveSessionKey = `live-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     setError(null);
     setElapsedSeconds(0);
-    silentSecondsRef.current = 0;
     finishingRef.current = false;
+    silentSecondsRef.current = 0;
     setConn('connecting');
     setPhase('live');
     try {

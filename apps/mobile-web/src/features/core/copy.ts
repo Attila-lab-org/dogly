@@ -151,13 +151,13 @@ export function processingCompanionCopy(
   finishing: boolean,
 ): { title: string; detail?: string } {
   if (finishing || status === 'COMPLETED') {
-    return { title: 'Lettura pronta ✓' };
+    return { title: 'Lettura pronta!' };
   }
   if (status === 'FAILED_RETRYABLE') {
     return { title: 'Ci riprovo…' };
   }
   if (status === 'QUEUED') {
-    return { title: 'Video ricevuto ✓' };
+    return { title: 'Video ricevuto!' };
   }
   if (status === 'OBSERVING') {
     return {
