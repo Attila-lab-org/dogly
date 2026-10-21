@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../../lib/supabase';
+import { isMeaningfulWalk } from './walkFilter';
 import type { WalkPoint } from './tracking';
 import { parsePark, type ProgressWalk } from './progress';
 
@@ -24,7 +25,7 @@ export async function fetchWalkHistory(dogId: string, limit = 8, offset = 0, par
   return (data ?? []).map(item => ({
     ...item, park: parsePark(item.park), park_visited: item.park_visited === true,
     distance_meters: Number(item.distance_meters), route_points: parseRoute(item.route_points),
-  }));
+  })).filter(isMeaningfulWalk);
 }
 // Lightweight history for lifetime badges: no GPS routes transferred here.
 export async function fetchWalkProgress(dogId: string): Promise<ProgressWalk[]> {
@@ -35,7 +36,7 @@ export async function fetchWalkProgress(dogId: string): Promise<ProgressWalk[]> 
       .eq('dog_id', dogId).eq('status', 'COMPLETED')
       .order('started_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
     if (error) throw error;
-    result.push(...(data ?? []).map(item => ({ ...item, park: parsePark(item.park), distance_meters: Number(item.distance_meters) })));
+    result.push(...(data ?? []).map(item => ({ ...item, park: parsePark(item.park), distance_meters: Number(item.distance_meters) })).filter(isMeaningfulWalk));
     if (!data || data.length < 500) return result;
   }
 }
