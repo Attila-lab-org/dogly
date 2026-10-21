@@ -23,6 +23,7 @@ import { ScreenContainer } from '@/components';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { PageGuide } from '@/features/guide/PageGuide';
 import { SquirrelArt } from '@/features/games/squirrelArt';
 import { MatchPiece } from '@/features/games/matchPieces';
 import { GAME_LABELS, type GameId } from '@/features/games/api';
@@ -235,6 +236,7 @@ export default function GamesHubScreen() {
           <AgilityMark />
         </Pressable>
       </Animated.View>
+      <PageGuide page="games" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </ScreenContainer>
   );
 }

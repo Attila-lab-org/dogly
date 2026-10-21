@@ -1,5 +1,6 @@
 /**
- * "Bau Match" — Match-3 Dogly (griglia 6×7, Blitz 60s). Tap-tap per
+ * "Bau Match" — Match-3 Dogly (griglia 6×7, livelli con obiettivo punti,
+ * 3 vite e nessun cronometro). Tap-tap per
  * scambiare tessere adiacenti; 3+ in linea scoppiano con cascata e
  * moltiplicatore crescente; linee da 4+ = razzo (riga/colonna intera).
  * Buddy telecronista. Logica pura in features/games/matchLogic.ts
@@ -27,6 +28,7 @@ import { SpringPress } from '@/components/pressSpring';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { PageGuide } from '@/features/guide/PageGuide';
 import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import { MatchPiece } from '@/features/games/matchPieces';
 import {
@@ -298,7 +300,7 @@ function RocketSweep({
   );
 }
 
-/** Barra tempo che pulsa corallo sotto i 10 secondi. */
+/** Cuori delle vite: uno se ne va a ogni scambio a vuoto. */
 function MatchLives({ lives }: { lives: number }) {
   return (
     <View style={styles.matchLives} accessibilityLabel={`${lives} vite rimaste`}>
@@ -789,6 +791,7 @@ export default function MatchGameScreen() {
           </Pressable>
         </View>
       ) : null}
+      <PageGuide page="games-match" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </ScreenContainer>
   );
 }

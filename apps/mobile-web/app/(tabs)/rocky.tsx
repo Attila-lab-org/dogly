@@ -120,7 +120,7 @@ export default function DogProfileTabScreen() {
           <ProfileLink icon="bookmark-outline" title="Informazioni che ricordo" detail="Puoi rivederle, correggerle o eliminarle." onPress={() => router.push(`/dogs/${dog.id}/memories` as never)} />
         </View>
       </Animated.ScrollView>
-      <PageGuide page="profile" dogId={dog.id} dogName={dog.name} />
+      <PageGuide page="profile" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </View>
   );
 }
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   heroEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   heroShade: StyleSheet.absoluteFill,
   heroTint: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  heroLabel: { position: 'absolute', left: 18, bottom: 28, gap: 2 },
+  heroLabel: { position: 'absolute', left: 18, bottom: 46, gap: 2 },
   heroEyebrow: { color: 'rgba(255,255,255,0.84)', fontSize: 11, fontWeight: '800', letterSpacing: 1.4 },
   heroWorldName: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.4 },
   heroControls: { position: 'absolute', top: 0, left: 0, right: 0, padding: 16, flexDirection: 'row', justifyContent: 'space-between' },

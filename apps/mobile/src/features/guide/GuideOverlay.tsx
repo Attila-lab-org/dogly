@@ -14,19 +14,20 @@ import Animated, { Easing, FadeIn, FadeInDown, useAnimatedStyle, useReducedMotio
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { SpringPress } from '@/components/pressSpring';
+import { AvatarActor } from '@/features/core/AvatarActor';
 import { colors, radius, shadows, spacing, typography } from '@/theme/tokens';
 import type { GuideLocale, GuidePage } from './copy';
 import { guideForPage } from './copy';
 import { arrowPath, positionGuide, type GuideRect } from './layout';
 import type { MeasureGuideTarget } from './useGuideTargets';
 
-const MASCOT = require('../../../assets/images/dog-sex-male.png');
 const LOGO = require('../../../assets/brand/dogly-logo-mark.png');
 
 export function GuideOverlay({
   visible,
   page,
   dogName,
+  photoUri,
   locale,
   onLocaleChange,
   onClose,
@@ -35,6 +36,8 @@ export function GuideOverlay({
   visible: boolean;
   page: GuidePage;
   dogName?: string;
+  /** La foto del cane protagonista; senza foto, AvatarActor usa la sua sagoma. */
+  photoUri?: string | null;
   locale: GuideLocale;
   onLocaleChange: (locale: GuideLocale) => void;
   onClose: () => void | Promise<void>;
@@ -127,7 +130,8 @@ export function GuideOverlay({
             <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(360)} key={`${page}-${locale}-${stepIndex}`} style={[styles.coachRow, compact && styles.coachRowCompact, panelStyle]}>
               <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(450)} style={[styles.mascotWrap, { width: mascotSize, height: mascotSize }]}>
                 <View style={styles.mascotHalo} />
-                <Image source={MASCOT} style={styles.mascot} resizeMode="contain" accessibilityLabel="Mascotte DOGly" />
+                {/* Il protagonista è il cane dell'utente (regola di coerenza). */}
+                <AvatarActor size={mascotSize * 0.86} expression="happy" photoUri={photoUri ?? null} dogName={dogName} />
                 <View style={styles.mascotSpark}><Ionicons name="sparkles" size={17} color="#FFFFFF" /></View>
               </Animated.View>
               <View style={styles.speechBubble}>
@@ -207,7 +211,6 @@ const styles = StyleSheet.create({
   coachRowCompact: { marginBottom: 75 },
   mascotWrap: { position: 'relative', justifyContent: 'flex-end', alignItems: 'center', marginRight: -spacing.sm, zIndex: 2 },
   mascotHalo: { position: 'absolute', width: '82%', height: '82%', bottom: 4, borderRadius: radius.full, backgroundColor: 'rgba(20,184,166,0.26)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)' },
-  mascot: { width: '100%', height: '100%' },
   mascotSpark: { position: 'absolute', top: '8%', right: -2, width: 30, height: 30, borderRadius: radius.full, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#FFFFFF' },
   speechBubble: { flex: 1, minHeight: 188, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md, borderRadius: 28, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', ...shadows.raised },
   speechTail: { position: 'absolute', left: -16, bottom: 28, width: 28, height: 28, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderBottomLeftRadius: 5 },

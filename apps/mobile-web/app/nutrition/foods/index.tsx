@@ -197,7 +197,6 @@ export default function FoodsScreen() {
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
       <StackScreenHeader title={`Cibo di ${dog.name}`} />
-      <Text style={styles.pageHero}>Cibo di {dog.name}</Text>
       <Text style={styles.pageLead}>
         Quello che mangia adesso, e gli alimenti che hai già salvato.
       </Text>
@@ -296,12 +295,6 @@ export default function FoodsScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: spacing.md, paddingBottom: spacing.xxxl },
-  pageHero: {
-    color: colors.text,
-    fontSize: typography.size.xxl,
-    fontWeight: typography.weight.bold,
-    letterSpacing: -0.4,
-  },
   pageLead: {
     color: colors.textSecondary,
     fontSize: typography.size.md,

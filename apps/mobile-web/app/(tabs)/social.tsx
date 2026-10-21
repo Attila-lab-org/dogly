@@ -232,23 +232,28 @@ function ConnectionHero({
             <Ionicons name="stats-chart" size={20} color="#079B88" />
           </View>
           <View style={styles.weekStats}>
-            <View style={styles.weekStat}>
-              <Ionicons name="paw" size={23} color="#45C3A1" />
-              <Text style={styles.weekValue}>{walksThisWeek}</Text>
-              <Text style={styles.weekLabel}>passeggiate</Text>
-              {walksPrevWeek > 0 ? (
-                <Text style={styles.weekDelta}>
-                  {walksThisWeek >= walksPrevWeek ? '+' : ''}
-                  {walksThisWeek - walksPrevWeek} rispetto{'\n'}alla scorsa
-                </Text>
-              ) : null}
-            </View>
-            <View style={styles.weekDivider} />
-            <View style={styles.weekStat}>
-              <Ionicons name="tennisball" size={23} color="#079B88" />
-              <Text style={styles.weekValue}>{matchBest ?? 0}</Text>
-              <Text style={styles.weekLabel}>record Bau Match</Text>
-            </View>
+            {walks.length > 0 ? (
+              <View style={styles.weekStat}>
+                <Ionicons name="paw" size={23} color="#45C3A1" />
+                <Text style={styles.weekValue}>{walksThisWeek}</Text>
+                <Text style={styles.weekLabel}>passeggiate</Text>
+                {walksPrevWeek > 0 ? (
+                  <Text style={styles.weekDelta}>
+                    {walksThisWeek >= walksPrevWeek ? '+' : ''}
+                    {walksThisWeek - walksPrevWeek} rispetto{'\n'}alla scorsa
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            {/* Metriche a zero nascoste: meglio assenti che "0 record". */}
+            {walks.length > 0 && (matchBest ?? 0) > 0 ? <View style={styles.weekDivider} /> : null}
+            {(matchBest ?? 0) > 0 ? (
+              <View style={styles.weekStat}>
+                <Ionicons name="tennisball" size={23} color="#079B88" />
+                <Text style={styles.weekValue}>{matchBest}</Text>
+                <Text style={styles.weekLabel}>record Bau Match</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -332,16 +337,16 @@ export default function SocialScreen() {
           </View>
         </View>
         {showGames ? (
-          <Animated.View entering={enter(150)}>
+          <Animated.View key="games" entering={enter(150)}>
             <GamesSection />
           </Animated.View>
         ) : (
-          <Animated.View entering={enter(150)}>
+          <Animated.View key="places" entering={enter(150)}>
             <NearbyPlacesSection />
           </Animated.View>
         )}
       </ScrollView>
-      <PageGuide page="social" dogId={dog.id} dogName={dog.name} />
+      <PageGuide page="social" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </SafeAreaView>
   );
 }

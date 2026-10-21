@@ -9,7 +9,10 @@ export type GuidePage =
   | 'social'
   | 'profile'
   | 'settings'
-  | 'games';
+  | 'games'
+  | 'games-match'
+  | 'games-squirrel'
+  | 'games-agility';
 
 export type GuideTarget = 'composer' | 'media' | 'conversation' | 'overview';
 
@@ -77,6 +80,22 @@ const italian: Record<GuidePage, (name: string) => GuidePageDefinition> = {
     { title: 'Nessuna gara da vincere', body: 'Segui il suo ritmo e fermati quando ne ha abbastanza.', target: 'conversation' },
     { title: 'Pronti? Si parte', body: 'Scegli un gioco e lascia che sia lui a guidare il momento.', target: 'overview' },
   ] }),
+  // Regole dichiarate qui = regole del gioco: tenerle allineate agli intro.
+  'games-match': () => ({ page: 'games-match', eyebrow: 'BAU MATCH', steps: [
+    { title: 'Scambia e scoppia', body: 'Tocca due tessere vicine per scambiarle: 3 o più in fila scoppiano.', target: 'overview' },
+    { title: 'Catene e razzi', body: 'Le cascate alzano il moltiplicatore; una fila da 4+ crea un razzo che libera riga o colonna.', target: 'conversation' },
+    { title: 'Tre vite, zero cronometro', body: 'Uno scambio che non scoppia nulla costa una vita. Raggiungi l’obiettivo punti e sali di livello, con calma.', target: 'overview' },
+  ] }),
+  'games-squirrel': () => ({ page: 'games-squirrel', eyebrow: 'CACCIA AGLI SCOIATTOLI', steps: [
+    { title: 'Sbucano dalle buche', body: 'Per 30 secondi gli scoiattoli spuntano qua e là: toccali prima che rientrino.', target: 'overview' },
+    { title: 'Il dorato vale triplo', body: 'Lo scoiattolo dorato compare di rado e vale 3 punti. Il riccio è un amico: lascialo stare.', target: 'conversation' },
+    { title: 'Niente vite, solo riflessi', body: 'Non si può perdere: conta solo quanti ne acchiappi prima del via libera.', target: 'overview' },
+  ] }),
+  'games-agility': () => ({ page: 'games-agility', eyebrow: 'AGILITY', steps: [
+    { title: 'Un tap per saltare', body: 'Muretti, birilli e anche il tunnel si superano con lo stesso gesto: un salto.', target: 'overview' },
+    { title: 'Tre cuori e via', body: 'Ogni ostacolo colpito toglie un cuore; finiti i cuori la corsa è finita. Un tap in extremis salva comunque.', target: 'conversation' },
+    { title: 'Ossicini in arcata', body: 'Gli ossicini sospesi si raccolgono solo in salto e valgono punti extra.', target: 'overview' },
+  ] }),
 };
 
 const english: Record<GuidePage, (name: string) => GuidePageDefinition> = {
@@ -129,6 +148,22 @@ const english: Record<GuidePage, (name: string) => GuidePageDefinition> = {
     { title: 'There is no race to win', body: 'Follow their pace and stop when they have had enough.', target: 'conversation' },
     { title: 'Ready? Let’s go', body: 'Choose a game and let them lead the moment.', target: 'overview' },
   ] }),
+  // The rules stated here are the rules of the game: keep them in sync.
+  'games-match': () => ({ page: 'games-match', eyebrow: 'BAU MATCH', steps: [
+    { title: 'Swap and pop', body: 'Tap two neighbouring tiles to swap them: 3 or more in a row pop.', target: 'overview' },
+    { title: 'Chains and rockets', body: 'Cascades raise the multiplier; a row of 4+ creates a rocket that clears a line.', target: 'conversation' },
+    { title: 'Three lives, no timer', body: 'A swap that pops nothing costs a life. Reach the points goal to level up, at your own pace.', target: 'overview' },
+  ] }),
+  'games-squirrel': () => ({ page: 'games-squirrel', eyebrow: 'SQUIRREL HUNT', steps: [
+    { title: 'They pop out of holes', body: 'For 30 seconds squirrels peek out here and there: tap them before they duck back.', target: 'overview' },
+    { title: 'Golden is worth triple', body: 'The golden squirrel is rare and worth 3 points. The hedgehog is a friend: leave it alone.', target: 'conversation' },
+    { title: 'No lives, just reflexes', body: 'You cannot lose: only how many you catch before time is up counts.', target: 'overview' },
+  ] }),
+  'games-agility': () => ({ page: 'games-agility', eyebrow: 'AGILITY', steps: [
+    { title: 'One tap to jump', body: 'Hurdles, cones and even the tunnel are all cleared with the same move: a jump.', target: 'overview' },
+    { title: 'Three hearts and go', body: 'Every obstacle hit costs a heart; when they are gone, the run is over. A last-instant tap still saves you.', target: 'conversation' },
+    { title: 'Bones in an arc', body: 'Floating bones can only be collected mid-jump and are worth extra points.', target: 'overview' },
+  ] }),
 };
 
 export function guideForPage(page: GuidePage, locale: GuideLocale, dogName = '') {
@@ -144,7 +179,9 @@ export function guidePageForPath(pathname: string): GuidePage | null {
   if (path.includes('nutrition') || path.includes('foods')) return 'nutrition';
   if (path.includes('social') || path.includes('around')) return 'social';
   if (path.includes('rocky') || path.includes('/dogs')) return 'profile';
-  if (path.includes('games')) return 'games';
+  // I giochi montano la propria guida per-gioco (PageGuide): niente guida
+  // automatica da route qui, altrimenti apparirebbe due volte.
+  if (path.includes('games')) return null;
   if (path === '/' || path.includes('/home')) return 'home';
   return null;
 }

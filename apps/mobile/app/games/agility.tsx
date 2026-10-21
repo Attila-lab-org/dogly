@@ -26,6 +26,7 @@ import { SpringPress } from '@/components/pressSpring';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { PageGuide } from '@/features/guide/PageGuide';
 import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import {
   AGILITY_COMBO_LINE,
@@ -33,6 +34,7 @@ import {
   AGILITY_LIVES,
   AGILITY_START_LINE,
   AGILITY_TUNNEL_LINE,
+  COYOTE_MS,
   DOG_W,
   DOG_X,
   JUMP_MS,
@@ -387,6 +389,7 @@ export default function AgilityGameScreen() {
   const lastHitAt = useRef<number | null>(null);
   const livesRef = useRef(AGILITY_LIVES);
   const jumpStart = useRef<number | null>(null);
+  const pendingCrashAt = useRef<number | null>(null);
   const clearedIds = useRef<Set<number>>(new Set());
   const streak = useRef(0);
   const commentarySeq = useRef(0);
@@ -451,6 +454,7 @@ export default function AgilityGameScreen() {
     startedAt.current = Date.now();
     crashAt.current = null;
     jumpStart.current = null;
+    pendingCrashAt.current = null;
     clearedIds.current = new Set();
     streak.current = 0;
     jumpAnim.value = 0;
@@ -532,33 +536,45 @@ export default function AgilityGameScreen() {
       setInvulnerable(flashing);
 
       if (!crashed && !flashing) {
+        let hit: AgilityObstacle | null = null;
         for (const obstacle of schedule.current) {
           if (
             obstacle.spawnAtMs <= now &&
             !clearedIds.current.has(obstacle.id) &&
             collides(dogY, obstacle, now, jumpStart.current)
           ) {
-            clearedIds.current.add(obstacle.id);
-            lastHitAt.current = now;
-            const nextLives = livesAfterCrash(livesRef.current);
-            livesRef.current = nextLives;
-            setLives(nextLives);
-            if (isGameOver(nextLives)) {
-              crashAt.current = now;
-              setCrashed(true);
-              say('Ahi! Mi siedo un attimo…', 'sad');
-              clearInterval(timer);
-              later(900, finish);
-            } else {
-              say(
-                nextLives === 1
-                  ? 'Ultima vita, con calma!'
-                  : `Ops! Ancora ${nextLives} vite!`,
-                'sad',
-              );
-            }
-            return;
+            hit = obstacle;
+            break;
           }
+        }
+        // Coyote-time: il contatto apre una finestra di grazia di 80ms prima
+        // del crash — un tap in extremis (rileva al prossimo tick) salva il cane.
+        if (hit === null) {
+          pendingCrashAt.current = null;
+        } else if (pendingCrashAt.current === null) {
+          pendingCrashAt.current = now;
+        } else if (now - pendingCrashAt.current >= COYOTE_MS) {
+          pendingCrashAt.current = null;
+          clearedIds.current.add(hit.id);
+          lastHitAt.current = now;
+          const nextLives = livesAfterCrash(livesRef.current);
+          livesRef.current = nextLives;
+          setLives(nextLives);
+          if (isGameOver(nextLives)) {
+            crashAt.current = now;
+            setCrashed(true);
+            say('Ahi! Mi siedo un attimo…', 'sad');
+            clearInterval(timer);
+            later(900, finish);
+          } else {
+            say(
+              nextLives === 1
+                ? 'Ultima vita, con calma!'
+                : `Ops! Ancora ${nextLives} vite!`,
+              'sad',
+            );
+          }
+          return;
         }
         // Dentro il tunnel (a terra): cane semi-trasparente.
         const tunnel = schedule.current.find(
@@ -863,6 +879,7 @@ export default function AgilityGameScreen() {
           </Pressable>
         </View>
       ) : null}
+      <PageGuide page="games-agility" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </ScreenContainer>
   );
 }

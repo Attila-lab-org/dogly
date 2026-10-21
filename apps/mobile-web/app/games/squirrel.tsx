@@ -27,6 +27,7 @@ import { SpringPress } from '@/components/pressSpring';
 import { CuteIcon } from '@/components/CuteIcon';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
+import { PageGuide } from '@/features/guide/PageGuide';
 import { AvatarActor, type BuddyExpression } from '@/features/core/AvatarActor';
 import { SquirrelArt, type SquirrelArtVariant } from '@/features/games/squirrelArt';
 import {
@@ -633,6 +634,7 @@ export default function SquirrelGameScreen() {
           </Pressable>
         </View>
       ) : null}
+      <PageGuide page="games-squirrel" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </ScreenContainer>
   );
 }

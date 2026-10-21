@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +31,9 @@ export default function CareAgendaScreen() {
   const router = useRouter();
   const { dog } = useDogProfile();
   const [view, setView] = useState<'upcoming' | 'completed'>('upcoming');
+  // Se "Prossimi" è vuota ma c'è storico, si apre direttamente la tab piena
+  // (solo finché l'utente non ha scelto una tab a mano).
+  const viewTouched = useRef(false);
   const events = useCareEvents(dog.id, dog.name);
   // "Prossimo" = solo eventi SCHEDULED futuri (nextCareEvent): un evento
   // passato non completato non deve mai apparire come prossimo; resta però
@@ -53,6 +56,12 @@ export default function CareAgendaScreen() {
     .sort((a, b) => Date.parse(b.scheduledAt) - Date.parse(a.scheduledAt));
   const nextUrgent = next ? dayDistance(next.scheduledAt) <= 1 : false;
   const nextDate = next ? new Date(next.scheduledAt) : null;
+  const upcomingCount = upcoming.length + overdue.length + (next ? 1 : 0);
+  useEffect(() => {
+    if (!viewTouched.current && view === 'upcoming' && upcomingCount === 0 && history.length > 0) {
+      setView('completed');
+    }
+  }, [view, upcomingCount, history.length]);
 
   const nextPress = usePressSpring();
   return (
@@ -75,7 +84,7 @@ export default function CareAgendaScreen() {
       </Svg>
       <StackScreenHeader title={`Agenda di ${dog.name}`} />
 
-      {view === 'upcoming' && next && nextDate ? (
+      {next && nextDate ? (
         <Animated.View style={nextPress.style}>
         <Pressable
           accessibilityRole="button"
@@ -197,10 +206,10 @@ export default function CareAgendaScreen() {
       />
 
       <View style={styles.segmented} accessibilityRole="tablist">
-        <SpringPress style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: view === 'upcoming' }} onPress={() => { void hapticLight(); setView('upcoming'); }} pressableStyle={[styles.segment, view === 'upcoming' && styles.segmentActive]}>
+        <SpringPress style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: view === 'upcoming' }} onPress={() => { void hapticLight(); viewTouched.current = true; setView('upcoming'); }} pressableStyle={[styles.segment, view === 'upcoming' && styles.segmentActive]}>
           <Text style={[styles.segmentText, view === 'upcoming' && styles.segmentTextActive]}>Prossimi ({upcoming.length + (next ? 1 : 0)})</Text>
         </SpringPress>
-        <SpringPress style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: view === 'completed' }} onPress={() => { void hapticLight(); setView('completed'); }} pressableStyle={[styles.segment, view === 'completed' && styles.segmentActive]}>
+        <SpringPress style={{ flex: 1 }} accessibilityRole="tab" accessibilityState={{ selected: view === 'completed' }} onPress={() => { void hapticLight(); viewTouched.current = true; setView('completed'); }} pressableStyle={[styles.segment, view === 'completed' && styles.segmentActive]}>
           <Text style={[styles.segmentText, view === 'completed' && styles.segmentTextActive]}>Completati ({history.length})</Text>
         </SpringPress>
       </View>

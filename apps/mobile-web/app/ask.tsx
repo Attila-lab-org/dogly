@@ -855,6 +855,9 @@ export default function AskScreen() {
     { label: 'Parliamo di cibo', icon: 'nutrition-outline' as const },
   ];
   const hasUserMessage = messages.some((message) => message.role === 'user');
+  // Apertura con contesto (episodio diario, digestione, analisi): il primo
+  // messaggio parla già di quello — i suggerimenti generici sarebbero fuori tema.
+  const hasContextEntry = Boolean(eventId || intent);
 
   return <LinearGradient colors={['#EFF8FF', '#F8FBFF', '#FFFFFF']} style={styles.root}>
     <WorldBackdrop world="ask" />
@@ -967,7 +970,7 @@ export default function AskScreen() {
               {message.turn?.memory_proposal ? <View style={styles.memory}><Text style={styles.memoryLabel}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Tengo presente questa abitudine?' : 'Posso ricordare questa cosa?'}</Text><Text style={styles.memoryText}>{message.turn.memory_proposal.statement}</Text><View style={styles.memoryActions}><SpringPress disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'CONFIRM')} pressableStyle={styles.memoryButton}><Text style={styles.memoryConfirm}>{message.turn.memory_proposal.category === 'ROUTINE' ? 'Sì, tienila presente' : 'Sì, ricordala'}</Text></SpringPress><SpringPress disabled={memoryBusy === message.turn.memory_proposal.id} onPress={() => void decideMemory(message.turn!.memory_proposal!, 'REJECT')}><Text style={styles.memoryReject}>Non ora</Text></SpringPress></View></View> : null}
             </View>
           </Animated.View>)}
-          {!starting && !sending && !hasUserMessage && messages.length === 1 ? (
+          {!starting && !sending && !hasUserMessage && !hasContextEntry && messages.length === 1 ? (
             <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(320).delay(100)} style={styles.starterPanel}>
               <View style={styles.starterHeading}>
                 <View style={styles.starterIcon}>

@@ -584,7 +584,7 @@ export default function DiaryScreen() {
           )}
         </View>
       </SafeAreaView>
-      <PageGuide page="diary" dogId={dog.id} dogName={dog.name} />
+      <PageGuide page="diary" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </View>
   );
 }

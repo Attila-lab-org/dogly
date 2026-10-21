@@ -2,8 +2,10 @@
  * Fondale-mondo: ogni pagina ha una mini-scena illustrata riconoscibile
  * (stesso stile grafico della scena Home: forme SVG morbide, gradiente che
  * sfuma nel colore di sfondo della pagina, elementi duotone brand).
- * La scena vive nella fascia alta (~240px), statica o con una nuvoletta che
+ * La scena vive nella fascia alta (~140px), statica o con una nuvoletta che
  * deriva lenta (unica micro-animazione; reduce-motion → tutto statico).
+ * Un velo sfumato verso il colore pagina copre la metà bassa della banda:
+ * titoli, search e filtri che scorrono sopra restano sempre leggibili.
  * Sempre sotto il contenuto, nascosta agli screen reader.
  */
 import React, { useEffect } from 'react';
@@ -47,7 +49,15 @@ export function worldForPath(pathname: string): WorldKind {
   return 'soft';
 }
 
-const BAND = 240;
+const BAND = 140;
+
+/** Hex #RRGGBB → #RRGGBBAA (espo-linear-gradient accetta hex8). */
+function withAlpha(hex: string, alpha: number): string {
+  const value = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${hex}${value}`;
+}
 
 /** Colore "cielo" in cima alla banda per mondo (sfuma nel fondo pagina). */
 const SKY: Record<WorldKind, string> = {
@@ -287,8 +297,8 @@ export function WorldBackdrop({ world, accent }: { world: WorldKind; accent?: st
   return (
     <View pointerEvents="none" style={styles.layer} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <LinearGradient
-        colors={[SKY[world], 'rgba(255,255,255,0)']}
-        locations={[0, 1]}
+        colors={[SKY[world], withAlpha(SKY[world], 0.45), withAlpha(SKY[world], 0)]}
+        locations={[0, 0.5, 1]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -297,6 +307,15 @@ export function WorldBackdrop({ world, accent }: { world: WorldKind; accent?: st
         <WorldScene world={world} accent={accent} />
       </Svg>
       <DriftingCloud reducedMotion={reducedMotion} />
+      {/* Velo verso il colore pagina: il contenuto sopra resta leggibile,
+          ma la scena continua a intuirsi anche in basso. */}
+      <LinearGradient
+        colors={[withAlpha(colors.background, 0), withAlpha(colors.background, 0.9)]}
+        locations={[0.42, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
     </View>
   );
 }

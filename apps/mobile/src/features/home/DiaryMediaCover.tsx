@@ -243,13 +243,7 @@ export function DiaryMediaCover({
 
   if (!entry.mediaUri || failed) {
     return (
-      <View
-        style={[styles.cover, { backgroundColor: colors.accentSoft }]}
-        accessibilityRole="image"
-        accessibilityLabel="Foto del momento"
-      >
-        <CuteIcon name="paw" size={32} color={colors.accent} secondary={colors.text} />
-      </View>
+      <TealPlaceholder icon="paw" accessibilityLabel="Foto del momento" />
     );
   }
 

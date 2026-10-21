@@ -321,7 +321,7 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-      <PageGuide page="home" dogId={dog.id} dogName={dog.name} />
+      <PageGuide page="home" dogId={dog.id} dogName={dog.name} photoUri={dog.photoUri} />
     </View>
   );
 }

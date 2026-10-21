@@ -110,7 +110,35 @@ export function isJumping(jumpStartMs: number | null, nowMs: number): boolean {
  * Collisione AABB: tutti gli ostacoli si superano con lo stesso gesto,
  * il salto. Non esistono più regole separate per il tunnel.
  */
-export const HITBOX_MARGIN_U = 1.2;
+// Margine hitbox ridotto: il crash scatta solo quando l'ostacolo tocca
+// davvero la sagoma del cane (col pass-through del salto, resta rilevante
+// solo per gli impatti a terra — devono sembrare giusti a occhio).
+export const HITBOX_MARGIN_U = 0.8;
+
+/** Finestra di grazia: un tap entro 80ms dal contatto salva comunque il cane. */
+export const COYOTE_MS = 80;
+
+/**
+ * Salto riuscito: se durante l'aria l'ostacolo è passato (anche solo per
+ * uno spicchio) sotto il cane, è superato per intero. Un tap un po'
+ * anticipato o in extremis non viene punito: conta l'intenzione del gesto.
+ * Senza questa regola il tunnel a bassa velocità resta sotto il cane più
+ * a lungo dell'aria del salto e risulterebbe impossibile.
+ */
+export function jumpCoversObstacle(
+  jumpStartMs: number | null,
+  obstacle: AgilityObstacle,
+): boolean {
+  if (jumpStartMs === null || obstacle.speed <= 0) return false;
+  const spec = OBSTACLE_DIMS[obstacle.kind];
+  const overlapStartMs =
+    obstacle.spawnAtMs +
+    ((AGILITY_FIELD_W - (DOG_X + DOG_W - HITBOX_MARGIN_U)) / obstacle.speed) * 1000;
+  const overlapEndMs =
+    obstacle.spawnAtMs +
+    ((AGILITY_FIELD_W + spec.w - DOG_X - HITBOX_MARGIN_U) / obstacle.speed) * 1000;
+  return jumpStartMs < overlapEndMs && jumpStartMs + JUMP_MS > overlapStartMs;
+}
 
 export function collides(
   dogY: number,
@@ -123,11 +151,7 @@ export function collides(
   const overlapX =
     x < DOG_X + DOG_W - HITBOX_MARGIN_U && x + spec.w > DOG_X + HITBOX_MARGIN_U;
   if (!overlapX) return false;
-  // Un salto è un'azione unica: una volta partito, il cane supera l'ostacolo
-  // per tutta la parabola e non può "atterrare" sopra mentre sta scendendo.
-  if (jumpStartMs !== null && nowMs - jumpStartMs >= 0 && nowMs - jumpStartMs < JUMP_MS) {
-    return false;
-  }
+  if (jumpCoversObstacle(jumpStartMs, obstacle)) return false;
   return dogY < spec.h;
 }
 

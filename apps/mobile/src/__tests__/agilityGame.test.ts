@@ -5,7 +5,11 @@
  */
 import {
   AGILITY_MAX_MS,
+  COYOTE_MS,
   DOG_H,
+  DOG_W,
+  DOG_X,
+  HITBOX_MARGIN_U,
   OBSTACLE_DIMS,
   boneCollected,
   bonusBoneX,
@@ -16,6 +20,7 @@ import {
   isCleared,
   isCombo,
   isNearMiss,
+  jumpCoversObstacle,
   jumpHeightAt,
   loadAgilityBest,
   minGapMs,
@@ -29,6 +34,7 @@ import {
   setAgilityStorageBackend,
   speedAt,
   type AgilityObstacle,
+  type ObstacleKind,
 } from '../features/games/agilityLogic';
 
 function memoryStorage() {
@@ -123,11 +129,13 @@ describe('collisions', () => {
     expect(collides(0, cones, now)).toBe(true);
   });
 
-  it('keeps a vertical jump safe while the dog is descending over the obstacle', () => {
+  it('keeps the dog safe when airborne over the obstacle, crashes if landed before it arrives', () => {
     const hurdle = at('hurdle', 0);
     const now = hitTime(0);
+    // Salto in corso durante il contatto: nessun crash anche in discesa.
     expect(collides(0, hurdle, now, now - 500)).toBe(false);
-    expect(collides(0, hurdle, now, now - 760)).toBe(true);
+    // Salto finito prima che l'ostacolo arrivi: il cane è a terra e urta.
+    expect(collides(0, hurdle, now, now - 1000)).toBe(true);
   });
 
   it('tunnel follows the same jump rule as every other obstacle', () => {
@@ -141,6 +149,89 @@ describe('collisions', () => {
     const hurdle = at('hurdle', 0);
     expect(isCleared(hurdle, hitTime(0))).toBe(false);
     expect(isCleared(hurdle, 4000)).toBe(true);
+  });
+});
+
+describe('realistic tap timing', () => {
+  const DOG_RIGHT = DOG_X + DOG_W;
+  const KINDS: ObstacleKind[] = ['hurdle', 'cones', 'tunnel'];
+
+  /**
+   * Simula il passaggio di un ostacolo a tick da 50ms: il giocatore tappa
+   * quando l'ostacolo è a `tapBodies` corpi-cane di distanza (null = mai).
+   */
+  function runPassage(
+    kind: ObstacleKind,
+    speed: number,
+    tapBodies: number | null,
+  ): { crashed: boolean; tapped: boolean } {
+    const obstacle: AgilityObstacle = { id: 0, kind, spawnAtMs: 0, speed };
+    let jumpStartMs: number | null = null;
+    let tapped = false;
+    for (let now = 0; now <= 12_000; now += 50) {
+      if (!tapped && tapBodies !== null) {
+        const gap = obstacleX(obstacle, now) - DOG_RIGHT;
+        if (gap <= tapBodies * DOG_W) {
+          jumpStartMs = now;
+          tapped = true;
+        }
+      }
+      if (isCleared(obstacle, now)) return { crashed: false, tapped };
+      const dogY = jumpHeightAt(jumpStartMs, now);
+      if (collides(dogY, obstacle, now, jumpStartMs)) {
+        return { crashed: true, tapped };
+      }
+    }
+    return { crashed: false, tapped };
+  }
+
+  it('tap at 1.2 and 1.5 dog bodies clears every obstacle at base speed (20 u/s)', () => {
+    for (const kind of KINDS) {
+      for (const bodies of [1.2, 1.5]) {
+        const run = runPassage(kind, 20, bodies);
+        expect(run.tapped).toBe(true);
+        expect(run.crashed).toBe(false);
+      }
+    }
+  });
+
+  it('the same taps clear every obstacle at mid-ramp (27 u/s) and full speed (34 u/s)', () => {
+    for (const kind of KINDS) {
+      for (const speed of [27, 34]) {
+        for (const bodies of [1.2, 1.5]) {
+          expect(runPassage(kind, speed, bodies).crashed).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('a late tap during the contact still saves the dog (coyote window covers the tick)', () => {
+    for (const kind of KINDS) {
+      expect(runPassage(kind, 20, 0.05).crashed).toBe(false);
+    }
+  });
+
+  it('never tapping crashes into every kind, tunnel included', () => {
+    for (const kind of KINDS) {
+      expect(runPassage(kind, 20, null).crashed).toBe(true);
+    }
+  });
+
+  it('a tap way too early (4 bodies) does not clear the obstacle by itself', () => {
+    expect(runPassage('hurdle', 20, 4).crashed).toBe(true);
+  });
+
+  it('jumpCoversObstacle matches the geometry of the tap window', () => {
+    const hurdle: AgilityObstacle = { id: 0, kind: 'hurdle', spawnAtMs: 0, speed: 20 };
+    // Overlap al suolo: x in (13.8, 25.2) → t in (3740, 4310) ms.
+    expect(jumpCoversObstacle(null, hurdle)).toBe(false);
+    expect(jumpCoversObstacle(3220, hurdle)).toBe(true); // tap a 1.2 corpi
+    expect(jumpCoversObstacle(2100, hurdle)).toBe(false); // tap a 4 corpi
+  });
+
+  it('exposes a forgiving hitbox margin and an 80ms coyote window', () => {
+    expect(HITBOX_MARGIN_U).toBe(0.8);
+    expect(COYOTE_MS).toBe(80);
   });
 });
 

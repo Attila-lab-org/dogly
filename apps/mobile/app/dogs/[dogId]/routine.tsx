@@ -113,7 +113,7 @@ export default function DailyRoutineScreen() {
       <StackScreenHeader title={`La giornata di ${dog.name || '…'}`} />
       <Text style={styles.subtitle}>Organizza passeggiate, pasti e riposo. Puoi cambiare giorno dalla striscia.</Text>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.week}>
+      <View style={styles.week}>
         {WEEKDAYS.map((label, index) => {
           const date = dateForWeekday(index);
           const selected = index === selectedDay;
@@ -134,7 +134,7 @@ export default function DailyRoutineScreen() {
             </SpringPress>
           );
         })}
-      </ScrollView>
+      </View>
 
       <Text style={styles.todayLine}>
         {selectedDay === mondayBasedToday() ? 'Oggi, ' : ''}
@@ -336,11 +336,11 @@ const styles = StyleSheet.create({
   },
   content: { gap: spacing.md, paddingBottom: spacing.xxxl },
   subtitle: { color: colors.textSecondary, fontSize: typography.size.sm, lineHeight: 20 },
-  week: { gap: 8, paddingVertical: 4 },
+  week: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
   dayChip: {
-    width: 54,
+    flex: 1,
     paddingVertical: 10,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
