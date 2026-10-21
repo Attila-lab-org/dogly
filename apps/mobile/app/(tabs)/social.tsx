@@ -24,6 +24,7 @@ import Svg, {
   Path,
   Stop,
 } from 'react-native-svg';
+import { WorldBackdrop } from '@/components/WorldBackdrop';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { DogAvatar } from '@/features/core/components';
@@ -288,10 +289,7 @@ export default function SocialScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 400 300" preserveAspectRatio="xMidYMin slice" accessible={false}>
-        <Circle cx={350} cy={-20} r={110} fill={colors.accentSoft} opacity={0.35} />
-        <Ellipse cx={40} cy={30} rx={90} ry={60} fill={colors.primarySoft} opacity={0.3} />
-      </Svg>
+      <WorldBackdrop world="social" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <ConnectionHero
           dogId={dog.id}

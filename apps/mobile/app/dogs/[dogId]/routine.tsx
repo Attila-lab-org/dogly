@@ -15,7 +15,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, ScreenContainer } from '@/components';
 import { SpringPress } from '@/components/pressSpring';
 import { hapticLight } from '@/lib/haptics';
-import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import { StackScreenHeader } from '@/features/secondary/components';
 import { useDogProfile } from '@/features/core/useDogProfile';
 import { useSession } from '@/features/auth/SessionProvider';
@@ -111,20 +110,6 @@ export default function DailyRoutineScreen() {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <Svg
-        pointerEvents="none"
-        style={StyleSheet.absoluteFill}
-        viewBox="0 0 400 200"
-        preserveAspectRatio="xMaxYMin slice"
-        accessible={false}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      >
-        <Circle cx={336} cy={44} r={26} fill="#F6C94C" opacity={0.3} />
-        <Path d="M336 6 v10 M336 72 v10 M298 44 h10 M364 44 h10 M310 18 l7 7 M362 18 l-7 7 M310 70 l7 -7 M362 70 l-7 -7" stroke="#F6C94C" strokeWidth={3} strokeLinecap="round" opacity={0.3} />
-        <Ellipse cx={40} cy={150} rx={30} ry={20} fill={colors.primarySoft} opacity={0.5} />
-        <Path d="M52 138 a16 16 0 1 0 8 28 a13 13 0 1 1 -8 -28 Z" fill={colors.primarySoft} />
-      </Svg>
       <StackScreenHeader title={`La giornata di ${dog.name || '…'}`} />
       <Text style={styles.subtitle}>Organizza passeggiate, pasti e riposo. Puoi cambiare giorno dalla striscia.</Text>
 
